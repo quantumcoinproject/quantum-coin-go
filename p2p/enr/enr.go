@@ -40,7 +40,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 const SizeLimit = 55000 // maximum encoded size of a node record in bytes //todo: signature

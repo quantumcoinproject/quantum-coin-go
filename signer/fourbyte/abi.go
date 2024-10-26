@@ -23,8 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/DogeProtocol/dp/accounts/abi"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // decodedCallData is an internal type to represent a method call parsed according

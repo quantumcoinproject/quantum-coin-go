@@ -22,10 +22,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/DogeProtocol/dp/cmd/utils"
-	"github.com/DogeProtocol/dp/console"
-	"github.com/DogeProtocol/dp/node"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/cmd/utils"
+	"github.com/QuantumCoinProject/qc/console"
+	"github.com/QuantumCoinProject/qc/node"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 

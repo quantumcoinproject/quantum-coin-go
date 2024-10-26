@@ -18,8 +18,8 @@ import (
 	"net"
 	"net/http"
 	"os"
-	qcreadapi "github.com/DogeProtocol/dp/relay/qcreadapi"
-	qcwriteapi "github.com/DogeProtocol/dp/relay/qcwriteapi"
+	qcreadapi "github.com/QuantumCoinProject/qc/relay/qcreadapi"
+	qcwriteapi "github.com/QuantumCoinProject/qc/relay/qcwriteapi"
 	"strconv"
 	"strings"
 )

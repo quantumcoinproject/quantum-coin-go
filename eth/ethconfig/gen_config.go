@@ -6,12 +6,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/eth/downloader"
-	"github.com/DogeProtocol/dp/eth/gasprice"
-	"github.com/DogeProtocol/dp/miner"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/eth/downloader"
+	"github.com/QuantumCoinProject/qc/eth/gasprice"
+	"github.com/QuantumCoinProject/qc/miner"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 // MarshalTOML marshals as TOML.

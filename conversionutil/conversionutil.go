@@ -3,11 +3,11 @@ package conversionutil
 import (
 	"bytes"
 	"errors"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/crypto/crosssign"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/systemcontracts/conversion"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/crypto/crosssign"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/systemcontracts/conversion"
 	"strings"
 )
 

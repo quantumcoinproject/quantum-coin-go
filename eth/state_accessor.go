@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/trie"
 )
 
 // stateAtBlock retrieves the state database associated with a certain block.

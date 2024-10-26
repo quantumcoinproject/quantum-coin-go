@@ -23,10 +23,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 type account struct{}

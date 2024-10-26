@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/ethdb"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/ethdb"
 )
 
 // Tests that the node iterator indeed walks over the entire database contents.

@@ -25,8 +25,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/p2p/enode"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
 )
 
 const jsonIndent = "    "

@@ -18,24 +18,24 @@ package core
 
 import (
 	"errors"
-	"github.com/DogeProtocol/dp/backupmanager"
-	"github.com/DogeProtocol/dp/conversionutil"
-	"github.com/DogeProtocol/dp/systemcontracts/conversion"
-	"github.com/DogeProtocol/dp/systemcontracts/staking"
+	"github.com/QuantumCoinProject/qc/backupmanager"
+	"github.com/QuantumCoinProject/qc/conversionutil"
+	"github.com/QuantumCoinProject/qc/systemcontracts/conversion"
+	"github.com/QuantumCoinProject/qc/systemcontracts/staking"
 	"math"
 	"math/big"
 	"sort"
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/prque"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/event"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/metrics"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/prque"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/event"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 const (

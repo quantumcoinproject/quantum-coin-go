@@ -16,7 +16,7 @@
 
 package downloader
 
-import "github.com/DogeProtocol/dp/core/types"
+import "github.com/QuantumCoinProject/qc/core/types"
 
 type DoneEvent struct {
 	Latest *types.Header

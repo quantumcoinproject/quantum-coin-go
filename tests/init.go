@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 // Forks table defines supported forks and their chain config.

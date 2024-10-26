@@ -19,7 +19,7 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"io"
 	"io/ioutil"
 	"net"
@@ -29,9 +29,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/rpc"
 
 	"github.com/stretchr/testify/assert"
 )

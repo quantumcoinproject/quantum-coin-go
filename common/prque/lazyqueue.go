@@ -20,7 +20,7 @@ import (
 	"container/heap"
 	"time"
 
-	"github.com/DogeProtocol/dp/common/mclock"
+	"github.com/QuantumCoinProject/qc/common/mclock"
 )
 
 // LazyQueue is a priority queue data structure where priorities can change over

@@ -26,8 +26,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DogeProtocol/dp/common/bitutil"
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc/common/bitutil"
+	"github.com/QuantumCoinProject/qc/crypto"
 )
 
 // bloomIndexes represents the bit indexes inside the bloom filter that belong

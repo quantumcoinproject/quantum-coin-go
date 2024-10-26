@@ -21,10 +21,10 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/rlp"
 	mapset "github.com/deckarep/golang-set"
 )
 

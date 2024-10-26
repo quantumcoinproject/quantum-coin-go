@@ -23,10 +23,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/metrics"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 var emptyCodeHash = crypto.Keccak256(nil)

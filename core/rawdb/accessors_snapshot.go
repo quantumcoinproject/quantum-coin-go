@@ -19,9 +19,9 @@ package rawdb
 import (
 	"encoding/binary"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // ReadSnapshotDisabled retrieves if the snapshot maintenance is disabled.

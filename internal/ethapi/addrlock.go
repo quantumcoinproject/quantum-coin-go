@@ -19,7 +19,7 @@ package ethapi
 import (
 	"sync"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 type AddrLocker struct {

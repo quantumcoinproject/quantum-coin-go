@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 	"testing"
 	"time"
 )

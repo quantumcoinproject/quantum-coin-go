@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"io/ioutil"
 	"net"
 	"os"

@@ -3,10 +3,10 @@ package commontest
 import (
 	"bytes"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/crypto/hybrideds"
-	"github.com/DogeProtocol/dp/crypto/hybridedsfull"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/crypto/hybrideds"
+	"github.com/QuantumCoinProject/qc/crypto/hybridedsfull"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"testing"
 )
 

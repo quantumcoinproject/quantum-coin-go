@@ -3,7 +3,7 @@ package hybridedsfull
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"testing"
 )
 

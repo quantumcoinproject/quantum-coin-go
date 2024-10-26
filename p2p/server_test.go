@@ -18,10 +18,10 @@ package p2p
 
 import (
 	"errors"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 
-	"github.com/DogeProtocol/dp/p2p/rlpx"
+	"github.com/QuantumCoinProject/qc/p2p/rlpx"
 	"io"
 	"math/rand"
 	"net"
@@ -29,10 +29,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/internal/testlog"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/p2p/enr"
+	"github.com/QuantumCoinProject/qc/internal/testlog"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
 )
 
 type testTransport struct {

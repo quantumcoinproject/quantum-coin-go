@@ -21,7 +21,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // Handler returns a log handler which logs to the unit test log of t.

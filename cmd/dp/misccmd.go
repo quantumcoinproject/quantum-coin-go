@@ -23,8 +23,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DogeProtocol/dp/cmd/utils"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/cmd/utils"
+	"github.com/QuantumCoinProject/qc/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

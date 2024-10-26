@@ -26,12 +26,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/rlp"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/QuantumCoinProject/qc/trie"
 )
 
 // trieKV represents a trie key-value pair

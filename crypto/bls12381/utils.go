@@ -20,7 +20,7 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 func bigFromHex(hex string) *big.Int {

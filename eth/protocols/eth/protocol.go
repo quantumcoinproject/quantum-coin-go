@@ -19,14 +19,14 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc/crypto"
 	"io"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/forkid"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/forkid"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // Constants to match up protocol versions and messages

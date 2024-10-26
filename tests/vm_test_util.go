@@ -22,15 +22,15 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/common/math"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 // VMTest checks EVM execution without block or transaction context.

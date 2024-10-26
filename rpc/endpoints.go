@@ -20,7 +20,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // StartIPCEndpoint starts an IPC endpoint.

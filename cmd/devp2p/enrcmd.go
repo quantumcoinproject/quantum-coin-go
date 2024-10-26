@@ -28,9 +28,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/p2p/enr"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
+	"github.com/QuantumCoinProject/qc/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -7,7 +7,7 @@ package blake2b
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 	"io"
 )
 

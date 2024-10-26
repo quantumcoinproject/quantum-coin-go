@@ -18,14 +18,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"net"
 
-	"github.com/DogeProtocol/dp/cmd/devp2p/internal/ethtest"
-	"github.com/DogeProtocol/dp/internal/utesting"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/p2p/rlpx"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/cmd/devp2p/internal/ethtest"
+	"github.com/QuantumCoinProject/qc/internal/utesting"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/p2p/rlpx"
+	"github.com/QuantumCoinProject/qc/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DogeProtocol/dp/node"
+	"github.com/QuantumCoinProject/qc/node"
 	"gopkg.in/urfave/cli.v1"
 )
 

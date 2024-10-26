@@ -26,9 +26,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/math"
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/QuantumCoinProject/qc/crypto"
 )
 
 const jsondata = `

@@ -27,11 +27,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/eth/protocols/eth"
-	"github.com/DogeProtocol/dp/event"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p/msgrate"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
+	"github.com/QuantumCoinProject/qc/event"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p/msgrate"
 )
 
 const (

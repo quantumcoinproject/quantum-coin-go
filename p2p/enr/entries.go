@@ -21,7 +21,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // Entry is implemented by known node record entry types.

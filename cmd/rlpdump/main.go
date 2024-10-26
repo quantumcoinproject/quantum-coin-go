@@ -26,7 +26,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 var (

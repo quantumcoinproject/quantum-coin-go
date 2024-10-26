@@ -2,7 +2,7 @@ package hybridedsfull
 
 import (
 	"bytes"
-	"github.com/DogeProtocol/dp/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"math/rand"
 	"testing"
 )

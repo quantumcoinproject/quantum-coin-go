@@ -25,9 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // Runs multiple tests with randomized parameters.

@@ -18,14 +18,14 @@ package eth
 
 import (
 	"bytes"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 var (

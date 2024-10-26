@@ -2,7 +2,7 @@ package types
 
 import (
 	"errors"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 	"math/big"
 )
 

@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 func BenchmarkCutOriginal(b *testing.B) {

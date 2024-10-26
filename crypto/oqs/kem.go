@@ -11,7 +11,7 @@ import "C"
 
 import (
 	"errors"
-	"github.com/DogeProtocol/dp/crypto/keyestablishmentalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/keyestablishmentalgorithm"
 	"math/big"
 	"unsafe"
 )

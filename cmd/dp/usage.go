@@ -22,9 +22,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/DogeProtocol/dp/cmd/utils"
-	"github.com/DogeProtocol/dp/internal/debug"
-	"github.com/DogeProtocol/dp/internal/flags"
+	"github.com/QuantumCoinProject/qc/cmd/utils"
+	"github.com/QuantumCoinProject/qc/internal/debug"
+	"github.com/QuantumCoinProject/qc/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -21,13 +21,13 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/bloombits"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/event"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/bloombits"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/event"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 type Backend interface {

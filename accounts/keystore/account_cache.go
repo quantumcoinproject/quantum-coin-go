@@ -27,9 +27,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/log"
 	mapset "github.com/deckarep/golang-set"
 )
 

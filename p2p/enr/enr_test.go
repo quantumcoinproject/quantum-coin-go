@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/rlp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -23,9 +23,9 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/metrics"
-	"github.com/DogeProtocol/dp/metrics/exp"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/QuantumCoinProject/qc/metrics/exp"
 	"github.com/mattn/go-colorable"
 	"github.com/mattn/go-isatty"
 	"gopkg.in/urfave/cli.v1"

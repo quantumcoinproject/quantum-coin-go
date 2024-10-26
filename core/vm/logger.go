@@ -19,17 +19,17 @@ package vm
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/DogeProtocol/dp/uint256"
+	"github.com/QuantumCoinProject/qc/uint256"
 	"io"
 	"math/big"
 	"strings"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/common/math"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 // Storage represents a contract's storage.

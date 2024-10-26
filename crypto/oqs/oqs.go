@@ -11,8 +11,8 @@ import "C"
 
 import (
 	"errors"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"unsafe"
 )
 

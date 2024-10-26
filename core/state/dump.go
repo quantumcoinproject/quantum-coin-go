@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/rlp"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/QuantumCoinProject/qc/trie"
 )
 
 // DumpConfig is a set of options to control what portions of the statewill be

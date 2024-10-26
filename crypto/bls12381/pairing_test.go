@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 func TestPairingExpected(t *testing.T) {

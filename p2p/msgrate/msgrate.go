@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // measurementImpact is the impact a single measurement has on a peer's final

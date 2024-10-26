@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/DogeProtocol/dp/node"
+	"github.com/QuantumCoinProject/qc/node"
 )
 
 // SampleLifecycle is a trivial network service that can be attached to a node for

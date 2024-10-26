@@ -18,15 +18,15 @@ package ethtest
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"math/big"
 	"strings"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/internal/utesting"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/internal/utesting"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 //var faucetAddr = common.HexToAddress("0x71562b71999873DB5b286dF957af199Ec94617F7")

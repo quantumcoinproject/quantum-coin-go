@@ -30,9 +30,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // Tests that the account management snippets work correctly.

@@ -20,8 +20,8 @@
 package node
 
 import (
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 // NoopLifecycle is a trivial implementation of the Service interface.

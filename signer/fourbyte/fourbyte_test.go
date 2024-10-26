@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/accounts/abi"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // Tests that all the selectors contained in the 4byte database are valid.

@@ -26,7 +26,7 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 	"github.com/dop251/goja"
 )
 

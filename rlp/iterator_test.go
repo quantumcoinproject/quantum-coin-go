@@ -19,7 +19,7 @@ package rlp
 import (
 	"testing"
 
-	"github.com/DogeProtocol/dp/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
 )
 
 // TestIterator tests some basic things about the ListIterator. A more

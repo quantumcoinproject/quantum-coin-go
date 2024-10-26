@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/DogeProtocol/dp/metrics"
+	"github.com/QuantumCoinProject/qc/metrics"
 )
 
 // a regexp for extracting the unit from time.Duration.String

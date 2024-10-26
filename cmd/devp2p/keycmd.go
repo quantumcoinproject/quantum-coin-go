@@ -18,10 +18,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"net"
 
-	"github.com/DogeProtocol/dp/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
 	"gopkg.in/urfave/cli.v1"
 )
 

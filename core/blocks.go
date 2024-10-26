@@ -16,7 +16,7 @@
 
 package core
 
-import "github.com/DogeProtocol/dp/common"
+import "github.com/QuantumCoinProject/qc/common"
 
 // BadHashes represent a set of manually tracked bad hashes (usually hard forks)
 var BadHashes = map[common.Hash]bool{

@@ -7,8 +7,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/math"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/math"
 )
 
 var _ = (*stEnvMarshaling)(nil)

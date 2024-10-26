@@ -26,7 +26,7 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 var (

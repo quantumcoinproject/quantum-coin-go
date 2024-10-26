@@ -27,8 +27,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/common"
 	"github.com/cespare/cp"
 	"github.com/davecgh/go-spew/spew"
 )

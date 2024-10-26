@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/stretchr/testify/assert"
 )
 

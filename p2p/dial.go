@@ -27,10 +27,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/common/mclock"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/p2p/netutil"
+	"github.com/QuantumCoinProject/qc/common/mclock"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/netutil"
 )
 
 const (

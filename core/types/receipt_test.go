@@ -23,10 +23,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 func TestDecodeEmptyTypedReceipt(t *testing.T) {

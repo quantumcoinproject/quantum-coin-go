@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 func newTestFullNode(v []byte) []interface{} {

@@ -21,10 +21,10 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/ethdb"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/ethdb"
 )
 
 type stateTest struct {

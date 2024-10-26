@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/DogeProtocol/dp/cmd/evm/internal/compiler"
+	"github.com/QuantumCoinProject/qc/cmd/evm/internal/compiler"
 
 	"gopkg.in/urfave/cli.v1"
 )

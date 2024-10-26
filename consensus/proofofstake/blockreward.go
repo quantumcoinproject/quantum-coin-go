@@ -2,9 +2,9 @@ package proofofstake
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/params"
 	"math"
 	"math/big"
 	"strings"

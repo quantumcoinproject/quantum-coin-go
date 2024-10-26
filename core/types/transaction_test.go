@@ -21,15 +21,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // The values in those tests are from the Transaction Tests

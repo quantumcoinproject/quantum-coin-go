@@ -17,7 +17,7 @@
 package rawdb
 
 import (
-	"github.com/DogeProtocol/dp/ethdb"
+	"github.com/QuantumCoinProject/qc/ethdb"
 )
 
 // table is a wrapper around a database that prefixes each key access with a pre-

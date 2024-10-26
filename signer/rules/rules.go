@@ -22,11 +22,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DogeProtocol/dp/internal/ethapi"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/signer/core"
-	"github.com/DogeProtocol/dp/signer/rules/deps"
-	"github.com/DogeProtocol/dp/signer/storage"
+	"github.com/QuantumCoinProject/qc/internal/ethapi"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/signer/core"
+	"github.com/QuantumCoinProject/qc/signer/rules/deps"
+	"github.com/QuantumCoinProject/qc/signer/storage"
 	"github.com/dop251/goja"
 )
 

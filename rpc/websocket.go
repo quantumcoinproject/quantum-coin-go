@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/gorilla/websocket"
 )

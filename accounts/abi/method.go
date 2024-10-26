@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc/crypto"
 )
 
 // FunctionType represents different types of functions a contract might have.

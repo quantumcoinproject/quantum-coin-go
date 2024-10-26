@@ -1,7 +1,7 @@
 package oqs
 
 import (
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"testing"
 )
 

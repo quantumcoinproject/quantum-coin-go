@@ -28,16 +28,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/internal/ethapi"
-	"github.com/DogeProtocol/dp/rlp"
-	"github.com/DogeProtocol/dp/rpc"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/internal/ethapi"
+	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/QuantumCoinProject/qc/trie"
 )
 
 // PublicEthereumAPI provides an API to access Ethereum full node-related

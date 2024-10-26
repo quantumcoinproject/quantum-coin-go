@@ -18,13 +18,13 @@ package proofofstake
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/accounts/abi"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
-	"github.com/DogeProtocol/dp/systemcontracts/conversion"
-	"github.com/DogeProtocol/dp/systemcontracts/staking"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/systemcontracts/conversion"
+	"github.com/QuantumCoinProject/qc/systemcontracts/staking"
 	"math/big"
 	"testing"
 )

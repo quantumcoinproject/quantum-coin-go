@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DogeProtocol/dp/common/math"
-	"github.com/DogeProtocol/dp/core/vm"
+	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/QuantumCoinProject/qc/core/vm"
 )
 
 // Compiler contains information about the parsed source

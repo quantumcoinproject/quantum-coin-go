@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/DogeProtocol/dp/internal/debug"
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/internal/debug"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

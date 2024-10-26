@@ -17,9 +17,9 @@
 package rawdb
 
 import (
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // ReadPreimage retrieves a single preimage of the provided hash.

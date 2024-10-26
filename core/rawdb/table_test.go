@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/DogeProtocol/dp/ethdb"
+	"github.com/QuantumCoinProject/qc/ethdb"
 )
 
 func TestTableDatabase(t *testing.T)            { testTableDatabase(t, "prefix") }

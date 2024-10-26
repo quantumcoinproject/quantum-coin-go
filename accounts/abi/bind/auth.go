@@ -20,17 +20,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"io"
 	"io/ioutil"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // ErrNoChainID is returned whenever the user failed to specify a chain id.

@@ -22,7 +22,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common/mclock"
+	"github.com/QuantumCoinProject/qc/common/mclock"
 )
 
 const (

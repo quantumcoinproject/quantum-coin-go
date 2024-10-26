@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 	natpmp "github.com/jackpal/go-nat-pmp"
 )
 

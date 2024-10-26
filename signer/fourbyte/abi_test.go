@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/accounts/abi"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {

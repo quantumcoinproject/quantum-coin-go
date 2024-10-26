@@ -27,7 +27,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common/math"
+	"github.com/QuantumCoinProject/qc/common/math"
 )
 
 type testEncoder struct {

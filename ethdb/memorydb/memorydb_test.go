@@ -19,8 +19,8 @@ package memorydb
 import (
 	"testing"
 
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/ethdb/dbtest"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/ethdb/dbtest"
 )
 
 func TestMemoryDB(t *testing.T) {

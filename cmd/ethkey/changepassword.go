@@ -21,8 +21,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/cmd/utils"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -21,7 +21,7 @@ package p2p
 import (
 	"net"
 
-	"github.com/DogeProtocol/dp/metrics"
+	"github.com/QuantumCoinProject/qc/metrics"
 )
 
 const (

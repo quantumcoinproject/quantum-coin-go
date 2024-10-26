@@ -17,8 +17,8 @@
 package runtime
 
 import (
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/vm"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {

@@ -21,10 +21,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/internal/ethapi"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/internal/ethapi"
 )
 
 type ValidationInfo struct {

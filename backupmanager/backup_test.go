@@ -3,9 +3,9 @@ package backupmanager
 import (
 	"crypto/rand"
 	"fmt"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/trie"
 	"math/big"
 	"testing"
 )

@@ -18,18 +18,18 @@ package ethtest
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"net"
 	"reflect"
 	"strings"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/eth/protocols/eth"
-	"github.com/DogeProtocol/dp/internal/utesting"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/p2p/rlpx"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
+	"github.com/QuantumCoinProject/qc/internal/utesting"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/p2p/rlpx"
 	"github.com/davecgh/go-spew/spew"
 )
 

@@ -18,11 +18,11 @@
 package consensus
 
 import (
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"math/big"
 )
 

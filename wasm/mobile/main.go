@@ -5,12 +5,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/params"
-	abi "github.com/DogeProtocol/dp/wasm/accounts/abi"
-	wasm "github.com/DogeProtocol/dp/wasm/core/types"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/params"
+	abi "github.com/QuantumCoinProject/qc/wasm/accounts/abi"
+	wasm "github.com/QuantumCoinProject/qc/wasm/core/types"
 	"golang.org/x/crypto/scrypt"
 	"math/big"
 	"strconv"
@@ -159,54 +159,54 @@ func TxData(from, nonce, to, value, gasLimit, data, chainId,
 //export ContractData
 func ContractData(args **C.char, argvLength int) (*C.char, *C.char) {
 	/*
-	length := argvLength
-	cStrings := (*[1 << 28]*C.char)(unsafe.Pointer(argv))[:length:length]
-	args := make([]string, length)
-	for i, cString := range cStrings {
-		args[i] = C.GoString(cString)
-	}
+		length := argvLength
+		cStrings := (*[1 << 28]*C.char)(unsafe.Pointer(argv))[:length:length]
+		args := make([]string, length)
+		for i, cString := range cStrings {
+			args[i] = C.GoString(cString)
+		}
 	*/
 	//argv := make([]*C.char, len(args))
-	    		//cs := C.CString(s)
-    		//defer C.free(unsafe.Pointer(cs))
-    		//argv[i] = cs
-	
+	//cs := C.CString(s)
+	//defer C.free(unsafe.Pointer(cs))
+	//argv[i] = cs
+
 	var method string
 	var abiString string
 	arguments := make([]interface{}, 0, argvLength-2)
-	
+
 	length := argvLength
 	cStrings := (*[1 << 28]*C.char)(unsafe.Pointer(args))[:length:length]
-	
-	for i, cString := range cStrings { 
+
+	for i, cString := range cStrings {
 		fmt.Println("cString : ", cString)
-	    switch i { 
-		case 0: 
-       			method = C.GoString(cString)
-       		case 1: 
+		switch i {
+		case 0:
+			method = C.GoString(cString)
+		case 1:
 			abiString = C.GoString(cString)
-	    	default:  
+		default:
 			arguments = append(arguments, C.GoString(cString))
-	    }
+		}
 	}
 
 	abiData, err := abi.JSON(strings.NewReader(abiString))
-	
+
 	/*
-	method := C.GoString(argv[0])
+		method := C.GoString(argv[0])
 
-	abiData, err := abi.JSON(strings.NewReader(C.GoString(argv[1])))
+		abiData, err := abi.JSON(strings.NewReader(C.GoString(argv[1])))
 
-	if err != nil {
-		return nil, C.CString(err.Error())
-	}
+		if err != nil {
+			return nil, C.CString(err.Error())
+		}
 
-	arguments := make([]interface{}, 0, len(argv)-2)
-	for _, i := range argv[2:] {
-		arguments = append(arguments, i)
-	}
+		arguments := make([]interface{}, 0, len(argv)-2)
+		for _, i := range argv[2:] {
+			arguments = append(arguments, i)
+		}
 	*/
-	
+
 	data, err := abiData.Pack(method, arguments...)
 	if err != nil {
 		return nil, C.CString(err.Error())
@@ -300,7 +300,7 @@ func transaction(args0, args1, args2, args3, args4, args5, args6 string) (transa
 	//fmt.Println("data :", data[:])
 
 	var chainId, _ = new(big.Int).SetString(args6, 0)
-	
+
 	transactionDetails := TransactionDetails{
 		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
 		Value: weiVal, Data: data, ChainId: chainId}

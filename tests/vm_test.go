@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/DogeProtocol/dp/core/vm"
+	"github.com/QuantumCoinProject/qc/core/vm"
 )
 
 func TestVM(t *testing.T) {

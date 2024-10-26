@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/crypto/hybridedsfull"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/crypto/hybridedsfull"
 	"os"
 	"runtime/pprof"
 	"strconv"

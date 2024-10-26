@@ -26,13 +26,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/event"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/event"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/prometheus/tsdb/fileutil"
 )
 

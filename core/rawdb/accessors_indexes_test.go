@@ -18,16 +18,16 @@ package rawdb
 
 import (
 	"bytes"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
 	"hash"
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // testHasher is the helper tool for transaction/receipt list hashing.

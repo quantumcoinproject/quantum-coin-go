@@ -19,10 +19,10 @@ package ethtest
 import (
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/eth/protocols/eth"
-	"github.com/DogeProtocol/dp/internal/utesting"
-	"github.com/DogeProtocol/dp/p2p/enode"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
+	"github.com/QuantumCoinProject/qc/internal/utesting"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
 )
 
 // Suite represents a structure used to test a node's conformance

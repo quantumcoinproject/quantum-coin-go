@@ -23,8 +23,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 func TestChainIterator(t *testing.T) {

@@ -17,7 +17,7 @@
 package state
 
 import (
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 type accessList struct {

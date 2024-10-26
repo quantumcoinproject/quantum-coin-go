@@ -19,7 +19,7 @@ package event_test
 import (
 	"fmt"
 
-	"github.com/DogeProtocol/dp/event"
+	"github.com/QuantumCoinProject/qc/event"
 )
 
 func ExampleNewSubscription() {

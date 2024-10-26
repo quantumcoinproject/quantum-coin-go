@@ -32,7 +32,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 	"github.com/davecgh/go-spew/spew"
 )
 

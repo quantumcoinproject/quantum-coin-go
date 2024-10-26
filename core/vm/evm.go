@@ -21,10 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/uint256"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/uint256"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already

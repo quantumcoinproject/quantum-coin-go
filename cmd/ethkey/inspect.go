@@ -19,11 +19,11 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"io/ioutil"
 
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/cmd/utils"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 

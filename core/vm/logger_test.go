@@ -17,13 +17,13 @@
 package vm
 
 import (
-	"github.com/DogeProtocol/dp/uint256"
+	"github.com/QuantumCoinProject/qc/uint256"
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 type dummyContractRef struct {

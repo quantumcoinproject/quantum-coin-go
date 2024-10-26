@@ -21,16 +21,16 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"io"
 	"sort"
 	"strings"
 
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/p2p/enr"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // Tree is a merkle tree of node records.

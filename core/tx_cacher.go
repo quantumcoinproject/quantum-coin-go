@@ -19,7 +19,7 @@ package core
 import (
 	"runtime"
 
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // senderCacher is a concurrent transaction sender recoverer and cacher.

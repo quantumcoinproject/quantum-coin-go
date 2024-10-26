@@ -19,7 +19,7 @@ package downloader
 import (
 	"fmt"
 
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.

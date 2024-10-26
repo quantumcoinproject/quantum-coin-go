@@ -23,9 +23,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 var (

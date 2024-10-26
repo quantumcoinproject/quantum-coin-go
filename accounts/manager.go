@@ -21,8 +21,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/event"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/event"
 )
 
 // Config contains the settings of the global account manager.

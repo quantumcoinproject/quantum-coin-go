@@ -2,7 +2,7 @@ package conversionutil
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 	"strings"
 	"testing"
 )

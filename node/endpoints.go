@@ -21,8 +21,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 // StartHTTPEndpoint starts the HTTP RPC endpoint.

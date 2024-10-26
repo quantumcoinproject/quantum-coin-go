@@ -20,8 +20,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // senderFromServer is a types.Signer that remembers the sender address returned by the RPC

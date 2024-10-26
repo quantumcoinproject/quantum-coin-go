@@ -23,8 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DogeProtocol/dp/signer/core/apitypes"
-	"github.com/DogeProtocol/dp/signer/fourbyte"
+	"github.com/QuantumCoinProject/qc/signer/core/apitypes"
+	"github.com/QuantumCoinProject/qc/signer/fourbyte"
 )
 
 func init() {

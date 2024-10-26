@@ -22,9 +22,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/p2p/nat"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/p2p/nat"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 const (

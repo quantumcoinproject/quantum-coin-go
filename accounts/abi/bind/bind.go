@@ -30,8 +30,8 @@ import (
 	"text/template"
 	"unicode"
 
-	"github.com/DogeProtocol/dp/accounts/abi"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // Lang is a target programming language selector to generate bindings for.

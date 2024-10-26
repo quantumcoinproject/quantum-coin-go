@@ -17,7 +17,7 @@
 package keystore
 
 import (
-	"github.com/DogeProtocol/dp/accounts"
+	"github.com/QuantumCoinProject/qc/accounts"
 	"os"
 	"strconv"
 	"testing"

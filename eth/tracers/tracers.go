@@ -21,7 +21,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/DogeProtocol/dp/eth/tracers/internal/tracers"
+	"github.com/QuantumCoinProject/qc/eth/tracers/internal/tracers"
 )
 
 // all contains all the built in JavaScript tracers by name.

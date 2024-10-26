@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 // In this example, our client wishes to track the latest 'block number'

@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 const testSectionSize = 4096

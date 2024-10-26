@@ -21,18 +21,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"io/ioutil"
 	"path"
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/common/math"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/signer/core"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/signer/core"
 )
 
 var typesStandard = core.Types{

@@ -20,7 +20,7 @@
 package metrics
 
 import (
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 	"github.com/shirou/gopsutil/cpu"
 )
 

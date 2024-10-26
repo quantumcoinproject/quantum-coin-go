@@ -19,8 +19,8 @@ package leveldb
 import (
 	"testing"
 
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/ethdb/dbtest"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/ethdb/dbtest"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )

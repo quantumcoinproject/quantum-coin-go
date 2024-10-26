@@ -33,8 +33,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 type allocItem struct{ Addr, Balance *big.Int }

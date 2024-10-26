@@ -18,8 +18,8 @@ package node
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -27,13 +27,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 const (

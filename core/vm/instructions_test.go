@@ -20,13 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/DogeProtocol/dp/uint256"
+	"github.com/QuantumCoinProject/qc/uint256"
 	"io/ioutil"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 type TwoOperandTestcase struct {

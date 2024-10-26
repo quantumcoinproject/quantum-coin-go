@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/crypto/hybridedsfull"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/crypto/hybridedsfull"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"testing"
 )
 

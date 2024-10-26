@@ -19,10 +19,10 @@ package trie
 import (
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc/crypto"
 	"sync"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // leafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow

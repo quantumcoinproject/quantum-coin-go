@@ -21,9 +21,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/forkid"
-	"github.com/DogeProtocol/dp/p2p"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/forkid"
+	"github.com/QuantumCoinProject/qc/p2p"
 )
 
 const (

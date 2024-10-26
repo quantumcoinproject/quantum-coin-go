@@ -17,11 +17,11 @@
 package ethtest
 
 import (
-	"github.com/DogeProtocol/dp/eth"
-	"github.com/DogeProtocol/dp/eth/ethconfig"
-	"github.com/DogeProtocol/dp/internal/utesting"
-	"github.com/DogeProtocol/dp/node"
-	"github.com/DogeProtocol/dp/p2p"
+	"github.com/QuantumCoinProject/qc/eth"
+	"github.com/QuantumCoinProject/qc/eth/ethconfig"
+	"github.com/QuantumCoinProject/qc/internal/utesting"
+	"github.com/QuantumCoinProject/qc/node"
+	"github.com/QuantumCoinProject/qc/p2p"
 	"os"
 	"testing"
 	"time"

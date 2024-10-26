@@ -26,7 +26,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/DogeProtocol/dp/common/math"
+	"github.com/QuantumCoinProject/qc/common/math"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -18,14 +18,14 @@ package main
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/cmd/utils"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/cmd/utils"
 	"github.com/google/uuid"
 	"gopkg.in/urfave/cli.v1"
 )

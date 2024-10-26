@@ -19,7 +19,7 @@ package miner
 import (
 	"testing"
 
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // noopChainRetriever is an implementation of headerRetriever that always

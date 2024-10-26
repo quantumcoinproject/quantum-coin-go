@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 func (g *G2) one() *PointG2 {

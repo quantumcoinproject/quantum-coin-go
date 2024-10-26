@@ -8,9 +8,9 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/metrics"
-	"github.com/DogeProtocol/dp/metrics/prometheus"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/QuantumCoinProject/qc/metrics/prometheus"
 )
 
 type exp struct {

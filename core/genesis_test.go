@@ -17,16 +17,16 @@
 package core
 
 import (
-	"github.com/DogeProtocol/dp/consensus/mockconsensus"
+	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
 	"math/big"
 	"reflect"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/params"
 	"github.com/davecgh/go-spew/spew"
 )
 

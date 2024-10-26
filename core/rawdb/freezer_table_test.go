@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/metrics"
+	"github.com/QuantumCoinProject/qc/metrics"
 )
 
 func init() {

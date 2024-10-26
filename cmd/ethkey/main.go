@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/DogeProtocol/dp/internal/flags"
+	"github.com/QuantumCoinProject/qc/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 
