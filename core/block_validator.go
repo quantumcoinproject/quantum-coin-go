@@ -18,11 +18,11 @@ package core
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/consensus"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/consensus"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/trie"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and

@@ -1,8 +1,8 @@
 package cryptobase
 
 import (
-	"github.com/DogeProtocol/dp/crypto/drng/ChaCha20"
-	"github.com/DogeProtocol/dp/crypto/hybrideds"
+	"github.com/QuantumCoinProject/qc/crypto/drng/ChaCha20"
+	"github.com/QuantumCoinProject/qc/crypto/hybrideds"
 )
 
 var SigAlg = hybrideds.CreateHybridedsSig(true)

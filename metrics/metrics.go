@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // Enabled is checked by the constructor functions for all of the

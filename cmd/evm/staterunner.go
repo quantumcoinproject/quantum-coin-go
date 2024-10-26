@@ -23,10 +23,10 @@ import (
 	"io/ioutil"
 	"os"
 
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/tests"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/tests"
 
 	"gopkg.in/urfave/cli.v1"
 )

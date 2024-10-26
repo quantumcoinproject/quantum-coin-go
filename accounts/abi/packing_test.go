@@ -19,7 +19,7 @@ package abi
 import (
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 type packUnpackTest struct {

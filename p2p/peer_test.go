@@ -28,9 +28,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/p2p/enr"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
 )
 
 var discard = Protocol{

@@ -21,8 +21,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
 )
 
 // txJSON is the JSON representation of transactions.

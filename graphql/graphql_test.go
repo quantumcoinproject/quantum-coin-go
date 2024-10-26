@@ -18,8 +18,8 @@ package graphql
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/consensus/mockconsensus"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -27,14 +27,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/eth"
-	"github.com/DogeProtocol/dp/eth/ethconfig"
-	"github.com/DogeProtocol/dp/node"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/eth"
+	"github.com/QuantumCoinProject/qc/eth/ethconfig"
+	"github.com/QuantumCoinProject/qc/node"
+	"github.com/QuantumCoinProject/qc/params"
 
 	"github.com/stretchr/testify/assert"
 )

@@ -17,10 +17,10 @@
 package keystore
 
 import (
-	"github.com/DogeProtocol/dp"
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/crypto"
 	"math/big"
 )
 

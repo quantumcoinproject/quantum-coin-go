@@ -19,12 +19,12 @@ package gethclient
 
 import (
 	"context"
-	"github.com/DogeProtocol/dp"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"math/big"
 	"runtime"
 	"runtime/debug"

@@ -21,7 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/DogeProtocol/dp/core/vm"
+	"github.com/QuantumCoinProject/qc/core/vm"
 )
 
 // Iterator for disassembled EVM instructions

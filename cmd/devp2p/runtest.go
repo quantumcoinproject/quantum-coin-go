@@ -17,8 +17,8 @@
 package main
 
 import (
-	"github.com/DogeProtocol/dp/internal/utesting"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/internal/utesting"
+	"github.com/QuantumCoinProject/qc/log"
 	"gopkg.in/urfave/cli.v1"
 	"os"
 )

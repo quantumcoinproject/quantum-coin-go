@@ -20,10 +20,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/forkid"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/p2p/enode"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/forkid"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
 )
 
 // Tests that handshake failures are detected and reported correctly.

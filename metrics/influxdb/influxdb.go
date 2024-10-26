@@ -5,8 +5,8 @@ import (
 	uurl "net/url"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/metrics"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/metrics"
 	"github.com/influxdata/influxdb/client"
 )
 

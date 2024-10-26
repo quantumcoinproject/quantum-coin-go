@@ -27,7 +27,7 @@
 # $LIB_FUZZING_ENGINE   C++ compiler argument to link fuzz target against the prebuilt engine library (e.g. libFuzzer).
 
 # This sets the -coverpgk for the coverage report when the corpus is executed through go test
-coverpkg="github.com/DogeProtocol/dp/..."
+coverpkg="github.com/QuantumCoinProject/qc/..."
 
 function coverbuild {
   path=$1

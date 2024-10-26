@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // binaryIterator is a simplistic iterator to step over the accounts or storage

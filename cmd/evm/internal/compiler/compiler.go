@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DogeProtocol/dp/core/asm"
+	"github.com/QuantumCoinProject/qc/core/asm"
 )
 
 func Compile(fn string, src []byte, debug bool) (string, error) {

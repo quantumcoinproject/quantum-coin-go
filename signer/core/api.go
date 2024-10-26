@@ -24,14 +24,14 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/internal/ethapi"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/signer/core/apitypes"
-	"github.com/DogeProtocol/dp/signer/storage"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/internal/ethapi"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/signer/core/apitypes"
+	"github.com/QuantumCoinProject/qc/signer/storage"
 )
 
 const (

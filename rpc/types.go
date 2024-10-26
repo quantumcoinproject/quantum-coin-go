@@ -24,8 +24,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
 )
 
 // API describes the set of methods offered over the RPC interface

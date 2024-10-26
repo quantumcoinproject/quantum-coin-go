@@ -1,7 +1,7 @@
 package signaturealgorithm
 
 import (
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 	"math/big"
 )
 

@@ -19,7 +19,7 @@ package core
 import (
 	"errors"
 
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 var (

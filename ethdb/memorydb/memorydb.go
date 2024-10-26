@@ -23,8 +23,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/ethdb"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/ethdb"
 )
 
 var (

@@ -2,8 +2,8 @@ package proofofstake
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/params"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"

@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // hashes is a helper to implement sort.Interface.

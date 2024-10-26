@@ -20,7 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

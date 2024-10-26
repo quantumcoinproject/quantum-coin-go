@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 func TestUnmarshalJSONNewFilterArgs(t *testing.T) {

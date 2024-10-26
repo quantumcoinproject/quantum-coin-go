@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/internal/cmdtest"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/internal/cmdtest"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/docker/docker/pkg/reexec"
 )
 

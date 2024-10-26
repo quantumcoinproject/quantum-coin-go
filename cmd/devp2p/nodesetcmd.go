@@ -25,10 +25,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeProtocol/dp/core/forkid"
-	"github.com/DogeProtocol/dp/p2p/enr"
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/core/forkid"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/rlp"
 	"gopkg.in/urfave/cli.v1"
 )
 

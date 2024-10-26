@@ -3,8 +3,8 @@ package types
 import (
 	"bytes"
 	"errors"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/rlp"
 	"math/big"
 	"sync/atomic"
 	"time"

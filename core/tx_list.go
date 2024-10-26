@@ -18,15 +18,15 @@ package core
 
 import (
 	"container/heap"
-	"github.com/DogeProtocol/dp/conversionutil"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/conversionutil"
+	"github.com/QuantumCoinProject/qc/log"
 	"math"
 	"math/big"
 	"sort"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for

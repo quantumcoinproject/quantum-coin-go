@@ -5,9 +5,9 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/ethdb/memorydb"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
 )
 
 func TestSizeBug(t *testing.T) {

@@ -12,7 +12,7 @@ package qcwriteapi
 
 import (
 	"encoding/json"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 	"io"
 	"net/http"
 	"strings"

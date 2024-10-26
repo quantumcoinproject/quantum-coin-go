@@ -19,9 +19,9 @@ package vm
 import (
 	"errors"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/math"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 func makeGasSStoreFunc(clearingRefund uint64) gasFunc {

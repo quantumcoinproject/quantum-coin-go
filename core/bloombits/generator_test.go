@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // Tests that batched bloom bits are correctly rotated from the input bloom

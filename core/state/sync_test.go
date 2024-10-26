@@ -21,13 +21,13 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/ethdb/memorydb"
-	"github.com/DogeProtocol/dp/rlp"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
+	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/QuantumCoinProject/qc/trie"
 )
 
 // testAccount is the data associated with an account used by the state tests.

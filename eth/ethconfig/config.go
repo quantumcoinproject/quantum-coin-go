@@ -18,23 +18,23 @@
 package ethconfig
 
 import (
-	"github.com/DogeProtocol/dp/consensus/proofofstake"
-	"github.com/DogeProtocol/dp/internal/ethapi"
+	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
+	"github.com/QuantumCoinProject/qc/internal/ethapi"
 	"math/big"
 	"os"
 	"os/user"
 	"runtime"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/consensus"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/eth/downloader"
-	"github.com/DogeProtocol/dp/eth/gasprice"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/miner"
-	"github.com/DogeProtocol/dp/node"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/consensus"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/eth/downloader"
+	"github.com/QuantumCoinProject/qc/eth/gasprice"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/miner"
+	"github.com/QuantumCoinProject/qc/node"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.

@@ -22,14 +22,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/internal/ethapi"
-	"github.com/DogeProtocol/dp/signer/core"
-	"github.com/DogeProtocol/dp/signer/core/apitypes"
-	"github.com/DogeProtocol/dp/signer/storage"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/internal/ethapi"
+	"github.com/QuantumCoinProject/qc/signer/core"
+	"github.com/QuantumCoinProject/qc/signer/core/apitypes"
+	"github.com/QuantumCoinProject/qc/signer/storage"
 )
 
 const JS = `

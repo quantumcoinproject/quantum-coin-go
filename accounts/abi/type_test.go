@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 	"github.com/davecgh/go-spew/spew"
 )
 

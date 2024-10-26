@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // TestPack tests the general pack/unpack tests in packing_test.go

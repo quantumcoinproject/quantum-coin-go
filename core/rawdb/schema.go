@@ -21,8 +21,8 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/metrics"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/metrics"
 )
 
 // The fields below define the low level database schema prefixing.

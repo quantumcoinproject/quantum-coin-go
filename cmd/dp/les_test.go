@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 type gethrpc struct {

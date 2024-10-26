@@ -1,8 +1,8 @@
 package conversion
 
 import (
-	"github.com/DogeProtocol/dp/accounts/abi"
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
+	"github.com/QuantumCoinProject/qc/common"
 	"strings"
 )
 

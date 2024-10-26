@@ -27,11 +27,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common/mclock"
-	"github.com/DogeProtocol/dp/internal/testlog"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/p2p/netutil"
+	"github.com/QuantumCoinProject/qc/common/mclock"
+	"github.com/QuantumCoinProject/qc/internal/testlog"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/netutil"
 )
 
 // This test checks that dynamic dials are launched from discovery results.

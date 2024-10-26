@@ -1,4 +1,4 @@
-module github.com/DogeProtocol/dp
+module github.com/QuantumCoinProject/qc
 
 go 1.22
 

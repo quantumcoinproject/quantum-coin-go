@@ -24,11 +24,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/ethdb/leveldb"
-	"github.com/DogeProtocol/dp/ethdb/memorydb"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/ethdb/leveldb"
+	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
+	"github.com/QuantumCoinProject/qc/log"
 	"github.com/olekukonko/tablewriter"
 )
 

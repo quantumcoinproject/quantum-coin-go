@@ -19,7 +19,7 @@ package console
 import (
 	"testing"
 
-	"github.com/DogeProtocol/dp/internal/jsre"
+	"github.com/QuantumCoinProject/qc/internal/jsre"
 	"github.com/dop251/goja"
 )
 

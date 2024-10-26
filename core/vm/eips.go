@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/uint256"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/uint256"
 )
 
 var activators = map[int]func(*JumpTable){

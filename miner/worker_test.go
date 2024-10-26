@@ -17,24 +17,24 @@
 package miner
 
 import (
-	"github.com/DogeProtocol/dp/consensus/mockconsensus"
-	"github.com/DogeProtocol/dp/consensus/proofofstake"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
+	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"math/big"
 	"math/rand"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/consensus"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/event"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/consensus"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/event"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 const (

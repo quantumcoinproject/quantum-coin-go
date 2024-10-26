@@ -18,10 +18,10 @@ package trie
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc/crypto"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // SecureTrie wraps a trie with key hashing. In a secure trie, all

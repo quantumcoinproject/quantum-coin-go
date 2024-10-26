@@ -23,13 +23,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
 	"math/big"
 	"math/rand"
 	"reflect"
 	"strings"
 
-	"github.com/DogeProtocol/dp/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
 )
 
 // Lengths of hashes and addresses in bytes.

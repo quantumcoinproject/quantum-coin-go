@@ -17,12 +17,12 @@
 package enode
 
 import (
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"math/rand"
 	"net"
 	"testing"
 
-	"github.com/DogeProtocol/dp/p2p/enr"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
 	"github.com/stretchr/testify/assert"
 )
 

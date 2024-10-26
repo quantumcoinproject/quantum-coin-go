@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -29,10 +29,10 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // Tests block header storage and retrieval operations.

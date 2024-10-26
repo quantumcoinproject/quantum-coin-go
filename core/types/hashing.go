@@ -18,12 +18,12 @@ package types
 
 import (
 	"bytes"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
 	"sync"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // hasherPool holds LegacyKeccak256 hashers for rlpHash.

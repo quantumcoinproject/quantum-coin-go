@@ -27,10 +27,10 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/bitutil"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/bitutil"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/log"
 	"golang.org/x/crypto/sha3"
 )
 

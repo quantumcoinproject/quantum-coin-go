@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/common/mclock"
+	"github.com/QuantumCoinProject/qc/common/mclock"
 )
 
 // Subscription represents a stream of events. The carrier of the events is typically a

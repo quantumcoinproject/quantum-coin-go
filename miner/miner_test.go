@@ -18,20 +18,20 @@
 package miner
 
 import (
-	"github.com/DogeProtocol/dp/consensus/proofofstake"
+	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/eth/downloader"
-	"github.com/DogeProtocol/dp/ethdb/memorydb"
-	"github.com/DogeProtocol/dp/event"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/eth/downloader"
+	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
+	"github.com/QuantumCoinProject/qc/event"
+	"github.com/QuantumCoinProject/qc/trie"
 )
 
 type mockBackend struct {

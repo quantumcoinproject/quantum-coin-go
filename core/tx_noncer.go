@@ -19,8 +19,8 @@ package core
 import (
 	"sync"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/state"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/state"
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of

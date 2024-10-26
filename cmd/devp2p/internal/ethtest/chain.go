@@ -26,11 +26,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/forkid"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/params"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/forkid"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 type Chain struct {

@@ -2,10 +2,10 @@ package proofofstake
 
 import (
 	"crypto/rand"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/rlp"
-	"github.com/DogeProtocol/dp/trie"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/QuantumCoinProject/qc/trie"
 	"math/big"
 	"runtime/debug"
 	"strings"

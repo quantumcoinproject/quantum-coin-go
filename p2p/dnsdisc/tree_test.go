@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/p2p/enode"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
 	"github.com/davecgh/go-spew/spew"
 )
 

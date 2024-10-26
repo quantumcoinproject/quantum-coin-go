@@ -17,10 +17,10 @@
 package trie
 
 import (
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc/crypto"
 	"sync"
 
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 type sliceBuffer []byte

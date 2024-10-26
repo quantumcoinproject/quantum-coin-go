@@ -22,7 +22,7 @@ package keystore
 import (
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 	"github.com/rjeczalik/notify"
 )
 

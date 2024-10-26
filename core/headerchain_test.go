@@ -19,15 +19,15 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/consensus/mockconsensus"
+	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/consensus"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/consensus"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 func verifyUnbrokenCanonchain(hc *HeaderChain) error {

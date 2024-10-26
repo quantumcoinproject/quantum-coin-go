@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.

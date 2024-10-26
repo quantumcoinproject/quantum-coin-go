@@ -18,7 +18,7 @@
 package rlpx
 
 import (
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"net"
 	"time"
 )

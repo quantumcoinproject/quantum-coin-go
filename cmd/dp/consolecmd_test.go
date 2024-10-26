@@ -27,7 +27,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 const (

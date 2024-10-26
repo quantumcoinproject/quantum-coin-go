@@ -3,8 +3,8 @@ package signaturealgorithm
 import (
 	"bytes"
 	"fmt"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/crypto"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/crypto"
 	"io/ioutil"
 	"os"
 	"strings"

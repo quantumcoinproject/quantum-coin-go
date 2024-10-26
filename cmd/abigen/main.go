@@ -25,13 +25,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/DogeProtocol/dp/accounts/abi"
-	"github.com/DogeProtocol/dp/accounts/abi/bind"
-	"github.com/DogeProtocol/dp/cmd/utils"
-	"github.com/DogeProtocol/dp/common/compiler"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/internal/flags"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
+	"github.com/QuantumCoinProject/qc/accounts/abi/bind"
+	"github.com/QuantumCoinProject/qc/cmd/utils"
+	"github.com/QuantumCoinProject/qc/common/compiler"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/internal/flags"
+	"github.com/QuantumCoinProject/qc/log"
 	"gopkg.in/urfave/cli.v1"
 )
 

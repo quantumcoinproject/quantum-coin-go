@@ -21,11 +21,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/ethdb/memorydb"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // Prove constructs a merkle proof for key. The result contains all encoded nodes

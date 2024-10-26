@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
 	"hash"
 	"io/ioutil"
 	"math/big"
@@ -31,12 +31,12 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/ethdb"
-	"github.com/DogeProtocol/dp/ethdb/leveldb"
-	"github.com/DogeProtocol/dp/ethdb/memorydb"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/QuantumCoinProject/qc/ethdb/leveldb"
+	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
+	"github.com/QuantumCoinProject/qc/rlp"
 	"github.com/davecgh/go-spew/spew"
 )
 

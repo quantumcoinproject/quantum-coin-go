@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // Type enumerator

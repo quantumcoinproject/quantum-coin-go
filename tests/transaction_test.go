@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 func TestTransaction(t *testing.T) {

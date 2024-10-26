@@ -21,7 +21,7 @@ package core
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/consensus/mockconsensus"
+	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -29,11 +29,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/rawdb"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 // rewindTest is a test case for chain rollback upon user request.

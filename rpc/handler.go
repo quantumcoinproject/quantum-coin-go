@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // handler handles JSON-RPC messages. There is one handler per connection. Note that

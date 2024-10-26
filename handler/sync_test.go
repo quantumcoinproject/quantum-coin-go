@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/eth/downloader"
-	"github.com/DogeProtocol/dp/eth/protocols/eth"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/p2p/enode"
+	"github.com/QuantumCoinProject/qc/eth/downloader"
+	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
 )
 
 // Tests that fast sync is disabled after a successful sync cycle.

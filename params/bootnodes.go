@@ -17,7 +17,7 @@
 package params
 
 import (
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on

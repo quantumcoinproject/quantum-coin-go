@@ -20,7 +20,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/DogeProtocol/dp/console/prompt"
+	"github.com/QuantumCoinProject/qc/console/prompt"
 )
 
 // GetPassPhrase displays the given text(prompt) to the user and requests some textual

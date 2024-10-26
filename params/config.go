@@ -19,10 +19,10 @@ package params
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // Genesis hashes to enforce below configs on.

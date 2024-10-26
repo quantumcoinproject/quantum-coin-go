@@ -17,9 +17,9 @@
 package vm
 
 import (
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/math"
-	"github.com/DogeProtocol/dp/uint256"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/QuantumCoinProject/qc/uint256"
 )
 
 // calcMemSize64 calculates the required memory size, and returns

@@ -19,8 +19,8 @@ package p2p
 import (
 	"fmt"
 
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/p2p/enr"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
 )
 
 // Protocol represents a P2P subprotocol implementation.

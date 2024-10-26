@@ -22,8 +22,8 @@ package eth
 import (
 	"crypto/rand"
 
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
 )
 
 // testPeer is a simulated peer to allow testing direct network calls.

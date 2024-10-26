@@ -2,7 +2,7 @@ package profiling
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 	"net/http"
 	"os"
 	"runtime/pprof"

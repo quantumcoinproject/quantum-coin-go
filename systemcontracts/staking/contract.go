@@ -2,10 +2,10 @@ package staking
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/accounts/abi"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/systemcontracts/staking/stakingv1"
-	"github.com/DogeProtocol/dp/systemcontracts/staking/stakingv2"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv1"
+	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv2"
 	"strings"
 )
 

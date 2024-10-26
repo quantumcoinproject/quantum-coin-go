@@ -24,9 +24,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/pbkdf2"
 )

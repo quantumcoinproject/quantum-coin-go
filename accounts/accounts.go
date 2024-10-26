@@ -19,13 +19,13 @@ package accounts
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/event"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/event"
 )
 
 // Account represents an Ethereum account located at a specific location defined

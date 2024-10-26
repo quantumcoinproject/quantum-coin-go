@@ -34,7 +34,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // Handler is the global debugging handler.

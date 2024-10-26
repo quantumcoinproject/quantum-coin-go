@@ -18,14 +18,14 @@ package node
 
 import (
 	"bytes"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
-	"github.com/DogeProtocol/dp/p2p"
+	"github.com/QuantumCoinProject/qc/p2p"
 )
 
 // Tests that datadirs can be successfully created, be them manually configured

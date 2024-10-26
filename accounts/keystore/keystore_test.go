@@ -17,7 +17,7 @@
 package keystore
 
 import (
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -29,9 +29,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/accounts"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/event"
+	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/event"
 )
 
 var testSigData = make([]byte, 32)

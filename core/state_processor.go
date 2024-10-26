@@ -19,19 +19,19 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/backupmanager"
-	"github.com/DogeProtocol/dp/consensus/misc"
-	"github.com/DogeProtocol/dp/conversionutil"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/backupmanager"
+	"github.com/QuantumCoinProject/qc/consensus/misc"
+	"github.com/QuantumCoinProject/qc/conversionutil"
+	"github.com/QuantumCoinProject/qc/log"
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/consensus"
-	"github.com/DogeProtocol/dp/core/state"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/core/vm"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/consensus"
+	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning

@@ -19,17 +19,17 @@ package dnsdisc
 import (
 	"context"
 	"errors"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common/mclock"
-	"github.com/DogeProtocol/dp/internal/testlog"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/p2p/enr"
+	"github.com/QuantumCoinProject/qc/common/mclock"
+	"github.com/QuantumCoinProject/qc/internal/testlog"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
 	"github.com/davecgh/go-spew/spew"
 )
 

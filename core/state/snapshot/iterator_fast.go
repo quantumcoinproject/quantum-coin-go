@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // weightedIterator is a iterator with an assigned weight. It is used to prioritise

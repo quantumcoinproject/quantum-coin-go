@@ -18,9 +18,9 @@ package downloader
 
 import (
 	"context"
-	"github.com/DogeProtocol/dp"
-	"github.com/DogeProtocol/dp/event"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc"
+	"github.com/QuantumCoinProject/qc/event"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"sync"
 )
 

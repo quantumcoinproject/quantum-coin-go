@@ -22,7 +22,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common/hexutil"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
 )
 
 // prepare converts an ethash cache or dataset from a byte stream into the internal

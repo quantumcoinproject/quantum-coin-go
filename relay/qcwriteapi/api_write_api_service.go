@@ -12,10 +12,10 @@ package qcwriteapi
 
 import (
 	"context"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/relay"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/relay"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"net/http"
 	"errors"
 	"github.com/mattn/go-colorable"

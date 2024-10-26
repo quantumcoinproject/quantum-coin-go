@@ -17,7 +17,7 @@
 package vm
 
 import (
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/params"
 )
 
 type (

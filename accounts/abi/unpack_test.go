@@ -26,7 +26,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 	"github.com/stretchr/testify/require"
 )
 

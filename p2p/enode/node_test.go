@@ -20,14 +20,14 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"math/big"
 	"testing"
 	"testing/quick"
 
-	"github.com/DogeProtocol/dp/p2p/enr"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
+	"github.com/QuantumCoinProject/qc/rlp"
 	"github.com/stretchr/testify/assert"
 )
 

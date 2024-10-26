@@ -1,8 +1,8 @@
 package proofofstake
 
 import (
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/eth/protocols/eth"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
 )
 
 type P2PHandler interface {

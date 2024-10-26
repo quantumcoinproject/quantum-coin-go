@@ -19,17 +19,17 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/DogeProtocol/dp/accounts/keystore"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/console/prompt"
-	"github.com/DogeProtocol/dp/p2p/dnsdisc"
-	"github.com/DogeProtocol/dp/p2p/enode"
+	"github.com/QuantumCoinProject/qc/accounts/keystore"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/console/prompt"
+	"github.com/QuantumCoinProject/qc/p2p/dnsdisc"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
 	"gopkg.in/urfave/cli.v1"
 )
 

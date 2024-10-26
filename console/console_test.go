@@ -26,14 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/console/prompt"
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/eth"
-	"github.com/DogeProtocol/dp/eth/ethconfig"
-	"github.com/DogeProtocol/dp/internal/jsre"
-	"github.com/DogeProtocol/dp/miner"
-	"github.com/DogeProtocol/dp/node"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/console/prompt"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/eth"
+	"github.com/QuantumCoinProject/qc/eth/ethconfig"
+	"github.com/QuantumCoinProject/qc/internal/jsre"
+	"github.com/QuantumCoinProject/qc/miner"
+	"github.com/QuantumCoinProject/qc/node"
 )
 
 const (

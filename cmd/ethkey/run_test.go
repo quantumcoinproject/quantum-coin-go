@@ -21,7 +21,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/DogeProtocol/dp/internal/cmdtest"
+	"github.com/QuantumCoinProject/qc/internal/cmdtest"
 	"github.com/docker/docker/pkg/reexec"
 )
 

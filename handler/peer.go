@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/eth/protocols/eth"
+	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
 )
 
 // ethPeerInfo represents a short summary of the `eth` sub-protocol metadata known

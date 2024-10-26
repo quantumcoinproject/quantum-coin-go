@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/common/math"
+	"github.com/QuantumCoinProject/qc/common/math"
 )
 
 func TestStreamKind(t *testing.T) {

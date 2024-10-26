@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p/dnsdisc"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p/dnsdisc"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"

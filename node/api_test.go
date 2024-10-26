@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/stretchr/testify/assert"
 )
 

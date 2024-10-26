@@ -19,7 +19,7 @@ package state
 import (
 	"math/big"
 
-	"github.com/DogeProtocol/dp/common"
+	"github.com/QuantumCoinProject/qc/common"
 )
 
 // journalEntry is a modification entry in the state change journal that can be

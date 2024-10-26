@@ -19,19 +19,19 @@ package p2p
 import (
 	"bytes"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 
 	"io"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/bitutil"
-	"github.com/DogeProtocol/dp/metrics"
-	"github.com/DogeProtocol/dp/p2p/rlpx"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/bitutil"
+	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/QuantumCoinProject/qc/p2p/rlpx"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 const (

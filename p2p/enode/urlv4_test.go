@@ -19,15 +19,15 @@ package enode
 import (
 	"encoding/base64"
 	"errors"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/hashingalgorithm"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"net"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/p2p/enr"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
 )
 
 var (

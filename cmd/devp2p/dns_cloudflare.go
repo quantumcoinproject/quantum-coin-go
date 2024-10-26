@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/p2p/dnsdisc"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/p2p/dnsdisc"
 	"github.com/cloudflare/cloudflare-go"
 	"gopkg.in/urfave/cli.v1"
 )

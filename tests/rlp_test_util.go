@@ -24,7 +24,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // RLPTest is the JSON structure of a single RLP test.

@@ -19,9 +19,9 @@ package vm
 import (
 	"sync/atomic"
 
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/math"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/QuantumCoinProject/qc/log"
 )
 
 // Config are the configuration options for the Interpreter

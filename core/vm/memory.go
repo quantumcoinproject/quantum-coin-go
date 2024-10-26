@@ -18,7 +18,7 @@ package vm
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/uint256"
+	"github.com/QuantumCoinProject/qc/uint256"
 )
 
 // Memory implements a simple memory model for the ethereum virtual machine.

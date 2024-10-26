@@ -27,13 +27,13 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/DogeProtocol/dp/cmd/utils"
-	"github.com/DogeProtocol/dp/eth/ethconfig"
-	"github.com/DogeProtocol/dp/internal/ethapi"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/metrics"
-	"github.com/DogeProtocol/dp/node"
-	"github.com/DogeProtocol/dp/params"
+	"github.com/QuantumCoinProject/qc/cmd/utils"
+	"github.com/QuantumCoinProject/qc/eth/ethconfig"
+	"github.com/QuantumCoinProject/qc/internal/ethapi"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/QuantumCoinProject/qc/node"
+	"github.com/QuantumCoinProject/qc/params"
 	"github.com/naoina/toml"
 )
 

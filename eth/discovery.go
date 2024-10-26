@@ -17,10 +17,10 @@
 package eth
 
 import (
-	"github.com/DogeProtocol/dp/core"
-	"github.com/DogeProtocol/dp/core/forkid"
-	"github.com/DogeProtocol/dp/p2p/enode"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/core"
+	"github.com/QuantumCoinProject/qc/core/forkid"
+	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 // ethEntry is the "eth" ENR entry which advertises eth protocol

@@ -18,11 +18,11 @@ package ethtest
 
 import (
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
-	"github.com/DogeProtocol/dp/eth/protocols/eth"
-	"github.com/DogeProtocol/dp/p2p"
-	"github.com/DogeProtocol/dp/p2p/rlpx"
-	"github.com/DogeProtocol/dp/rlp"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
+	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/QuantumCoinProject/qc/p2p/rlpx"
+	"github.com/QuantumCoinProject/qc/rlp"
 )
 
 type Message interface {

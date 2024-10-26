@@ -22,11 +22,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	ethereum "github.com/DogeProtocol/dp"
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/common/hexutil"
-	"github.com/DogeProtocol/dp/core/types"
-	"github.com/DogeProtocol/dp/rpc"
+	ethereum "github.com/QuantumCoinProject/qc"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"math/big"
 )
 

@@ -17,8 +17,8 @@
 package core
 
 import (
-	"github.com/DogeProtocol/dp/common"
-	"github.com/DogeProtocol/dp/core/types"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core/types"
 )
 
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.

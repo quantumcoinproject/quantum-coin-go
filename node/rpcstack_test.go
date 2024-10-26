@@ -25,9 +25,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/DogeProtocol/dp/internal/testlog"
-	"github.com/DogeProtocol/dp/log"
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/internal/testlog"
+	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
 )

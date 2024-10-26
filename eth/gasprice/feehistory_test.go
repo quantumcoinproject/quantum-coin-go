@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/DogeProtocol/dp/rpc"
+	"github.com/QuantumCoinProject/qc/rpc"
 )
 
 func TestFeeHistory(t *testing.T) {

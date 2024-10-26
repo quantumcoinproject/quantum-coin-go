@@ -12,7 +12,7 @@ package qcreadapi
 
 import (
 	"errors"
-	"github.com/DogeProtocol/dp/log"
+	"github.com/QuantumCoinProject/qc/log"
 	"net/http"
 	"strings"
 

@@ -20,15 +20,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/DogeProtocol/dp/crypto/cryptobase"
-	"github.com/DogeProtocol/dp/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"net"
 	"net/url"
 	"regexp"
 	"strconv"
 
-	"github.com/DogeProtocol/dp/crypto"
-	"github.com/DogeProtocol/dp/p2p/enr"
+	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/QuantumCoinProject/qc/p2p/enr"
 )
 
 var (
