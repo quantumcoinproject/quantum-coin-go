@@ -338,7 +338,7 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 
 	for i,item := range  cacheResponse.Items {
 		listItem := AccountTransactionCompact{}
-		listItem.TxnHash = item.TxnHash
+		listItem.Hash = item.TxnHash
 
 		listItem.BlockNumber = item.BlockNumber
 
@@ -348,8 +348,8 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 		}
 
 		listItem.CreatedAt = formattedTime
-		listItem.FromAddress = item.FromAddress
-		listItem.ToAddress = item.ToAddress
+		listItem.From = item.FromAddress
+		listItem.To = item.ToAddress
 		listItem.Value = item.Value
 		listItem.TxnFee = item.TxnFee
 		if item.TransactionType == 1 {
