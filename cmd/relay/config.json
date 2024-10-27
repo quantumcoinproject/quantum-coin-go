@@ -6,7 +6,8 @@
     "dpurl": "http://127.0.0.1:8545",
     "corsAllowedOrigins": "*",
     "enableAuth": false,
-    "apiKeys": ""
+    "apiKeys": "",
+    "cacheUrl": ""
   },
   {
     "api": "write",
@@ -15,6 +16,7 @@
     "dpurl": "http://127.0.0.1:8545",
     "corsAllowedOrigins": "*",
     "enableAuth": false,
-    "apiKeys": ""
+    "apiKeys": "",
+    "cacheUrl": ""
   }
 ]
