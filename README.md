@@ -87,7 +87,7 @@ using digital signatures. These changes are at (https://github.com/quantumcoinpr
 These values can be used for public key recovery from the transaction metadata in Ethereum. 
 
 ## Addendum
-“Quantum Coin” and “Quantum Coin Community” were previously known under the monikers “Quantum Coin” and “Quantum Coin Community” respectively.
+“Quantum Coin” and “Quantum Coin Community” were previously known under the monikers “Doge Protocol” and “Doge Protocol Community” respectively.
 
 ## Contributing
 
