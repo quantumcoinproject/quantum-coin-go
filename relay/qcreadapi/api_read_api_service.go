@@ -335,7 +335,7 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 	listResponse := ListAccountTransactionsResponse{}
 	listResponse.PageCount = cacheResponse.PageCount
 	listResponse.Items = make([]AccountTransactionCompact, len(cacheResponse.Items))
-	
+
 	for i,item := range  cacheResponse.Items {
 		listItem := AccountTransactionCompact{}
 		listItem.TxnHash = item.TxnHash
@@ -363,8 +363,14 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 		} else if item.TransactionType == 5 {
 			listItem.TransactionType = SMART_CONTRACT
 		}
-		status := "0x" + string(item.Receipt.Status)
+		var status string
+		if item.Receipt.Status == 1 {
+			status = "0x1"
+		} else {
+			status = "0x0"
+		}
 		listItem.Status = &status
+
 		listItem.ErrorReason = item.ErrorReason
 		listResponse.Items[i] = listItem
 	}
