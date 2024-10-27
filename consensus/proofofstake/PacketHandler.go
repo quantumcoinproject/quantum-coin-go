@@ -1140,7 +1140,10 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 		return errors.New("not a validator in this block")
 	}
 
-	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+	blockRoundDetails, ok := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+	if ok == false {
+		return errors.New("invalid round")
+	}
 
 	var startIndex int
 	if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
@@ -1266,7 +1269,10 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 		return errors.New("invalid validator")
 	}
 
-	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+	blockRoundDetails, ok := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+	if ok == false {
+		return errors.New("invalid round")
+	}
 
 	_, ok = blockRoundDetails.validatorProposalAcks[validator]
 	if ok == true {
@@ -1613,7 +1619,10 @@ func (cph *ConsensusHandler) handlePrecommitPacket(validator common.Address, pac
 		return errors.New("not a validator in this block")
 	}
 
-	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+	blockRoundDetails, ok := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+	if ok == false {
+		return errors.New("invalid round")
+	}
 
 	if blockRoundDetails.state != BLOCK_STATE_WAITING_FOR_PRECOMMITS {
 		return OutOfOrderPackerErr
@@ -1711,7 +1720,11 @@ func (cph *ConsensusHandler) handleCommitPacket(validator common.Address, packet
 		return errors.New("not a validator in this block")
 	}
 
-	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+	blockRoundDetails, ok := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+	if ok == false {
+		return errors.New("invalid round")
+	}
+
 	if blockRoundDetails.state != BLOCK_STATE_WAITING_FOR_COMMITS {
 		return OutOfOrderPackerErr
 	}
