@@ -302,6 +302,19 @@ func send(from string, to string, quantity string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
+	envNonce := os.Getenv("NONCE_VALUE")
+	if len(envNonce) > 0 {
+		nonceVal, err := strconv.ParseInt(envNonce, 10, 64)
+		if err == nil {
+			nonce = uint64(nonceVal)
+			fmt.Println("Using nonce passed from environment variable NONCE_VALUE: ", nonceVal)
+		} else {
+			fmt.Println("Not Using nonce passed from environment variable NONCE_VALUE due to error: ", err)
+			return "", err
+		}
+	}
+
 	chainID, err := client.NetworkID(context.Background())
 	if err != nil {
 		return "", err

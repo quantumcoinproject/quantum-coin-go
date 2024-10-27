@@ -19,15 +19,15 @@ import (
 
 type AccountTransactionCompact struct {
 
-	TxnHash string `json:"txnHash,omitempty"`
+	Hash string `json:"hash,omitempty"`
 
 	BlockNumber int64 `json:"blockNumber,omitempty"`
 
 	CreatedAt time.Time `json:"createdAt,omitempty"`
 
-	FromAddress *string `json:"fromAddress,omitempty"`
+	From *string `json:"from,omitempty"`
 
-	ToAddress *string `json:"toAddress,omitempty"`
+	To *string `json:"to,omitempty"`
 
 	Value *string `json:"value,omitempty"`
 

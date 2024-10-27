@@ -356,7 +356,7 @@ components:
     AccountTransactionCompact:
       type: object
       properties:
-        txnHash:
+        hash:
           type: string
           nullable: false
         blockNumber:
@@ -365,10 +365,10 @@ components:
         createdAt:
           type: string
           format: date-time
-        fromAddress:
+        from:
           type: string
           nullable: true
-        toAddress:
+        to:
           type: string
           nullable: true
         value:
