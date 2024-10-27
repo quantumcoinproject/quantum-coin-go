@@ -19,9 +19,11 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/rpc"
+	"io/ioutil"
 	"net/http"
 	"errors"
 	"github.com/mattn/go-colorable"
+	"strconv"
 	"time"
 )
 
@@ -30,6 +32,7 @@ import (
 // Include any external packages or services that will be required by this service.
 type ReadApiAPIService struct {
   DpUrl string
+  CacheUrl string
 }
 
 type RPCTransaction struct {
@@ -49,9 +52,12 @@ type RPCTransaction struct {
 }
 
 // NewReadApiAPIService creates a default api service
-func NewReadApiAPIService(dpUrl string) *ReadApiAPIService {
+func NewReadApiAPIService(dpUrl string, cacheUrl string) *ReadApiAPIService {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
-	return &ReadApiAPIService{DpUrl: dpUrl}
+	return &ReadApiAPIService{
+		DpUrl: dpUrl,
+		CacheUrl: cacheUrl,
+	}
 }
 
 // GetLatestBlockDetails - Get latest block details
@@ -85,7 +91,7 @@ func (s *ReadApiAPIService) GetLatestBlockDetails(ctx context.Context) (ImplResp
 
 	log.Info(relay.InfoTitleLatestBlockDetails, "blockNumber", latestBlockNumber.Int64(),  relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
 	l := latestBlockNumber.Int64()
-	return Response(http.StatusOK, LatestBlockDetailsResponse{BlockDetails{&l}}), nil
+	return Response(http.StatusOK, BlockDetailsResponse{BlockDetails{&l}}), nil
 }
 
 // GetAccountDetails - Get account details
@@ -102,7 +108,7 @@ func (s *ReadApiAPIService) GetAccountDetails(ctx context.Context, address strin
 	}
 	defer client.Close()
 
-	if !common.IsHexAddress(address) {
+	if !common.IsHexAddressDeep(address) {
 		log.Error(relay.MsgAddress, relay.MsgAddress, address, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest)
 		return Response(http.StatusBadRequest, nil), relay.ErrInvalidAddress
 	}
@@ -173,7 +179,7 @@ func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash stri
 	}
 	defer client.Close()
 
-	if !common.IsHexAddress(hash)  {
+	if !common.IsHexAddressDeep(hash)  {
 		log.Error(relay.MsgHash, relay.MsgHash, hash, relay.MsgError, relay.ErrInvalidHash, relay.MsgStatus, http.StatusBadRequest)
 		return  Response(http.StatusBadRequest, nil), relay.ErrInvalidHash
 	}
@@ -252,8 +258,8 @@ func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash stri
 			log.Info(relay.InfoTitleTransaction, relay.MsgHash, hash, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
 
 			txnDetails := TransactionDetails{
-				&blochHash, &blockNumber, discardReason, from,gas, gasPrice, txnHash,
-				input, isDiscarded, nonce , &to,value,
+				&blochHash, &blockNumber, from,gas, gasPrice, txnHash,
+				input, &isDiscarded, &discardReason, nonce , &to,value,
 				transactionReceipt}
 
 			Dump(txnDetails)
@@ -265,8 +271,8 @@ func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash stri
 		log.Info(relay.InfoTitleTransaction, relay.MsgHash, hash, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
 
 		txnDetails := TransactionDetails{
-			&blochHash, &blockNumber, discardReason, from,gas, gasPrice, txnHash,
-			input, isDiscarded, nonce , &to,value,
+			&blochHash, &blockNumber, from,gas, gasPrice, txnHash,
+			input, &isDiscarded, &discardReason, nonce , &to,value,
 			transactionReceipt}
 
 		Dump(txnDetails)
@@ -279,6 +285,95 @@ func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash stri
 	log.Info(relay.InfoTitleTransaction, relay.MsgHash, hash, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
 	return  Response(http.StatusNotFound,nil), nil
+}
+
+// ListAccountTransactions - List account transactions
+func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address string, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgDial, s.CacheUrl)
+
+	cacheClient := http.Client{
+		Timeout: time.Second * 2, // Timeout after 2 seconds
+	}
+
+	if common.IsHexAddressDeep(address) == false {
+		return Response(http.StatusInternalServerError, nil), relay.ErrInvalidAddress
+	}
+
+	url := s.CacheUrl + "/api/dogep/accounts/" + address + "/transactions/page/" +  strconv.Itoa(int(pageNumber))
+	log.Info("ListAccountTransactions", "url", url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+
+	res, getErr := cacheClient.Do(req)
+	if getErr != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New(getErr.Error())
+	}
+
+	if res.Body == nil {
+		return Response(http.StatusInternalServerError, nil), errors.New("body is nil")
+	}
+	defer res.Body.Close()
+
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New(readErr.Error())
+	}
+
+
+	cacheResponse := ListAccountTransactionsResponseInternal{}
+	jsonErr := json.Unmarshal(body, &cacheResponse)
+
+	if jsonErr != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New(jsonErr.Error())
+	}
+
+	listResponse := ListAccountTransactionsResponse{}
+	listResponse.PageCount = cacheResponse.PageCount
+	listResponse.Items = make([]AccountTransactionCompact, len(cacheResponse.Items))
+	
+	for i,item := range  cacheResponse.Items {
+		listItem := AccountTransactionCompact{}
+		listItem.TxnHash = item.TxnHash
+
+		listItem.BlockNumber = item.BlockNumber
+
+		formattedTime, err := time.Parse("2006-01-02T15:04:05", item.CreatedAt)
+		if err != nil {
+			return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+		}
+
+		listItem.CreatedAt = formattedTime
+		listItem.FromAddress = item.FromAddress
+		listItem.ToAddress = item.ToAddress
+		listItem.Value = item.Value
+		listItem.TxnFee = item.TxnFee
+		if item.TransactionType == 1 {
+			listItem.TransactionType = COIN_TRANSFER
+		} else if item.TransactionType == 2 {
+			listItem.TransactionType = NEW_TOKEN
+		} else if item.TransactionType == 3 {
+			listItem.TransactionType = TOKEN_TRANSFER
+		} else if item.TransactionType == 4 {
+			listItem.TransactionType = NEW_SMART_CONTRACT
+		} else if item.TransactionType == 5 {
+			listItem.TransactionType = SMART_CONTRACT
+		}
+		status := "0x" + string(item.Receipt.Status)
+		listItem.Status = &status
+		listItem.ErrorReason = item.ErrorReason
+		listResponse.Items[i] = listItem
+	}
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	return Response(http.StatusOK,listResponse),	nil
 }
 
 func Dump(data interface{}){

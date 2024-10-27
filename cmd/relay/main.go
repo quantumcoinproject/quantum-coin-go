@@ -32,6 +32,7 @@ type Config struct {
 	CorsAllowedOrigins    string `json:"corsAllowedOrigins"`
 	EnableAuth bool `json:"enableAuth"`
 	ApiKeys string `json:"apiKeys"`
+	CacheUrl string `json:"cacheUrl"`
 }
 
 type Configs struct {
@@ -65,6 +66,7 @@ func main() {
 		corsAllowedOrigins := config.CorsAllowedOrigins
 		enableAuth := config.EnableAuth
 		apiKeys := config.ApiKeys
+		cacheUrl := config.CacheUrl
 
 		if net.ParseIP(ip) == nil {
 			fmt.Println("Check configuration ip value ", ip)
@@ -77,7 +79,7 @@ func main() {
 		}
 
 		if strings.EqualFold(api ,"read") {
-			go qcReadApi(ip, port, dpUrl, corsAllowedOrigins,enableAuth,apiKeys)
+			go qcReadApi(ip, port, dpUrl, corsAllowedOrigins,enableAuth,apiKeys, cacheUrl)
 		}
 
 		if strings.EqualFold(api ,"write") {
@@ -89,8 +91,8 @@ func main() {
 	<-make(chan int)
 }
 
-func qcReadApi(ip string, port string, dpUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string) {
-	ReadApiAPIService := qcreadapi.NewReadApiAPIService(dpUrl)
+func qcReadApi(ip string, port string, dpUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheUrl string) {
+	ReadApiAPIService := qcreadapi.NewReadApiAPIService(dpUrl, cacheUrl)
 	ReadApiAPIController := qcreadapi.NewReadApiAPIController(ReadApiAPIService, corsAllowedOrigins, enableAuth, apiKeys)
 	readRouter := qcreadapi.NewRouter(ReadApiAPIController)
 

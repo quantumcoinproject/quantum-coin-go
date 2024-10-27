@@ -112,7 +112,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
-
+  '/account/{address}/transactions/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List transactions by address
+      operationId: ListAccountTransactions
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: The address of the account
+          schema:
+            type: string
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAccountTransactionsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
   '/transaction/{hash}':
     get:
       tags:
@@ -210,6 +271,14 @@ components:
           allOf:
             - $ref: '#/components/schemas/AccountDetails'
       additionalProperties: false
+    TransactionType:
+      enum:
+        - CoinTransfer
+        - NewToken
+        - TokenTransfer
+        - NewSmartContract
+        - SmartContract
+      type: string
     TransactionDetails:
       type: object
       properties:
@@ -283,6 +352,50 @@ components:
         type:
           type: string
           nullable: false
+      additionalProperties: false
+    AccountTransactionCompact:
+      type: object
+      properties:
+        txnHash:
+          type: string
+          nullable: false
+        blockNumber:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        fromAddress:
+          type: string
+          nullable: true
+        toAddress:
+          type: string
+          nullable: true
+        value:
+          type: string
+          nullable: true
+        txnFee:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        transactionType:
+          $ref: '#/components/schemas/TransactionType'
+        errorReason:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ListAccountTransactionsResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountTransactionCompact'
       additionalProperties: false
     ErrorResponseModel:
       type: object

@@ -251,6 +251,18 @@ func IsHexAddress(s string) bool {
 	return len(s) == 2*AddressLength && IsHex(s)
 }
 
+func IsHexAddressDeep(s string) bool {
+	if len(s) < 66 {
+		return false
+	}
+	if has0xPrefix(s) {
+		s = s[2:]
+	} else {
+		return false
+	}
+	return len(s) == 2*AddressLength && IsHex(s)
+}
+
 // IsHexAddress verifies whether a string can represent a valid hex-encoded
 // Ethereum address or not.
 func IsLegacyEthereumHexAddress(s string) bool {

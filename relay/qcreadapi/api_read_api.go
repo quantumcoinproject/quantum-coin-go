@@ -14,6 +14,7 @@ import (
 	"errors"
 	"github.com/QuantumCoinProject/qc/log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/gorilla/mux"
@@ -85,6 +86,11 @@ func (c *ReadApiAPIController) Routes() Routes {
 			strings.ToUpper("Get"),
 			"/transaction/{hash}",
 			c.GetTransactionDetails,
+		},
+		"ListAccountTransactions": Route{
+			strings.ToUpper("Get"),
+			"/account/{address}/transactions/{pageNumber}",
+			c.ListAccountTransactions,
 		},
 	}
 }
@@ -224,6 +230,61 @@ func (c *ReadApiAPIController) GetTransactionDetails(w http.ResponseWriter, r *h
 		return
 	}
 	result, err := c.service.GetTransactionDetails(r.Context(), hashParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+}
+
+// ListAccountTransactions - List account transactions
+func (c *ReadApiAPIController) ListAccountTransactions(w http.ResponseWriter, r *http.Request) {
+	if r.Header != nil {
+		requestId := r.Header.Get(REQUEST_ID_HEADER_NAME)
+
+		if len(requestId) > 0 {
+			log.Info("ListAccountTransactions", "requestId", requestId)
+		}
+	}
+
+	c.setupCORS(&w, r)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
+
+	if c.authorize(r) == false {
+		result := Response(http.StatusUnauthorized, nil)
+		// If no error, encode the body and the result code
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
+		return
+	}
+
+	params := mux.Vars(r)
+	addressParam := params["address"]
+	if addressParam == "" {
+		c.errorHandler(w, r, &RequiredError{"address"}, nil)
+		return
+	}
+	pageNumberParam := params["pageNumber"]
+	if pageNumberParam == "" {
+		c.errorHandler(w, r, &RequiredError{"pageNumber"}, nil)
+		return
+	}
+	pageNumber, err := strconv.ParseInt(pageNumberParam, 10, 64)
+	if err != nil {
+		c.errorHandler(w, r, err, nil)
+		return
+	}
+	if pageNumber <= 0 {
+		pageNumber = -1
+	}
+
+	result, err := c.service.ListAccountTransactions(r.Context(), addressParam, pageNumber)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
