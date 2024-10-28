@@ -109,16 +109,17 @@ func (c *WriteApiAPIController) authorize(w http.ResponseWriter, req *http.Reque
 
 // SendTransaction - Send Transaction
 func (c *WriteApiAPIController) SendTransaction(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
 	if r.Header != nil {
-		requestId := r.Header.Get(REQUEST_ID_HEADER_NAME)
-
-		if len(requestId) > 0 {
-			log.Info("SendTransaction", "requestId", requestId)
-		}
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("SendTransaction", "requestId", requestId)
 	}
 
 	c.setupCORS(&w, r)
 	if (*r).Method == "OPTIONS" {
+		log.Info("SendTransaction OPTIONS", "requestId", requestId)
 		return
 	}
 
@@ -126,7 +127,7 @@ func (c *WriteApiAPIController) SendTransaction(w http.ResponseWriter, r *http.R
 		result := Response(http.StatusUnauthorized, nil)
 		// If no error, encode the body and the result code
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
-
+		log.Error("SendTransaction", "requestId", requestId, "error", "Unauthorized")
 		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
 		return
 	}
@@ -135,15 +136,18 @@ func (c *WriteApiAPIController) SendTransaction(w http.ResponseWriter, r *http.R
 	d := json.NewDecoder(r.Body)
 	d.DisallowUnknownFields()
 	if err := d.Decode(&sendTransactionRequestParam); err != nil && !errors.Is(err, io.EOF) {
-		c.errorHandler(w, r, &ParsingError{Err: err}, nil)
+		c.errorHandler(w, r, &ParsingError{Err: err, Param: "txnData"}, nil)
+		log.Error("SendTransaction", "requestId", requestId, "error", "invalid txnData")
 		return
 	}
 	if err := AssertSendTransactionRequestRequired(sendTransactionRequestParam); err != nil {
 		c.errorHandler(w, r, err, nil)
+		log.Error("SendTransaction", "requestId", requestId, "error", "err fields")
 		return
 	}
 	if err := AssertSendTransactionRequestConstraints(sendTransactionRequestParam); err != nil {
 		c.errorHandler(w, r, err, nil)
+		log.Error("SendTransaction", "requestId", requestId, "error", "err constraints")
 		return
 	}
 	result, err := c.service.SendTransaction(r.Context(), sendTransactionRequestParam)
@@ -153,8 +157,11 @@ func (c *WriteApiAPIController) SendTransaction(w http.ResponseWriter, r *http.R
 			result = Response(http.StatusBadRequest, result.Body)
 		}
 		c.errorHandler(w, r, err, &result)
+		log.Error("SendTransaction", "requestId", requestId, "error", "Unauthorized", "error", err)
 		return
 	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("SendTransaction ok", "requestId", requestId)
 }
