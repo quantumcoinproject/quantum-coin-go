@@ -12,7 +12,9 @@ package qcreadapi
 
 import (
 	"errors"
+	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/relay"
 	"net/http"
 	"strconv"
 	"strings"
@@ -95,10 +97,10 @@ func (c *ReadApiAPIController) Routes() Routes {
 	}
 }
 
+//(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-Api-Key")
 func (c *ReadApiAPIController) setupCORS(w *http.ResponseWriter, req *http.Request) {
 	(*w).Header().Set("Access-Control-Allow-Origin", c.corsAllowedOrigins)
-	(*w).Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT")
-	//(*w).Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-Api-Key")
+	(*w).Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	(*w).Header().Set("Access-Control-Allow-Headers", "*")
 }
 
@@ -126,16 +128,18 @@ func (c *ReadApiAPIController) authorize(req *http.Request) bool {
 
 // GetLatestBlockDetails - Get latest block details
 func (c *ReadApiAPIController) GetLatestBlockDetails(w http.ResponseWriter, r *http.Request) {
+	log.Info("GetLatestBlockDetails aaf")
+	requestId := ""
 	if r.Header != nil {
-		requestId := r.Header.Get(REQUEST_ID_HEADER_NAME)
-
-		if len(requestId) > 0 {
-			log.Info("GetLatestBlockDetails", "requestId", requestId)
-		}
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("GetLatestBlockDetails", "requestId", requestId)
 	}
 
 	c.setupCORS(&w, r)
 	if (*r).Method == "OPTIONS" {
+		log.Info("GetLatestBlockDetails OPTIONS", "requestId", requestId)
 		return
 	}
 
@@ -144,6 +148,7 @@ func (c *ReadApiAPIController) GetLatestBlockDetails(w http.ResponseWriter, r *h
 		// If no error, encode the body and the result code
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 
+		log.Error("GetLatestBlockDetails", "requestId", requestId, "error", "Unauthorized");
 		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
 		return
 	}
@@ -151,25 +156,29 @@ func (c *ReadApiAPIController) GetLatestBlockDetails(w http.ResponseWriter, r *h
 	result, err := c.service.GetLatestBlockDetails(r.Context())
 	// If an error occurred, encode the error with the status code
 	if err != nil {
+		log.Error("GetLatestBlockDetails", "requestId", requestId, "error", err);
 		c.errorHandler(w, r, err, &result)
 		return
 	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("GetLatestBlockDetails ok", "requestId", requestId)
 }
 
 // GetAccountDetails - Get account details
 func (c *ReadApiAPIController) GetAccountDetails(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
 	if r.Header != nil {
-		requestId := r.Header.Get(REQUEST_ID_HEADER_NAME)
-
-		if len(requestId) > 0 {
-			log.Info("GetAccountDetails", "requestId", requestId)
-		}
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("GetAccountDetails", "requestId", requestId)
 	}
 
 	c.setupCORS(&w, r)
 	if (*r).Method == "OPTIONS" {
+		log.Info("GetAccountDetails OPTIONS", "requestId", requestId)
 		return
 	}
 
@@ -177,6 +186,8 @@ func (c *ReadApiAPIController) GetAccountDetails(w http.ResponseWriter, r *http.
 		result := Response(http.StatusUnauthorized, nil)
 		// If no error, encode the body and the result code
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+		log.Error("GetAccountDetails", "requestId", requestId, "error", "Unauthorized");
 
 		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
 		return
@@ -186,31 +197,43 @@ func (c *ReadApiAPIController) GetAccountDetails(w http.ResponseWriter, r *http.
 	addressParam := params["address"]
 	if addressParam == "" {
 		c.errorHandler(w, r, &RequiredError{"address"}, nil)
+		log.Error("GetAccountDetails", "requestId", requestId, "error", "address is empty")
 		return
 	}
 
+	if !common.IsHexAddressDeep(addressParam) {
+		log.Error(relay.MsgAddress, relay.MsgAddress, addressParam, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest, "requestId", requestId)
+		c.errorHandler(w, r, &ParsingError{"address", errors.New("Invalid address")}, nil)
+		return
+	}
+
+	log.Info("GetAccountDetails", "requestId", requestId, "addressParam", addressParam)
 	result, err := c.service.GetAccountDetails(r.Context(), addressParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
+		log.Error("GetAccountDetails", "requestId", requestId, "error", err)
 		return
 	}
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("GetAccountDetails ok", "requestId", requestId)
 }
 
 // GetTransaction - Get Transaction
 func (c *ReadApiAPIController) GetTransactionDetails(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
 	if r.Header != nil {
-		requestId := r.Header.Get(REQUEST_ID_HEADER_NAME)
-
-		if len(requestId) > 0 {
-			log.Info("GetTransactionDetails", "requestId", requestId)
-		}
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("GetTransactionDetails", "requestId", requestId)
 	}
 
 	c.setupCORS(&w, r)
 	if (*r).Method == "OPTIONS" {
+		log.Info("GetTransactionDetails OPTIONS", "requestId", requestId)
 		return
 	}
 
@@ -219,6 +242,7 @@ func (c *ReadApiAPIController) GetTransactionDetails(w http.ResponseWriter, r *h
 		// If no error, encode the body and the result code
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 
+		log.Error("GetTransactionDetails OPTIONS", "requestId", requestId, "error", "Unauthorized")
 		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
 		return
 	}
@@ -227,27 +251,38 @@ func (c *ReadApiAPIController) GetTransactionDetails(w http.ResponseWriter, r *h
 	hashParam := params["hash"]
 	if hashParam == "" {
 		c.errorHandler(w, r, &RequiredError{"hash"}, nil)
+		log.Error("GetTransactionDetails hashParam is empty", "requestId", requestId)
 		return
 	}
+
+	if !common.IsHexAddressDeep(hashParam) {
+		log.Error(relay.MsgAddress, relay.MsgHash, hashParam, relay.MsgError, relay.ErrInvalidHash, relay.MsgStatus, http.StatusBadRequest, "requestId", requestId)
+		c.errorHandler(w, r, &ParsingError{"hash", errors.New("Invalid hash")}, nil)
+		return
+	}
+
 	result, err := c.service.GetTransactionDetails(r.Context(), hashParam)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
+		log.Error("GetTransactionDetails", "requestId", requestId, "error", err)
 		return
 	}
 
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("GetTransactionDetails ok", "requestId", requestId)
 }
 
 // ListAccountTransactions - List account transactions
 func (c *ReadApiAPIController) ListAccountTransactions(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
 	if r.Header != nil {
-		requestId := r.Header.Get(REQUEST_ID_HEADER_NAME)
-
-		if len(requestId) > 0 {
-			log.Info("ListAccountTransactions", "requestId", requestId)
-		}
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("ListAccountTransactions", "requestId", requestId)
 	}
 
 	c.setupCORS(&w, r)
@@ -260,6 +295,7 @@ func (c *ReadApiAPIController) ListAccountTransactions(w http.ResponseWriter, r 
 		// If no error, encode the body and the result code
 		_ = EncodeJSONResponse(result.Body, &result.Code, w)
 
+		log.Error("ListAccountTransactions", "requestId", requestId, "error", "Unauthorized")
 		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
 		return
 	}
@@ -268,29 +304,41 @@ func (c *ReadApiAPIController) ListAccountTransactions(w http.ResponseWriter, r 
 	addressParam := params["address"]
 	if addressParam == "" {
 		c.errorHandler(w, r, &RequiredError{"address"}, nil)
+		log.Error("ListAccountTransactions address is empty", "requestId", requestId)
 		return
 	}
+
+	if !common.IsHexAddressDeep(addressParam) {
+		log.Error(relay.MsgAddress, relay.MsgAddress, addressParam, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest, "requestId", requestId)
+		c.errorHandler(w, r, &ParsingError{"address", errors.New("Invalid address")}, nil)
+		return
+	}
+
+	pageNumber := int64(-1)
 	pageNumberParam := params["pageNumber"]
-	if pageNumberParam == "" {
-		c.errorHandler(w, r, &RequiredError{"pageNumber"}, nil)
-		return
-	}
-	pageNumber, err := strconv.ParseInt(pageNumberParam, 10, 64)
-	if err != nil {
-		c.errorHandler(w, r, err, nil)
-		return
-	}
-	if pageNumber <= 0 {
-		pageNumber = -1
+	var err error
+	if len(pageNumberParam) > 0 {
+		pageNumber, err = strconv.ParseInt(pageNumberParam, 10, 64)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{"pageNumber", err}, nil)
+			log.Error("ListAccountTransactions", "requestId", requestId, "error", "invalid pageNumber")
+			return
+		}
+		if pageNumber <= 0 {
+			pageNumber = -1
+		}
 	}
 
 	result, err := c.service.ListAccountTransactions(r.Context(), addressParam, pageNumber)
 	// If an error occurred, encode the error with the status code
 	if err != nil {
 		c.errorHandler(w, r, err, &result)
+		log.Error("ListAccountTransactions", "requestId", requestId, "error", err)
 		return
 	}
 
 	// If no error, encode the body and the result code
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("ListAccountTransactions ok", "requestId", requestId)
 }

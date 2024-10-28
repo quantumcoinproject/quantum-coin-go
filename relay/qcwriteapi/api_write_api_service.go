@@ -61,8 +61,8 @@ func (s *WriteApiAPIService) SendTransaction(ctx context.Context, sendTransactio
 	err = client.CallContext(ctx, &txHash, "eth_sendRawTransaction", rawTxHex)
 
 	if err != nil {
-		log.Error(relay.MsgSend + " " + relay.MsgTransaction, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusMethodNotAllowed)
-		return  Response(http.StatusMethodNotAllowed, nil), errors.New(err.Error())
+		log.Error(relay.MsgSend + " " + relay.MsgTransaction, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), errors.New(err.Error())
 	}
 
 	duration := time.Now().Sub(startTime)
