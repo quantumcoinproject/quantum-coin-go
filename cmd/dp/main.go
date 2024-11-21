@@ -253,7 +253,7 @@ func init() {
 }
 
 func main() {
-	log.Info("Starting Quantum Coin")
+	log.Info("Starting Quantum Coin - Q")
 	fmt.Println("VERSION_NUMBER", VERSION_NUMBER)
 
 	if len(os.Args) < 2 {
