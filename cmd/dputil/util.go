@@ -457,7 +457,7 @@ func convertCoins(ethAddress string, ethSignature string, key *signaturealgorith
 		return err
 	}
 
-	fmt.Println("Your request to get the quantum dp coins has been added to the queue for processing. Please check your account balance after 10 minutes.")
+	fmt.Println("Your request to get the quantum coins has been added to the queue for processing. Please check your account balance after 10 minutes.")
 	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash())
 	fmt.Println("Your can you use the following command to check your account balance: ")
 	fmt.Println("dputil balance [YOUR_QUANTUM_ADDRESS]")
