@@ -179,6 +179,20 @@ func (bnh *BlockNumberOrHash) String() string {
 	}
 	return "nil"
 }
+
+func (bnh *BlockNumberOrHash) DeepString() string {
+	blockNum := ""
+	blockHash := ""
+
+	if bnh.BlockNumber != nil {
+		blockNum = strconv.Itoa(int(*bnh.BlockNumber))
+	}
+	if bnh.BlockHash != nil {
+		blockHash = bnh.BlockHash.String()
+	}
+	return fmt.Sprintf("blockNum : %s, blockHash : %s", blockNum, blockHash)
+}
+
 func (bnh *BlockNumberOrHash) Hash() (common.Hash, bool) {
 	if bnh.BlockHash != nil {
 		return *bnh.BlockHash, true

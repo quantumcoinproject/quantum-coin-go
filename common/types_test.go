@@ -87,20 +87,25 @@ func TestEqualToAddress(t *testing.T) {
 	Address2 := BytesToAddress([]byte{byte(1)})
 	Address3 := BytesToAddress([]byte{byte(2)})
 
+	var addressNil *Address
+	if addressNil.IsEqualTo(Address0) == true {
+		t.Fatalf("failed1")
+	}
+
 	if Address0.IsEqualTo(Address1) == true {
-		t.Fatalf("failed")
+		t.Fatalf("failed2")
 	}
 
 	if Address1.IsEqualTo(Address2) == false {
-		t.Fatalf("failed")
+		t.Fatalf("failed3")
 	}
 
 	if Address2.IsEqualTo(Address3) == true {
-		t.Fatalf("failed")
+		t.Fatalf("failed4")
 	}
 
 	if Address3.IsEqualTo(Address1) == true {
-		t.Fatalf("failed")
+		t.Fatalf("failed5")
 	}
 }
 
