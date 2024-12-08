@@ -48,7 +48,7 @@ const (
 	clientIdentifier = "geth" // Client identifier to advertise over the network
 )
 
-const VERSION_NUMBER = "v2.0.50"
+const VERSION_NUMBER = "v2.0.56"
 
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
@@ -253,11 +253,14 @@ func init() {
 }
 
 func main() {
-	log.Info("Starting Quantum Coin - Q")
+	log.Info("=======================================")
+	log.Info("||        Quantum Coin               ||")
+	log.Info("||              Q                    ||")
+	log.Info("||  Quantum Resistant Blockchain     ||")
+	log.Info("=======================================")
 	fmt.Println("VERSION_NUMBER", VERSION_NUMBER)
 
 	if len(os.Args) < 2 {
-		fmt.Println("VERSION_NUMBER", VERSION_NUMBER)
 		os.Exit(-1)
 	}
 
