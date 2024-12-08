@@ -362,6 +362,9 @@ func (a *Address) CopyFrom(fromAddress Address) {
 }
 
 func (a *Address) IsEqualTo(other Address) bool {
+	if a == nil {
+		return false
+	}
 	return bytes.Compare(a.Bytes(), other.Bytes()) == 0
 }
 

@@ -20,14 +20,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"math/big"
-
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/common/math"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/rpc"
+	"math/big"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction

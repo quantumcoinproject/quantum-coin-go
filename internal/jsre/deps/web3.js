@@ -3937,7 +3937,7 @@ var inputAddressFormatter = function (address) {
     } else if (utils.isAddress(address)) {
         return '0x' + address;
     }
-    throw new Error('invalid address');
+    throw new Error('invalid address ' + address);
 };
 
 

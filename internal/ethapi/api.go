@@ -898,7 +898,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			return 0, err
 		}
 		if block == nil {
-			return 0, errors.New("block not found")
+			return 0, errors.New(fmt.Sprintf("block not found: %s", blockNrOrHash.DeepString()))
 		}
 		hi = block.GasLimit()
 	}
@@ -1565,6 +1565,10 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 		defer s.nonceLock.UnlockAddr(args.from())
 	}
 
+	if args.GasPrice == nil {
+		log.Info("GasPrice is nil. Setting GasPrice to GAS_TIER_DEFAULT_PRICE")
+		args.GasPrice = (*hexutil.Big)(types.GAS_TIER_DEFAULT_PRICE)
+	}
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {
 		return common.Hash{}, err
