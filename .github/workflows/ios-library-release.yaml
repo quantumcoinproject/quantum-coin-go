@@ -40,8 +40,8 @@ jobs:
         export CC=${{ github.workspace }}/clangwrap.sh
         export CGO_CFLAGS="-fembed-bitcode"
         go build -buildmode=c-archive -trimpath -tags ios -o ${{ github.workspace }}/build/ios_arm64/arm64.a ${{ github.workspace }}/wasm/mobile/main.go
-        lipo ${{ github.workspace }}/build/ios_amd64/amd64.a ${{ github.workspace }}/build/ios_arm64/arm64.a -create -output  ${{ github.workspace }}/build/ios_lib/libgodp.a
-        cp ${{ github.workspace }}/build/ios_arm64/arm64.h ${{ github.workspace }}/build/ios_lib/libgodp.h
+        lipo ${{ github.workspace }}/build/ios_amd64/amd64.a ${{ github.workspace }}/build/ios_arm64/arm64.a -create -output  ${{ github.workspace }}/build/ios_lib/libquantumcoin.a
+        cp ${{ github.workspace }}/build/ios_arm64/arm64.h ${{ github.workspace }}/build/ios_lib/libquantumcoin.h
     - name: Check Files
       run:  ls  ${{ github.workspace }}/build/ios_lib
     - name: Create Release

@@ -19,11 +19,10 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/rpc"
-	"io/ioutil"
+	"github.com/QuantumCoinProject/qc/cachemanager"
 	"net/http"
 	"errors"
 	"github.com/mattn/go-colorable"
-	"strconv"
 	"time"
 )
 
@@ -294,90 +293,18 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 
 	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgDial, s.CacheUrl)
 
-	cacheClient := http.Client{
-		Timeout: time.Second * 2, // Timeout after 2 seconds
-	}
-
 	if common.IsHexAddressDeep(address) == false {
 		return Response(http.StatusInternalServerError, nil), relay.ErrInvalidAddress
-	}
-
-	url := s.CacheUrl + "/api/dogep/accounts/" + address + "/transactions/page/" +  strconv.Itoa(int(pageNumber))
-	log.Info("ListAccountTransactions", "url", url)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
-	}
-
-	res, getErr := cacheClient.Do(req)
-	if getErr != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New(getErr.Error())
-	}
-
-	if res.Body == nil {
-		return Response(http.StatusInternalServerError, nil), errors.New("body is nil")
-	}
-	defer res.Body.Close()
-
-	body, readErr := ioutil.ReadAll(res.Body)
-	if readErr != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New(readErr.Error())
-	}
-
-
-	cacheResponse := ListAccountTransactionsResponseInternal{}
-	jsonErr := json.Unmarshal(body, &cacheResponse)
-
-	if jsonErr != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New(jsonErr.Error())
-	}
-
-	listResponse := ListAccountTransactionsResponse{}
-	listResponse.PageCount = cacheResponse.PageCount
-	listResponse.Items = make([]AccountTransactionCompact, len(cacheResponse.Items))
-
-	for i,item := range  cacheResponse.Items {
-		listItem := AccountTransactionCompact{}
-		listItem.Hash = item.TxnHash
-
-		listItem.BlockNumber = item.BlockNumber
-
-		formattedTime, err := time.Parse("2006-01-02T15:04:05", item.CreatedAt)
-		if err != nil {
-			return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
-		}
-
-		listItem.CreatedAt = formattedTime
-		listItem.From = item.FromAddress
-		listItem.To = item.ToAddress
-		listItem.Value = item.Value
-		listItem.TxnFee = item.TxnFee
-		if item.TransactionType == 1 {
-			listItem.TransactionType = COIN_TRANSFER
-		} else if item.TransactionType == 2 {
-			listItem.TransactionType = NEW_TOKEN
-		} else if item.TransactionType == 3 {
-			listItem.TransactionType = TOKEN_TRANSFER
-		} else if item.TransactionType == 4 {
-			listItem.TransactionType = NEW_SMART_CONTRACT
-		} else if item.TransactionType == 5 {
-			listItem.TransactionType = SMART_CONTRACT
-		}
-		var status string
-		if item.Receipt.Status == 1 {
-			status = "0x1"
-		} else {
-			status = "0x0"
-		}
-		listItem.Status = &status
-
-		listItem.ErrorReason = item.ErrorReason
-		listResponse.Items[i] = listItem
 	}
 
 	duration := time.Now().Sub(startTime)
 
 	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	listResponse, err := cachemanager.ListTransactionByAccount(address, string(pageNumber), s.CacheUrl)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
 
 	return Response(http.StatusOK,listResponse),	nil
 }

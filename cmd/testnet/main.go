@@ -26,6 +26,8 @@ import (
 	//"strconv"
 )
 
+const DEFAULT_GAS_LIMIT = uint64(210000)
+
 // Accounts struct which contains
 // an array of users
 type Accounts struct {
@@ -104,7 +106,7 @@ func main() {
 
 	rawURL = os.Getenv("DP_URL")
 	accountPrimary = os.Getenv("DP_ALLOC_ACCOUNT")
-	accountPrimaryPassword = os.Getenv("DP_ACCOUNT_PASSWORD")
+	accountPrimaryPassword = os.Getenv("DP_ALLOC_ACCOUNT_PASSWORD")
 	tokenInfoPath = os.Getenv("TOKENS_INFO")
 	dataFilePath = os.Getenv("DP_DATA_PATH")
 	accountPassword = os.Getenv("DP_ACCOUNT_PASSWORD")
@@ -114,29 +116,29 @@ func main() {
 	fmt.Println("Start new account coin transaction...")
 	go startTestCoinByNewAccount()
 
-	//fmt.Println("Start account to account coin transaction...")
+	fmt.Println("Start account to account coin transaction...")
 	go startTestCoinAccountByAccount()
+
+	fmt.Println("Start new token...")
+	go startTestAccountByNewToken()
+
+	fmt.Println("Start new token account transaction...")
+	go startTestNewTokenAccountByAccount()
+
+	fmt.Println("Start  account to account token transaction")
+	go startTestTokenByAccount()
+
 	/*
-
-
-		fmt.Println("Start new token...")
-		go startTestAccountByNewToken()
-
-		fmt.Println("Start new token account transaction...")
-		go startTestNewTokenAccountByAccount()
-
-		fmt.Println("Start  account to account token transaction")
-		go startTestTokenByAccount()
-
 		fmt.Println("Start new Contract to dynamic account")
 		go startTestAccountByContract()
 
 		fmt.Println("Start new contract account ")
 		go startTestNewContractByAccount()
-
-		fmt.Println("Start  load account history...")
-		go load_account_history()
 	*/
+
+	fmt.Println("Start  load account history...")
+	go load_account_history()
+
 	fmt.Println("Waiting indefinitely...")
 	<-make(chan int)
 }
@@ -285,11 +287,11 @@ func startTestCoinByNewAccount() {
 		//if mbalance >= 1 {
 		//Create account
 		newAccount := ks.CreateNewKeys(password)
-		fmt.Println("newAccount : ", newAccount.Address.String())
+		fmt.Println("newAccount : ", newAccount.Address.String(), " trans Address ", transAddress)
 
 		//Transfer fund
 		rand.Seed(time.Now().UnixNano())
-		amount := int64(100000)
+		amount := int64(10000000)
 
 		trans, err := transferCoinToAccount(transAddress,
 			newAccount.Address.String(), amount, transKey.PrivateKey)
@@ -320,8 +322,7 @@ func startTestCoinAccountByAccount() {
 	loop := 1
 
 	for loop != 0 {
-
-		if accLen > 10 {
+		if accLen > reduceLength {
 			rand.Seed(time.Now().UnixNano())
 			//min := int64(1)
 
@@ -331,7 +332,7 @@ func startTestCoinAccountByAccount() {
 
 			if max > 5 {
 				//max := int64(5)
-				amount := int64(100000)
+				amount := int64(10000)
 
 				//to Account selection
 				k := i + j
@@ -366,9 +367,8 @@ func startTestCoinAccountByAccount() {
 				accounts.Accounts[k].Amount = fmt.Sprint(accountbalance)
 			}
 		}
-
 		i++
-		if i >= accLen && accLen > 0 {
+		if i >= accLen {
 			accounts = accountHistory
 			accLen = len(accounts.Accounts)
 
@@ -377,11 +377,15 @@ func startTestCoinAccountByAccount() {
 			max := 4
 			j = rand.Intn(max-min) + min
 
-			rand.Seed(time.Now().UnixNano())
-			min = 1
-			max = accLen - j
-			i = rand.Intn(max-min) + min
-			fmt.Println("To address start and skip:", i, j)
+			if (accLen - j) > 0 {
+				rand.Seed(time.Now().UnixNano())
+				min = 1
+				max = accLen - j
+				i = rand.Intn(max-min) + min
+				fmt.Println("To address start and skip:", i, j)
+			} else {
+				i = 0
+			}
 		}
 		time.Sleep(9 * time.Second)
 	}
@@ -403,23 +407,28 @@ func transferCoinToAccount(fromaddress string, toaddress string, amount int64,
 	if err != nil {
 		return "1", err
 	}
+
 retry:
 	chainID, err := client.NetworkID(context.Background())
 	if err != nil {
 		return "2", err
 	}
+
 	gasLimit := uint64(21000)
-	gasPrice, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		return "3", err
-	}
+
+	//gasPrice, err := client.SuggestGasPrice(context.Background())
+	//if err != nil {
+	//	return "3", err
+	//}
+
 	v, _ := ParseBigFloat(strconv.Itoa(int(amount)))
 	value := etherToWei(v)
 	fmt.Println("toAddress", toAddress)
 	fmt.Println("value", value)
 
 	var data []byte
-	tx := types.NewTransaction(nonce, toAddress, value, gasLimit, gasPrice, data)
+	//tx := types.NewTransaction(nonce, toAddress, value, gasLimit, gasPrice, data)
+	tx := types.NewDefaultFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data)
 	signedTx, err := types.SignTx(tx, types.NewLondonSigner(chainID), key)
 	if err != nil {
 		return "4", err
@@ -448,7 +457,7 @@ func startTestAccountByNewToken() {
 	contract := ReadNewTokenJsonDataFile("contract.json")
 	tokendps.Tokendps = contract
 	accLen := len(accounts.Accounts) - reduceLength
-
+	fmt.Println("accLen > reduceLength", accLen, reduceLength)
 	i := 0
 	loop := 1
 	for loop != 0 {
@@ -523,10 +532,6 @@ func startTestNewTokenAccountByAccount() {
 	for loop != 0 {
 		//Block transaction count
 		if transrandNum <= transCount {
-			rand.Seed(time.Now().UnixNano())
-			min := 1
-			max := 4
-			j = rand.Intn(max-min) + min
 
 			contract := ReadNewTokenJsonDataFile("contract.json")
 			contractLen = len(contract)
@@ -614,12 +619,21 @@ func startTestNewTokenAccountByAccount() {
 		if i >= accLen {
 			accounts = accountHistory
 			accLen = len(accounts.Accounts)
-			i = 0
+
 			rand.Seed(time.Now().UnixNano())
 			min := 1
-			max := accLen - j
-			i = rand.Intn(max-min) + min
-			fmt.Println("To address start and skip:", i, j)
+			max := 4
+			j = rand.Intn(max-min) + min
+
+			if (accLen - j) > 0 {
+				rand.Seed(time.Now().UnixNano())
+				min = 1
+				max = accLen - j
+				i = rand.Intn(max-min) + min
+				fmt.Println("To address start and skip:", i, j)
+			} else {
+				i = 0
+			}
 		}
 
 		if totalToken < 1 {
@@ -657,10 +671,6 @@ func startTestTokenByAccount() {
 
 		//Block transaction count
 		if transrandNum <= transCount {
-			rand.Seed(time.Now().UnixNano())
-			min := 1
-			max := 4
-			j = rand.Intn(max-min) + min
 
 			contract := ReadNewTokenJsonDataFile("clientcontract.json")
 			contract1 := ReadNewTokenJsonDataFile("clientcontract-1.json")
@@ -742,12 +752,23 @@ func startTestTokenByAccount() {
 		i++
 
 		if i >= accLen {
+			accounts = accountHistory
 			accLen = len(accounts.Accounts)
+
 			rand.Seed(time.Now().UnixNano())
 			min := 1
-			max := accLen - j
-			i = rand.Intn(max-min) + min
-			fmt.Println("To address start and skip:", i, j)
+			max := 4
+			j = rand.Intn(max-min) + min
+
+			if (accLen - j) > 0 {
+				rand.Seed(time.Now().UnixNano())
+				min = 1
+				max = accLen - j
+				i = rand.Intn(max-min) + min
+				fmt.Println("To address start and skip:", i, j)
+			} else {
+				i = 0
+			}
 		}
 
 		if totalToken < 1 {
@@ -902,12 +923,16 @@ func DeployTestTokenContractDynamicAccount(address string,
 	auth.From = addr
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0)
-	gasPrice, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		log.Println(err.Error())
-		return "", "0", err
-	}
-	auth.GasPrice = gasPrice
+	auth.GasLimit = DEFAULT_GAS_LIMIT
+
+	/*
+		gasPrice, err := client.SuggestGasPrice(context.Background())
+		if err != nil {
+			log.Println(err.Error())
+			return "", "0", err
+		}
+		auth.GasPrice = gasPrice
+	*/
 
 	var tokens Tokens
 	tk := ReadTokenJsonDataFile(tokenInfoPath)
@@ -926,8 +951,9 @@ func DeployTestTokenContractDynamicAccount(address string,
 	tokenName := sb.String()
 	tokenSymbol := tokens.Tokens[dynamictoken-1].Symbol
 
-	fmt.Println("Name : ", tokenName)
-	fmt.Println("Symbol : ", tokenSymbol)
+	fmt.Println("ChainID : ", chainID)
+	fmt.Println("Token Name : ", tokenName)
+	fmt.Println("Token Symbol : ", tokenSymbol)
 
 	rand.Seed(time.Now().UnixNano())
 	min = int64(0)
@@ -995,12 +1021,13 @@ func DeployTestOtherContractDynamicAccount(address string,
 	auth.Nonce = big.NewInt(int64(nonce))
 	auth.Value = big.NewInt(0)
 
-	gasPrice, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		log.Println(err.Error())
-		return "", "0", err
-	}
-	auth.GasPrice = gasPrice
+	//gasPrice, err := client.SuggestGasPrice(context.Background())
+	//if err != nil {
+	//	log.Println(err.Error())
+	//	return "", "0", err
+	//}
+	//auth.GasPrice = gasPrice
+	auth.GasLimit = DEFAULT_GAS_LIMIT
 
 	rand.Seed(time.Now().UnixNano())
 	min := int64(100)
@@ -1030,7 +1057,7 @@ func transferTokenToAccount(fromaddress string, toaddress string, tokenaddress s
 
 	client, err := ethclient.Dial(rawURL)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err.Error(), "1")
 		return "", err
 	}
 
@@ -1040,42 +1067,45 @@ func transferTokenToAccount(fromaddress string, toaddress string, tokenaddress s
 
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err.Error(), "2")
 		return "", err
 	}
 	chainID, err := client.NetworkID(context.Background())
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err.Error(), "3")
 		return "", err
 	}
 	auth, err := bind.NewKeyedTransactorWithChainID(key, chainID)
 	if err != nil {
-		log.Println(err.Error())
+		log.Println(err.Error(), "4")
 		return "", err
 	}
 
 	auth.From = fromAddress
 	auth.Nonce = big.NewInt(int64(nonce))
+
 	//auth.Value = big.N
 
-	gasPrice, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		log.Println(err.Error())
-		return "", err
-	}
-	auth.GasPrice = gasPrice
+	//gasPrice, err := client.SuggestGasPrice(context.Background())
+	//if err != nil {
+	//	log.Println(err.Error())
+	//	return "", err
+	//}
+	//auth.GasPrice = gasPrice
+
+	auth.GasLimit = DEFAULT_GAS_LIMIT
 
 	token, err := NewToken(tokenAddress, client)
 	if err != nil {
 		//log.Fatalf("Failed to instantiate a Token contract: %v", err)
-		log.Println(err.Error())
+		log.Println(err.Error(), "5")
 		return "", err
 	}
 
 	name, err := token.Name(nil)
 	if err != nil {
 		//log.Fatalf("Failed to retrieve token name: %v", err)
-		log.Println(err.Error())
+		log.Println(err.Error(), tokenAddress, "6")
 		return "", err
 	}
 	fmt.Println("Token name.....:", name)
@@ -1083,7 +1113,7 @@ func transferTokenToAccount(fromaddress string, toaddress string, tokenaddress s
 	tx, err := token.Transfer(auth, toAddress, big.NewInt(amount))
 	if err != nil {
 		//log.Fatalf("Failed to request token transfer: %v", err)
-		log.Println(err.Error())
+		log.Println(err.Error(), "7")
 		return "", err
 	}
 	//fmt.Printf("Transfer pending: 0x%x\n", tx.Hash())
@@ -1126,12 +1156,14 @@ func setContractDataToAccount(fromaddress string, contractaddress string,
 	auth.Nonce = big.NewInt(int64(nonce))
 	//auth.Value = big.N
 
-	gasPrice, err := client.SuggestGasPrice(context.Background())
-	if err != nil {
-		log.Println(err.Error())
-		return "", "0", err
-	}
-	auth.GasPrice = gasPrice
+	//gasPrice, err := client.SuggestGasPrice(context.Background())
+	//if err != nil {
+	//	log.Println(err.Error())
+	//	return "", "0", err
+	//}
+	//auth.GasPrice = gasPrice
+
+	auth.GasLimit = DEFAULT_GAS_LIMIT
 
 	contract, err := NewGreeter(contractAddress, client)
 	if err != nil {
