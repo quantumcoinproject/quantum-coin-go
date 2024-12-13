@@ -25,6 +25,8 @@ import (
 	"strings"
 )
 
+const VERSION_NUMBER = "v1.0.1"
+
 type Config struct {
 	Api		string `json:"api"`
 	Ip		string `json:"ip"`
@@ -41,6 +43,14 @@ type Configs struct {
 }
 
 func main() {
+
+	fmt.Println("==========================================")
+	fmt.Println("||             Quantum Coin              ||")
+	fmt.Println("||                   Q                   ||")
+	fmt.Println("||  Quantum Resistant Blockchain Relay   ||")
+	fmt.Println("==========================================")
+	fmt.Println("VERSION_NUMBER", VERSION_NUMBER)
+
 	if len(os.Args) < 2 {
 		printHelp()
 		return
@@ -99,6 +109,8 @@ func main() {
 
 		go newCachemanager(cacheUrl, nodeUrl)
 	}
+
+
 
 	fmt.Println("Relay listen and server...")
 	<-make(chan int)

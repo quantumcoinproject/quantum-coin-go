@@ -127,7 +127,6 @@ func NewCacheManager(cacheDir string, nodeUrl string) error {
 }
 
 func ListTransactionByAccount(address string, page string, cacheDir string) (ListAccountTransactionsResponse, error) {
-
 	c := &CacheManager{
 		cacheDir: cacheDir,
 	}
@@ -230,8 +229,6 @@ func ListTransactionByAccount(address string, page string, cacheDir string) (Lis
 
 func (c *CacheManager) initialize() error {
 
-	fmt.Println("Quantum Coin")
-	fmt.Println()
 	log.Info("Quantum Coin initialize cache manager", "cacheDir", c.cacheDir, "nodeUrl", c.nodeUrl)
 
 	catchManagerFilePath := filepath.Join(c.cacheDir, "cacheManager.db")
@@ -286,6 +283,7 @@ func (c *CacheManager) start() {
 				}
 				//}
 				cacheTimer.Reset(time.Duration(delayNumber))
+
 			case <-cancel:
 				cacheTimer.Stop()
 				c.close()
@@ -306,7 +304,7 @@ func (c *CacheManager) processByCatchManager(blockNumber uint64) error {
 	}
 
 	block, err := client.BlockByNumber(context.Background(), new(big.Int).SetUint64(blockNumber))
-	fmt.Println("block", block, err.Error())
+	fmt.Println("block ", block, "Error ", err.Error())
 	if err != nil {
 		return err
 	}
