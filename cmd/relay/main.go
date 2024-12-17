@@ -20,15 +20,18 @@ import (
 	"os"
 	qcreadapi "github.com/QuantumCoinProject/qc/relay/qcreadapi"
 	qcwriteapi "github.com/QuantumCoinProject/qc/relay/qcwriteapi"
+	cachemanager "github.com/QuantumCoinProject/qc/cachemanager"
 	"strconv"
 	"strings"
 )
+
+const VERSION_NUMBER = "v1.0.1"
 
 type Config struct {
 	Api		string `json:"api"`
 	Ip		string `json:"ip"`
 	Port	string `json:"port"`
-	DpUrl   string `json:"dpurl"`
+	NodeUrl   string `json:"nodeUrl"`
 	CorsAllowedOrigins    string `json:"corsAllowedOrigins"`
 	EnableAuth bool `json:"enableAuth"`
 	ApiKeys string `json:"apiKeys"`
@@ -40,6 +43,14 @@ type Configs struct {
 }
 
 func main() {
+
+	fmt.Println("==========================================")
+	fmt.Println("||             Quantum Coin              ||")
+	fmt.Println("||                   Q                   ||")
+	fmt.Println("||  Quantum Resistant Blockchain Relay   ||")
+	fmt.Println("==========================================")
+	fmt.Println("VERSION_NUMBER", VERSION_NUMBER)
+
 	if len(os.Args) < 2 {
 		printHelp()
 		return
@@ -62,7 +73,7 @@ func main() {
 		api := config.Api
 		ip := config.Ip
 		port := config.Port
-		dpUrl := config.DpUrl
+		nodeUrl := config.NodeUrl
 		corsAllowedOrigins := config.CorsAllowedOrigins
 		enableAuth := config.EnableAuth
 		apiKeys := config.ApiKeys
@@ -78,35 +89,54 @@ func main() {
 			return
 		}
 
+		if len(strings.TrimSpace(nodeUrl)) == 0{
+			fmt.Println("Check configuration  node Url value", nodeUrl)
+			return
+		}
+
+		if len(strings.TrimSpace(cacheUrl)) == 0{
+			fmt.Println("Check configuration  cache Url value", cacheUrl)
+			return
+		}
+
 		if strings.EqualFold(api ,"read") {
-			go qcReadApi(ip, port, dpUrl, corsAllowedOrigins,enableAuth,apiKeys, cacheUrl)
+			go qcReadApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys, cacheUrl)
 		}
 
 		if strings.EqualFold(api ,"write") {
-			go qcWriteApi(ip, port, dpUrl, corsAllowedOrigins,enableAuth,apiKeys)
+			go qcWriteApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys)
 		}
+
+		go newCachemanager(cacheUrl, nodeUrl)
 	}
+
+
 
 	fmt.Println("Relay listen and server...")
 	<-make(chan int)
 }
 
-func qcReadApi(ip string, port string, dpUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheUrl string) {
-	ReadApiAPIService := qcreadapi.NewReadApiAPIService(dpUrl, cacheUrl)
+func qcReadApi(ip string, port string, nodeUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheUrl string) {
+	ReadApiAPIService := qcreadapi.NewReadApiAPIService(nodeUrl, cacheUrl)
 	ReadApiAPIController := qcreadapi.NewReadApiAPIController(ReadApiAPIService, corsAllowedOrigins, enableAuth, apiKeys)
 	readRouter := qcreadapi.NewRouter(ReadApiAPIController)
 
-	fmt.Println("Read api server is listening on : ", ip + ":" + port, "dpUrl" + ":" + dpUrl, "corsAllowedOrigins" + ":" + corsAllowedOrigins)
+	fmt.Println("Read api server is listening on : ", ip + ":" + port, "nodeUrl" + ":" + nodeUrl, "corsAllowedOrigins" + ":" + corsAllowedOrigins)
 	http.ListenAndServe(ip + ":" + port, readRouter)
 }
 
-func qcWriteApi(ip string, port string, dpUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string) {
-	WriteApiAPIService := qcwriteapi.NewWriteApiAPIService(dpUrl)
+func qcWriteApi(ip string, port string, nodeUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string) {
+	WriteApiAPIService := qcwriteapi.NewWriteApiAPIService(nodeUrl)
 	WriteApiAPIController := qcwriteapi.NewWriteApiAPIController(WriteApiAPIService, corsAllowedOrigins, enableAuth, apiKeys)
 	writeRouter := qcwriteapi.NewRouter(WriteApiAPIController)
 
-	fmt.Println("Write api server is listening on : ", ip + ":" + port, "dpUrl" + ":" + dpUrl, "corsAllowedOrigins" + ":" + corsAllowedOrigins)
+	fmt.Println("Write api server is listening on : ", ip + ":" + port, "nodeUrl" + ":" + nodeUrl, "corsAllowedOrigins" + ":" + corsAllowedOrigins)
 	http.ListenAndServe(ip + ":" + port,  writeRouter)
+}
+
+func newCachemanager(cacheUrl, nodeUrl string){
+	err := cachemanager.NewCacheManager(cacheUrl, nodeUrl)
+	fmt.Println("newCachemanager ", err)
 }
 
 func readConfigJsonDataFile(filename string)  ([]Config, error) {
