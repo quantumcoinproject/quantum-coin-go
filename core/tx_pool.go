@@ -122,7 +122,8 @@ var (
 
 	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
 
-	txnStartAllowedTime = int64(1713052800) //April 14th, 2024
+	txnStartAllowedTime   = int64(1713052800) //April 14th, 2024
+	conversionTxnLastTime = int64(1744675199) //April 14th, 2025, 11:59:59 PM UTC
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -563,6 +564,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			log.Warn("txn not in allowed date range, dropping it", "txn", tx.Hash())
 			return errors.New("txn not in allowed time range")
 		}
+	}
+
+	if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) && time.Now().UTC().Unix() > conversionTxnLastTime {
+		log.Warn("conversion txn is not in allowed date range, dropping it", "txn", tx.Hash())
+		return errors.New("conversion txn not in allowed time range")
 	}
 
 	// Reject transactions over defined size to prevent DOS attacks
