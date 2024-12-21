@@ -264,13 +264,53 @@ contract Runner {
     address testAddress1 = 0x0000000000000000000000000000000000000000000000000000000000001000;
     address testAddress2 = 0x0000000000000000000000000000000000000000000000000000000000002000;
 
-    function runAllTests(address payable _addressChecker) public {
-        require(_addressChecker != address(0), "Invalid AddressChecker contract address");
+    function runAllTestsWithDefaultAddress(address payable _addressChecker) public {
+        require(_addressChecker != address(0), "Invalid AddressChecker contract address a");
         addressChecker = AddressChecker(_addressChecker);
 
         runTestSet1();
         runTestSet2();
         runTestSet3();
+    }
+
+    function runAllTests1(address payable _addressChecker, address payable add1, address payable add2) public {
+        require(_addressChecker != address(0), "Invalid AddressChecker contract address b");
+        addressChecker = AddressChecker(_addressChecker);
+
+        testAddress1 = add1;
+        testAddress2 = add2;
+
+        runTestSet1();
+    }
+
+    function runAllTests2(address payable _addressChecker, address payable add1, address payable add2) public {
+        require(_addressChecker != address(0), "Invalid AddressChecker contract address c");
+        addressChecker = AddressChecker(_addressChecker);
+
+        testAddress1 = add1;
+        testAddress2 = add2;
+
+        runTestSet2();
+    }
+
+    function runAllTests3(address payable _addressChecker, address payable add1, address payable add2) public {
+        require(_addressChecker != address(0), "Invalid AddressChecker contract address d");
+        addressChecker = AddressChecker(_addressChecker);
+
+        testAddress1 = add1;
+        testAddress2 = add2;
+
+        runTestSet3();
+    }
+
+    function runAllTests4(address payable _addressChecker, address payable add1, address payable add2) public {
+        require(_addressChecker != address(0), "Invalid AddressChecker contract address e");
+        addressChecker = AddressChecker(_addressChecker);
+
+        testAddress1 = add1;
+        testAddress2 = add2;
+
+        runTestSet4();
     }
 
     function runTestSet1() public {
@@ -297,11 +337,6 @@ contract Runner {
         // Test the owner setting and verification
         address testOwner = testSetAndCheckOwner(testAddress1); 
         emit TestCompleted("testSetAndCheckOwner", testOwner == testAddress1 ? "Success" : "Failure");
-
-        // Call the testSendEther function
-        uint256 testAmount = 1 ether;
-        testSendEther(testAmount); // Call the Ether-sending test
-        emit TestCompleted("testSendEther", "Success");
     }
 
     function runTestSet2() public {
@@ -355,7 +390,7 @@ contract Runner {
         testCodeHash(address(addressChecker));
 
         // Test deploying a new contract
-        testDeployNewContract(500); 
+        testDeployNewContract(1);
         emit TestCompleted("testDeployNewContract", "Success");
 
         // Test getting deployed contracts count
@@ -366,6 +401,14 @@ contract Runner {
         testGetDeployedContract(0); 
         emit TestCompleted("testGetDeployedContract", "Success");
     }
+
+    function runTestSet4() public {
+        // Call the testSendEther function
+        uint256 testAmount = 1 ether;
+        testSendEther(testAmount); // Call the Ether-sending test
+        emit TestCompleted("testSendEther", "Success");
+    }
+
 
     // Test: Check and log the sender address
     function testCheckSender() public {
