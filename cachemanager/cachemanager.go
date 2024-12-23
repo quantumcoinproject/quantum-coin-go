@@ -244,14 +244,14 @@ func (c *CacheManager) initialize() error {
 func (c *CacheManager) start() {
 	c.catchLock.Lock()
 	defer c.catchLock.Unlock()
-	//var prevBlockNumber uint64 = 0
 
 	cancel := make(chan os.Signal)
 	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
 
 	blockNumber, err := c.getLastBlockNumberByDb(BlockGetKey)
 	if err != nil {
-		log.Error("GetLastBlockByDb ", err.Error())
+		log.Error("GetLastBlockByDb ", "err", err.Error())
+		return
 	}
 
 	delayNumber := int64(100 * time.Millisecond)
@@ -261,29 +261,22 @@ func (c *CacheManager) start() {
 		for {
 			select {
 			case <-cacheTimer.C:
-				blockNumber = blockNumber + 1
-				//if blockNumber > prevBlockNumber {
 				log.Info("Batch Start ", "Block Number ", blockNumber, "Catch Time", time.Now().String())
-				//prevBlockNumber = blockNumber
-				err := c.processByCatchManager(blockNumber)
+				err := c.processByCacheManager(blockNumber + 1)
 				if err == nil {
-					//prevBlockNumber = blockNumber
+					blockNumber = blockNumber + 1
 					log.Info("Batch Complete", "Block number", blockNumber)
+					delayNumber = 0
 				} else {
-					blockNumber = blockNumber - 1
-					log.Error("Batch Error", err.Error(), "Block number", blockNumber)
-
-					latestBlock, err := c.latestBlockByNode()
-					if err == nil {
-						log.Debug("Block number didn't match in prevBlockNumber.", "Block number", blockNumber)
-						if blockNumber >= latestBlock {
-							delayNumber = int64(5 * time.Second)
-						}
+					if err.Error() == "not found" {
+						log.Info("Block not found", "Block number", blockNumber)
+					} else {
+						log.Error("Batch Error", "error", err.Error(), "Block number", blockNumber)
 					}
+					delayNumber = int64(5 * time.Second)
 				}
-				//}
-				cacheTimer.Reset(time.Duration(delayNumber))
 
+				cacheTimer.Reset(time.Duration(delayNumber))
 			case <-cancel:
 				cacheTimer.Stop()
 				c.close()
@@ -293,30 +286,25 @@ func (c *CacheManager) start() {
 			}
 		}
 	}()
-
 }
 
-func (c *CacheManager) processByCatchManager(blockNumber uint64) error {
-
+func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 	client, err := ethclient.Dial(c.nodeUrl)
 	if err != nil {
 		return err
 	}
 
-	block, err := client.BlockByNumber(context.Background(), new(big.Int).SetUint64(blockNumber))
-	fmt.Println("block ", block, "Error ", err.Error())
+	blockNum := new(big.Int).SetUint64(blockNumber)
+	block, err := client.BlockByNumber(context.Background(), blockNum)
 	if err != nil {
 		return err
 	}
 
 	accountTransactionBatch := c.catchDb.NewBatch()
-
 	blockKey := []byte(BlockGetKey)
 	accountTransactionBatch.Put(blockKey, uint64ToBytes(blockNumber))
 
 	for _, tx := range block.Transactions() {
-
-		fmt.Println("1")
 
 		var fromAddress string
 		var toAddress string
@@ -340,9 +328,11 @@ func (c *CacheManager) processByCatchManager(blockNumber uint64) error {
 			return err
 		}
 
-		if msg, err := tx.AsMessage(types.NewLondonSigner(chainID)); err != nil {
-			fromAddress = msg.From().Hex()
+		msg, err := tx.AsMessage(types.NewLondonSigner(chainID))
+		if err != nil {
+			return err
 		}
+		fromAddress = msg.From().Hex()
 
 		receipt, err := client.TransactionReceipt(context.Background(), tx.Hash())
 		if err != nil {
@@ -457,7 +447,7 @@ func (c *CacheManager) latestBlockByNode() (uint64, error) {
 		return 0, err
 	}
 
-	fmt.Println("latestBlockByNode ", latestBlock)
+	log.Info("latestBlockByNode", "number", latestBlock)
 
 	return latestBlock, nil
 
@@ -472,8 +462,6 @@ func (c *CacheManager) getLastBlockNumberByDb(blockKey string) (uint64, error) {
 
 	var blockNumber uint64
 	blockNumber = *(*uint64)(unsafe.Pointer(&mySlice[0]))
-
-	//fmt.Println("getLastByBlockNumber ", blockNumber)
 
 	return blockNumber, nil
 }
@@ -548,7 +536,6 @@ func encodeToBytes(p interface{}) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	//fmt.Println("uncompressed size (bytes): ", len(buf.Bytes()))
 	return buf.Bytes(), nil
 }
 

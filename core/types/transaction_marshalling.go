@@ -19,6 +19,7 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"github.com/QuantumCoinProject/qc/log"
 	"math/big"
 
 	"github.com/QuantumCoinProject/qc/common"
@@ -48,6 +49,35 @@ type txJSON struct {
 
 	// Only used for encoding:
 	Hash common.Hash `json:"hash"`
+
+	VBlob []byte `json:"vBlob"`
+	RBlob []byte `json:"rBlob"`
+	SBlob []byte `json:"sBlob"`
+}
+
+type txJSONinner struct {
+	Type hexutil.Uint64 `json:"type"`
+
+	// Common transaction fields:
+	Nonce      *hexutil.Uint64 `json:"nonce"`
+	GasPrice   *hexutil.Big    `json:"gasPrice"`
+	Gas        *hexutil.Uint64 `json:"gas"`
+	MaxGasTier *hexutil.Uint64 `json:"maxGasTier"`
+	Value      *hexutil.Big    `json:"value"`
+	Data       *hexutil.Bytes  `json:"input"`
+	To         *common.Address `json:"to"`
+	Remarks    *hexutil.Bytes  `json:"remarks"`
+
+	// Access list transaction fields:
+	ChainID    *hexutil.Big `json:"chainId,omitempty"`
+	AccessList *AccessList  `json:"accessList,omitempty"`
+
+	// Only used for encoding:
+	Hash common.Hash `json:"hash"`
+
+	VBlob []byte `json:"vBlob"`
+	RBlob []byte `json:"rBlob"`
+	SBlob []byte `json:"sBlob"`
 }
 
 // MarshalJSON marshals as JSON with a hash.
@@ -75,13 +105,16 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
 		enc.S = (*hexutil.Big)(tx.S)
+		enc.VBlob = tx.V.Bytes()
+		enc.RBlob = tx.R.Bytes()
+		enc.SBlob = tx.S.Bytes()
 	}
 	return json.Marshal(&enc)
 }
 
 // UnmarshalJSON unmarshals from JSON.
 func (t *Transaction) UnmarshalJSON(input []byte) error {
-	var dec txJSON
+	var dec txJSONinner
 	if err := json.Unmarshal(input, &dec); err != nil {
 		return err
 	}
@@ -91,28 +124,36 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	switch dec.Type {
 	case DefaultFeeTxType:
 		var itx DefaultFeeTx
+
 		inner = &itx
+
+		// Now set the inner transaction.
+		t.setDecoded(inner, 0)
+
 		// Access list is optional for now.
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList
 		}
+
 		if dec.ChainID == nil {
 			return errors.New("missing required field 'chainId' in transaction")
 		}
 		itx.ChainID = (*big.Int)(dec.ChainID)
+
 		if dec.To != nil {
 			itx.To = dec.To
 		}
+
 		if dec.Nonce == nil {
 			return errors.New("missing required field 'nonce' in transaction")
 		}
 		itx.Nonce = uint64(*dec.Nonce)
+
 		if dec.Gas == nil {
 			return errors.New("missing required field 'gas' for txdata")
 		}
-		if dec.MaxGasTier == nil {
-			return errors.New("missing required field 'maxGasTier' in transaction")
-		}
+		itx.Gas = uint64(*dec.Gas)
+
 		itx.Value = (*big.Int)(dec.Value)
 		if dec.Data == nil {
 			return errors.New("missing required field 'input' in transaction")
@@ -124,30 +165,39 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return errors.New("verify remarks failed")
 			}
 		}
-		if dec.V == nil {
-			return errors.New("missing required field 'v' in transaction")
+
+		if dec.MaxGasTier == nil {
+			return errors.New("missing required field 'maxGasTier' in transaction") //todo: fill
 		}
-		itx.V = (*big.Int)(dec.V)
-		if dec.R == nil {
-			return errors.New("missing required field 'r' in transaction")
+		maxGasTier := uint64(*dec.MaxGasTier)
+		log.Error("maxGasTier", "val", maxGasTier)
+
+		itx.MaxGasTier = GasTier(maxGasTier)
+		if itx.MaxGasTier != GAS_TIER_DEFAULT && itx.MaxGasTier != GAS_TIER_2X && itx.MaxGasTier != GAS_TIER_5X && itx.MaxGasTier != GAS_TIER_10X {
+			log.Error("max gas tier", "tier", itx.MaxGasTier)
+			return errors.New("invalid max gas tier")
 		}
-		itx.R = (*big.Int)(dec.R)
-		if dec.S == nil {
-			return errors.New("missing required field 's' in transaction")
+
+		if dec.VBlob == nil {
+			return errors.New("missing required field 'VBlob' in transaction") //todo: fill
+		} else {
+			itx.V = big.NewInt(1).SetBytes(dec.VBlob)
 		}
-		itx.S = (*big.Int)(dec.S)
-		withSignature := itx.V.Sign() != 0 || itx.R.Sign() != 0 || itx.S.Sign() != 0
-		if withSignature {
-			if err := sanityCheckSignature(t.Hash().Bytes(), itx.V, itx.R, itx.S, false); err != nil {
-				return err
-			}
+
+		if dec.RBlob == nil {
+			return errors.New("missing required field 'RBlob' in transaction") //todo: fill
+		} else {
+			itx.R = big.NewInt(1).SetBytes(dec.RBlob)
+		}
+
+		if dec.SBlob == nil {
+			return errors.New("missing required field 'SBlob' in transaction") //todo: fill
+		} else {
+			itx.S = big.NewInt(1).SetBytes(dec.SBlob)
 		}
 	default:
 		return ErrTxTypeNotSupported
 	}
-
-	// Now set the inner transaction.
-	t.setDecoded(inner, 0)
 
 	// TODO: check hash here?
 	return nil

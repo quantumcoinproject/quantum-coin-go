@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"math/big"
+	"os"
 	"strings"
 	"time"
 
@@ -1151,6 +1152,10 @@ type RPCTransaction struct {
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
+	VBlob            []byte            `json:"vBlob"`
+	RBlob            []byte            `json:"rBlob"`
+	SBlob            []byte            `json:"sBlob"`
+	MaxGasTier       hexutil.Uint64    `json:"maxGasTier"`
 }
 
 // newRPCTransaction returns a transaction that will serialize to the RPC
@@ -1177,7 +1182,27 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		V:        (*hexutil.Big)(v),
 		R:        (*hexutil.Big)(r),
 		S:        (*hexutil.Big)(s),
+		VBlob:    make([]byte, len(v.Bytes())),
+		RBlob:    make([]byte, len(r.Bytes())),
+		SBlob:    make([]byte, len(s.Bytes())),
 	}
+	copy(result.VBlob, v.Bytes())
+	copy(result.RBlob, r.Bytes())
+	copy(result.SBlob, s.Bytes())
+
+	signerHash, err := signer.Hash(tx)
+	if err != nil {
+		log.Error("hash failed", "err", err)
+		os.Exit(1)
+	}
+
+	log.Error("signerHash", "hash", signerHash)
+	if !tx.Verify(signerHash.Bytes()) {
+		log.Error("Txn Verify failed", "Hash", tx.Hash())
+	} else {
+		log.Trace("Txn Verify ok", "Hash", tx.Hash())
+	}
+
 	if blockHash != (common.Hash{}) {
 		result.BlockHash = &blockHash
 		result.BlockNumber = (*hexutil.Big)(new(big.Int).SetUint64(blockNumber))
@@ -1190,6 +1215,8 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
 		price := (*hexutil.Big)(tx.GasPrice())
 		result.GasPrice = price
+		result.MaxGasTier = hexutil.Uint64(tx.MaxGasTier().Uint64())
+		log.Error("=============max gas tier", "a", tx.MaxGasTier(), "b", result.MaxGasTier)
 	}
 	return result
 }

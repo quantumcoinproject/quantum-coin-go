@@ -7,7 +7,7 @@
     "corsAllowedOrigins": "*",
     "enableAuth": false,
     "apiKeys": "",
-    "cacheUrl": "D://cachemanager//"
+    "cachePath": "D://cachemanager//"
   },
   {
     "api": "write",
@@ -17,6 +17,6 @@
     "corsAllowedOrigins": "*",
     "enableAuth": false,
     "apiKeys": "",
-    "cacheUrl": "D://cachemanager//"
+    "cachePath": "D://cachemanager//"
   }
 ]
