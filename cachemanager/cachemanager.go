@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/core/rawdb"
@@ -28,14 +29,14 @@ type CacheManager struct {
 	cacheDir  string
 	nodeUrl   string
 	catchLock sync.Mutex
-	catchDb   ethdb.Database
+	cacheDb   ethdb.Database
 }
 
 var BlockGetKey = "quantum-coin-block-count-get"
 var AccountGetKey = "quantum-coin-account-count-get-%s"
 var AccountTransactionListKey = "quantum-coin-account-transaction-list-%s-%d-%d"
 
-var accountPagination int64 = 20
+const PAGE_SIZE int64 = 20
 
 type AccountTransaction struct {
 	Address     string `json:"address"`
@@ -140,23 +141,36 @@ func ListTransactionByAccount(address string, page string, cacheDir string) (Lis
 
 	accountKey := []byte(fmt.Sprintf(AccountGetKey, address))
 
-	pagination, err := c.catchDb.Get(accountKey)
+	pagination, err := c.cacheDb.Get(accountKey)
 	if err != nil {
 		return listResponse, err
 	}
 
 	if len(pagination) != 0 {
 
-		pageArray := decode(pagination)
+		pageArray, err := decode(pagination)
+		if err != nil {
+			return ListAccountTransactionsResponse{}, err
+		}
 
 		var pageRow, pageCount int64
-		fmt.Sscan(pageArray[0], &pageRow)
-		fmt.Sscan(pageArray[1], &pageCount)
+		_, err = fmt.Sscan(pageArray[0], &pageRow)
+		if err != nil {
+			return ListAccountTransactionsResponse{}, err
+		}
+
+		_, err = fmt.Sscan(pageArray[1], &pageCount)
+		if err != nil {
+			return ListAccountTransactionsResponse{}, err
+		}
 
 		pageNumber := pageCount
 
 		if len(strings.TrimSpace(page)) != 0 {
-			fmt.Sscan(page, &pageNumber)
+			_, err = fmt.Sscan(page, &pageNumber)
+			if err != nil {
+				return ListAccountTransactionsResponse{}, err
+			}
 			if pageNumber > pageCount {
 				pageNumber = pageCount
 			}
@@ -177,7 +191,10 @@ func ListTransactionByAccount(address string, page string, cacheDir string) (Lis
 			accountTransaction.Hash = accountTrans.Transaction.Hash
 
 			var b int64
-			fmt.Sscan(accountTrans.Transaction.BlockNumber, &b)
+			_, err = fmt.Sscan(accountTrans.Transaction.BlockNumber, &b)
+			if err != nil {
+				return ListAccountTransactionsResponse{}, err
+			}
 			accountTransaction.BlockNumber = b
 
 			formattedTime, err := time.Parse("2006-01-02T15:04:05", string(accountTrans.Transaction.TimeStamp))
@@ -236,7 +253,7 @@ func (c *CacheManager) initialize() error {
 	if err != nil {
 		return err
 	}
-	c.catchDb = catchManager
+	c.cacheDb = catchManager
 
 	return nil
 }
@@ -250,8 +267,14 @@ func (c *CacheManager) start() {
 
 	blockNumber, err := c.getLastBlockNumberByDb(BlockGetKey)
 	if err != nil {
-		log.Error("GetLastBlockByDb ", "err", err.Error())
-		return
+		if err.Error() == "leveldb: not found" {
+			log.Warn("First time start")
+			blockNumber = 0
+		} else {
+			log.Error("GetLastBlockByDb", "err", err.Error())
+			os.Exit(-1)
+			return
+		}
 	}
 
 	delayNumber := int64(100 * time.Millisecond)
@@ -261,17 +284,18 @@ func (c *CacheManager) start() {
 		for {
 			select {
 			case <-cacheTimer.C:
-				log.Info("Batch Start ", "Block Number ", blockNumber, "Catch Time", time.Now().String())
-				err := c.processByCacheManager(blockNumber + 1)
+				blockNumberToGet := blockNumber + 1
+				log.Info("Batch Start ", "Block Number ", blockNumberToGet, "Catch Time", time.Now().String())
+				err := c.processByCacheManager(blockNumberToGet)
 				if err == nil {
-					blockNumber = blockNumber + 1
-					log.Info("Batch Complete", "Block number", blockNumber)
+					blockNumber = blockNumberToGet
+					log.Info("Batch Complete", "Block number", blockNumberToGet)
 					delayNumber = 0
 				} else {
 					if err.Error() == "not found" {
-						log.Info("Block not found", "Block number", blockNumber)
+						log.Info("Block not found", "Block number", blockNumberToGet)
 					} else {
-						log.Error("Batch Error", "error", err.Error(), "Block number", blockNumber)
+						log.Error("Batch Error", "error", err.Error(), "Block number", blockNumberToGet)
 					}
 					delayNumber = int64(5 * time.Second)
 				}
@@ -297,10 +321,11 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 	blockNum := new(big.Int).SetUint64(blockNumber)
 	block, err := client.BlockByNumber(context.Background(), blockNum)
 	if err != nil {
+		log.Error("BlockByNumber", "error", err)
 		return err
 	}
 
-	accountTransactionBatch := c.catchDb.NewBatch()
+	accountTransactionBatch := c.cacheDb.NewBatch()
 	blockKey := []byte(BlockGetKey)
 	accountTransactionBatch.Put(blockKey, uint64ToBytes(blockNumber))
 
@@ -325,17 +350,20 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 
 		chainID, err := client.NetworkID(context.Background())
 		if err != nil {
+			log.Error("processByCacheManager NetworkID", "error", err)
 			return err
 		}
 
 		msg, err := tx.AsMessage(types.NewLondonSigner(chainID))
 		if err != nil {
+			log.Error("processByCacheManager AsMessage", "error", err)
 			return err
 		}
 		fromAddress = msg.From().Hex()
 
 		receipt, err := client.TransactionReceipt(context.Background(), tx.Hash())
 		if err != nil {
+			log.Error("processByCacheManager TransactionReceipt", "error", err)
 			return err
 		}
 
@@ -362,38 +390,77 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 
 		transaction.From = fromAddress
 
-		//transactions = append(transactions, transaction)
-
 		//Account
 		accountFromKey := []byte(fmt.Sprintf(AccountGetKey, fromAddress))
 		accountToKey := []byte(fmt.Sprintf(AccountGetKey, toAddress))
 
-		paginationFrom, err := c.catchDb.Get(accountFromKey)
-		if err != nil {
-			return err
-		}
-		//fromPage := strings.Split(string(paginationFrom[:]), ",")
-		fromPage := decode(paginationFrom)
-
 		var pageFrom, pageFromCount int64
-		fmt.Sscan(fromPage[0], &pageFrom)
-		fmt.Sscan(fromPage[1], &pageFromCount)
-		if accountPagination < (pageFrom + 1) {
-			pageFromCount = pageFromCount + 1
-		}
-
-		paginationTo, err := c.catchDb.Get(accountToKey)
+		var fromPage, toPage []string
+		paginationFrom, err := c.cacheDb.Get(accountFromKey)
 		if err != nil {
-			return err
+			if err.Error() == "leveldb: not found" {
+				log.Info("first time account from", "key", accountFromKey)
+				pageFrom = 1
+				pageFromCount = 1
+			} else {
+				log.Error("processByCacheManager cacheDb.Get accountFromKey", "error", err)
+				return err
+			}
+		} else {
+			fromPage, err = decode(paginationFrom)
+			if err != nil {
+				log.Error("processByCacheManager decode paginationFrom", "error", err)
+				return err
+			}
+
+			_, err = fmt.Sscan(fromPage[0], &pageFrom)
+			if err != nil {
+				log.Error("processByCacheManager Sscan pageFrom", "error", err)
+				return err
+			}
+
+			_, err = fmt.Sscan(fromPage[1], &pageFromCount)
+			if err != nil {
+				log.Error("processByCacheManager Sscan pageFromCount", "error", err)
+				return err
+			}
+			if PAGE_SIZE < (pageFrom + 1) {
+				pageFromCount = pageFromCount + 1
+			}
 		}
-		//toPage := strings.Split(string(paginationTo[:]), ",")
-		toPage := decode(paginationTo)
 
 		var pageTo, pageToCount int64
-		fmt.Sscan(toPage[0], &pageTo)
-		fmt.Sscan(toPage[1], &pageToCount)
-		if accountPagination < (pageTo + 1) {
-			pageToCount = pageToCount + 1
+		paginationTo, err := c.cacheDb.Get(accountToKey)
+		if err != nil {
+			if err.Error() == "leveldb: not found" {
+				log.Info("first time account to", "key", accountToKey)
+				pageTo = 1
+				pageToCount = 1
+			} else {
+				log.Error("processByCacheManager cacheDb.Get accountToKey", "error", err)
+				return err
+			}
+		} else {
+			toPage, err = decode(paginationTo)
+			if err != nil {
+				log.Error("processByCacheManager decode paginationTo", "error", err)
+				return err
+			}
+
+			_, err = fmt.Sscan(toPage[0], &pageTo)
+			if err != nil {
+				log.Error("processByCacheManager Sscan pageTo", "error", err)
+				return err
+			}
+
+			_, err = fmt.Sscan(toPage[1], &pageToCount)
+			if err != nil {
+				log.Error("processByCacheManager Sscan pageToCount", "error", err)
+				return err
+			}
+			if PAGE_SIZE < (pageTo + 1) {
+				pageToCount = pageToCount + 1
+			}
 		}
 
 		fromPage[0] = strconv.FormatInt(pageFrom, 10)
@@ -402,8 +469,29 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 		toPage[0] = strconv.FormatInt(pageTo, 10)
 		toPage[1] = strconv.FormatInt(pageToCount, 10)
 
-		accountTransactionBatch.Put(accountFromKey, encode(fromPage))
-		accountTransactionBatch.Put(accountToKey, encode(toPage))
+		encodedFromPage, err := encode(fromPage)
+		if err != nil {
+			log.Error("processByCacheManager encode fromPage", "error", err)
+			return err
+		}
+
+		err = accountTransactionBatch.Put(accountFromKey, encodedFromPage)
+		if err != nil {
+			log.Error("processByCacheManager accountTransactionBatch.Put accountFromKey", "error", err)
+			return err
+		}
+
+		encodedToPage, err := encode(toPage)
+		if err != nil {
+			log.Error("processByCacheManager encode toPage", "error", err)
+			return err
+		}
+
+		err = accountTransactionBatch.Put(accountToKey, encodedToPage)
+		if err != nil {
+			log.Error("processByCacheManager accountTransactionBatch.Put accountToKey", "error", err)
+			return err
+		}
 
 		//Transaction
 		var fromAccountTransaction AccountTransaction
@@ -419,18 +507,33 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 
 		ft, err := encodeToBytes(fromAccountTransaction)
 		if err != nil {
+			log.Error("processByCacheManager encodeToBytes fromAccountTransaction", "error", err)
 			return err
 		}
 
 		tt, err := encodeToBytes(toAccountTransaction)
 		if err != nil {
+			log.Error("processByCacheManager encodeToBytes toAccountTransaction", "error", err)
 			return err
 		}
-		accountTransactionBatch.Put(accountFromTransactionKey, ft)
-		accountTransactionBatch.Put(accountToTransactionKey, tt)
+		err = accountTransactionBatch.Put(accountFromTransactionKey, ft)
+		if err != nil {
+			log.Error("processByCacheManager accountTransactionBatch accountFromTransactionKey", "error", err)
+			return err
+		}
+
+		err = accountTransactionBatch.Put(accountToTransactionKey, tt)
+		if err != nil {
+			log.Error("processByCacheManager accountTransactionBatch accountToTransactionKey", "error", err)
+			return err
+		}
 	}
 
-	accountTransactionBatch.Write()
+	err = accountTransactionBatch.Write()
+	if err != nil {
+		log.Error("processByCacheManager accountTransactionBatch Write", "error", err)
+		return err
+	}
 
 	return nil
 }
@@ -454,7 +557,7 @@ func (c *CacheManager) latestBlockByNode() (uint64, error) {
 }
 
 func (c *CacheManager) getLastBlockNumberByDb(blockKey string) (uint64, error) {
-	db := c.catchDb
+	db := c.cacheDb
 	mySlice, err := db.Get([]byte(blockKey))
 	if err != nil {
 		return uint64(0), err
@@ -467,10 +570,7 @@ func (c *CacheManager) getLastBlockNumberByDb(blockKey string) (uint64, error) {
 }
 
 func (c *CacheManager) close() error {
-	//c.catchLock.Lock()
-	//defer c.catchLock.Unlock()
-
-	catchDb := c.catchDb
+	catchDb := c.cacheDb
 	err := catchDb.Close()
 	if err != nil {
 		log.Debug("cache manager account transaction db close error", "err", err)
@@ -488,45 +588,58 @@ func uint64ToBytes(val uint64) []byte {
 
 const maxInt32 = 1<<(32-1) - 1
 
-func writeLen(b []byte, l int) []byte {
+func writeLen(b []byte, l int) ([]byte, error) {
 	if 0 > l || l > maxInt32 {
-		panic("writeLen: invalid length")
+		return nil, errors.New("writeLen: invalid length")
 	}
 	var lb [4]byte
 	binary.BigEndian.PutUint32(lb[:], uint32(l))
-	return append(b, lb[:]...)
+	return append(b, lb[:]...), nil
 }
 
-func readLen(b []byte) ([]byte, int) {
+func readLen(b []byte) ([]byte, int, error) {
 	if len(b) < 4 {
-		panic("readLen: invalid length")
+		return nil, 0, errors.New("readLen: invalid length a")
 	}
 	l := binary.BigEndian.Uint32(b)
 	if l > maxInt32 {
-		panic("readLen: invalid length")
+		return nil, 0, errors.New("readLen: invalid length b")
 	}
-	return b[4:], int(l)
+	return b[4:], int(l), nil
 }
 
-func decode(b []byte) []string {
-	b, ls := readLen(b)
+func decode(b []byte) ([]string, error) {
+	b, ls, err := readLen(b)
+	if err != nil {
+		return nil, err
+	}
 	s := make([]string, ls)
 	for i := range s {
-		b, ls = readLen(b)
+		b, ls, err = readLen(b)
+		if err != nil {
+			return nil, err
+		}
 		s[i] = string(b[:ls])
 		b = b[ls:]
 	}
-	return s
+	return s, nil
 }
 
-func encode(s []string) []byte {
+func encode(s []string) ([]byte, error) {
 	var b []byte
-	b = writeLen(b, len(s))
+	b, err := writeLen(b, len(s))
+	if err != nil {
+		return nil, err
+	}
 	for _, ss := range s {
-		b = writeLen(b, len(ss))
+		b, err = writeLen(b, len(ss))
+		if err != nil {
+			return nil, err
+		}
+
 		b = append(b, ss...)
 	}
-	return b
+	return b, nil
 }
 
 func encodeToBytes(p interface{}) ([]byte, error) {

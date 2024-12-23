@@ -169,12 +169,18 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.MaxGasTier == nil {
 			return errors.New("missing required field 'maxGasTier' in transaction") //todo: fill
 		}
-		maxGasTier := uint64(*dec.MaxGasTier)
+		maxGasTier := int64(*dec.MaxGasTier)
 		log.Error("maxGasTier", "val", maxGasTier)
 
-		itx.MaxGasTier = GasTier(maxGasTier)
-		if itx.MaxGasTier != GAS_TIER_DEFAULT && itx.MaxGasTier != GAS_TIER_2X && itx.MaxGasTier != GAS_TIER_5X && itx.MaxGasTier != GAS_TIER_10X {
-			log.Error("max gas tier", "tier", itx.MaxGasTier)
+		if big.NewInt(maxGasTier).Cmp(GAS_TIER_DEFAULT_PRICE) == 0 {
+			itx.MaxGasTier = GAS_TIER_DEFAULT
+		} else if big.NewInt(maxGasTier).Cmp(GAS_TIER_2x_PRICE) == 0 {
+			itx.MaxGasTier = GAS_TIER_2X
+		} else if big.NewInt(maxGasTier).Cmp(GAS_TIER_5x_PRICE) == 0 {
+			itx.MaxGasTier = GAS_TIER_5X
+		} else if big.NewInt(maxGasTier).Cmp(GAS_TIER_10x_PRICE) == 0 {
+			itx.MaxGasTier = GAS_TIER_10X
+		} else {
 			return errors.New("invalid max gas tier")
 		}
 
