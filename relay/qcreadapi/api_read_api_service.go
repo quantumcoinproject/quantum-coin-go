@@ -301,7 +301,7 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 
 	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
-	listResponse, err := s.cacheManager.ListTransactionByAccount(common.HexToAddress(address), uint64(pageNumber))
+	listResponse, err := s.cacheManager.ListTransactionByAccount(common.HexToAddress(address), pageNumber)
 	if err != nil {
 		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
 	}

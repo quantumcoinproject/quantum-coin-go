@@ -24,7 +24,7 @@ import (
 type CacheManager struct {
 	cacheDir  string
 	nodeUrl   string
-	catchLock sync.Mutex
+	cacheLock sync.Mutex
 	cacheDb   ethdb.Database
 }
 
@@ -78,18 +78,6 @@ type ListAccountTransactionsResponse struct {
 	Items     []AccountTransactionCompact `json:"items,omitempty"`
 }
 
-type BlockAccountLivePageDetails struct {
-	accountTxnList     AccountTransactionList
-	accountTxnListBlob []byte
-	pageKeyBlob        []byte
-}
-
-type BlockAccountLive struct {
-	txnCount  uint64
-	pageCount uint64
-	pageMap   map[uint64]*BlockAccountLivePageDetails
-}
-
 func NewCacheManager(cacheDir string, nodeUrl string) (*CacheManager, error) {
 	cManager := &CacheManager{
 		nodeUrl:  nodeUrl,
@@ -136,8 +124,8 @@ func (c *CacheManager) initialize() error {
 }
 
 func (c *CacheManager) start() error {
-	c.catchLock.Lock()
-	defer c.catchLock.Unlock()
+	c.cacheLock.Lock()
+	defer c.cacheLock.Unlock()
 
 	cancel := make(chan os.Signal)
 	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
@@ -161,15 +149,15 @@ func (c *CacheManager) start() error {
 			select {
 			case <-cacheTimer.C:
 				blockNumberToGet := blockNumber + 1
-				log.Info("Batch Start ", "Block Number ", blockNumberToGet, "Catch Time", time.Now().String())
+				log.Info("Batch Start ", "Block Number ", blockNumberToGet)
 				err := c.processByCacheManager(blockNumberToGet)
 				if err == nil {
 					blockNumber = blockNumberToGet
 					log.Info("Batch Complete", "Block number", blockNumberToGet)
 					delayNumber = 0
 					if blockNumber == 4508 {
-						cacheTimer.Stop()
-						return
+						//cacheTimer.Stop()
+						//return
 					}
 
 				} else {
@@ -221,8 +209,8 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 		return err
 	}
 
-	var liveAccountMap map[string]BlockAccountLive
-	liveAccountMap = make(map[string]BlockAccountLive)
+	var liveAccountMap map[string][]AccountTransactionCompact //address to transactions in block mapping
+	liveAccountMap = make(map[string][]AccountTransactionCompact)
 
 	for _, tx := range block.Transactions() {
 		receipt, err := client.TransactionReceipt(context.Background(), tx.Hash())
@@ -238,7 +226,10 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 		}
 
 		fromAddress := msg.From().Hex()
-		toAddress := tx.To().Hex()
+		var toAddress string
+		if tx.To() != nil {
+			toAddress = tx.To().Hex()
+		}
 
 		var transaction AccountTransactionCompact
 
@@ -266,31 +257,28 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 		//todo: fix
 		transaction.TransactionType = "CoinTransfer"
 
-		err = c.processAccountTransaction(fromAddress, &transaction, &liveAccountMap)
-		if err != nil {
-			log.Error("putTransaction", "error", err, "fromAddress", fromAddress)
-			return err
+		_, ok := liveAccountMap[strings.ToLower(fromAddress)]
+		if ok == false {
+			liveAccountMap[strings.ToLower(fromAddress)] = make([]AccountTransactionCompact, 0)
 		}
+		liveAccountMap[strings.ToLower(fromAddress)] = append(liveAccountMap[strings.ToLower(fromAddress)], transaction)
 
-		err = c.processAccountTransaction(toAddress, &transaction, &liveAccountMap)
-		if err != nil {
-			log.Error("putTransaction", "error", err, "toAddress", toAddress)
-			return err
+		if tx.To() != nil {
+			if strings.ToLower(fromAddress) != strings.ToLower(toAddress) {
+				_, ok := liveAccountMap[strings.ToLower(toAddress)]
+				if ok == false {
+					liveAccountMap[strings.ToLower(toAddress)] = make([]AccountTransactionCompact, 0)
+				}
+				liveAccountMap[strings.ToLower(toAddress)] = append(liveAccountMap[strings.ToLower(toAddress)], transaction)
+			}
 		}
 	}
 
 	for k, v := range liveAccountMap {
-		err = c.putAccountTxnCount(k, v.txnCount, &txnBatch)
+		err = c.processAccountTransactions(k, &v, &txnBatch)
 		if err != nil {
+			log.Error("processAccountTransaction", "error", err, "address", k)
 			return err
-		}
-
-		for _, inner := range v.pageMap {
-			err = txnBatch.Put(inner.pageKeyBlob, inner.accountTxnListBlob)
-			if err != nil {
-				log.Error("txnBatch.Put accountTransactionListBlob", "error", err)
-				return err
-			}
 		}
 	}
 
@@ -334,8 +322,8 @@ func (c *CacheManager) getLastBlockNumberByDb(blockKey string) (uint64, error) {
 }
 
 func (c *CacheManager) close() error {
-	catchDb := c.cacheDb
-	err := catchDb.Close()
+	cacheDb := c.cacheDb
+	err := cacheDb.Close()
 	if err != nil {
 		log.Debug("cache manager account transaction db close error", "err", err)
 		return err
@@ -344,73 +332,88 @@ func (c *CacheManager) close() error {
 	return nil
 }
 
-func (c *CacheManager) processAccountTransaction(address string, txn *AccountTransactionCompact, liveBlockMap *map[string]BlockAccountLive) error {
-	liveMap := *liveBlockMap
-
-	var accountTxnPageKey []byte
-	var accountTxnCount uint64
-	var txnPageCount uint64
-	var accountTransactionList AccountTransactionList
-	var accountTransactionListBlob []byte
+func (c *CacheManager) processAccountTransactions(address string, txnList *[]AccountTransactionCompact, batch *ethdb.Batch) error {
+	txnBatch := *batch
 	var txnCount uint64
 	var err error
 
-	blockAccountTransactions, ok := liveMap[address]
-	if ok {
-		txnCount = blockAccountTransactions.txnCount
-		accountTxnCount = txnCount + 1
-		if accountTxnCount%PageSize == 1 { //if it's the first transaction of the page, won't be in the cache
+	address = strings.ToLower(address)
 
-		}
+	txnCount, err = c.getAccountTxnCount(address)
+	if err != nil {
+		return err
+	}
+	newTxnCount := txnCount + 1
+	var accountTransactionList AccountTransactionList
+
+	log.Info("processAccountTransactions", "address", address, "txnCount", txnCount, "transaction count in block", len(*txnList))
+
+	if newTxnCount%PageSize == 1 { //if it's the first transaction of the page, won't be in the cache
+		accountTransactionList.Transactions = make([]AccountTransactionCompact, 0)
+		accountTransactionList.Address = address
+		log.Info("processAccountTransactions", "address", address, "newTxnCount", newTxnCount)
 	} else {
-		txnCount, err = c.getAccountTxnCount(address)
+		//Load current state form the cache
+		txnPageCount := getPageCount(newTxnCount)
+		txnPageKey := getAccountPageKey(address, txnPageCount)
+
+		log.Info("processAccountTransactions loading from cache", "address", address, "newTxnCount", newTxnCount, "txnPageCount", txnPageCount)
+
+		accountTransactionListBlob, err := c.cacheDb.Get(txnPageKey)
 		if err != nil {
+			log.Error("cacheDb.Get accountTxnPageKey", "error", err)
+			return err
+		}
+		err = json.Unmarshal(accountTransactionListBlob, &accountTransactionList)
+		if err != nil {
+			log.Error("json.Unmarshal accountTransactionListBlob", "error", err)
 			return err
 		}
 
-		accountTxnCount = txnCount + 1
-		txnPageCount = getPageCount(txnCount)
+		if strings.ToLower(accountTransactionList.Address) != strings.ToLower(address) {
+			return errors.New("unexpected fromaddress")
+		}
 
-		accountTxnPageKey = getAccountPageKey(address, txnPageCount)
+		if accountTransactionList.Transactions == nil {
+			return errors.New("unexpected transactions is nul")
+		}
 
-		if accountTxnCount%PageSize == 1 { //if it's the first transaction of the page, won't be in the cache
-			accountTransactionList.Transactions = make([]AccountTransactionCompact, 0)
-			accountTransactionList.Address = address
-		} else {
-			accountTransactionListBlob, err = c.cacheDb.Get(accountTxnPageKey)
-			if err != nil {
-				log.Error("cacheDb.Get accountTxnPageKey", "error", err)
-				return err
-			}
-			err = json.Unmarshal(accountTransactionListBlob, &accountTransactionList)
-			if err != nil {
-				log.Error("json.Unmarshal accountTransactionListBlob", "error", err)
-				return err
-			}
-
-			if strings.ToLower(accountTransactionList.Address) != strings.ToLower(address) {
-				return errors.New("unexpected fromaddress")
-			}
-
-			if accountTransactionList.Transactions == nil {
-				return errors.New("unexpected transactions is nul")
-			}
-
-			if len(accountTransactionList.Transactions) != int(txnCount%PageSize) {
-				log.Error("unexpected transactions count from address", "actual", len(accountTransactionList.Transactions), "expected", int(accountTxnCount%PageSize)-1, "txnCount", txnCount)
-				return errors.New("unexpected transactions count")
-			}
+		if len(accountTransactionList.Transactions) != int(txnCount%PageSize) {
+			log.Error("unexpected transactions count from address", "actual", len(accountTransactionList.Transactions), "expected", int(txnCount%PageSize), "txnCount", txnCount)
+			return errors.New("unexpected transactions count")
 		}
 	}
 
-	log.Info("processAccountTransaction", "address", address, "accountTxnCount", accountTxnCount)
-	accountTransactionList.Transactions = append(accountTransactionList.Transactions, *txn)
-	accountTransactionListBlob, err = json.Marshal(accountTransactionList)
-	if err != nil {
-		log.Error("json.Marshal accountTransactionListBlob", "error", err)
+	for i, txn := range *txnList {
+		accountTransactionList.Transactions = append(accountTransactionList.Transactions, txn)
+
+		if len(accountTransactionList.Transactions) == int(PageSize) || i == len(*txnList)-1 {
+			accountTransactionListBlob, err := json.Marshal(accountTransactionList)
+			if err != nil {
+				log.Error("json.Marshal accountTransactionListBlob", "error", err)
+				return err
+			}
+
+			runningTxnCount := txnCount + uint64(i) + 1
+			txnPageCount := getPageCount(runningTxnCount)
+			txnPageKey := getAccountPageKey(address, txnPageCount)
+			err = txnBatch.Put(txnPageKey, accountTransactionListBlob)
+			if err != nil {
+				log.Error("txnBatch.Put accountTransactionListBlob", "error", err)
+				return err
+			}
+			log.Info("txnBatch.Put", "runningTxnCount", runningTxnCount, "txnPageCount", txnPageCount)
+			accountTransactionList.Transactions = make([]AccountTransactionCompact, 0) //reset
+		}
 	}
 
-	log.Info("inserted from account txn", "txnPageCount", txnPageCount, "accountTxnCount", accountTxnCount, "address", address)
+	txnCount = txnCount + uint64(len(*txnList))
+	err = c.putAccountTxnCount(address, txnCount, batch)
+	if err != nil {
+		return err
+	}
+
+	log.Info("inserted account txn list", "txnCount", txnCount, "txnPageCount", getPageCount(txnCount), "txnCountInBlock", len(*txnList), "address", address)
 
 	return nil
 }
@@ -423,47 +426,47 @@ func getPageCount(txnCount uint64) uint64 {
 	}
 }
 
+func getAccountTxnCountKey(address string) (key string, blob []byte) {
+	key = fmt.Sprintf(AccountTxnCountKey, address)
+	blob = []byte(key)
+	return key, blob
+}
+
 func (c *CacheManager) getAccountTxnCount(address string) (uint64, error) {
-	address = strings.ToLower(address)
-	fromAccountTxnCountKey := []byte(fmt.Sprintf(AccountTxnCountKey, address))
-	fromAccountTxnCountBlob, err := c.cacheDb.Get(fromAccountTxnCountKey)
+	accountTxnCountKey, keyBlob := getAccountTxnCountKey(address)
+	accountTxnCountBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
 		if err.Error() == "leveldb: not found" {
+			log.Info("getAccountTxnCount not found", "address", address, "accountTxnCountKey", accountTxnCountKey)
 			return 0, nil
 		} else {
-			log.Error("processByCacheManager cacheDb.Get address", "error", err)
+			log.Error("processByCacheManager cacheDb.Get address", "address", address, "accountTxnCountKey", accountTxnCountKey, "error", err)
 			return 0, err
 		}
 	} else {
-		return common.BytesToUint64(fromAccountTxnCountBlob), nil
+		txnCount := common.BytesToUint64(accountTxnCountBlob)
+		log.Info("getAccountTxnCount", "address", address, "accountTxnCountKey", accountTxnCountKey, "txnCount", txnCount)
+		return txnCount, nil
 	}
 }
 
 func (c *CacheManager) putAccountTxnCount(address string, txnCount uint64, batch *ethdb.Batch) error {
 	txnBatch := *batch
 	address = strings.ToLower(address)
-	fromAccountTxnCountKey := []byte(fmt.Sprintf(AccountTxnCountKey, address))
+	accountTxnCountKey, keyBlob := getAccountTxnCountKey(address)
+	log.Info("putAccountTxnCount", "address", address, "accountTxnCountKey", accountTxnCountKey, "txnCount", txnCount)
+
 	blob := common.Uint64ToBytes(txnCount)
-	err := txnBatch.Put(fromAccountTxnCountKey, blob)
+	err := txnBatch.Put(keyBlob, blob)
 	if err != nil {
 		log.Error("putAccountTxnCount address", "error", err, "address", address, "txnCount", txnCount)
-		return err
-	}
-
-	checkTxnCount, err := c.getAccountTxnCount(address)
-	if err != nil {
-		log.Error("checkTxnCount", "error", err)
-		return err
-	}
-	if checkTxnCount != txnCount {
-		log.Error("checkTxnCount mismatch", "checkTxnCount", checkTxnCount, "txnCount", txnCount)
 		return err
 	}
 
 	return nil
 }
 
-func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, pageNumber uint64) (ListAccountTransactionsResponse, error) {
+func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTransactionsResponse, error) {
 	listResponse := ListAccountTransactionsResponse{}
 	address := strings.ToLower(accountAddress.Hex())
 
@@ -478,10 +481,14 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 		pageCount = (accountTxnCount / PageSize) + 1
 	}
 
-	log.Info("ListTransactionByAccount", "address", address, "pageNumber", pageNumber, "pageCount", pageCount, "accountTxnCount", accountTxnCount)
-	if pageNumber == 0 {
+	var pageNumber uint64
+	if pageNumberInput < 1 {
 		pageNumber = 1
-	} else if pageNumber > pageCount {
+	} else {
+		pageNumber = uint64(pageNumberInput)
+	}
+	log.Info("ListTransactionByAccount", "address", address, "pageNumberInput", pageNumberInput, "pageNumber", pageNumber, "pageCount", pageCount, "accountTxnCount", accountTxnCount)
+	if pageNumber > pageCount {
 		return ListAccountTransactionsResponse{}, nil
 	}
 
