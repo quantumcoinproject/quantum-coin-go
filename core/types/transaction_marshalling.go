@@ -19,7 +19,6 @@ package types
 import (
 	"encoding/json"
 	"errors"
-	"github.com/QuantumCoinProject/qc/log"
 	"math/big"
 
 	"github.com/QuantumCoinProject/qc/common"
@@ -170,7 +169,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'maxGasTier' in transaction") //todo: fill
 		}
 		maxGasTier := int64(*dec.MaxGasTier)
-		log.Error("maxGasTier", "val", maxGasTier)
 
 		if big.NewInt(maxGasTier).Cmp(GAS_TIER_DEFAULT_PRICE) == 0 {
 			itx.MaxGasTier = GAS_TIER_DEFAULT

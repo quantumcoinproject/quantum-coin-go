@@ -1196,7 +1196,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		os.Exit(1)
 	}
 
-	log.Error("signerHash", "hash", signerHash)
 	if !tx.Verify(signerHash.Bytes()) {
 		log.Error("Txn Verify failed", "Hash", tx.Hash())
 	} else {
@@ -1216,7 +1215,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		price := (*hexutil.Big)(tx.GasPrice())
 		result.GasPrice = price
 		result.MaxGasTier = hexutil.Uint64(tx.MaxGasTier().Uint64())
-		log.Error("=============max gas tier", "a", tx.MaxGasTier(), "b", result.MaxGasTier)
 	}
 	return result
 }

@@ -101,8 +101,12 @@ func main() {
 				return
 			}
 
-			go qcReadApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys, cachePath)
-			go newCachemanager(cachePath, nodeUrl)
+			cacheManager, err := cachemanager.NewCacheManager(cachePath, nodeUrl)
+			if err != nil {
+				log.Error("NewCacheManager failed", "error", err)
+				panic(err)
+			}
+			go qcReadApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys, cacheManager)
 		}
 
 		if strings.EqualFold(api ,"write") {
@@ -110,14 +114,15 @@ func main() {
 		}
 	}
 
-
-
 	fmt.Println("Relay listen and server...")
 	<-make(chan int)
 }
 
-func qcReadApi(ip string, port string, nodeUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheUrl string) {
-	ReadApiAPIService := qcreadapi.NewReadApiAPIService(nodeUrl, cacheUrl)
+func qcReadApi(ip string, port string, nodeUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheManager *cachemanager.CacheManager) {
+	ReadApiAPIService, err := qcreadapi.NewReadApiAPIService(nodeUrl, cacheManager)
+	if err != nil {
+		panic(err)
+	}
 	ReadApiAPIController := qcreadapi.NewReadApiAPIController(ReadApiAPIService, corsAllowedOrigins, enableAuth, apiKeys)
 	readRouter := qcreadapi.NewRouter(ReadApiAPIController)
 
@@ -132,14 +137,6 @@ func qcWriteApi(ip string, port string, nodeUrl string, corsAllowedOrigins strin
 
 	fmt.Println("Write api server is listening on : ", ip + ":" + port, "nodeUrl" + ":" + nodeUrl, "corsAllowedOrigins" + ":" + corsAllowedOrigins)
 	http.ListenAndServe(ip + ":" + port,  writeRouter)
-}
-
-func newCachemanager(cachePath, nodeUrl string){
-	err := cachemanager.NewCacheManager(cachePath, nodeUrl)
-	if err != nil {
-		log.Error("NewCacheManager failed", "error", err)
-		os.Exit(-1)
-	}
 }
 
 func readConfigJsonDataFile(filename string)  ([]Config, error) {

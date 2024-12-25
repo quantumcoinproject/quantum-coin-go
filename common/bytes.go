@@ -210,3 +210,13 @@ func LenToBytes(len int) (b []byte) {
 func BytesToLen(b []byte) (len int) {
 	return int(binary.LittleEndian.Uint16(b[:]))
 }
+
+func Uint64ToBytes(val uint64) []byte {
+	b := make([]byte, 8)
+	binary.LittleEndian.PutUint64(b, val)
+	return b
+}
+
+func BytesToUint64(val []byte) uint64 {
+	return binary.LittleEndian.Uint64(val[:])
+}

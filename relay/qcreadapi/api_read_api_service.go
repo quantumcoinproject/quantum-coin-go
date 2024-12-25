@@ -31,7 +31,7 @@ import (
 // Include any external packages or services that will be required by this service.
 type ReadApiAPIService struct {
   DpUrl string
-  CacheUrl string
+  cacheManager *cachemanager.CacheManager
 }
 
 type RPCTransaction struct {
@@ -51,12 +51,12 @@ type RPCTransaction struct {
 }
 
 // NewReadApiAPIService creates a default api service
-func NewReadApiAPIService(dpUrl string, cacheUrl string) *ReadApiAPIService {
+func NewReadApiAPIService(dpUrl string, cacheManager *cachemanager.CacheManager) (*ReadApiAPIService, error) {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 	return &ReadApiAPIService{
 		DpUrl: dpUrl,
-		CacheUrl: cacheUrl,
-	}
+		cacheManager: cacheManager,
+	}, nil
 }
 
 // GetLatestBlockDetails - Get latest block details
@@ -68,7 +68,7 @@ func (s *ReadApiAPIService) GetLatestBlockDetails(ctx context.Context) (ImplResp
 
 	client, err := rpc.Dial(s.DpUrl)
 	if err != nil {
-		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		log.Error(relay.MsgDial, relay.MsgError, "errors.New(err.Error())", relay.MsgStatus, http.StatusInternalServerError)
 		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
 	}
 	defer client.Close()
@@ -291,7 +291,7 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 
 	startTime := time.Now()
 
-	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgDial, s.CacheUrl)
+	log.Info(relay.InfoTitleListAccountTransactions)
 
 	if common.IsHexAddressDeep(address) == false {
 		return Response(http.StatusInternalServerError, nil), relay.ErrInvalidAddress
@@ -301,9 +301,9 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 
 	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
-	listResponse, err := cachemanager.ListTransactionByAccount(address, string(pageNumber), s.CacheUrl)
+	listResponse, err := s.cacheManager.ListTransactionByAccount(common.HexToAddress(address), uint64(pageNumber))
 	if err != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
 	}
 
 	return Response(http.StatusOK,listResponse),	nil

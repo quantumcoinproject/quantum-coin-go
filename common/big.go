@@ -17,6 +17,7 @@
 package common
 
 import (
+	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"math/big"
 )
 
@@ -69,4 +70,9 @@ func SafePercentageOfBigInt(x, y *big.Int) *big.Int {
 func SafeRelativePercentageBigInt(total, percentage *big.Int) *big.Int {
 	hundred := big.NewInt(100)
 	return SafeDivBigInt(SafeMulBigInt(total, percentage), hundred)
+}
+
+func BigIntToHexString(val *big.Int) string {
+	hexVal := (*hexutil.Big)(val)
+	return hexVal.String()
 }
