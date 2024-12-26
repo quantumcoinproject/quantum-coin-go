@@ -480,7 +480,7 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 
 	var pageNumber uint64
 	if pageNumberInput < 1 {
-		pageNumber = 1
+		pageNumber = pageCount
 	} else {
 		pageNumber = uint64(pageNumberInput)
 	}
@@ -508,6 +508,14 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 	if strings.ToLower(accountTransactionList.Address) != strings.ToLower(address) {
 		log.Error("unexpected address accountTransactionList.Address", "address", address, "accountTransactionList.Address", accountTransactionList.Address)
 		return ListAccountTransactionsResponse{}, errors.New("unexpected address accountTransactionList.Address")
+	}
+
+	for i, v := range accountTransactionList.Transactions {
+		v.From = strings.ToLower(v.From)
+		if len(v.To) != 0 {
+			v.To = strings.ToLower(v.To)
+		}
+		accountTransactionList.Transactions[i] = v
 	}
 
 	listResponse.Items = accountTransactionList.Transactions
