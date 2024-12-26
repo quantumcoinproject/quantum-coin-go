@@ -183,19 +183,19 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 
 		if dec.VBlob == nil {
-			return errors.New("missing required field 'VBlob' in transaction") //todo: fill
+			return errors.New("missing required field 'VBlob' in transaction")
 		} else {
 			itx.V = big.NewInt(1).SetBytes(dec.VBlob)
 		}
 
 		if dec.RBlob == nil {
-			return errors.New("missing required field 'RBlob' in transaction") //todo: fill
+			return errors.New("missing required field 'RBlob' in transaction")
 		} else {
 			itx.R = big.NewInt(1).SetBytes(dec.RBlob)
 		}
 
 		if dec.SBlob == nil {
-			return errors.New("missing required field 'SBlob' in transaction") //todo: fill
+			return errors.New("missing required field 'SBlob' in transaction")
 		} else {
 			itx.S = big.NewInt(1).SetBytes(dec.SBlob)
 		}

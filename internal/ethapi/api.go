@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"math/big"
-	"os"
 	"strings"
 	"time"
 
@@ -1193,11 +1192,12 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	signerHash, err := signer.Hash(tx)
 	if err != nil {
 		log.Error("hash failed", "err", err)
-		os.Exit(1)
+		return nil
 	}
 
 	if !tx.Verify(signerHash.Bytes()) {
 		log.Error("Txn Verify failed", "Hash", tx.Hash())
+		return nil
 	} else {
 		log.Trace("Txn Verify ok", "Hash", tx.Hash())
 	}

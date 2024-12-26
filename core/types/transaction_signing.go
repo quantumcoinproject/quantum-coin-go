@@ -25,7 +25,6 @@ import (
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/params"
 	"math/big"
-	"runtime/debug"
 )
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
@@ -259,13 +258,11 @@ func decodeSignature(digestHash []byte, sig []byte) (r, s, v *big.Int, err error
 
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error) {
 	if Vb.BitLen() > 8 {
-		debug.PrintStack()
 		return common.Address{}, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
 	if !cryptobase.SigAlg.ValidateSignatureValues(sighash[:], V, R, S) {
 		log.Error("recoverPlain", "hash", sighash)
-		debug.PrintStack()
 		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format
