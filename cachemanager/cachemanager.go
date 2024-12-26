@@ -216,10 +216,10 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 			return err
 		}
 
-		fromAddress := msg.From().Hex()
+		fromAddress := strings.ToLower(msg.From().Hex())
 		var toAddress string
 		if tx.To() != nil {
-			toAddress = tx.To().Hex()
+			toAddress = strings.ToLower(tx.To().Hex())
 		}
 
 		var transaction AccountTransactionCompact
@@ -252,19 +252,19 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 		}
 		transaction.TransactionType = string(txType)
 
-		_, ok := liveAccountMap[strings.ToLower(fromAddress)]
+		_, ok := liveAccountMap[fromAddress]
 		if ok == false {
-			liveAccountMap[strings.ToLower(fromAddress)] = make([]AccountTransactionCompact, 0)
+			liveAccountMap[fromAddress] = make([]AccountTransactionCompact, 0)
 		}
-		liveAccountMap[strings.ToLower(fromAddress)] = append(liveAccountMap[strings.ToLower(fromAddress)], transaction)
+		liveAccountMap[fromAddress] = append(liveAccountMap[fromAddress], transaction)
 
 		if tx.To() != nil {
-			if strings.ToLower(fromAddress) != strings.ToLower(toAddress) {
-				_, ok := liveAccountMap[strings.ToLower(toAddress)]
+			if fromAddress != toAddress {
+				_, ok := liveAccountMap[toAddress]
 				if ok == false {
-					liveAccountMap[strings.ToLower(toAddress)] = make([]AccountTransactionCompact, 0)
+					liveAccountMap[toAddress] = make([]AccountTransactionCompact, 0)
 				}
-				liveAccountMap[strings.ToLower(toAddress)] = append(liveAccountMap[strings.ToLower(toAddress)], transaction)
+				liveAccountMap[toAddress] = append(liveAccountMap[toAddress], transaction)
 			}
 		}
 	}
@@ -367,8 +367,8 @@ func (c *CacheManager) processAccountTransactions(address string, txnList *[]Acc
 			return err
 		}
 
-		if strings.ToLower(accountTransactionList.Address) != strings.ToLower(address) {
-			return errors.New("unexpected fromaddress")
+		if strings.ToLower(accountTransactionList.Address) != address {
+			return errors.New("unexpected address")
 		}
 
 		if accountTransactionList.Transactions == nil {
@@ -505,18 +505,18 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 		return ListAccountTransactionsResponse{}, err
 	}
 
-	if strings.ToLower(accountTransactionList.Address) != strings.ToLower(address) {
+	if strings.ToLower(accountTransactionList.Address) != address {
 		log.Error("unexpected address accountTransactionList.Address", "address", address, "accountTransactionList.Address", accountTransactionList.Address)
 		return ListAccountTransactionsResponse{}, errors.New("unexpected address accountTransactionList.Address")
 	}
 
-	for i, v := range accountTransactionList.Transactions {
+	/*for i, v := range accountTransactionList.Transactions {
 		v.From = strings.ToLower(v.From)
 		if len(v.To) != 0 {
 			v.To = strings.ToLower(v.To)
 		}
 		accountTransactionList.Transactions[i] = v
-	}
+	}*/
 
 	listResponse.Items = accountTransactionList.Transactions
 	listResponse.PageCount = pageCount
