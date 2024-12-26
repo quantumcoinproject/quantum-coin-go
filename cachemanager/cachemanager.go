@@ -26,6 +26,7 @@ type CacheManager struct {
 	nodeUrl   string
 	cacheLock sync.Mutex
 	cacheDb   ethdb.Database
+	client    *ethclient.Client
 }
 
 var LastBlockKey = "last-block"
@@ -118,7 +119,7 @@ func (c *CacheManager) initialize() error {
 		return err
 	}
 
-	client.Close()
+	c.client = client
 
 	return nil
 }
@@ -155,11 +156,6 @@ func (c *CacheManager) start() error {
 					blockNumber = blockNumberToGet
 					log.Info("Batch Complete", "Block number", blockNumberToGet)
 					delayNumber = 0
-					if blockNumber == 4508 {
-						//cacheTimer.Stop()
-						//return
-					}
-
 				} else {
 					if err.Error() == "not found" {
 						log.Info("Block not found", "Block number", blockNumberToGet)
@@ -187,13 +183,8 @@ func (c *CacheManager) start() error {
 }
 
 func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
-	client, err := ethclient.Dial(c.nodeUrl)
-	if err != nil {
-		return err
-	}
-
 	blockNum := new(big.Int).SetUint64(blockNumber)
-	block, err := client.BlockByNumber(context.Background(), blockNum)
+	block, err := c.client.BlockByNumber(context.Background(), blockNum)
 	if err != nil {
 		if err.Error() != "not found" {
 			log.Error("BlockByNumber", "error", err)
@@ -213,7 +204,7 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 	liveAccountMap = make(map[string][]AccountTransactionCompact)
 
 	for _, tx := range block.Transactions() {
-		receipt, err := client.TransactionReceipt(context.Background(), tx.Hash())
+		receipt, err := c.client.TransactionReceipt(context.Background(), tx.Hash())
 		if err != nil {
 			log.Error("processByCacheManager TransactionReceipt", "error", err)
 			return err
@@ -255,7 +246,11 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 		}
 
 		//todo: fix
-		transaction.TransactionType = "CoinTransfer"
+		txType, err := getTransactionType(tx)
+		if err != nil {
+			log.Error("getTransactionType", "error", err, "tx", tx.Hash())
+		}
+		transaction.TransactionType = string(txType)
 
 		_, ok := liveAccountMap[strings.ToLower(fromAddress)]
 		if ok == false {
@@ -328,6 +323,8 @@ func (c *CacheManager) close() error {
 		log.Debug("cache manager account transaction db close error", "err", err)
 		return err
 	}
+
+	c.client.Close()
 
 	return nil
 }
@@ -522,4 +519,15 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 func getAccountPageKey(address string, pageCount uint64) []byte {
 	pageKey := fmt.Sprintf(AccountTransactionPageKey, strings.ToLower(address), pageCount)
 	return []byte(pageKey)
+}
+
+// todo: handle TokenTransfer, NewToken
+func getTransactionType(txn *types.Transaction) (TransactionType, error) {
+	if txn.To() == nil {
+		return NEW_SMART_CONTRACT, nil
+	}
+	if txn.Data() == nil || len(txn.Data()) == 0 {
+		return COIN_TRANSFER, nil
+	}
+	return SMART_CONTRACT, nil
 }
