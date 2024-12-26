@@ -158,7 +158,7 @@ func (c *CacheManager) start() error {
 					delayNumber = 0
 				} else {
 					if err.Error() == "not found" {
-						log.Info("Block not found", "Block number", blockNumberToGet)
+						log.Info("Waiting for Block...", "Block number", blockNumberToGet)
 					} else {
 						log.Error("Batch Error", "error", err.Error(), "Block number", blockNumberToGet)
 					}
@@ -382,7 +382,7 @@ func (c *CacheManager) processAccountTransactions(address string, txnList *[]Acc
 	}
 
 	for i, txn := range *txnList {
-		accountTransactionList.Transactions = append(accountTransactionList.Transactions, txn)
+		accountTransactionList.Transactions = append([]AccountTransactionCompact{txn}, accountTransactionList.Transactions...) //prepend for backward compat
 
 		if len(accountTransactionList.Transactions) == int(PageSize) || i == len(*txnList)-1 {
 			accountTransactionListBlob, err := json.Marshal(accountTransactionList)
