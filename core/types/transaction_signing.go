@@ -22,6 +22,7 @@ import (
 	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/params"
 	"math/big"
 )
@@ -261,6 +262,7 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 	}
 	V := byte(Vb.Uint64() - 27)
 	if !cryptobase.SigAlg.ValidateSignatureValues(sighash[:], V, R, S) {
+		log.Error("recoverPlain", "hash", sighash)
 		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format

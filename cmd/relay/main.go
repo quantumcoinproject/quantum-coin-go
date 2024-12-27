@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/QuantumCoinProject/qc/log"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -35,7 +36,7 @@ type Config struct {
 	CorsAllowedOrigins    string `json:"corsAllowedOrigins"`
 	EnableAuth bool `json:"enableAuth"`
 	ApiKeys string `json:"apiKeys"`
-	CacheUrl string `json:"cacheUrl"`
+	CachePath string `json:"cachePath"`
 }
 
 type Configs struct {
@@ -77,7 +78,7 @@ func main() {
 		corsAllowedOrigins := config.CorsAllowedOrigins
 		enableAuth := config.EnableAuth
 		apiKeys := config.ApiKeys
-		cacheUrl := config.CacheUrl
+		cachePath := config.CachePath
 
 		if net.ParseIP(ip) == nil {
 			fmt.Println("Check configuration ip value ", ip)
@@ -94,30 +95,34 @@ func main() {
 			return
 		}
 
-		if len(strings.TrimSpace(cacheUrl)) == 0{
-			fmt.Println("Check configuration  cache Url value", cacheUrl)
-			return
-		}
-
 		if strings.EqualFold(api ,"read") {
-			go qcReadApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys, cacheUrl)
+			if len(strings.TrimSpace(cachePath)) == 0 {
+				fmt.Println("Check configuration cache path value", cachePath)
+				return
+			}
+
+			cacheManager, err := cachemanager.NewCacheManager(cachePath, nodeUrl)
+			if err != nil {
+				log.Error("NewCacheManager failed", "error", err)
+				panic(err)
+			}
+			go qcReadApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys, cacheManager)
 		}
 
 		if strings.EqualFold(api ,"write") {
 			go qcWriteApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys)
 		}
-
-		go newCachemanager(cacheUrl, nodeUrl)
 	}
-
-
 
 	fmt.Println("Relay listen and server...")
 	<-make(chan int)
 }
 
-func qcReadApi(ip string, port string, nodeUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheUrl string) {
-	ReadApiAPIService := qcreadapi.NewReadApiAPIService(nodeUrl, cacheUrl)
+func qcReadApi(ip string, port string, nodeUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheManager *cachemanager.CacheManager) {
+	ReadApiAPIService, err := qcreadapi.NewReadApiAPIService(nodeUrl, cacheManager)
+	if err != nil {
+		panic(err)
+	}
 	ReadApiAPIController := qcreadapi.NewReadApiAPIController(ReadApiAPIService, corsAllowedOrigins, enableAuth, apiKeys)
 	readRouter := qcreadapi.NewRouter(ReadApiAPIController)
 
@@ -132,11 +137,6 @@ func qcWriteApi(ip string, port string, nodeUrl string, corsAllowedOrigins strin
 
 	fmt.Println("Write api server is listening on : ", ip + ":" + port, "nodeUrl" + ":" + nodeUrl, "corsAllowedOrigins" + ":" + corsAllowedOrigins)
 	http.ListenAndServe(ip + ":" + port,  writeRouter)
-}
-
-func newCachemanager(cacheUrl, nodeUrl string){
-	err := cachemanager.NewCacheManager(cacheUrl, nodeUrl)
-	fmt.Println("newCachemanager ", err)
 }
 
 func readConfigJsonDataFile(filename string)  ([]Config, error) {

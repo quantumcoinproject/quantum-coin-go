@@ -172,3 +172,13 @@ func TestLenConversion(t *testing.T) {
 		}
 	}
 }
+
+func TestUint64(t *testing.T) {
+	var sourceList = [...]uint64{0, 1, 999, 9999999999999999999}
+
+	for _, source := range sourceList {
+		if BytesToUint64(Uint64ToBytes(source)) != source {
+			t.Fatalf("failed")
+		}
+	}
+}
