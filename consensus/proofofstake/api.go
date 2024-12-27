@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus"
+	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/internal/ethapi"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/rlp"
@@ -222,6 +223,70 @@ type ConsensusData struct {
 	AdditionalData           *BlockAdditionalConsensusData `json:"additionalData"     gencodec:"required"`
 	ExtendedConsensusPackets []*ExtendedConsensusPacket    `json:"extendedConsensusPackets"     gencodec:"required"`
 	BlockProposerRewards     string                        `json:"blockProposerRewards"     gencodec:"required"`
+}
+
+type ProposalExtendedDetails struct {
+	ProposalDetails *ProposalDetails `json:"proposalDetails"     gencodec:"required"`
+	PacketHash      common.Hash      `json:"packetHash"     gencodec:"required"`
+	ProposalHash    common.Hash      `json:"proposalHash"     gencodec:"required"`
+}
+
+func (api *API) GetBlockProposalDetails(blockNumberHex string) (*ProposalExtendedDetails, error) {
+	var blockNumber uint64
+	var err error
+	if blockNumberHex == "" || len(blockNumberHex) == 0 {
+		blockNumber = api.chain.CurrentHeader().Number.Uint64()
+	} else {
+		blockNumber, err = hexutil.DecodeUint64(blockNumberHex)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	header := api.chain.GetHeaderByNumber(blockNumber)
+	if header == nil {
+		return nil, errUnknownBlock
+	}
+
+	blockAdditionalConsensusData := &BlockAdditionalConsensusData{}
+	err = rlp.DecodeBytes(header.UnhashedConsensusData, blockAdditionalConsensusData)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := 0; i < len(blockAdditionalConsensusData.ConsensusPackets); i++ {
+		packet := blockAdditionalConsensusData.ConsensusPackets[i]
+		var startIndex int
+		if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
+			startIndex = 2
+		} else {
+			startIndex = 1
+		}
+
+		packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
+		if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK {
+			dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
+			digestHash := crypto.Keccak256(dataToVerify)
+			packetHash := common.BytesToHash(digestHash)
+
+			proposalDetails := ProposalDetails{}
+
+			err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &proposalDetails)
+			if err != nil {
+				return nil, err
+			}
+
+			proposalHash := GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
+
+			return &ProposalExtendedDetails{
+				ProposalDetails: &proposalDetails,
+				PacketHash:      packetHash,
+				ProposalHash:    proposalHash,
+			}, nil
+		}
+	}
+
+	return nil, errors.New("proposal packet not found")
 }
 
 // GetBlockConsensusData retrieves proofofstake consensus data of the block.

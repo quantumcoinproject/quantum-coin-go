@@ -51,6 +51,11 @@ web3._extend({
 			params: 1
 		}),
 		new web3._extend.Method({
+			name: 'getBlockProposalDetails',
+			call: 'proofofstake_getBlockProposalDetails',
+			params: 1
+		}),
+		new web3._extend.Method({
 			name: 'getConversionDetails',
 			call: 'proofofstake_getConversionDetails',
 			params: 1
