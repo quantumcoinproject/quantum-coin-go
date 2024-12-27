@@ -1125,6 +1125,28 @@ func GetCombinedTxnHash(parentHash common.Hash, round byte, txns []common.Hash) 
 	return hash
 }
 
+func GetCombinedTxnHashWithTime(parentHash common.Hash, round byte, txns []common.Hash, proposedBlockTime uint64) common.Hash {
+	var txnList []common.Hash
+	txnList = make([]common.Hash, len(txns))
+	for i := 0; i < len(txns); i++ {
+		txnList[i].CopyFrom(txns[i])
+	}
+
+	sort.Slice(txnList, func(i, j int) bool {
+		return bytes.Compare(txnList[i].Bytes(), txnList[j].Bytes()) == -1
+	})
+
+	var data []byte
+	data = make([]byte, 0)
+	for _, txn := range txnList {
+		data = append(data, txn.Bytes()...)
+	}
+
+	hash := crypto.Keccak256Hash(data, parentHash.Bytes(), []byte{round}, common.Uint64ToBytes(proposedBlockTime))
+	log.Trace("GetCombinedTxnHash", "parentHash", parentHash, "round", round, "txn count", len(txns), "proposedBlockTime", proposedBlockTime, "hash", hash)
+	return hash
+}
+
 func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, packet *eth.ConsensusPacket, self bool) error {
 	cph.innerPacketLock.Lock()
 	defer cph.innerPacketLock.Unlock()
@@ -1191,7 +1213,13 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 		return errors.New("unexpected transaction count when handling blockProposal")
 	}
 
-	proposalHash := GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
+	var proposalHash common.Hash
+	if blockStateDetails.blockNumber >= PROPOSAL_TIME_HASH_START_BLOCK {
+		proposalHash = GetCombinedTxnHashWithTime(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns, proposalDetails.BlockTime)
+	} else {
+		proposalHash = GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
+	}
+
 	if blockRoundDetails.proposalPacket != nil && proposalHash.IsEqualTo(blockRoundDetails.proposalHash) == false {
 		return errors.New("invalid proposal hash")
 	}

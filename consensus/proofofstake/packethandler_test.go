@@ -644,6 +644,53 @@ func testPacketHandler_min_basic(t *testing.T) {
 	}
 }
 
+func TestPacketHandler_min_basic_time_hash(t *testing.T) {
+	TEST_CONSENSUS_BLOCK_NUMBER = PROPOSAL_TIME_HASH_START_BLOCK
+	numKeys := 4
+	_, p2p, valMap := Initialize(numKeys)
+
+	parentHash := common.BytesToHash([]byte{1})
+
+	startTime := time.Now().UnixNano() / int64(time.Millisecond)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, nil, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+
+	skipped := false
+	c := 0
+	skipList := make(map[common.Address]bool)
+	for _, handler := range p2p.mockP2pHandlers {
+		h := handler
+		if h.validator.IsEqualTo(proposer) == false && skipped == false {
+			skipped = true
+			skipList[h.validator] = true
+			continue
+		}
+		go WaitBlockCommit(parentHash, h, t)
+		c = c + 1
+	}
+
+	fmt.Println("c", c)
+
+	if ValidateTest(valMap, startTime, parentHash, p2p, 3, 10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+		t.Fatalf("failed")
+	}
+
+	for _, handler := range p2p.mockP2pHandlers {
+		h := handler
+		txnList, err := h.consensusHandler.getBlockSelectedTransactions(parentHash)
+		if skipList[h.validator] {
+			if err == nil {
+				t.Fatalf("failed")
+			}
+		} else {
+			if err != nil || txnList == nil || len(txnList) != 0 {
+				t.Fatalf("failed")
+			}
+		}
+	}
+
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+}
+
 func TestPacketHandler_min_basic(t *testing.T) {
 	for i := 1; i <= TEST_ITERATIONS; i++ {
 		fmt.Println("iteration", i)
