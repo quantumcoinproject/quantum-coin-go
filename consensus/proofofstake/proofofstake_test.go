@@ -215,9 +215,9 @@ func testGetBlockConsensusContextForBlock(t *testing.T, blockNumber uint64, expe
 }
 
 func Test_GetBlockConsensusContextForBlock(t *testing.T) {
-	testGetBlockConsensusContextForBlock(t, uint64(500000), uint64(436000))
-	testGetBlockConsensusContextForBlock(t, uint64(500001), uint64(436001))
-	testGetBlockConsensusContextForBlock(t, uint64(500002), uint64(436002))
+	testGetBlockConsensusContextForBlock(t, uint64(536000), uint64(472000))
+	testGetBlockConsensusContextForBlock(t, uint64(536002), uint64(472002))
+	testGetBlockConsensusContextForBlock(t, uint64(536003), uint64(472003))
 
 	testGetBlockConsensusContextForBlock(t, uint64(933888), uint64(869888))
 	testGetBlockConsensusContextForBlock(t, uint64(933889), uint64(421889))
