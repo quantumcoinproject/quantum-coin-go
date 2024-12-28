@@ -1544,12 +1544,15 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 
 // No nil checks, call only if nil has been checked already
 func getPacketType(packet *eth.ConsensusPacket) ConsensusPacketType {
-	var packetType ConsensusPacketType
+	var startIndex int
 	if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
-		packetType = ConsensusPacketType(packet.ConsensusData[1])
+		startIndex = 2
 	} else {
-		packetType = ConsensusPacketType(packet.ConsensusData[0])
+		startIndex = 1
 	}
+
+	var packetType ConsensusPacketType
+	packetType = ConsensusPacketType(packet.ConsensusData[startIndex-1])
 	return packetType
 }
 
