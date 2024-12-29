@@ -110,19 +110,20 @@ func TestEqualToAddress(t *testing.T) {
 }
 
 func TestIsHexAddress(t *testing.T) {
+	fmt.Println(HexToAddress("0x0000000000005aaeb6053f3e94c9b9a09f33669435e7ef1beaed"))
 	tests := []struct {
 		str string
 		exp bool
 	}{
-		{"0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
-		{"5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
-		{"0X5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
-		{"0XAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
-		{"0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
-		{"0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed1", false},
-		{"0x5aaeb6053f3e94c9b9a09f33669435e7ef1beae", false},
-		{"5aaeb6053f3e94c9b9a09f33669435e7ef1beaed11", false},
-		{"0xxaaeb6053f3e94c9b9a09f33669435e7ef1beaed", false},
+		{"0000000000000000000000005aaEB6053F3E94c9B9A09f33669435e7eF1BEAeD", true},
+		{"0000000000000000000000005aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
+		{"0X0000000000000000000000005aaeb6053f3e94c9b9a09f33669435e7ef1beaed", true},
+		{"0X000000000000000000000000AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
+		{"0x000000000000000000000000AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", true},
+		{"0x0000000000000000000000005aaeb6053f3e94c9b9a09f33669435e7ef1beaed1", false},
+		{"0x0000000000000000000000005aaeb6053f3e94c9b9a09f33669435e7ef1beae", false},
+		{"0000000000000000000000005aaeb6053f3e94c9b9a09f33669435e7ef1beaed11", false},
+		{"0xx000000000000000000000000aaeb6053f3e94c9b9a09f33669435e7ef1beaed", false},
 	}
 
 	for _, test := range tests {
@@ -163,6 +164,7 @@ func TestHashJsonValidation(t *testing.T) {
 }
 
 func TestAddressUnmarshalJSON(t *testing.T) {
+	fmt.Println(HexToAddress("0xG000000000000000000000000000000000000000"))
 	var tests = []struct {
 		Input     string
 		ShouldErr bool
@@ -173,10 +175,11 @@ func TestAddressUnmarshalJSON(t *testing.T) {
 		{`"0x"`, true, nil},
 		{`"0x00"`, true, nil},
 		{`"0xG000000000000000000000000000000000000000"`, true, nil},
-		{`"0x0000000000000000000000000000000000000000"`, false, big.NewInt(0)},
-		{`"0x0000000000000000000000000000000000000010"`, false, big.NewInt(16)},
+		{`"0x0000000000000000000000000000000000000000000000000000000000000000"`, false, big.NewInt(0)},
+		{`"0x0000000000000000000000000000000000000000000000000000000000000010"`, false, big.NewInt(16)},
 	}
 	for i, test := range tests {
+		fmt.Println("running test case", "i", i)
 		var v Address
 		err := json.Unmarshal([]byte(test.Input), &v)
 		if err != nil && !test.ShouldErr {
@@ -190,6 +193,7 @@ func TestAddressUnmarshalJSON(t *testing.T) {
 				t.Errorf("test #%d: address mismatch: have %v, want %v", i, got, test.Output)
 			}
 		}
+		fmt.Println("done running test case", "i", i)
 	}
 }
 
@@ -199,15 +203,15 @@ func TestAddressHexChecksum(t *testing.T) {
 		Output string
 	}{
 		// Test cases from https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md#specification
-		{"0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", "0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed"},
-		{"0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359", "0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359"},
-		{"0xdbf03b407c01e7cd3cbea99509d93f8dddc8c6fb", "0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB"},
-		{"0xd1220a0cf47c7b9be7a2e6ba89f429762e7b9adb", "0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb"},
+		{"0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed", "0x0000000000000000000000005aaEB6053F3E94c9B9A09f33669435e7eF1BEAeD"},
+		{"0xfb6916095ca1df60bb79ce92ce3ea74c37c5d359", "0x000000000000000000000000FB6916095ca1dF60BB79cE92cE3eA74c37C5D359"},
+		{"0xdbf03b407c01e7cd3cbea99509d93f8dddc8c6fb", "0x000000000000000000000000DBf03b407c01e7CD3cBEa99509d93F8dDdC8c6fB"},
+		{"0xd1220a0cf47c7b9be7a2e6ba89f429762e7b9adb", "0x000000000000000000000000D1220a0Cf47c7B9Be7a2E6BA89F429762e7B9adB"},
 		// Ensure that non-standard length input values are handled correctly
-		{"0xa", "0x000000000000000000000000000000000000000A"},
-		{"0x0a", "0x000000000000000000000000000000000000000A"},
-		{"0x00a", "0x000000000000000000000000000000000000000A"},
-		{"0x000000000000000000000000000000000000000a", "0x000000000000000000000000000000000000000A"},
+		{"0xa", "0x000000000000000000000000000000000000000000000000000000000000000A"},
+		{"0x0a", "0x000000000000000000000000000000000000000000000000000000000000000A"},
+		{"0x00a", "0x000000000000000000000000000000000000000000000000000000000000000A"},
+		{"0x000000000000000000000000000000000000000a", "0x000000000000000000000000000000000000000000000000000000000000000A"},
 	}
 	for i, test := range tests {
 		output := HexToAddress(test.Input).Hex()
@@ -225,7 +229,6 @@ func BenchmarkAddressHex(b *testing.B) {
 }
 
 func TestMixedcaseAccount_Address(t *testing.T) {
-
 	// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
 	// Note: 0X{checksum_addr} is not valid according to spec above
 
@@ -234,10 +237,10 @@ func TestMixedcaseAccount_Address(t *testing.T) {
 		Valid bool
 	}
 	if err := json.Unmarshal([]byte(`[
-		{"A" : "0xae967917c465db8578ca9024c205720b1a3651A9", "Valid": false},
-		{"A" : "0xAe967917c465db8578ca9024c205720b1a3651A9", "Valid": true},
-		{"A" : "0XAe967917c465db8578ca9024c205720b1a3651A9", "Valid": false},
-		{"A" : "0x1111111111111111111112222222222223333323", "Valid": true}
+		{"A" : "0x000000000000000000000000ae967917c465db8578ca9024c205720b1a3651A9", "Valid": false},
+		{"A" : "0x000000000000000000000000AE967917C465db8578ca9024C205720b1a3651a9", "Valid": true},
+		{"A" : "0X000000000000000000000000Ae967917c465db8578ca9024c205720b1a3651A9", "Valid": false},
+		{"A" : "0x0000000000000000000000001111111111111111111112222222222223333323", "Valid": true}
 		]`), &res); err != nil {
 		t.Fatal(err)
 	}
@@ -370,6 +373,8 @@ func TestAddress_Scan(t *testing.T) {
 		{
 			name: "working scan",
 			args: args{src: []byte{
+				0x0, 0x0,
+				0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
 				0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 				0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 			}},
@@ -412,6 +417,8 @@ func TestAddress_Scan(t *testing.T) {
 
 func TestAddress_Value(t *testing.T) {
 	b := []byte{
+		0x0, 0x0,
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 	}
@@ -446,6 +453,8 @@ func TestAddress_Value(t *testing.T) {
 
 func TestAddress_Format(t *testing.T) {
 	b := []byte{
+		0x0, 0x0,
+		0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0,
 		0xb2, 0x6f, 0x2b, 0x34, 0x2a, 0xab, 0x24, 0xbc, 0xf6, 0x3e,
 		0xa2, 0x18, 0xc6, 0xa9, 0x27, 0x4d, 0x30, 0xab, 0x9a, 0x15,
 	}
@@ -460,12 +469,12 @@ func TestAddress_Format(t *testing.T) {
 		{
 			name: "println",
 			out:  fmt.Sprintln(addr),
-			want: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15\n",
+			want: "0x000000000000000000000000B26f2B342aAB24bcf63eA218C6A9274d30ab9A15\n",
 		},
 		{
 			name: "print",
 			out:  fmt.Sprint(addr),
-			want: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15",
+			want: "0x000000000000000000000000B26f2B342aAB24bcf63eA218C6A9274d30ab9A15",
 		},
 		{
 			name: "printf-s",
@@ -474,44 +483,44 @@ func TestAddress_Format(t *testing.T) {
 				fmt.Fprintf(buf, "%s", addr)
 				return buf.String()
 			}(),
-			want: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15",
+			want: "0x000000000000000000000000B26f2B342aAB24bcf63eA218C6A9274d30ab9A15",
 		},
 		{
 			name: "printf-q",
 			out:  fmt.Sprintf("%q", addr),
-			want: `"0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15"`,
+			want: `"0x000000000000000000000000B26f2B342aAB24bcf63eA218C6A9274d30ab9A15"`,
 		},
 		{
 			name: "printf-x",
 			out:  fmt.Sprintf("%x", addr),
-			want: "b26f2b342aab24bcf63ea218c6a9274d30ab9a15",
+			want: "000000000000000000000000b26f2b342aab24bcf63ea218c6a9274d30ab9a15",
 		},
 		{
 			name: "printf-X",
 			out:  fmt.Sprintf("%X", addr),
-			want: "B26F2B342AAB24BCF63EA218C6A9274D30AB9A15",
+			want: "000000000000000000000000B26F2B342AAB24BCF63EA218C6A9274D30AB9A15",
 		},
 		{
 			name: "printf-#x",
 			out:  fmt.Sprintf("%#x", addr),
-			want: "0xb26f2b342aab24bcf63ea218c6a9274d30ab9a15",
+			want: "0x000000000000000000000000b26f2b342aab24bcf63ea218c6a9274d30ab9a15",
 		},
 		{
 			name: "printf-v",
 			out:  fmt.Sprintf("%v", addr),
-			want: "0xB26f2b342AAb24BCF63ea218c6A9274D30Ab9A15",
+			want: "0x000000000000000000000000B26f2B342aAB24bcf63eA218C6A9274d30ab9A15",
 		},
 		// The original default formatter for byte slice
 		{
 			name: "printf-d",
 			out:  fmt.Sprintf("%d", addr),
-			want: "[178 111 43 52 42 171 36 188 246 62 162 24 198 169 39 77 48 171 154 21]",
+			want: "[0 0 0 0 0 0 0 0 0 0 0 0 178 111 43 52 42 171 36 188 246 62 162 24 198 169 39 77 48 171 154 21]",
 		},
 		// Invalid format char.
 		{
 			name: "printf-t",
 			out:  fmt.Sprintf("%t", addr),
-			want: "%!t(address=b26f2b342aab24bcf63ea218c6a9274d30ab9a15)",
+			want: "%!t(address=000000000000000000000000b26f2b342aab24bcf63ea218c6a9274d30ab9a15)",
 		},
 	}
 	for _, tt := range tests {
