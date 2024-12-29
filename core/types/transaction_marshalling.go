@@ -19,6 +19,7 @@ package types
 import (
 	"encoding/json"
 	"errors"
+	"github.com/QuantumCoinProject/qc/log"
 	"math/big"
 
 	"github.com/QuantumCoinProject/qc/common"
@@ -172,13 +173,10 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 
 		if big.NewInt(maxGasTier).Cmp(GAS_TIER_DEFAULT_PRICE) == 0 {
 			itx.MaxGasTier = GAS_TIER_DEFAULT
-		} else if big.NewInt(maxGasTier).Cmp(GAS_TIER_2x_PRICE) == 0 {
-			itx.MaxGasTier = GAS_TIER_2X
-		} else if big.NewInt(maxGasTier).Cmp(GAS_TIER_5x_PRICE) == 0 {
-			itx.MaxGasTier = GAS_TIER_5X
-		} else if big.NewInt(maxGasTier).Cmp(GAS_TIER_10x_PRICE) == 0 {
-			itx.MaxGasTier = GAS_TIER_10X
+		} else if maxGasTier == int64(GAS_TIER_DEFAULT) {
+			itx.MaxGasTier = GAS_TIER_DEFAULT
 		} else {
+			log.Error("invalid max gas tier", "tier", maxGasTier)
 			return errors.New("invalid max gas tier")
 		}
 

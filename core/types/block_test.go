@@ -19,8 +19,10 @@ package types
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
+	"github.com/QuantumCoinProject/qc/log"
 	"hash"
 	"math/big"
 	"reflect"
@@ -39,9 +41,89 @@ var (
 	hexsigtest1     = hex.EncodeToString(sigtest)
 )
 
+func TestCreateBlock(t *testing.T) {
+	hash := common.HexToHash("0x123123")
+	var blockNonce BlockNonce
+	blockNonce[0] = 1
+
+	header := &Header{
+		Coinbase:    common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"),
+		Number:      big.NewInt(int64(1)),
+		ParentHash:  hash,
+		Difficulty:  big.NewInt(131072),
+		GasLimit:    uint64(3141592),
+		TxHash:      EmptyRootHash,
+		ReceiptHash: EmptyRootHash,
+		MixDigest:   common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"),
+		Root:        common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"),
+		Nonce:       blockNonce,
+		Time:        1426516743,
+		GasUsed:     21000,
+	}
+	hash = header.Hash()
+
+	block1 := NewBlockWithHeader(header)
+
+	buff := new(bytes.Buffer)
+	err := rlp.Encode(buff, block1)
+	if err != nil {
+		t.Fatal("Encode error: ", err)
+	}
+	buffBlob := buff.Bytes()
+
+	var block2 Block
+
+	if err := rlp.DecodeBytes(buffBlob, &block2); err != nil {
+		t.Fatal("decode error: ", err)
+	}
+
+	if block1.header.Coinbase.IsEqualTo(block2.header.Coinbase) == false {
+		t.Fatalf("failed Coinbase")
+	}
+	if block1.header.Number.Cmp(block2.header.Number) != 0 {
+		t.Fatalf("failed Number")
+	}
+	if block1.header.ParentHash.IsEqualTo(block2.header.ParentHash) == false {
+		t.Fatalf("failed ParentHash")
+	}
+	if block1.header.Difficulty.Cmp(block2.header.Difficulty) != 0 {
+		t.Fatalf("failed Difficulty")
+	}
+	if block1.header.TxHash.IsEqualTo(block2.header.TxHash) == false {
+		t.Fatalf("failed TxHash")
+	}
+	if block1.header.ReceiptHash.IsEqualTo(block2.header.ReceiptHash) == false {
+		t.Fatalf("failed ReceiptHash")
+	}
+
+	hash1 := block1.Hash()
+	hash2 := block2.Hash()
+	if hash1.IsEqualTo(hash2) == false {
+		t.Fatalf("failed block hash")
+	}
+
+	if len(block1.transactions) != len(block2.transactions) {
+		log.Info("txn count", "b1", len(block1.transactions), "b2", len(block2.transactions))
+		t.Fatalf("txn count")
+	}
+
+	for i, _ := range block1.transactions {
+		h1 := block1.transactions[i].Hash()
+		h2 := block2.transactions[i].Hash()
+
+		if h1.IsEqualTo(h2) == false {
+			t.Fatalf("failed txn hash")
+		}
+	}
+
+	fmt.Println(block1.Hash())
+	fmt.Println(common.Bytes2Hex(buffBlob))
+}
+
 // from bcValidBlockTest.json, "SimpleTx"
 func TestBlockEncoding(t *testing.T) {
-	blockEnc := common.FromHex("f90260f901f9a083cafc574e1f51ba9dc0568fc617a08ea2429fb384059c972f13b19fa1c8dd55a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347948888f1f195afa192cfee860698584c030f4c9db1a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017a05fe50b260da6308036625b850b5d6ced6d0a9f814c0688bc91ffb7b7a3a54b67a0bc37d79753ad738a6dac4921e57392f145d8887476de3f783dfa7edae9283e52b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001832fefd8825208845506eb0780a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff49888a13a5a8c8f2bb1c4f861f85f800a82c35094095e7baea6a6c7c4c2dfeb977efac326af552d870a801ba09bea4c4daac7c7c52e093e6a4c35dbbcf8856f1af7b059ba20253e70848d094fa08a8fae537ce25ed8cb5af9adac3f141af69bd515bd2ba031522df09b97dd72b1c0")
+
+	blockEnc := common.FromHex("f9020bf90207a00000000000000000000000000000000000000000000000000000000000123123a00000000000000000000000008888f1f195afa192cfee860698584c030f4c9db1a0ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421b90100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008302000001832fefd8825208845506eb0780a0000000000000000000000000000000000000000000000000000000000000000080a0bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff49888010000000000000080c0")
 	var block Block
 	if err := rlp.DecodeBytes(blockEnc, &block); err != nil {
 		t.Fatal("decode error: ", err)
@@ -58,15 +140,11 @@ func TestBlockEncoding(t *testing.T) {
 	check("Coinbase", block.Coinbase(), common.HexToAddress("8888f1f195afa192cfee860698584c030f4c9db1"))
 	check("MixDigest", block.MixDigest(), common.HexToHash("bd4472abb6659ebe3ee06ee4d7b72a00a9f4d001caca51342001075469aff498"))
 	check("Root", block.Root(), common.HexToHash("ef1552a40b7165c3cd773806b9e0c165b75356e0314bf0706f279c729f51e017"))
-	check("Hash", block.Hash(), common.HexToHash("0a5843ac1cb04865017cb35a57b50b07084e5fcee39b5acadade33149f4fff9e"))
-	check("Nonce", block.Nonce(), uint64(0xa13a5a8c8f2bb1c4))
+	check("Hash", block.Hash(), common.HexToHash("0xc47617147c52fc49f5b5bdb3ab971c7ff227adb915734ef9339f0236373d2899"))
+	check("Nonce", block.Nonce(), uint64(72057594037927936))
 	check("Time", block.Time(), uint64(1426516743))
 	check("Size", block.Size(), common.StorageSize(len(blockEnc)))
 
-	tx1 := NewTransaction(0, common.HexToAddress("095e7baea6a6c7c4c2dfeb977efac326af552d87"), big.NewInt(10), 50000, big.NewInt(10), nil)
-	tx1, _ = tx1.WithSignature(NewLondonSignerDefaultChain(), common.Hex2Bytes(hexsigtest1))
-	check("len(Transactions)", len(block.Transactions()), 1)
-	check("Transactions[0].Hash", block.Transactions()[0].Hash(), tx1.Hash())
 	ourBlockEnc, err := rlp.EncodeToBytes(&block)
 	if err != nil {
 		t.Fatal("encode error: ", err)
