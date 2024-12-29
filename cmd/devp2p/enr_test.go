@@ -1,4 +1,4 @@
-package main
+package devp2p
 
 import (
 	"encoding/base64"
