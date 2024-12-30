@@ -17,6 +17,7 @@
 package core
 
 import (
+	"fmt"
 	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
@@ -116,6 +117,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 		block := gen.PrevBlock(i - 1)
 		gas := block.GasLimit()
 		for {
+			fmt.Println("from", from)
 			gas -= params.TxGas
 			if gas < params.TxGas {
 				break
@@ -129,7 +131,10 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 				nil,
 				nil,
 			)
-			tx, _ = types.SignTx(tx, types.NewLondonSignerDefaultChain(), ringKeys[from])
+			tx, err := types.SignTx(tx, types.NewLondonSignerDefaultChain(), ringKeys[from])
+			if err != nil {
+				panic(err)
+			}
 			gen.AddTx(tx)
 			from = to
 		}
