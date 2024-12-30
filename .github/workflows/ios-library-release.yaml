@@ -41,6 +41,8 @@ jobs:
         export CGO_LDFLAGS="-target ${TARGET} -syslibroot \"${SDK_PATH}\""
         export CC=${{ github.workspace }}/clangwrap.sh
         go build -buildmode=c-archive -o ${{ github.workspace }}/build/ios_arm64/arm64.a ${{ github.workspace }}/wasm/mobile/main.go
+        cp ${{ github.workspace }}/build/ios_arm64/arm64.a ${{ github.workspace }}/build/ios_lib/arm64.a
+        cp ${{ github.workspace }}/build/ios_arm64/arm64.h ${{ github.workspace }}/build/ios_lib/arm64.h
     - name: Check Files
       run:  ls  ${{ github.workspace }}/build/ios_lib
     - name: Create Release
