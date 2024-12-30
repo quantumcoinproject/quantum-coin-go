@@ -270,8 +270,6 @@ func (c *Mock) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 		return errUnknownBlock
 	}
 
-	number := header.Number.Uint64()
-
 	// Don't waste time checking blocks from the future
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
@@ -286,11 +284,10 @@ func (c *Mock) verifyHeader(chain consensus.ChainHeaderReader, header *types.Hea
 	}
 
 	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
-	if number > 0 {
-		if header.Difficulty == nil || header.Difficulty.Uint64() != number {
-			return errInvalidDifficulty
-		}
+	if header.Difficulty == nil {
+		return errInvalidDifficulty
 	}
+
 	// Verify that the gas limit is <= 2^63-1
 	cap := uint64(0x7fffffffffffffff)
 	if header.GasLimit > cap {
