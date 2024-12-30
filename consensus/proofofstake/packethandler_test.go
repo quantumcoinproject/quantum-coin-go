@@ -2291,9 +2291,28 @@ func TestPacketHandler_canPropose(t *testing.T) {
 	}
 
 	for i := uint64(1); i < 16; i++ {
-		if canProposeTest(50, int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER), 51, true) == true {
+		if canProposeTest(50, int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER), 51, false) == false {
 			t.Fatalf("failed")
 		}
+
+		if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER), BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, false) == false {
+			t.Fatalf("failed")
+		}
+
+		if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER),
+			uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+50), true) == false {
+			t.Fatalf("failed")
+		}
+	}
+
+	if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK), 1024,
+		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2-1), false) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 1024,
+		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+1), true) == false {
+		t.Fatalf("failed")
 	}
 }
 

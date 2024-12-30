@@ -114,6 +114,8 @@ var STALE_BLOCK_WARN_TIME = int64(1800 * 1000)
 var BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER = uint64(2)
 var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT = uint64(1024)
 
+var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2 = uint64(64000)
+
 var MIN_VALIDATORS int = 3
 
 type BlockRoundState byte
@@ -425,10 +427,17 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool 
 		return true
 	}
 
+	var maxBlockdelay uint64
+	if currentBlockNumber >= BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
+		maxBlockdelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
+	} else {
+		maxBlockdelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
+	}
+
 	slotsMissed := float64(valDetails.NilBlockCount.Uint64() / BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER)
 	blockDelay := uint64(math.Pow(2.0, slotsMissed))
-	if blockDelay > BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT {
-		blockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
+	if blockDelay > maxBlockdelay {
+		blockDelay = maxBlockdelay
 	}
 
 	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
