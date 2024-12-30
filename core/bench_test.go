@@ -162,10 +162,17 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	}
 	genesis := gspec.MustCommit(db)
 	chain, _ := GenerateChain(gspec.Config, genesis, mockconsensus.NewMockConsensus(), db, b.N, gen)
+	if chain == nil {
+		b.Fatalf("chain is nil")
+	}
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
-	chainman, _ := NewBlockChain(db, nil, gspec.Config, mockconsensus.NewMockConsensus(), vm.Config{}, nil, nil)
+	chainman, err := NewBlockChain(db, nil, gspec.Config, mockconsensus.NewMockConsensus(), vm.Config{}, nil, nil)
+	if err != nil {
+		b.Fatalf("NewBlockChain error %v", err)
+	}
+
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()
