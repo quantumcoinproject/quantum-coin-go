@@ -18,14 +18,15 @@ package core
 
 import (
 	"fmt"
-	"math"
-	"math/big"
-
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/core/vm"
 	"github.com/QuantumCoinProject/qc/params"
+	"math"
+	"math/big"
 )
+
+const TXN_FEE_CUTTOFF_BLOCK = 1607600
 
 /*
 The State Transitioning Model
@@ -285,7 +286,9 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.refundGas(params.RefundQuotientEIP3529)
 	}
 
-	st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+	if st.evm.Context.BlockNumber.Uint64() < TXN_FEE_CUTTOFF_BLOCK {
+		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
+	}
 
 	return &ExecutionResult{
 		UsedGas:    st.gasUsed(),

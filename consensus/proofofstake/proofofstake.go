@@ -94,6 +94,10 @@ var (
 
 	PROPOSAL_TIME_HASH_START_BLOCK        = uint64(1507600)
 	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK = uint64(1597600)
+
+	//Note: both of the below should add upto 100
+	TxnFeeBurnPercentage    = int64(50)
+	TxnFeeRewardsPercentage = int64(50)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -678,7 +682,7 @@ func (c *ProofOfStake) Convert(header *types.Header, state *state.StateDB, txn *
 }
 
 // Finalize implements consensus.Engine
-func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction) error {
+func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) error {
 	if txs == nil {
 		txs = make([]*types.Transaction, 0)
 	} else {
@@ -773,6 +777,27 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			return err
 		}
 
+		//If txn fee for proposer criteria is met and the block has transactions
+		if header.Number.Uint64() >= core.TXN_FEE_CUTTOFF_BLOCK && len(txs) > 0 {
+			rewardsAmountTxnFee, burnAmountTxnFee, err := calculateTxnFeeSplit(blockProposerRewardAmount, txs, receipts)
+			if err != nil {
+				return err
+			}
+
+			//Accumulate additional fee from transactions to staking contract
+			err = c.accumulateBalance(state, rewardsAmountTxnFee, common.HexToAddress(staking.GetStakingContract_Address_String()))
+			if err != nil {
+				log.Error("accumulateBalance rewardsAmountTxnFee staking contract err", "err", err)
+				return err
+			}
+			blockProposerRewardAmount = common.SafeAddBigInt(blockProposerRewardAmount, rewardsAmountTxnFee)
+
+			//burn whatever needs to be burnt from the txn fee
+			burn(state, burnAmountTxnFee)
+
+			log.Trace("Reward amount", "BlockNumber", header.Number, "rewardsAmountTxnFee", rewardsAmountTxnFee, "burnAmountTxnFee", burnAmountTxnFee)
+		}
+
 		//Update staking contract with reward details
 		blockProposerRewardAmountTotal, err := c.AddDepositorReward(header.ParentHash, depositor, blockProposerRewardAmount, state, header)
 		if err != nil {
@@ -854,8 +879,45 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	return nil
 }
 
+func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transaction, receipts []*types.Receipt) (txnFeeRewardsAmount *big.Int, burnAmount *big.Int, err error) {
+	if len(receipts) != len(txs) {
+		log.Error("Finalize receipts and txn invalid len", "receipts len", len(receipts), "txn len", len(txs))
+		return nil, nil, errors.New("finalize receipts and txn invalid length")
+	}
+
+	txnFeeTotal := big.NewInt(0)
+	var txnMap map[common.Hash]*types.Transaction
+	txnMap = make(map[common.Hash]*types.Transaction)
+	for _, txn := range txs {
+		txnMap[txn.Hash()] = txn
+	}
+	for _, receipt := range receipts {
+		txn, ok := txnMap[receipt.TxHash]
+		if ok == false {
+			log.Error("Finalize txn not found in receipts", "hash", receipt.TxHash)
+			return nil, nil, errors.New("finalize txn not found in receipts")
+		}
+		gasCoinsUsed := common.SafeMulBigInt(txn.GasPrice(), new(big.Int).SetUint64(receipt.GasUsed))
+		txnFeeTotal = common.SafeAddBigInt(txnFeeTotal, gasCoinsUsed)
+		log.Warn("Finalize stat", "gasCoinsUsed", gasCoinsUsed, "txn", txn.Hash())
+	}
+
+	burnAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(TxnFeeBurnPercentage))
+	txnFeeRewardsAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(TxnFeeBurnPercentage))
+
+	if len(txs) > 0 {
+		log.Error("Reward amount", "originalBlockRewards", originalBlockRewards, "txnFeeTotal", txnFeeTotal, "burnAmount", burnAmount, "txnFeeRewardsAmount", txnFeeRewardsAmount)
+	}
+
+	return txnFeeRewardsAmount, burnAmount, nil
+}
+
+func burn(state *state.StateDB, burnAmount *big.Int) {
+	state.AddBalance(common.ZERO_ADDRESS, burnAmount)
+}
+
 func (c *ProofOfStake) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs)
+	err := c.Finalize(chain, header, state, txs, receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -903,7 +965,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	header.UnhashedConsensusData = make([]byte, len(data))
 	copy(header.UnhashedConsensusData, data)
 
-	err = c.Finalize(chain, header, state, txs)
+	err = c.Finalize(chain, header, state, txs, receipts)
 	if err != nil {
 		return nil, err
 	}

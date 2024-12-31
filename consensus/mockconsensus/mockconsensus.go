@@ -356,7 +356,7 @@ func (c *Mock) VerifyBlock(chain consensus.ChainHeaderReader, block *types.Block
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction) error {
+func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) error {
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
@@ -364,7 +364,7 @@ func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 }
 
 func (c *Mock) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs)
+	err := c.Finalize(chain, header, state, txs, receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -380,7 +380,7 @@ func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReade
 		return nil, errUnknownBlock
 	}
 
-	err := c.Finalize(chain, header, state, txs)
+	err := c.Finalize(chain, header, state, txs, receipts)
 	if err != nil {
 		return nil, err
 	}
