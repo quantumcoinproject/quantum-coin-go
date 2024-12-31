@@ -93,7 +93,7 @@ var (
 	PACKET_PROTOCOL_START_BLOCK   = uint64(BLOCK_TIME_ORIG_START_BLOCK + 32)
 
 	PROPOSAL_TIME_HASH_START_BLOCK        = uint64(1507600)
-	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK = uint64(164000)
+	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK = uint64(1597600)
 )
 
 // Various error messages to mark blocks invalid. These should be private to

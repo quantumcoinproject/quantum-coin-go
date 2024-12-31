@@ -19,7 +19,6 @@ package eth
 import (
 	"context"
 	"errors"
-	"github.com/QuantumCoinProject/qc/log"
 	"math/big"
 
 	"github.com/QuantumCoinProject/qc/accounts"
@@ -253,7 +252,6 @@ func (b *EthAPIBackend) GetPoolTransaction(hash common.Hash) *types.Transaction 
 
 func (b *EthAPIBackend) GetTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
 	tx, blockHash, blockNumber, index := rawdb.ReadTransaction(b.eth.ChainDb(), txHash)
-	log.Error("tx", "maxgastier", tx.MaxGasTier())
 	return tx, blockHash, blockNumber, index, nil
 }
 
