@@ -2314,6 +2314,16 @@ func TestPacketHandler_canPropose(t *testing.T) {
 		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+1), true) == false {
 		t.Fatalf("failed")
 	}
+
+	if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 28,
+		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), false) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 27,
+		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), true) == false {
+		t.Fatalf("failed")
+	}
 }
 
 func testGetBlockProposerV2(validatorMap *map[common.Address]*ValidatorDetailsV2, expected common.Address, blockNumber uint64) bool {
