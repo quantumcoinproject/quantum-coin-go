@@ -96,7 +96,6 @@ var (
 	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK = uint64(1597600)
 
 	//Note: both of the below should add upto 100
-	TxnFeeBurnPercentage    = int64(50)
 	TxnFeeRewardsPercentage = int64(50)
 )
 
@@ -899,17 +898,22 @@ func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transactio
 		}
 		gasCoinsUsed := common.SafeMulBigInt(txn.GasPrice(), new(big.Int).SetUint64(receipt.GasUsed))
 		txnFeeTotal = common.SafeAddBigInt(txnFeeTotal, gasCoinsUsed)
-		log.Warn("Finalize stat", "gasCoinsUsed", gasCoinsUsed, "txn", txn.Hash())
+		log.Trace("calculateTxnFeeSplit", "gasCoinsUsed", gasCoinsUsed, "txn", txn.Hash(), "gasPrice", txn.GasPrice(), "GasUsed", receipt.GasUsed)
 	}
 
-	burnAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(TxnFeeBurnPercentage))
-	txnFeeRewardsAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(TxnFeeBurnPercentage))
+	burnAmount, txnFeeRewardsAmount = calculateTxnFeeSplitCoins(txnFeeTotal)
 
 	if len(txs) > 0 {
-		log.Error("Reward amount", "originalBlockRewards", originalBlockRewards, "txnFeeTotal", txnFeeTotal, "burnAmount", burnAmount, "txnFeeRewardsAmount", txnFeeRewardsAmount)
+		log.Trace("calculateTxnFeeSplit", "originalBlockRewards", originalBlockRewards, "txnFeeTotal", txnFeeTotal, "burnAmount", burnAmount, "txnFeeRewardsAmount", txnFeeRewardsAmount)
 	}
 
 	return txnFeeRewardsAmount, burnAmount, nil
+}
+
+func calculateTxnFeeSplitCoins(txnFeeTotal *big.Int) (burnAmount *big.Int, txnFeeRewardsAmount *big.Int) {
+	txnFeeRewardsAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(TxnFeeRewardsPercentage))
+	burnAmount = common.SafeSubBigInt(txnFeeTotal, txnFeeRewardsAmount)
+	return burnAmount, txnFeeRewardsAmount
 }
 
 func burn(state *state.StateDB, burnAmount *big.Int) {

@@ -20,14 +20,76 @@ import (
 	"fmt"
 	"github.com/QuantumCoinProject/qc/accounts/abi"
 	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/systemcontracts/conversion"
 	"github.com/QuantumCoinProject/qc/systemcontracts/staking"
 	"math/big"
 	"testing"
 )
+
+func TestTxnFee(t *testing.T) {
+
+	txnFeeTotal := common.SafeMulBigInt(big.NewInt(types.DEFAULT_PRICE), new(big.Int).SetUint64(21000))
+	burnAmount, txnFeeRewards := calculateTxnFeeSplitCoins(txnFeeTotal)
+	log.Info("TestTxnFee1", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
+
+	if burnAmount.String() != "499999999999999800000" {
+		t.Fatalf("failed1")
+	}
+
+	if txnFeeRewards.String() != "499999999999999800000" {
+		t.Fatalf("failed2")
+	}
+
+	blockRewards := GetReward(big.NewInt(core.TXN_FEE_CUTTOFF_BLOCK))
+	totalRewards := common.SafeAddBigInt(blockRewards, txnFeeRewards)
+	log.Info("TestTxnFee2", "blockRewards", blockRewards, "totalRewards", totalRewards, "txnFeeRewards", txnFeeRewards)
+	if totalRewards.String() != "951793759512937627532754" {
+		t.Fatalf("failed2.1")
+	}
+
+	txnFeeTotal = common.SafeMulBigInt(big.NewInt(21000*10), types.GAS_TIER_DEFAULT_PRICE)
+	burnAmount, txnFeeRewards = calculateTxnFeeSplitCoins(txnFeeTotal)
+	log.Info("TestTxnFee3", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
+
+	if burnAmount.String() != "4999999999999998000000" {
+		t.Fatalf("failed3")
+	}
+
+	if txnFeeRewards.String() != "4999999999999998000000" {
+		t.Fatalf("failed4")
+	}
+
+	txnFeeTotal = common.SafeMulBigInt(big.NewInt((21000*4)-1), types.GAS_TIER_DEFAULT_PRICE)
+	burnAmount, txnFeeRewards = calculateTxnFeeSplitCoins(txnFeeTotal)
+	log.Info("TestTxnFee4", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
+
+	if burnAmount.String() != "1999976190476189676200" {
+		t.Fatalf("failed5")
+	}
+
+	if txnFeeRewards.String() != "1999976190476189676200" {
+		t.Fatalf("failed6")
+	}
+}
+
+func TestTxnFee_Simple(t *testing.T) {
+	txnFeeTotal := common.SafeMulBigInt(big.NewInt(21000*10), types.GAS_TIER_DEFAULT_PRICE)
+	burnAmount, txnFeeRewards := calculateTxnFeeSplitCoins(txnFeeTotal)
+	log.Info("TestTxnFee", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
+
+	if burnAmount.String() != "4999999999999998000000" {
+		t.Fatalf("failed3")
+	}
+
+	if txnFeeRewards.String() != "4999999999999998000000" {
+		t.Fatalf("failed4")
+	}
+}
 
 func TestPos_FlattenTxnMap(t *testing.T) {
 	txnList, txnAddressMap := flattenTxnMap(nil)
