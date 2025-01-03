@@ -105,7 +105,12 @@ func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
-func (tx *DefaultFeeTx) verifyFields() bool  { return len(tx.Remarks) <= MAX_REMARKS_LENGTH }
+func (tx *DefaultFeeTx) verifyFields() bool {
+	if tx.gasPrice() != GAS_TIER_DEFAULT_PRICE {
+		return false
+	}
+	return len(tx.Remarks) <= MAX_REMARKS_LENGTH
+}
 
 func (tx *DefaultFeeTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S

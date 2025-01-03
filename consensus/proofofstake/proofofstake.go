@@ -686,6 +686,10 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		txs = make([]*types.Transaction, 0)
 	} else {
 		for _, tx := range txs {
+			if tx.VerifyFields() == false {
+				log.Trace("Txn VerifyFields failed", "Hash", tx.Hash())
+				return errors.New("Transaction VerifyFields failed")
+			}
 			signerHash, err := c.signer.Hash(tx)
 			if err != nil {
 				return err

@@ -87,6 +87,8 @@ var (
 	// than some meaningful limit a user might use. This is not a consensus error
 	// making the transaction invalid, rather a DOS protection.
 	ErrOversizedData = errors.New("oversized data")
+
+	InvalidTx = errors.New("invalid transaction")
 )
 
 var (
@@ -557,6 +559,10 @@ func (pool *TxPool) local() map[common.Address]types.Transactions {
 // validateTx checks whether a transaction is valid according to the consensus
 // rules and adheres to some heuristic limits of the local node (price and size).
 func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
+	if tx.VerifyFields() == false {
+		return InvalidTx
+	}
+
 	if time.Now().UTC().Unix() < txnStartAllowedTime {
 		if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) || tx.To().IsEqualTo(staking.STAKING_CONTRACT_ADDRESS) {
 			log.Debug("txn in allowed date range", "txn", tx.Hash())
