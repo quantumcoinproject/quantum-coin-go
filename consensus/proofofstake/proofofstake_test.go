@@ -89,6 +89,14 @@ func TestTxnFee_Simple(t *testing.T) {
 	if txnFeeRewards.String() != "4999999999999998000000" {
 		t.Fatalf("failed4")
 	}
+
+	txnFeeTotal = common.SafeMulBigInt(big.NewInt(221554), types.GAS_TIER_DEFAULT_PRICE)
+	burnAmount, txnFeeRewards = calculateTxnFeeSplitCoins(txnFeeTotal)
+	total := common.SafeAddBigInt(burnAmount, txnFeeRewards)
+	log.Info("TestTxnFee", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal, "total", total)
+	if total.String() != "10550190476190471970400" {
+		t.Fatalf("Failed5")
+	}
 }
 
 func TestPos_FlattenTxnMap(t *testing.T) {

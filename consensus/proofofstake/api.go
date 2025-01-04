@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus"
+	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/internal/ethapi"
 	"github.com/QuantumCoinProject/qc/log"
@@ -218,11 +219,20 @@ type ExtendedConsensusPacket struct {
 	Round      byte           `json:"round"      gencodec:"required"`
 }
 
+type Slashing struct {
+	SlashedValidator common.Address `json:"slashedValidator"  gencodec:"required"`
+	SlashedAmount    string         `json:"slashedAmount"     gencodec:"required"`
+}
+
 type ConsensusData struct {
 	Data                     *BlockConsensusData           `json:"data"     gencodec:"required"`
 	AdditionalData           *BlockAdditionalConsensusData `json:"additionalData"     gencodec:"required"`
 	ExtendedConsensusPackets []*ExtendedConsensusPacket    `json:"extendedConsensusPackets"     gencodec:"required"`
-	BlockProposerRewards     string                        `json:"blockProposerRewards"     gencodec:"required"`
+	BlockProposerRewards     string                        `json:"blockProposerRewards"     gencodec:"required"` //total rewards, blockRewards + txnFeeRewards
+	TxnFeeRewards            string                        `json:"txnFeeRewards"`
+	BurntTxnFee              string                        `json:"burntTxnFee"`
+	SlashedValidators        []*Slashing                   `json:"slashedValidators"` //includes block proposers
+	SlashAmount              string                        `json:"slashAmount"`       //total slash amount
 }
 
 type ProposalExtendedDetails struct {
@@ -329,6 +339,11 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 		AdditionalData: blockAdditionalConsensusData,
 	}
 
+	block := api.chain.GetBlockByNumber(blockNumber)
+	if block == nil {
+		return nil, errUnknownBlock
+	}
+
 	consensusData.ExtendedConsensusPackets = make([]*ExtendedConsensusPacket, 0)
 	for i := 0; i < len(blockAdditionalConsensusData.ConsensusPackets); i++ {
 		packet := blockAdditionalConsensusData.ConsensusPackets[i]
@@ -355,9 +370,44 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 
 	if blockConsensusData.VoteType == VOTE_TYPE_OK {
 		blockRewards := GetReward(header.Number)
+
+		if len(block.Transactions()) > 0 {
+			receipts := api.chain.GetReceiptsByHash(block.Hash())
+			if receipts == nil {
+				return nil, errors.New("receipts is nil")
+			}
+
+			txnFeeTotal, rewardsAmountTxnFee, burnAmountTxnFee, err := calculateTxnFeeSplit(blockRewards, block.Transactions(), receipts)
+			if err != nil {
+				return nil, err
+			}
+
+			if blockNumber >= core.TXN_FEE_CUTTOFF_BLOCK {
+				blockRewards = common.SafeAddBigInt(blockRewards, rewardsAmountTxnFee)
+				consensusData.TxnFeeRewards = hexutil.EncodeBig(rewardsAmountTxnFee)
+				consensusData.BurntTxnFee = hexutil.EncodeBig(burnAmountTxnFee)
+			} else {
+				consensusData.BurntTxnFee = hexutil.EncodeBig(txnFeeTotal)
+			}
+		}
+
 		consensusData.BlockProposerRewards = hexutil.EncodeBig(blockRewards)
 	} else {
 		consensusData.BlockProposerRewards = hexutil.EncodeUint64(0)
+
+		totalSlashings := big.NewInt(0)
+		if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= slashStartBlockNumber {
+			consensusData.SlashedValidators = make([]*Slashing, len(blockConsensusData.SlashedBlockProposers))
+			for i, val := range blockConsensusData.SlashedBlockProposers {
+				slashing := &Slashing{
+					SlashedValidator: val,
+					SlashedAmount:    hexutil.EncodeBig(slashAmount),
+				}
+				consensusData.SlashedValidators[i] = slashing
+				totalSlashings = common.SafeAddBigInt(totalSlashings, slashAmount)
+			}
+			consensusData.SlashAmount = hexutil.EncodeBig(totalSlashings)
+		}
 	}
 
 	/*

@@ -782,7 +782,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 		//If txn fee for proposer criteria is met and the block has transactions
 		if header.Number.Uint64() >= core.TXN_FEE_CUTTOFF_BLOCK && len(txs) > 0 {
-			rewardsAmountTxnFee, burnAmountTxnFee, err := calculateTxnFeeSplit(blockProposerRewardAmount, txs, receipts)
+			txnFeeTotal, rewardsAmountTxnFee, burnAmountTxnFee, err := calculateTxnFeeSplit(blockProposerRewardAmount, txs, receipts)
 			if err != nil {
 				return err
 			}
@@ -798,7 +798,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			//burn whatever needs to be burnt from the txn fee
 			burn(state, burnAmountTxnFee)
 
-			log.Trace("Reward amount", "BlockNumber", header.Number, "rewardsAmountTxnFee", rewardsAmountTxnFee, "burnAmountTxnFee", burnAmountTxnFee)
+			log.Trace("Reward amount", "BlockNumber", header.Number, "rewardsAmountTxnFee", rewardsAmountTxnFee, "burnAmountTxnFee", burnAmountTxnFee, "txnFeeTotal", txnFeeTotal)
 		}
 
 		//Update staking contract with reward details
@@ -882,13 +882,13 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	return nil
 }
 
-func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transaction, receipts []*types.Receipt) (txnFeeRewardsAmount *big.Int, burnAmount *big.Int, err error) {
+func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transaction, receipts []*types.Receipt) (txnFeeTotal *big.Int, txnFeeRewardsAmount *big.Int, burnAmount *big.Int, err error) {
 	if len(receipts) != len(txs) {
 		log.Error("Finalize receipts and txn invalid len", "receipts len", len(receipts), "txn len", len(txs))
-		return nil, nil, errors.New("finalize receipts and txn invalid length")
+		return nil, nil, nil, errors.New("finalize receipts and txn invalid length")
 	}
 
-	txnFeeTotal := big.NewInt(0)
+	txnFeeTotal = big.NewInt(0)
 	var txnMap map[common.Hash]*types.Transaction
 	txnMap = make(map[common.Hash]*types.Transaction)
 	for _, txn := range txs {
@@ -898,7 +898,7 @@ func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transactio
 		txn, ok := txnMap[receipt.TxHash]
 		if ok == false {
 			log.Error("Finalize txn not found in receipts", "hash", receipt.TxHash)
-			return nil, nil, errors.New("finalize txn not found in receipts")
+			return nil, nil, nil, errors.New("finalize txn not found in receipts")
 		}
 		gasCoinsUsed := common.SafeMulBigInt(txn.GasPrice(), new(big.Int).SetUint64(receipt.GasUsed))
 		txnFeeTotal = common.SafeAddBigInt(txnFeeTotal, gasCoinsUsed)
@@ -911,7 +911,7 @@ func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transactio
 		log.Trace("calculateTxnFeeSplit", "originalBlockRewards", originalBlockRewards, "txnFeeTotal", txnFeeTotal, "burnAmount", burnAmount, "txnFeeRewardsAmount", txnFeeRewardsAmount)
 	}
 
-	return txnFeeRewardsAmount, burnAmount, nil
+	return txnFeeTotal, txnFeeRewardsAmount, burnAmount, nil
 }
 
 func calculateTxnFeeSplitCoins(txnFeeTotal *big.Int) (burnAmount *big.Int, txnFeeRewardsAmount *big.Int) {
