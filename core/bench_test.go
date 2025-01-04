@@ -17,6 +17,7 @@
 package core
 
 import (
+	"fmt"
 	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
@@ -116,6 +117,7 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 		block := gen.PrevBlock(i - 1)
 		gas := block.GasLimit()
 		for {
+			fmt.Println("from", from)
 			gas -= params.TxGas
 			if gas < params.TxGas {
 				break
@@ -129,7 +131,10 @@ func genTxRing(naccounts int) func(int, *BlockGen) {
 				nil,
 				nil,
 			)
-			tx, _ = types.SignTx(tx, types.NewLondonSignerDefaultChain(), ringKeys[from])
+			tx, err := types.SignTx(tx, types.NewLondonSignerDefaultChain(), ringKeys[from])
+			if err != nil {
+				panic(err)
+			}
 			gen.AddTx(tx)
 			from = to
 		}
@@ -162,10 +167,17 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	}
 	genesis := gspec.MustCommit(db)
 	chain, _ := GenerateChain(gspec.Config, genesis, mockconsensus.NewMockConsensus(), db, b.N, gen)
+	if chain == nil {
+		b.Fatalf("chain is nil")
+	}
 
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
-	chainman, _ := NewBlockChain(db, nil, gspec.Config, mockconsensus.NewMockConsensus(), vm.Config{}, nil, nil)
+	chainman, err := NewBlockChain(db, nil, gspec.Config, mockconsensus.NewMockConsensus(), vm.Config{}, nil, nil)
+	if err != nil {
+		b.Fatalf("NewBlockChain error %v", err)
+	}
+
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()

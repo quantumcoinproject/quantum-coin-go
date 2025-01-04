@@ -276,7 +276,12 @@ func (api *API) GetBlockProposalDetails(blockNumberHex string) (*ProposalExtende
 				return nil, err
 			}
 
-			proposalHash := GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
+			var proposalHash common.Hash
+			if blockNumber >= PROPOSAL_TIME_HASH_START_BLOCK {
+				proposalHash = GetCombinedTxnHashWithTime(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns, proposalDetails.BlockTime)
+			} else {
+				proposalHash = GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
+			}
 
 			return &ProposalExtendedDetails{
 				ProposalDetails: &proposalDetails,

@@ -114,6 +114,8 @@ var STALE_BLOCK_WARN_TIME = int64(1800 * 1000)
 var BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER = uint64(2)
 var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT = uint64(1024)
 
+var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2 = uint64(16384)
+
 var MIN_VALIDATORS int = 3
 
 type BlockRoundState byte
@@ -425,10 +427,17 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool 
 		return true
 	}
 
+	var maxBlockdelay uint64
+	if currentBlockNumber >= BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
+		maxBlockdelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
+	} else {
+		maxBlockdelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
+	}
+
 	slotsMissed := float64(valDetails.NilBlockCount.Uint64() / BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER)
 	blockDelay := uint64(math.Pow(2.0, slotsMissed))
-	if blockDelay > BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT {
-		blockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
+	if blockDelay > maxBlockdelay {
+		blockDelay = maxBlockdelay
 	}
 
 	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
@@ -1125,6 +1134,28 @@ func GetCombinedTxnHash(parentHash common.Hash, round byte, txns []common.Hash) 
 	return hash
 }
 
+func GetCombinedTxnHashWithTime(parentHash common.Hash, round byte, txns []common.Hash, proposedBlockTime uint64) common.Hash {
+	var txnList []common.Hash
+	txnList = make([]common.Hash, len(txns))
+	for i := 0; i < len(txns); i++ {
+		txnList[i].CopyFrom(txns[i])
+	}
+
+	sort.Slice(txnList, func(i, j int) bool {
+		return bytes.Compare(txnList[i].Bytes(), txnList[j].Bytes()) == -1
+	})
+
+	var data []byte
+	data = make([]byte, 0)
+	for _, txn := range txnList {
+		data = append(data, txn.Bytes()...)
+	}
+
+	hash := crypto.Keccak256Hash(data, parentHash.Bytes(), []byte{round}, common.Uint64ToBytes(proposedBlockTime))
+	log.Trace("GetCombinedTxnHash", "parentHash", parentHash, "round", round, "txn count", len(txns), "proposedBlockTime", proposedBlockTime, "hash", hash)
+	return hash
+}
+
 func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, packet *eth.ConsensusPacket, self bool) error {
 	cph.innerPacketLock.Lock()
 	defer cph.innerPacketLock.Unlock()
@@ -1191,7 +1222,13 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 		return errors.New("unexpected transaction count when handling blockProposal")
 	}
 
-	proposalHash := GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
+	var proposalHash common.Hash
+	if blockStateDetails.blockNumber >= PROPOSAL_TIME_HASH_START_BLOCK {
+		proposalHash = GetCombinedTxnHashWithTime(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns, proposalDetails.BlockTime)
+	} else {
+		proposalHash = GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
+	}
+
 	if blockRoundDetails.proposalPacket != nil && proposalHash.IsEqualTo(blockRoundDetails.proposalHash) == false {
 		return errors.New("invalid proposal hash")
 	}
@@ -1516,12 +1553,15 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 
 // No nil checks, call only if nil has been checked already
 func getPacketType(packet *eth.ConsensusPacket) ConsensusPacketType {
-	var packetType ConsensusPacketType
+	var startIndex int
 	if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
-		packetType = ConsensusPacketType(packet.ConsensusData[1])
+		startIndex = 2
 	} else {
-		packetType = ConsensusPacketType(packet.ConsensusData[0])
+		startIndex = 1
 	}
+
+	var packetType ConsensusPacketType
+	packetType = ConsensusPacketType(packet.ConsensusData[startIndex-1])
 	return packetType
 }
 

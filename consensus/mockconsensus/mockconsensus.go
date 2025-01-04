@@ -3,6 +3,7 @@ package mockconsensus
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/QuantumCoinProject/qc/core/state"
 	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
@@ -185,6 +186,8 @@ type Mock struct {
 	fakeDiff bool // Skip difficulty verifications
 
 	account *accounts.Account
+
+	fakeFail uint64
 }
 
 // New creates a Mock proof-of-authority consensus engine with the initial
@@ -260,8 +263,60 @@ func (c *Mock) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
 func (c *Mock) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	if header.Number.Uint64() == c.fakeFail {
+		return errors.New("invalid header")
+	}
 	if header.Number == nil {
 		return errUnknownBlock
+	}
+
+	// Don't waste time checking blocks from the future
+	if header.Time > uint64(time.Now().Unix()) {
+		return consensus.ErrFutureBlock
+	}
+	// Checkpoint blocks need to enforce zero beneficiary
+
+	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
+
+	// Ensure that the mix digest is zero as we don't have fork protection currently
+	if header.MixDigest != (common.Hash{}) {
+		return errInvalidMixDigest
+	}
+
+	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	if header.Difficulty == nil {
+		return errInvalidDifficulty
+	}
+
+	// Verify that the gas limit is <= 2^63-1
+	cap := uint64(0x7fffffffffffffff)
+	if header.GasLimit > cap {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
+	} // If all checks passed, validate any special fields for hard forks
+
+	// All basic checks passed, verify cascading fields
+	return c.verifyCascadingFields(chain, header, parents)
+}
+
+func (c *Mock) verifyCascadingFields(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+	// The genesis block is the always valid dead-end
+	number := header.Number.Uint64()
+	if number == 0 {
+		return nil
+	}
+	// Ensure that the block's timestamp isn't too close to its parent
+	var parent *types.Header
+	if len(parents) > 0 {
+		parent = parents[len(parents)-1]
+	} else {
+		parent = chain.GetHeader(header.ParentHash, number-1)
+	}
+	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
+		return consensus.ErrUnknownAncestor
+	}
+	// Verify that the gasUsed is <= gasLimit
+	if header.GasUsed > header.GasLimit {
+		return fmt.Errorf("invalid gasUsed: have %d, gasLimit %d", header.GasUsed, header.GasLimit)
 	}
 
 	return nil
@@ -301,7 +356,7 @@ func (c *Mock) VerifyBlock(chain consensus.ChainHeaderReader, block *types.Block
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction) error {
+func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) error {
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
@@ -309,7 +364,7 @@ func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 }
 
 func (c *Mock) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs)
+	err := c.Finalize(chain, header, state, txs, receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +380,7 @@ func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReade
 		return nil, errUnknownBlock
 	}
 
-	err := c.Finalize(chain, header, state, txs)
+	err := c.Finalize(chain, header, state, txs, receipts)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +485,9 @@ func NewFullMockConsensus() *Mock {
 }
 
 func NewFailerMockConsensus(number uint64) *Mock {
-	return new(Mock)
+	m := new(Mock)
+	m.fakeFail = number
+	return m
 }
 
 func NewDelayerMockConsensus(delay time.Duration) *Mock {

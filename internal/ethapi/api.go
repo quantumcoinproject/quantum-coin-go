@@ -31,7 +31,6 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/common/math"
-	"github.com/QuantumCoinProject/qc/consensus/ethash"
 	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/core/state"
 	"github.com/QuantumCoinProject/qc/core/types"
@@ -912,6 +911,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		available := new(big.Int).Set(balance)
 		if args.Value != nil {
 			if args.Value.ToInt().Cmp(available) >= 0 {
+				log.Warn("insufficient funds for transfer", "value", args.Value, "available", available)
 				return 0, errors.New("insufficient funds for transfer")
 			}
 			available.Sub(available, args.Value.ToInt())
@@ -1544,6 +1544,10 @@ func (s *PublicTransactionPoolAPI) sign(addr common.Address, tx *types.Transacti
 
 // SubmitTransaction is a helper function that submits tx to txPool and logs a message.
 func SubmitTransaction(ctx context.Context, b Backend, tx *types.Transaction) (common.Hash, error) {
+	if tx.VerifyFields() == false {
+		return common.Hash{}, errors.New("invalid transaction")
+	}
+
 	// If the transaction fee cap is already specified, ensure the
 	// fee of the given transaction is _reasonable_.
 	if err := checkTxFee(tx.GasPrice(), tx.Gas(), b.RPCTxFeeCap()); err != nil {
@@ -1813,15 +1817,6 @@ func (api *PublicDebugAPI) PrintBlock(ctx context.Context, number uint64) (strin
 		return "", fmt.Errorf("block #%d not found", number)
 	}
 	return spew.Sdump(block), nil
-}
-
-// SeedHash retrieves the seed hash of a block.
-func (api *PublicDebugAPI) SeedHash(ctx context.Context, number uint64) (string, error) {
-	block, _ := api.b.BlockByNumber(ctx, rpc.BlockNumber(number))
-	if block == nil {
-		return "", fmt.Errorf("block #%d not found", number)
-	}
-	return fmt.Sprintf("0x%x", ethash.SeedHash(number)), nil
 }
 
 // PrivateDebugAPI is the collection of Ethereum APIs exposed over the private

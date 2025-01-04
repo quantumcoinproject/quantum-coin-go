@@ -168,7 +168,7 @@ func setupTopicsTests() []topicTest {
 	int256Type, _ := NewType("int256", "", nil)
 	tupleType, _ := NewType("tuple(int256,int8)", "", nil)
 	stringType, _ := NewType("string", "", nil)
-	funcType, _ := NewType("function", "", nil)
+	//funcType, _ := NewType("function", "", nil) //todo: function types are not supported
 
 	tests := []topicTest{
 		{
@@ -249,7 +249,8 @@ func setupTopicsTests() []topicTest {
 			},
 			wantErr: false,
 		},
-		{
+		//todo: Function types are not supported
+		/*{
 			name: "function type",
 			args: args{
 				createObj: func() interface{} { return &funcStruct{} },
@@ -269,7 +270,7 @@ func setupTopicsTests() []topicTest {
 				},
 			},
 			wantErr: true,
-		},
+		},*/
 		{
 			name: "error on topic/field count mismatch",
 			args: args{
@@ -318,7 +319,8 @@ func setupTopicsTests() []topicTest {
 			},
 			wantErr: true,
 		},
-		{
+		//todo: Function types are not supported
+		/*{
 			name: "proper encoded function",
 			args: args{
 				createObj: func() interface{} { return &funcStruct{} },
@@ -338,7 +340,7 @@ func setupTopicsTests() []topicTest {
 				},
 			},
 			wantErr: false,
-		},
+		},*/
 	}
 
 	return tests

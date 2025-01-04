@@ -347,6 +347,10 @@ func Test_SafeRelativePercentageBigInt(t *testing.T) {
 		t.Fatalf("failed")
 	}
 
+	if testSafeRelativePercentageBigInt(1000, 50, 500) == false {
+		t.Fatalf("failed")
+	}
+
 	if testSafeRelativePercentageBigInt(100000, 70, 70000) == false {
 		t.Fatalf("failed")
 	}

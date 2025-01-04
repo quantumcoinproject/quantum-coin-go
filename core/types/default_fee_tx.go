@@ -12,9 +12,6 @@ type GasTier uint64
 
 const (
 	GAS_TIER_DEFAULT GasTier = 1
-	GAS_TIER_2X      GasTier = 2
-	GAS_TIER_5X      GasTier = 5
-	GAS_TIER_10X     GasTier = 10
 )
 
 type AccessList []AccessTuple
@@ -34,10 +31,8 @@ func (al AccessList) StorageKeys() int {
 	return sum
 }
 
-var GAS_TIER_DEFAULT_PRICE = big.NewInt(47619047619047600) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
-var GAS_TIER_2x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(2))
-var GAS_TIER_5x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(5))
-var GAS_TIER_10x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(10))
+var DEFAULT_PRICE = int64(47619047619047600)
+var GAS_TIER_DEFAULT_PRICE = big.NewInt(DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
 
 type DefaultFeeTx struct {
 	ChainID    *big.Int
@@ -103,21 +98,19 @@ func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GAS_TIER_DEFAULT_PRICE 
 func (tx *DefaultFeeTx) gasPrice() *big.Int {
 	if tx.MaxGasTier == GAS_TIER_DEFAULT {
 		return GAS_TIER_DEFAULT_PRICE
-	} else if tx.MaxGasTier == GAS_TIER_2X {
-		return GAS_TIER_2x_PRICE
-	} else if tx.MaxGasTier == GAS_TIER_5X {
-		return GAS_TIER_5x_PRICE
-	} else if tx.MaxGasTier == GAS_TIER_10X {
-		return GAS_TIER_10x_PRICE
 	}
-
 	return GAS_TIER_DEFAULT_PRICE
 }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
-func (tx *DefaultFeeTx) verifyFields() bool  { return len(tx.Remarks) <= MAX_REMARKS_LENGTH }
+func (tx *DefaultFeeTx) verifyFields() bool {
+	if tx.gasPrice() != GAS_TIER_DEFAULT_PRICE {
+		return false
+	}
+	return len(tx.Remarks) <= MAX_REMARKS_LENGTH
+}
 
 func (tx *DefaultFeeTx) rawSignatureValues() (v, r, s *big.Int) {
 	return tx.V, tx.R, tx.S
