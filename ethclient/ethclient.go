@@ -27,7 +27,6 @@ import (
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/rpc"
 	"math/big"
 )

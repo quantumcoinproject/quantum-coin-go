@@ -94,6 +94,11 @@ func (c *ReadApiAPIController) Routes() Routes {
 			"/account/{address}/transactions/{pageNumber}",
 			c.ListAccountTransactions,
 		},
+		"GetBlockchainDetailsResponse": Route{
+			strings.ToUpper("Get"),
+			"/blockchaindetails",
+			c.GetBlockchainDetails,
+		},
 	}
 }
 
@@ -273,6 +278,44 @@ func (c *ReadApiAPIController) GetTransactionDetails(w http.ResponseWriter, r *h
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 
 	log.Info("GetTransactionDetails ok", "requestId", requestId)
+}
+
+func (c *ReadApiAPIController) GetBlockchainDetails(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
+	if r.Header != nil {
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("GetBlockchainDetails", "requestId", requestId)
+	}
+
+	c.setupCORS(&w, r)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
+
+	if c.authorize(r) == false {
+		result := Response(http.StatusUnauthorized, nil)
+		// If no error, encode the body and the result code
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+		log.Error("GetBlockchainDetails", "requestId", requestId, "error", "Unauthorized")
+		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
+		return
+	}
+
+	result, err := c.service.GetBlockchainDetails(r.Context())
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		log.Error("GetBlockchainDetails", "requestId", requestId, "error", err)
+		return
+	}
+
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("GetBlockchainDetails ok", "requestId", requestId)
 }
 
 // ListAccountTransactions - List account transactions

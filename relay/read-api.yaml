@@ -56,6 +56,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
 
+  '/blockchain':
+    get:
+      tags:
+        - Read
+      summary: Get blockchain details
+      operationId: GetBlockchainDetails
+      parameters:
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockchainDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
   '/account/{address}':
     get:
       tags:
@@ -397,6 +448,45 @@ components:
           items:
             $ref: '#/components/schemas/AccountTransactionCompact'
       additionalProperties: false
+    BlockchainDetails:
+      type: object
+      properties:
+        blockNumber:
+          type: integer
+          format: int64
+        maxSupply:
+          type: integer
+          format: int64
+        totalSupply:
+          type: integer
+          format: int64
+        circulatingSupply:
+          type: integer
+          format: int64
+        burntCoins:
+          type: integer
+          format: int64
+        blockRewardsCoins:
+          type: integer
+          format: int64
+        baseBlockRewardsCoins:
+          type: integer
+          format: int64
+        txnFeeRewardsCoins:
+          type: integer
+          format: int64
+        txnFeeBurntCoins:
+          type: integer
+          format: int64
+        slashedCoins:
+          type: integer
+          format: int64
+    BlockchainDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/BlockchainDetails'
     ErrorResponseModel:
       type: object
       properties:

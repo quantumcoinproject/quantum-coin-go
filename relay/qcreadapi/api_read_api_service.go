@@ -286,6 +286,26 @@ func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash stri
 	return  Response(http.StatusNotFound,nil), nil
 }
 
+// GetBlockchainDetails - Get blockchain details
+func (s *ReadApiAPIService) GetBlockchainDetails(ctx context.Context) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleGetBlockchainDetails)
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleGetBlockchainDetails, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	getResponse, err := s.cacheManager.GetBlockchainDetails()
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+	}
+
+	return Response(http.StatusOK,getResponse),	nil
+}
+
+
 // ListAccountTransactions - List account transactions
 func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address string, pageNumber int64) (ImplResponse, error) {
 

@@ -87,7 +87,7 @@ type ListAccountTransactionsResponse struct {
 	Items     []AccountTransactionCompact `json:"items,omitempty"`
 }
 
-type Summary struct {
+type BlockchainDetails struct {
 	BlockNumber           uint64 `json:"blockNumber" gencodec:"required"`
 	MaxSupply             uint64 `json:"maxSupply" gencodec:"required"`
 	TotalSupply           uint64 `json:"totalSupply" gencodec:"required"`
@@ -98,6 +98,10 @@ type Summary struct {
 	TxnFeeRewardsCoins    uint64 `json:"txnFeeRewardsCoins" gencodec:"required"`
 	TxnFeeBurntCoins      uint64 `json:"txnFeeBurntCoins" gencodec:"required"`
 	SlashedCoins          uint64 `json:"slashedCoins" gencodec:"required"`
+}
+
+type GetBlockchainDetailsResponse struct {
+	BlockchainDetails
 }
 
 func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
@@ -186,14 +190,14 @@ func (c *CacheManager) start() error {
 	cancel := make(chan os.Signal)
 	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
 
-	var runningSummary *Summary
+	var runningSummary *BlockchainDetails
 
 	blockNumber, err := c.getLastBlockNumberByDb(LastBlockKey)
 	if err != nil {
 		if err.Error() == "leveldb: not found" {
 			log.Warn("First time start")
 			blockNumber = 0
-			runningSummary = &Summary{
+			runningSummary = &BlockchainDetails{
 				MaxSupply:         c.maxSupply,
 				TotalSupply:       c.genesisCirculatingSupply,
 				CirculatingSupply: c.genesisCirculatingSupply,
@@ -250,7 +254,7 @@ func (c *CacheManager) start() error {
 	return nil
 }
 
-func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary *Summary) error {
+func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary *BlockchainDetails) error {
 	blockNum := new(big.Int).SetUint64(blockNumber)
 	block, err := c.client.BlockByNumber(context.Background(), blockNum)
 	if err != nil {
@@ -363,7 +367,7 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 	return nil
 }
 
-func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Summary, batch *ethdb.Batch) error {
+func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
 
 	if blockNumber.Uint64() != runningSummary.BlockNumber+1 {
 		log.Error("updateSummary", "left", blockNumber.Uint64(), "right", runningSummary.BlockNumber+1)
@@ -483,14 +487,14 @@ func (c *CacheManager) getLastBlockNumberByDb(blockKey string) (uint64, error) {
 	return blockNumber, nil
 }
 
-func (c *CacheManager) getSummaryFromDb() (*Summary, error) {
+func (c *CacheManager) getSummaryFromDb() (*BlockchainDetails, error) {
 	db := c.cacheDb
 	summaryBlob, err := db.Get([]byte(SummaryKey))
 	if err != nil {
 		return nil, err
 	}
 
-	var summary Summary
+	var summary BlockchainDetails
 	err = json.Unmarshal(summaryBlob, &summary)
 	if err != nil {
 		return nil, err
@@ -499,7 +503,7 @@ func (c *CacheManager) getSummaryFromDb() (*Summary, error) {
 	return &summary, nil
 }
 
-func (c *CacheManager) putSummary(summary *Summary, batch *ethdb.Batch) error {
+func (c *CacheManager) putSummary(summary *BlockchainDetails, batch *ethdb.Batch) error {
 	txnBatch := *batch
 
 	blob, err := json.Marshal(summary)
@@ -661,6 +665,18 @@ func (c *CacheManager) putAccountTxnCount(address string, txnCount uint64, batch
 	}
 
 	return nil
+}
+
+func (c *CacheManager) GetBlockchainDetails() (GetBlockchainDetailsResponse, error) {
+	getResponse := GetBlockchainDetailsResponse{}
+	details, err := c.getSummaryFromDb()
+	if err != nil {
+		return getResponse, err
+	}
+
+	getResponse.BlockchainDetails = *details
+
+	return getResponse, nil
 }
 
 func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTransactionsResponse, error) {
