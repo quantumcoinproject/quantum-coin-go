@@ -32,8 +32,8 @@ type CacheManager struct {
 	cacheDb                  ethdb.Database
 	client                   *ethclient.Client
 	enableExtendedApis       bool
-	genesisCirculatingSupply uint64
-	maxSupply                uint64
+	genesisCirculatingSupply string
+	maxSupply                string
 }
 
 var SummaryKey = "summary"
@@ -89,15 +89,15 @@ type ListAccountTransactionsResponse struct {
 
 type BlockchainDetails struct {
 	BlockNumber           uint64 `json:"blockNumber" gencodec:"required"`
-	MaxSupply             uint64 `json:"maxSupply" gencodec:"required"`
-	TotalSupply           uint64 `json:"totalSupply" gencodec:"required"`
-	CirculatingSupply     uint64 `json:"circulatingSupply" gencodec:"required"`
-	BurntCoins            uint64 `json:"burntCoins" gencodec:"required"`
-	BlockRewardsCoins     uint64 `json:"blockRewardsCoins" gencodec:"required"` //baseBlockRewardsCoins + TxnFeeRewardsCoins
-	BaseBlockRewardsCoins uint64 `json:"baseBlockRewardsCoins" gencodec:"required"`
-	TxnFeeRewardsCoins    uint64 `json:"txnFeeRewardsCoins" gencodec:"required"`
-	TxnFeeBurntCoins      uint64 `json:"txnFeeBurntCoins" gencodec:"required"`
-	SlashedCoins          uint64 `json:"slashedCoins" gencodec:"required"`
+	MaxSupply             string `json:"maxSupply" gencodec:"required"`
+	TotalSupply           string `json:"totalSupply" gencodec:"required"`
+	CirculatingSupply     string `json:"circulatingSupply" gencodec:"required"`
+	BurntCoins            string `json:"burntCoins" gencodec:"required"`
+	BlockRewardsCoins     string `json:"blockRewardsCoins" gencodec:"required"` //baseBlockRewardsCoins + TxnFeeRewardsCoins
+	BaseBlockRewardsCoins string `json:"baseBlockRewardsCoins" gencodec:"required"`
+	TxnFeeRewardsCoins    string `json:"txnFeeRewardsCoins" gencodec:"required"`
+	TxnFeeBurntCoins      string `json:"txnFeeBurntCoins" gencodec:"required"`
+	SlashedCoins          string `json:"slashedCoins" gencodec:"required"`
 }
 
 type GetBlockchainDetailsResponse struct {
@@ -115,12 +115,7 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, ge
 		return nil, errors.New("max supply is nil")
 	}
 
-	maxSupplyVal, err := hexutil.DecodeBig(maxSupply)
-	if err != nil {
-		log.Error("DecodeBig", "error", err)
-		return nil, err
-	}
-	cManager.maxSupply = maxSupplyVal.Uint64()
+	cManager.maxSupply = maxSupply
 
 	genesisBytes, err := ioutil.ReadFile(genesisFilePath)
 	if err != nil {
@@ -141,8 +136,8 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, ge
 			genesisCirculatingSupply = common.SafeAddBigInt(genesisCirculatingSupply, v.Balance)
 		}
 	}
-	cManager.genesisCirculatingSupply = genesisCirculatingSupply.Uint64()
-	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", genesisCirculatingSupply, "maxSupplyVal", maxSupplyVal)
+	cManager.genesisCirculatingSupply = hexutil.EncodeBig(genesisCirculatingSupply)
+	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", genesisCirculatingSupply, "maxSupply", maxSupply)
 
 	err = cManager.initialize()
 	if err != nil {
@@ -198,9 +193,16 @@ func (c *CacheManager) start() error {
 			log.Warn("First time start")
 			blockNumber = 0
 			runningSummary = &BlockchainDetails{
-				MaxSupply:         c.maxSupply,
-				TotalSupply:       c.genesisCirculatingSupply,
-				CirculatingSupply: c.genesisCirculatingSupply,
+				BlockNumber:           0,
+				MaxSupply:             c.maxSupply,
+				TotalSupply:           c.genesisCirculatingSupply,
+				CirculatingSupply:     c.genesisCirculatingSupply,
+				BurntCoins:            "0x0",
+				BlockRewardsCoins:     "0x0",
+				BaseBlockRewardsCoins: "0x0",
+				TxnFeeRewardsCoins:    "0x0",
+				TxnFeeBurntCoins:      "0x0",
+				SlashedCoins:          "0x0",
 			}
 		} else {
 			log.Error("GetLastBlockByDb", "err", err.Error())
@@ -397,7 +399,12 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 			log.Error("updateSummary DecodeBig", "error", err)
 			return err
 		}
-		runningSummary.BaseBlockRewardsCoins = runningSummary.BaseBlockRewardsCoins + baseBlockProposerRewards.Uint64()
+		baseBlockRewardsCoinsBig, err := hexutil.DecodeBig(runningSummary.BaseBlockRewardsCoins)
+		if err != nil {
+			log.Error("updateSummary DecodeBig runningSummary baseBlockRewardsCoinsBig", "error", err)
+			return err
+		}
+		runningSummary.BaseBlockRewardsCoins = hexutil.EncodeBig(common.SafeAddBigInt(baseBlockRewardsCoinsBig, baseBlockProposerRewards))
 	}
 
 	if len(blockRewardsInfo.BlockProposerRewards) > 0 {
@@ -406,7 +413,12 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 			log.Error("updateSummary DecodeBig", "error", err)
 			return err
 		}
-		runningSummary.BlockRewardsCoins = runningSummary.BlockRewardsCoins + blockProposerRewards.Uint64()
+		blockRewardsCoinsBig, err := hexutil.DecodeBig(runningSummary.BlockRewardsCoins)
+		if err != nil {
+			log.Error("updateSummary DecodeBig runningSummary blockRewardsCoinsBig", "error", err)
+			return err
+		}
+		runningSummary.BlockRewardsCoins = hexutil.EncodeBig(common.SafeAddBigInt(blockRewardsCoinsBig, blockProposerRewards))
 	}
 
 	if len(blockRewardsInfo.TxnFeeRewards) > 0 {
@@ -415,7 +427,12 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 			log.Error("updateSummary DecodeBig", "error", err)
 			return err
 		}
-		runningSummary.TxnFeeRewardsCoins = runningSummary.TxnFeeRewardsCoins + txnFeeRewards.Uint64()
+		txnFeeRewardsCoinsBig, err := hexutil.DecodeBig(runningSummary.TxnFeeRewardsCoins)
+		if err != nil {
+			log.Error("updateSummary DecodeBig runningSummary txnFeeRewardsCoinsBig", "error", err)
+			return err
+		}
+		runningSummary.TxnFeeRewardsCoins = hexutil.EncodeBig(common.SafeAddBigInt(txnFeeRewardsCoinsBig, txnFeeRewards))
 	}
 
 	if len(blockRewardsInfo.BurntTxnFee) > 0 {
@@ -424,7 +441,12 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 			log.Error("updateSummary DecodeBig", "error", err)
 			return err
 		}
-		runningSummary.TxnFeeBurntCoins = runningSummary.TxnFeeBurntCoins + burntTxnFee.Uint64()
+		txnFeeBurntCoinsBig, err := hexutil.DecodeBig(runningSummary.TxnFeeBurntCoins)
+		if err != nil {
+			log.Error("updateSummary DecodeBig runningSummary txnFeeBurntCoinsBig", "error", err)
+			return err
+		}
+		runningSummary.TxnFeeBurntCoins = hexutil.EncodeBig(common.SafeAddBigInt(txnFeeBurntCoinsBig, burntTxnFee))
 	}
 
 	if len(blockRewardsInfo.SlashAmount) > 0 {
@@ -433,7 +455,12 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 			log.Error("updateSummary DecodeBig", "error", err)
 			return err
 		}
-		runningSummary.SlashedCoins = runningSummary.SlashedCoins + slashAmount.Uint64()
+		slashedCoinsBig, err := hexutil.DecodeBig(runningSummary.SlashedCoins)
+		if err != nil {
+			log.Error("updateSummary DecodeBig runningSummary slashedCoinsBig", "error", err)
+			return err
+		}
+		runningSummary.SlashedCoins = hexutil.EncodeBig(common.SafeAddBigInt(slashedCoinsBig, slashAmount))
 	}
 
 	//Get latest burnt coins info
@@ -444,8 +471,11 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 	}
 	burntCoins := params.WeiToEther(burntCoinsWei)
 
-	runningSummary.BurntCoins = burntCoins.Uint64()
-	runningSummary.CirculatingSupply = c.genesisCirculatingSupply + runningSummary.BlockRewardsCoins - burntCoins.Uint64()
+	runningSummary.BurntCoins = hexutil.EncodeBig(burntCoins)
+	genesisCirculatingSupplyBig, _ := hexutil.DecodeBig(c.genesisCirculatingSupply)
+	blockRewardsCoinsBig, _ := hexutil.DecodeBig(runningSummary.BlockRewardsCoins)
+	coinsNew := common.SafeAddBigInt(genesisCirculatingSupplyBig, blockRewardsCoinsBig)
+	runningSummary.CirculatingSupply = hexutil.EncodeBig(common.SafeSubBigInt(coinsNew, burntCoins))
 	runningSummary.TotalSupply = runningSummary.CirculatingSupply
 
 	err = c.putSummary(runningSummary, &txnBatch)

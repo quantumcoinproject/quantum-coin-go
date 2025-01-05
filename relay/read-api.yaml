@@ -452,35 +452,35 @@ components:
       type: object
       properties:
         blockNumber:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         maxSupply:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         totalSupply:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         circulatingSupply:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         burntCoins:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         blockRewardsCoins:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         baseBlockRewardsCoins:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         txnFeeRewardsCoins:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         txnFeeBurntCoins:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
         slashedCoins:
-          type: integer
-          format: int64
+          type: string
+          nullable: false
     BlockchainDetailsResponse:
       type: object
       properties:
