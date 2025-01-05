@@ -6,11 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/core/rawdb"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/ethclient"
 	"github.com/QuantumCoinProject/qc/ethdb"
 	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/params"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"os/signal"
@@ -22,13 +26,17 @@ import (
 )
 
 type CacheManager struct {
-	cacheDir  string
-	nodeUrl   string
-	cacheLock sync.Mutex
-	cacheDb   ethdb.Database
-	client    *ethclient.Client
+	cacheDir                 string
+	nodeUrl                  string
+	cacheLock                sync.Mutex
+	cacheDb                  ethdb.Database
+	client                   *ethclient.Client
+	enableExtendedApis       bool
+	genesisCirculatingSupply uint64
+	maxSupply                uint64
 }
 
+var SummaryKey = "summary"
 var LastBlockKey = "last-block"
 var AccountTxnCountKey = "account-txn-count-%s"                  //%s is account address
 var AccountTransactionPageKey = "account-transaction-list-%s-%d" //%s is account address, %d is page number
@@ -79,13 +87,60 @@ type ListAccountTransactionsResponse struct {
 	Items     []AccountTransactionCompact `json:"items,omitempty"`
 }
 
-func NewCacheManager(cacheDir string, nodeUrl string) (*CacheManager, error) {
+type Summary struct {
+	BlockNumber           uint64 `json:"blockNumber" gencodec:"required"`
+	MaxSupply             uint64 `json:"maxSupply" gencodec:"required"`
+	TotalSupply           uint64 `json:"totalSupply" gencodec:"required"`
+	CirculatingSupply     uint64 `json:"circulatingSupply" gencodec:"required"`
+	BurntCoins            uint64 `json:"burntCoins" gencodec:"required"`
+	BlockRewardsCoins     uint64 `json:"blockRewardsCoins" gencodec:"required"` //baseBlockRewardsCoins + TxnFeeRewardsCoins
+	BaseBlockRewardsCoins uint64 `json:"baseBlockRewardsCoins" gencodec:"required"`
+	TxnFeeRewardsCoins    uint64 `json:"txnFeeRewardsCoins" gencodec:"required"`
+	TxnFeeBurntCoins      uint64 `json:"txnFeeBurntCoins" gencodec:"required"`
+	SlashedCoins          uint64 `json:"slashedCoins" gencodec:"required"`
+}
+
+func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
 	cManager := &CacheManager{
-		nodeUrl:  nodeUrl,
-		cacheDir: cacheDir,
+		nodeUrl:            nodeUrl,
+		cacheDir:           cacheDir,
+		enableExtendedApis: enableExtendedApi,
 	}
 
-	err := cManager.initialize()
+	if len(maxSupply) == 0 {
+		return nil, errors.New("max supply is nil")
+	}
+
+	maxSupplyVal, err := hexutil.DecodeBig(maxSupply)
+	if err != nil {
+		log.Error("DecodeBig", "error", err)
+		return nil, err
+	}
+	cManager.maxSupply = maxSupplyVal.Uint64()
+
+	genesisBytes, err := ioutil.ReadFile(genesisFilePath)
+	if err != nil {
+		log.Error("ReadFile", "error", err)
+		return nil, err
+	}
+
+	genesis := core.Genesis{}
+	err = json.Unmarshal(genesisBytes, &genesis)
+	if err != nil {
+		log.Error("Unmarshal", "error", err)
+		return nil, err
+	}
+
+	genesisCirculatingSupply := big.NewInt(0)
+	if genesis.Alloc != nil {
+		for _, v := range genesis.Alloc {
+			genesisCirculatingSupply = common.SafeAddBigInt(genesisCirculatingSupply, v.Balance)
+		}
+	}
+	cManager.genesisCirculatingSupply = genesisCirculatingSupply.Uint64()
+	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", genesisCirculatingSupply, "maxSupplyVal", maxSupplyVal)
+
+	err = cManager.initialize()
 	if err != nil {
 		return nil, err
 	}
@@ -131,13 +186,26 @@ func (c *CacheManager) start() error {
 	cancel := make(chan os.Signal)
 	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
 
+	var runningSummary *Summary
+
 	blockNumber, err := c.getLastBlockNumberByDb(LastBlockKey)
 	if err != nil {
 		if err.Error() == "leveldb: not found" {
 			log.Warn("First time start")
 			blockNumber = 0
+			runningSummary = &Summary{
+				MaxSupply:         c.maxSupply,
+				TotalSupply:       c.genesisCirculatingSupply,
+				CirculatingSupply: c.genesisCirculatingSupply,
+			}
 		} else {
 			log.Error("GetLastBlockByDb", "err", err.Error())
+			return err
+		}
+	} else {
+		runningSummary, err = c.getSummaryFromDb()
+		if err != nil {
+			log.Error("getSummaryFromDb", "err", err.Error())
 			return err
 		}
 	}
@@ -151,7 +219,7 @@ func (c *CacheManager) start() error {
 			case <-cacheTimer.C:
 				blockNumberToGet := blockNumber + 1
 				log.Info("Batch Start ", "Block Number ", blockNumberToGet)
-				err := c.processByCacheManager(blockNumberToGet)
+				err := c.processByCacheManager(blockNumberToGet, runningSummary)
 				if err == nil {
 					blockNumber = blockNumberToGet
 					log.Info("Batch Complete", "Block number", blockNumberToGet)
@@ -182,7 +250,7 @@ func (c *CacheManager) start() error {
 	return nil
 }
 
-func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
+func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary *Summary) error {
 	blockNum := new(big.Int).SetUint64(blockNumber)
 	block, err := c.client.BlockByNumber(context.Background(), blockNum)
 	if err != nil {
@@ -203,12 +271,15 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 	var liveAccountMap map[string][]AccountTransactionCompact //address to transactions in block mapping
 	liveAccountMap = make(map[string][]AccountTransactionCompact)
 
-	for _, tx := range block.Transactions() {
+	var receipts types.Receipts
+	receipts = make(types.Receipts, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
 		receipt, err := c.client.TransactionReceipt(context.Background(), tx.Hash())
 		if err != nil {
 			log.Error("processByCacheManager TransactionReceipt", "error", err)
 			return err
 		}
+		receipts[i] = receipt
 
 		msg, err := tx.AsMessage(types.NewLondonSigner(chainID))
 		if err != nil {
@@ -277,9 +348,105 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64) error {
 		}
 	}
 
+	err = c.updateSummary(blockNum, runningSummary, &txnBatch)
+	if err != nil {
+		log.Error("updateSummary", "error", err)
+		return err
+	}
+
 	err = txnBatch.Write()
 	if err != nil {
 		log.Error("processByCacheManager txnBatch Write", "error", err)
+		return err
+	}
+
+	return nil
+}
+
+func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Summary, batch *ethdb.Batch) error {
+
+	if blockNumber.Uint64() != runningSummary.BlockNumber+1 {
+		log.Error("updateSummary", "left", blockNumber.Uint64(), "right", runningSummary.BlockNumber+1)
+		return errors.New("updateSummary unexpected blockNumber")
+	}
+
+	consensusData, err := c.client.GetBlockConsensusData(context.Background(), blockNumber)
+	if err != nil {
+		return err
+	}
+
+	txnBatch := *batch
+	blockRewardsInfo := consensusData.BlockRewardsInfo
+
+	var baseBlockProposerRewards *big.Int
+	var blockProposerRewards *big.Int
+	var txnFeeRewards *big.Int
+	var burntTxnFee *big.Int
+	var slashAmount *big.Int
+
+	//Update running summary
+	runningSummary.BlockNumber = blockNumber.Uint64()
+
+	if len(blockRewardsInfo.BaseBlockProposerRewards) > 0 {
+		baseBlockProposerRewards, err = hexutil.DecodeBig(blockRewardsInfo.BaseBlockProposerRewards)
+		if err != nil {
+			log.Error("updateSummary DecodeBig", "error", err)
+			return err
+		}
+		runningSummary.BaseBlockRewardsCoins = runningSummary.BaseBlockRewardsCoins + baseBlockProposerRewards.Uint64()
+	}
+
+	if len(blockRewardsInfo.BlockProposerRewards) > 0 {
+		blockProposerRewards, err = hexutil.DecodeBig(blockRewardsInfo.BlockProposerRewards)
+		if err != nil {
+			log.Error("updateSummary DecodeBig", "error", err)
+			return err
+		}
+		runningSummary.BlockRewardsCoins = runningSummary.BlockRewardsCoins + blockProposerRewards.Uint64()
+	}
+
+	if len(blockRewardsInfo.TxnFeeRewards) > 0 {
+		txnFeeRewards, err = hexutil.DecodeBig(blockRewardsInfo.TxnFeeRewards)
+		if err != nil {
+			log.Error("updateSummary DecodeBig", "error", err)
+			return err
+		}
+		runningSummary.TxnFeeRewardsCoins = runningSummary.TxnFeeRewardsCoins + txnFeeRewards.Uint64()
+	}
+
+	if len(blockRewardsInfo.BurntTxnFee) > 0 {
+		burntTxnFee, err = hexutil.DecodeBig(blockRewardsInfo.BurntTxnFee)
+		if err != nil {
+			log.Error("updateSummary DecodeBig", "error", err)
+			return err
+		}
+		runningSummary.TxnFeeBurntCoins = runningSummary.TxnFeeBurntCoins + burntTxnFee.Uint64()
+	}
+
+	if len(blockRewardsInfo.SlashAmount) > 0 {
+		slashAmount, err = hexutil.DecodeBig(blockRewardsInfo.SlashAmount)
+		if err != nil {
+			log.Error("updateSummary DecodeBig", "error", err)
+			return err
+		}
+		runningSummary.SlashedCoins = runningSummary.SlashedCoins + slashAmount.Uint64()
+	}
+
+	//Get latest burnt coins info
+	burntCoinsWei, err := c.client.BalanceAt(context.Background(), common.ZERO_ADDRESS, blockNumber)
+	if err != nil {
+		log.Error("updateSummary BalanceAt", "error", err)
+		return err
+	}
+	burntCoins := params.WeiToEther(burntCoinsWei)
+
+	runningSummary.BurntCoins = burntCoins.Uint64()
+	runningSummary.CirculatingSupply = c.genesisCirculatingSupply + runningSummary.BlockRewardsCoins - burntCoins.Uint64()
+	runningSummary.TotalSupply = runningSummary.CirculatingSupply
+
+	err = c.putSummary(runningSummary, &txnBatch)
+	if err != nil {
+		log.Error("updateSummary putSummary", "error", err)
 		return err
 	}
 
@@ -314,6 +481,39 @@ func (c *CacheManager) getLastBlockNumberByDb(blockKey string) (uint64, error) {
 	blockNumber := common.BytesToUint64(mySlice)
 
 	return blockNumber, nil
+}
+
+func (c *CacheManager) getSummaryFromDb() (*Summary, error) {
+	db := c.cacheDb
+	summaryBlob, err := db.Get([]byte(SummaryKey))
+	if err != nil {
+		return nil, err
+	}
+
+	var summary Summary
+	err = json.Unmarshal(summaryBlob, &summary)
+	if err != nil {
+		return nil, err
+	}
+
+	return &summary, nil
+}
+
+func (c *CacheManager) putSummary(summary *Summary, batch *ethdb.Batch) error {
+	txnBatch := *batch
+
+	blob, err := json.Marshal(summary)
+	if err != nil {
+		return err
+	}
+	keyBlob := []byte(SummaryKey)
+
+	err = txnBatch.Put(keyBlob, blob)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *CacheManager) close() error {
