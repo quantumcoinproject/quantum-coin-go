@@ -83,7 +83,7 @@ type AccountTransactionCompact struct {
 }
 
 type ListAccountTransactionsResponse struct {
-	PageCount uint64                      `json:"pageCount,omitempty"`
+	PageCount uint64                      `json:"pageCount"`
 	Items     []AccountTransactionCompact `json:"items,omitempty"`
 }
 
@@ -724,6 +724,10 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 		pageCount = (accountTxnCount / PageSize) + 1
 	}
 
+	if pageCount == 0 {
+		return ListAccountTransactionsResponse{PageCount: 0}, nil
+	}
+
 	var pageNumber uint64
 	if pageNumberInput < 1 {
 		pageNumber = pageCount
@@ -732,7 +736,7 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 	}
 	log.Info("ListTransactionByAccount", "address", address, "pageNumberInput", pageNumberInput, "pageNumber", pageNumber, "pageCount", pageCount, "accountTxnCount", accountTxnCount)
 	if pageNumber > pageCount {
-		return ListAccountTransactionsResponse{}, nil
+		return ListAccountTransactionsResponse{PageCount: pageCount}, nil
 	}
 
 	pageKey := fmt.Sprintf(AccountTransactionPageKey, address, pageNumber)

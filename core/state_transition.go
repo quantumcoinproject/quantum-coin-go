@@ -26,7 +26,7 @@ import (
 	"math/big"
 )
 
-const TXN_FEE_CUTTOFF_BLOCK = 1607600
+const TXN_FEE_CUTTOFF_BLOCK = 16
 
 /*
 The State Transitioning Model

@@ -432,7 +432,7 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 
 	var receipts types.Receipts
 	if len(block.Transactions()) > 0 {
-		receipts := api.chain.GetReceiptsByHash(block.Hash())
+		receipts = api.chain.GetReceiptsByHash(block.Hash())
 		if receipts == nil {
 			return nil, errors.New("receipts is nil")
 		}
