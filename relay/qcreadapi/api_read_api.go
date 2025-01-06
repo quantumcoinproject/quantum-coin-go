@@ -99,6 +99,11 @@ func (c *ReadApiAPIController) Routes() Routes {
 			"/blockchaindetails",
 			c.GetBlockchainDetails,
 		},
+		"QueryDetails": Route{
+			strings.ToUpper("Get"),
+			"/api",
+			c.QueryDetails,
+		},
 	}
 }
 
@@ -384,4 +389,46 @@ func (c *ReadApiAPIController) ListAccountTransactions(w http.ResponseWriter, r 
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 
 	log.Info("ListAccountTransactions ok", "requestId", requestId)
+}
+
+
+func (c *ReadApiAPIController) QueryDetails(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
+	if r.Header != nil {
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("QueryDetails", "requestId", requestId)
+	}
+
+	c.setupCORS(&w, r)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
+
+	if c.authorize(r) == false {
+		result := Response(http.StatusUnauthorized, nil)
+		// If no error, encode the body and the result code
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+		log.Error("QueryDetails", "requestId", requestId, "error", "Unauthorized")
+		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
+		return
+	}
+
+	log.Error("api", "url", r.URL, "query", r.URL.Query(), "q", r.URL.Query().Get("q"))
+	queryTerm := r.URL.Query().Get("q")
+
+	result, err := c.service.QueryDetails(r.Context(), queryTerm)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		log.Error("QueryDetails", "requestId", requestId, "error", err)
+		return
+	}
+
+	// If no error, encode the body and the result code
+	_ = EncodeTextResponse(result.Body, &result.Code, w)
+
+	log.Info("QueryDetails ok", "requestId", requestId)
 }

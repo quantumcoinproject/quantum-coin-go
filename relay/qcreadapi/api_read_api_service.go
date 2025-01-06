@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"errors"
 	"github.com/mattn/go-colorable"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -327,6 +329,34 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 	}
 
 	return Response(http.StatusOK,listResponse),	nil
+}
+
+// QueryDetails - Query details
+func (s *ReadApiAPIService) QueryDetails(ctx context.Context, queryTerm string) (ImplResponse, error) {
+	queryTerm = strings.ToLower(queryTerm)
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleQueryDetails)
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleQueryDetails, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	getResponse, err := s.cacheManager.GetBlockchainDetails()
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+	}
+
+	result := ""
+	if queryTerm == "totalcoins" {
+		val, _ :=  hexutil.DecodeBig(getResponse.TotalSupply)
+		result = strconv.FormatUint(val.Uint64(), 10)
+	} else if queryTerm == "circulating" {
+		val, _ :=  hexutil.DecodeBig(getResponse.CirculatingSupply)
+		result = strconv.FormatUint(val.Uint64(), 10)
+	}
+
+	return Response(http.StatusOK,result),	nil
 }
 
 func Dump(data interface{}){

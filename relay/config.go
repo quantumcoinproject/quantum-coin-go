@@ -9,6 +9,7 @@ var (
 	InfoTitleSendTransaction         = "Send Transaction"
 	InfoTitleListAccountTransactions = "List Account Transactions"
 	InfoTitleGetBlockchainDetails    = "Get Blockchain details"
+	InfoTitleQueryDetails            = "Query details"
 )
 
 var (

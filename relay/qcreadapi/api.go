@@ -26,6 +26,7 @@ type ReadApiAPIRouter interface {
 	GetTransactionDetails(http.ResponseWriter, *http.Request)
 	ListAccountTransactions(http.ResponseWriter, *http.Request)
 	GetBlockchainDetails(http.ResponseWriter, *http.Request)
+	QueryDetails(http.ResponseWriter, *http.Request)
 }
 
 
@@ -39,4 +40,5 @@ type ReadApiAPIServicer interface {
 	GetTransactionDetails(context.Context, string) (ImplResponse, error)
 	ListAccountTransactions(context.Context, string, int64) (ImplResponse, error)
 	GetBlockchainDetails(context.Context) (ImplResponse, error)
+	QueryDetails(context.Context, string) (ImplResponse, error)
 }
