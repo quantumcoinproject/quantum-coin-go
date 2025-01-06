@@ -136,8 +136,8 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, ge
 			genesisCirculatingSupply = common.SafeAddBigInt(genesisCirculatingSupply, v.Balance)
 		}
 	}
-	cManager.genesisCirculatingSupply = hexutil.EncodeBig(genesisCirculatingSupply)
-	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", genesisCirculatingSupply, "maxSupply", maxSupply)
+	cManager.genesisCirculatingSupply = hexutil.EncodeBig(params.WeiToEther(genesisCirculatingSupply))
+	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", cManager.genesisCirculatingSupply, "maxSupply", maxSupply)
 
 	err = cManager.initialize()
 	if err != nil {
