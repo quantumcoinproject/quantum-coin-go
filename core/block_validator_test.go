@@ -156,7 +156,7 @@ func testHeaderConcurrentVerification(t *testing.T, threads int) {
 		for j := 0; j < len(blocks); j++ {
 			want := valid || (j < len(blocks)-2) // We chose the last-but-one nonce in the chain to fail
 			if (checks[j] == nil) != want {
-				t.Errorf("test %d.%d: validity mismatch: have %v, want %v", i, j, checks[j], want)
+				t.Errorf("test %d.%d: validity mismatch: have %v, want %v, valid %v", i, j, checks[j], want, valid)
 			}
 			if !want {
 				// A few blocks after the first error may pass verification due to concurrent

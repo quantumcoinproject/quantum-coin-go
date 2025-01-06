@@ -56,6 +56,57 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
 
+  '/blockchain':
+    get:
+      tags:
+        - Read
+      summary: Get blockchain details
+      operationId: GetBlockchainDetails
+      parameters:
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockchainDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
   '/account/{address}':
     get:
       tags:
@@ -397,6 +448,45 @@ components:
           items:
             $ref: '#/components/schemas/AccountTransactionCompact'
       additionalProperties: false
+    BlockchainDetails:
+      type: object
+      properties:
+        blockNumber:
+          type: string
+          nullable: false
+        maxSupply:
+          type: string
+          nullable: false
+        totalSupply:
+          type: string
+          nullable: false
+        circulatingSupply:
+          type: string
+          nullable: false
+        burntCoins:
+          type: string
+          nullable: false
+        blockRewardsCoins:
+          type: string
+          nullable: false
+        baseBlockRewardsCoins:
+          type: string
+          nullable: false
+        txnFeeRewardsCoins:
+          type: string
+          nullable: false
+        txnFeeBurntCoins:
+          type: string
+          nullable: false
+        slashedCoins:
+          type: string
+          nullable: false
+    BlockchainDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/BlockchainDetails'
     ErrorResponseModel:
       type: object
       properties:

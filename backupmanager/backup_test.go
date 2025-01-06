@@ -1,10 +1,12 @@
 package backupmanager
 
 import (
+	"bytes"
 	"crypto/rand"
 	"fmt"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/rlp"
 	"github.com/QuantumCoinProject/qc/trie"
 	"math/big"
 	"testing"
@@ -74,6 +76,19 @@ func TestBackup(t *testing.T) {
 	if err != nil {
 		fmt.Println("err", err)
 		t.Fatalf("failed backup block 1")
+	}
+
+	buff := new(bytes.Buffer)
+	err = rlp.Encode(buff, block)
+	if err != nil {
+		t.Fatal("Encode error: ", err)
+	}
+	buffBlob := buff.Bytes()
+
+	var block2 types.Block
+
+	if err := rlp.DecodeBytes(buffBlob, &block2); err != nil {
+		t.Fatal("decode error: ", err)
 	}
 
 	err = bm.BlockExists(block.Hash())

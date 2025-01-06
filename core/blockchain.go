@@ -2483,7 +2483,12 @@ func (bc *BlockChain) DoesTransactionExist(hash common.Hash) bool {
 func (bc *BlockChain) Config() *params.ChainConfig { return bc.chainConfig }
 
 // Engine retrieves the blockchain's consensus engine.
-func (bc *BlockChain) Engine() consensus.Engine { return bc.engine }
+func (bc *BlockChain) Engine() consensus.Engine {
+	if bc == nil {
+		return nil
+	}
+	return bc.engine
+}
 
 // SubscribeRemovedLogsEvent registers a subscription of RemovedLogsEvent.
 func (bc *BlockChain) SubscribeRemovedLogsEvent(ch chan<- RemovedLogsEvent) event.Subscription {

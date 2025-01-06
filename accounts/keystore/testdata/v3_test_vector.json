@@ -2,7 +2,7 @@
     "wikipage_test_vector_scrypt": {
         "json": {
             "crypto" : {
-                "cipher" : "aes-128-ctr",
+                "cipher" : "aes-256-ctr",
                 "cipherparams" : {
                     "iv" : "83dbcc02d8ccb40e466191a123791e0e"
                 },
@@ -21,12 +21,12 @@
             "version" : 3
         },
         "password": "testpassword",
-        "priv": "7a28b5ba57c53603b0b07b56bba752f7784bf506fa95edc395f5cf6c7514fe9d"
+        "priv": "69b46b77e9fb75fa37ad05ed53b540c3ce968c7c0d3d29dd26f49c561db7cf63"
     },
     "wikipage_test_vector_pbkdf2": {
         "json": {
             "crypto" : {
-                "cipher" : "aes-128-ctr",
+                "cipher" : "aes-256-ctr",
                 "cipherparams" : {
                     "iv" : "6087dab2f9fdbbfaddc31a909735c1e6"
                 },
@@ -44,12 +44,12 @@
             "version" : 3
         },
         "password": "testpassword",
-        "priv": "7a28b5ba57c53603b0b07b56bba752f7784bf506fa95edc395f5cf6c7514fe9d"
+        "priv": "a0cdd9ae0fba92eeb69de5501ca461deec37f1c3d14f2cf37098253d255c6e96"
     },
     "31_byte_key": {
         "json": {
             "crypto" : {
-                "cipher" : "aes-128-ctr",
+                "cipher" : "aes-256-ctr",
                 "cipherparams" : {
                     "iv" : "e0c41130a323adc1446fc82f724bca2f"
                 },
@@ -68,12 +68,12 @@
             "version" : 3
         },
         "password": "foo",
-        "priv": "fa7b3db73dc7dfdf8c5fbdb796d741e4488628c41fc4febd9160a866ba0f35"
+        "priv": "06354dff42db6173ee3654135102d542857cfa4c067445e7b47135a844c659"
     },
     "30_byte_key": {
         "json": {
             "crypto" : {
-                "cipher" : "aes-128-ctr",
+                "cipher" : "aes-256-ctr",
                 "cipherparams" : {
                     "iv" : "3ca92af36ad7c2cd92454c59cea5ef00"
                 },
@@ -92,6 +92,6 @@
             "version" : 3
         },
         "password": "foo",
-        "priv": "81c29e8142bb6a81bef5a92bda7a8328a5c85bb2f9542e76f9b0f94fc018"
+        "priv": "577cb82a14a492261e3ef63303ae5249aa25b408c15dbef78b1a2950f516"
     }
 }

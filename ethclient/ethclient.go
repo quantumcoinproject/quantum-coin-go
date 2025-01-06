@@ -25,6 +25,7 @@ import (
 	ethereum "github.com/QuantumCoinProject/qc"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/rpc"
 	"math/big"
@@ -151,6 +152,15 @@ func (ec *Client) HeaderByNumber(ctx context.Context, number *big.Int) (*types.H
 		err = ethereum.NotFound
 	}
 	return head, err
+}
+
+func (ec *Client) GetBlockConsensusData(ctx context.Context, number *big.Int) (*proofofstake.ConsensusData, error) {
+	var consensusData *proofofstake.ConsensusData
+	err := ec.c.CallContext(ctx, &consensusData, "proofofstake_getBlockConsensusData", hexutil.EncodeBig(number))
+	if err == nil && consensusData == nil {
+		err = ethereum.NotFound
+	}
+	return consensusData, err
 }
 
 type rpcTransaction struct {

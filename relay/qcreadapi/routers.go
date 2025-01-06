@@ -13,6 +13,7 @@ package qcreadapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 	"github.com/gorilla/mux"
 	"io"
@@ -92,6 +93,41 @@ func EncodeJSONResponse(i interface{}, status *int, w http.ResponseWriter) error
 
 	if i != nil {
 		return json.NewEncoder(w).Encode(i)
+	}
+
+	return nil
+}
+
+// EncodeTextResponse uses the text encoder to write an interface to the http response with an optional status code
+func EncodeTextResponse(i interface{}, status *int, w http.ResponseWriter) error {
+	wHeader := w.Header()
+
+	f, ok := i.(*os.File)
+	if ok {
+		data, err := io.ReadAll(f)
+		if err != nil {
+			return err
+		}
+		wHeader.Set("Content-Type", "text/plain")
+		if status != nil {
+			w.WriteHeader(*status)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+		_, err = w.Write(data)
+		return err
+	}
+	wHeader.Set("Content-Type", "application/json; charset=UTF-8")
+
+	if status != nil {
+		w.WriteHeader(*status)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	if i != nil {
+		_, err := io.WriteString(w, fmt.Sprintf("%s", i))
+		return err
 	}
 
 	return nil

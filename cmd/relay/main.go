@@ -22,25 +22,16 @@ import (
 	qcreadapi "github.com/QuantumCoinProject/qc/relay/qcreadapi"
 	qcwriteapi "github.com/QuantumCoinProject/qc/relay/qcwriteapi"
 	cachemanager "github.com/QuantumCoinProject/qc/cachemanager"
+	"github.com/QuantumCoinProject/qc/relay"
 	"strconv"
 	"strings"
 )
 
 const VERSION_NUMBER = "v1.0.1"
 
-type Config struct {
-	Api		string `json:"api"`
-	Ip		string `json:"ip"`
-	Port	string `json:"port"`
-	NodeUrl   string `json:"nodeUrl"`
-	CorsAllowedOrigins    string `json:"corsAllowedOrigins"`
-	EnableAuth bool `json:"enableAuth"`
-	ApiKeys string `json:"apiKeys"`
-	CachePath string `json:"cachePath"`
-}
 
 type Configs struct {
-	Configs []Config `json:"configs"`
+	Configs []relay.RelayConfig `json:"configs"`
 }
 
 func main() {
@@ -101,7 +92,7 @@ func main() {
 				return
 			}
 
-			cacheManager, err := cachemanager.NewCacheManager(cachePath, nodeUrl)
+			cacheManager, err := cachemanager.NewCacheManager(cachePath, nodeUrl, config.EnableExtendedApis, config.GenesisFilePath, config.MaxSupply)
 			if err != nil {
 				log.Error("NewCacheManager failed", "error", err)
 				panic(err)
@@ -139,7 +130,7 @@ func qcWriteApi(ip string, port string, nodeUrl string, corsAllowedOrigins strin
 	http.ListenAndServe(ip + ":" + port,  writeRouter)
 }
 
-func readConfigJsonDataFile(filename string)  ([]Config, error) {
+func readConfigJsonDataFile(filename string)  ([]relay.RelayConfig, error) {
 	if _, err := os.Stat(filename); err != nil {
 		return nil, errors.New("File not found " + filename)
 	}
@@ -157,7 +148,7 @@ func readConfigJsonDataFile(filename string)  ([]Config, error) {
 
 	byteResult = bytes.TrimPrefix(byteResult, []byte("\xef\xbb\xbf")) // Or []byte{239, 187, 191}
 
-	var configs []Config
+	var configs []relay.RelayConfig
 	err = json.Unmarshal([]byte(byteResult), &configs)
 	if err != nil {
 		return nil, err

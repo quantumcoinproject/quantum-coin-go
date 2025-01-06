@@ -10,8 +10,8 @@ import (
 )
 
 // Steps after Contract is modified
-// 1) solc --bin --bin-runtime --abi c:\github\go-dp\systemcontracts\staking\stakingv2\StakingContract.sol  -o c:\github\go-dp\systemcontracts\staking\stakingv2
-// 2) abigen --bin=c:\github\go-dp\systemcontracts\staking\stakingv2\StakingContract.bin --abi=c:\github\go-dp\systemcontracts\staking\stakingv2\StakingContract.abi --pkg=staking --out=c:\github\go-dp\systemcontracts\staking\stakingv2\staking.go
+// 1) solc --bin --bin-runtime --abi c:\github\quantum-coin-go\systemcontracts\staking\stakingv2\StakingContract.sol  -o c:\github\quantum-coin-go\systemcontracts\staking\stakingv2
+// 2) abigen --bin=c:\github\quantum-coin-go\systemcontracts\staking\stakingv2\StakingContract.bin --abi=c:\github\quantum-coin-go\systemcontracts\staking\stakingv2\StakingContract.abi --pkg=staking --out=c:\github\quantum-coin-go\systemcontracts\staking\stakingv2\staking.go
 // 3) in staking\stakingv2\staking.go, change the package name to just "stakingv2" (instead of "staking") to clear the error
 // 4) copy StakingContract-runtime.bin into stakingbin.go STAKING_RUNTIME_BIN field
 const STAKING_CONTRACT = "0x0000000000000000000000000000000000000000000000000000000000001000"

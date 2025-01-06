@@ -255,7 +255,7 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 }
 
 func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, voteType VoteType,
-	filteredValidatorDepositMap *map[common.Address]*big.Int, totalBlockDepositValue *big.Int, minDepositRequired *big.Int, txns []common.Hash) error {
+	filteredValidatorDepositMap *map[common.Address]*big.Int, totalBlockDepositValue *big.Int, minDepositRequired *big.Int, txns []common.Hash, blockNumber uint64, proposedBlockTime uint64) error {
 	valMap := *filteredValidatorDepositMap
 
 	okVotesDepositValue := big.NewInt(0)
@@ -264,7 +264,11 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 	var proposalHash common.Hash
 	if voteType == VOTE_TYPE_OK {
 		log.Trace("GetCombinedTxnHash a", "parentHash", parentHash, "round", round, "count", len(txns))
-		proposalHash = GetCombinedTxnHash(parentHash, round, txns)
+		if blockNumber >= PROPOSAL_TIME_HASH_START_BLOCK {
+			proposalHash = GetCombinedTxnHashWithTime(parentHash, round, txns, proposedBlockTime)
+		} else {
+			proposalHash = GetCombinedTxnHash(parentHash, round, txns)
+		}
 	} else {
 		log.Trace("GetCombinedTxnHash b", "parentHash", parentHash, "round", round)
 		proposalHash.CopyFrom(getNilVoteProposalHash(parentHash, round))
@@ -494,7 +498,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 
 		packetMap := packetRoundMap[blockConsensusData.Round]
-		err = ValidatePackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_NIL, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions)
+		err = ValidatePackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_NIL, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime)
 		if err != nil {
 			return err
 		}
@@ -550,7 +554,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 
 		packetMap := packetRoundMap[blockConsensusData.Round]
-		err = ValidatePackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_OK, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions)
+		err = ValidatePackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_OK, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime)
 		if err != nil {
 			return err
 		}

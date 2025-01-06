@@ -17,6 +17,7 @@
 package core
 
 import (
+	"github.com/QuantumCoinProject/qc/log"
 	"math/big"
 
 	"github.com/QuantumCoinProject/qc/common"
@@ -44,7 +45,12 @@ func NewEVMBlockContext(header *types.Header, chain ChainContext, author *common
 
 	// If we don't have an explicit author (i.e. not mining), extract from the header
 	if author == nil {
-		beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
+		if chain == nil || chain.Engine() == nil { //bench_test
+			log.Warn("Author, chain, engine are nil")
+			beneficiary = common.ZERO_ADDRESS
+		} else {
+			beneficiary, _ = chain.Engine().Author(header) // Ignore error, we're past header validation
+		}
 	} else {
 		beneficiary = *author
 	}

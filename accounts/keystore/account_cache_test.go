@@ -37,15 +37,15 @@ var (
 	cachetestDir, _   = filepath.Abs(filepath.Join("testdata", "keystore"))
 	cachetestAccounts = []accounts.Account{
 		{
-			Address: common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"),
-			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8")},
+			Address: common.HexToAddress("ff8fd0e9064bcbc5462763229b8a4314f07cf000"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "UTC--2023-01-17T00-37-32.112011400Z--ff8fd0e9064bcbc5462763229b8a4314f07cf000")},
 		},
 		{
-			Address: common.HexToAddress("f466859ead1932d743d622cb74fc058882e8648a"),
+			Address: common.HexToAddress("9279739dce240363860F3672aFa9E4c1E1F86CcC"),
 			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "aaa")},
 		},
 		{
-			Address: common.HexToAddress("289d485d9771714cce91d3393d764e1311907acc"),
+			Address: common.HexToAddress("31cDF7786B0B26b733B545988701C6eD0601F848"),
 			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "zzz")},
 		},
 	}
@@ -160,10 +160,6 @@ func TestCacheAddDeleteOrder(t *testing.T) {
 		{
 			Address: common.HexToAddress("d49ff4eeb0b2686ed89c0fc0f2b6ea533ddbbd5e"),
 			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "SOMETHING.key"},
-		},
-		{
-			Address: common.HexToAddress("7ef5a6135f1fd6a02593eedc869c6d41d934aef8"),
-			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: "UTC--2016-03-22T12-57-55.920751759Z--7ef5a6135f1fd6a02593eedc869c6d41d934aef8"},
 		},
 		{
 			Address: common.HexToAddress("f466859ead1932d743d622cb74fc058882e8648a"),
