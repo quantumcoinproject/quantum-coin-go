@@ -94,6 +94,9 @@ var (
 
 	PROPOSAL_TIME_HASH_START_BLOCK        = uint64(1507600)
 	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK = uint64(1597600)
+
+	//Note: both of the below should add upto 100
+	TxnFeeRewardsPercentage = int64(50)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
