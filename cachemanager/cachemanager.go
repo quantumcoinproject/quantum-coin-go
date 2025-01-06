@@ -84,7 +84,7 @@ type AccountTransactionCompact struct {
 
 type ListAccountTransactionsResponse struct {
 	PageCount uint64                      `json:"pageCount"`
-	Items     []AccountTransactionCompact `json:"items,omitempty"`
+	Items     []AccountTransactionCompact `json:"items"`
 }
 
 type BlockchainDetails struct {
