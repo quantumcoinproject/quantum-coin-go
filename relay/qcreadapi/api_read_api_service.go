@@ -35,6 +35,7 @@ import (
 type ReadApiAPIService struct {
   DpUrl string
   cacheManager *cachemanager.CacheManager
+	enableExtendedApis bool
 }
 
 type RPCTransaction struct {
@@ -54,11 +55,12 @@ type RPCTransaction struct {
 }
 
 // NewReadApiAPIService creates a default api service
-func NewReadApiAPIService(dpUrl string, cacheManager *cachemanager.CacheManager) (*ReadApiAPIService, error) {
+func NewReadApiAPIService(dpUrl string, cacheManager *cachemanager.CacheManager,enableExtendedApis bool) (*ReadApiAPIService, error) {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 	return &ReadApiAPIService{
 		DpUrl: dpUrl,
 		cacheManager: cacheManager,
+		enableExtendedApis: enableExtendedApis,
 	}, nil
 }
 
@@ -300,6 +302,10 @@ func (s *ReadApiAPIService) GetBlockchainDetails(ctx context.Context) (ImplRespo
 
 	log.Info(relay.InfoTitleGetBlockchainDetails, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
+	if s.enableExtendedApis == false {
+		return Response(http.StatusNotFound, nil), errors.New("Not Found")
+	}
+
 	getResponse, err := s.cacheManager.GetBlockchainDetails()
 	if err != nil {
 		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
@@ -342,6 +348,10 @@ func (s *ReadApiAPIService) QueryDetails(ctx context.Context, queryTerm string) 
 	duration := time.Now().Sub(startTime)
 
 	log.Info(relay.InfoTitleQueryDetails, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	if s.enableExtendedApis == false {
+		return Response(http.StatusNotFound, nil), errors.New("Not Found")
+	}
 
 	getResponse, err := s.cacheManager.GetBlockchainDetails()
 	if err != nil {
