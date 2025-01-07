@@ -10,7 +10,7 @@
     "cachePath": "D://cachemanager//",
     "enableExtendedApis": "false",
     "genesisFilePath": "genesis.json",
-    "maxSupply": "0x5AF3107A4000"
+    "maxSupply": "0x4EE2D6D415B85ACEF8100000000"
   },
   {
     "api": "write",

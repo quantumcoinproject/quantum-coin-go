@@ -15,6 +15,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/params"
 	"github.com/QuantumCoinProject/qc/relay"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
@@ -349,11 +350,17 @@ func (s *ReadApiAPIService) QueryDetails(ctx context.Context, queryTerm string) 
 
 	result := ""
 	if queryTerm == "totalcoins" {
-		val, _ :=  hexutil.DecodeBig(getResponse.TotalSupply)
-		result = strconv.FormatUint(val.Uint64(), 10)
+		val, err :=  hexutil.DecodeBig(getResponse.TotalSupply)
+		if err != nil {
+			return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+		}
+		result = strconv.FormatUint(params.WeiToEther(val).Uint64(), 10)
 	} else if queryTerm == "circulating" {
-		val, _ :=  hexutil.DecodeBig(getResponse.CirculatingSupply)
-		result = strconv.FormatUint(val.Uint64(), 10)
+		val, err :=  hexutil.DecodeBig(getResponse.CirculatingSupply)
+		if err != nil {
+			return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+		}
+		result = strconv.FormatUint(params.WeiToEther(val).Uint64(), 10)
 	}
 
 	return Response(http.StatusOK,result),	nil

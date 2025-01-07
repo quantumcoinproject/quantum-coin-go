@@ -114,6 +114,10 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, ge
 	if len(maxSupply) == 0 {
 		return nil, errors.New("max supply is nil")
 	}
+	maxSupplyBig, err := hexutil.DecodeBig(maxSupply)
+	if err != nil {
+		return nil, err
+	}
 
 	cManager.maxSupply = maxSupply
 
@@ -136,8 +140,8 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, ge
 			genesisCirculatingSupply = common.SafeAddBigInt(genesisCirculatingSupply, v.Balance)
 		}
 	}
-	cManager.genesisCirculatingSupply = hexutil.EncodeBig(params.WeiToEther(genesisCirculatingSupply))
-	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", cManager.genesisCirculatingSupply, "maxSupply", maxSupply)
+	cManager.genesisCirculatingSupply = hexutil.EncodeBig(genesisCirculatingSupply)
+	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", params.WeiToEther(genesisCirculatingSupply), "maxSupply", params.WeiToEther(maxSupplyBig))
 
 	err = cManager.initialize()
 	if err != nil {
@@ -469,13 +473,12 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 		log.Error("updateSummary BalanceAt", "error", err)
 		return err
 	}
-	burntCoins := params.WeiToEther(burntCoinsWei)
 
-	runningSummary.BurntCoins = hexutil.EncodeBig(burntCoins)
+	runningSummary.BurntCoins = hexutil.EncodeBig(burntCoinsWei)
 	genesisCirculatingSupplyBig, _ := hexutil.DecodeBig(c.genesisCirculatingSupply)
 	blockRewardsCoinsBig, _ := hexutil.DecodeBig(runningSummary.BlockRewardsCoins)
 	coinsNew := common.SafeAddBigInt(genesisCirculatingSupplyBig, blockRewardsCoinsBig)
-	runningSummary.CirculatingSupply = hexutil.EncodeBig(common.SafeSubBigInt(coinsNew, burntCoins))
+	runningSummary.CirculatingSupply = hexutil.EncodeBig(common.SafeSubBigInt(coinsNew, burntCoinsWei))
 	runningSummary.TotalSupply = runningSummary.CirculatingSupply
 
 	err = c.putSummary(runningSummary, &txnBatch)
