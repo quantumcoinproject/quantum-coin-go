@@ -2431,6 +2431,23 @@ func (cph *ConsensusHandler) commitBlock(parentHash common.Hash) error {
 	return cph.broadCast(packet)
 }
 
+func (cph *ConsensusHandler) shouldBreakglassNilVote(blockNumber uint64) (bool, error) {
+	blockNumStr := strconv.FormatUint(blockNumber, 10)
+
+	datadir := node.DefaultDataDir()
+	hashFilePath := filepath.Join(datadir, blockNumStr)
+	log.Trace("shouldBreakglassNilVote", "path", hashFilePath, "blockNumber", blockNumber)
+
+	if _, err := os.Stat(hashFilePath); errors.Is(err, os.ErrNotExist) {
+		log.Trace("shouldBreakglassNilVote nilvote not found", "blockNumStr", blockNumStr)
+		return false, nil
+	}
+
+	log.Warn("shouldBreakglassNilVote file exists", "path", hashFilePath, "blockNumber", blockNumber)
+
+	return true, nil
+}
+
 func (cph *ConsensusHandler) DoesPreviousHashMatch(parentHash common.Hash) (bool, error) {
 	skipCheck := os.Getenv("SKIP_CONSENSUS_STARTUP_HASH_CHECK")
 	if SKIP_HASH_CHECK || (len(skipCheck) > 0 && skipCheck == "1") {
@@ -2596,16 +2613,22 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		if shouldPropose {
 			cph.proposeBlock(parentHash, txns, blockNumber)
 		} else {
-			var timeoutMs int64
+
 			if shouldSignFull(blockNumber) {
-				timeoutMs = FULL_BLOCK_TIMEOUT_MS
-			} else {
-				timeoutMs = BLOCK_TIMEOUT_MS
-			}
-			if HasExceededTimeThreshold(blockRoundDetails.initTime, timeoutMs*int64(blockRoundDetails.Round)) {
+				log.Warn("Breakglassing force nil vote")
 				cph.ackBlockProposalTimeout(parentHash)
 			} else {
-				cph.requestConsensusData(blockStateDetails)
+				var timeoutMs int64
+				if shouldSignFull(blockNumber) {
+					timeoutMs = FULL_BLOCK_TIMEOUT_MS
+				} else {
+					timeoutMs = BLOCK_TIMEOUT_MS
+				}
+				if HasExceededTimeThreshold(blockRoundDetails.initTime, timeoutMs*int64(blockRoundDetails.Round)) {
+					cph.ackBlockProposalTimeout(parentHash)
+				} else {
+					cph.requestConsensusData(blockStateDetails)
+				}
 			}
 		}
 	} else if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS {
