@@ -97,6 +97,8 @@ var (
 
 	//Note: both of the below should add upto 100
 	TxnFeeRewardsPercentage = int64(50)
+
+	SixtyVoteStartBlock = uint64(1386825)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -316,7 +318,8 @@ func recreateTxnMap(selectedTxns []common.Hash, txnAddressMap map[common.Hash]co
 			for k, v := range txnAddressMap {
 				log.Trace("recreateTxnMap txnAddressMap", "k", k, "v", v)
 			}
-			return nil, errors.New("unknown transaction")
+			//return nil, errors.New("unknown transaction") //todo: fail?
+			continue
 		}
 		txnList, ok := txnMap[addr]
 		if ok == false {

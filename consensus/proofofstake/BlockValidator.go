@@ -402,7 +402,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	}
 
 	valMap := *validatorDepositMap
-	filteredValidators, totalBlockDepositValue, minDepositRequired, err := filterValidators(parentHash, &valMap)
+	filteredValidators, totalBlockDepositValue, minDepositRequired, err := filterValidators(parentHash, &valMap, blockNumber)
 	if err != nil {
 		return err
 	}

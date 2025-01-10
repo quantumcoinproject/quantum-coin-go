@@ -180,11 +180,12 @@ var (
 )
 
 var (
-	MIN_VALIDATOR_DEPOSIT                               *big.Int       = params.EtherToWei(big.NewInt(5000000))
-	MIN_BLOCK_DEPOSIT                                   *big.Int       = params.EtherToWei(big.NewInt(500000000000))
-	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE *big.Int       = big.NewInt(70)
-	ZERO_HASH                                           common.Hash    = common.BytesToHash([]byte{0})
-	ZERO_ADDRESS                                        common.Address = common.BytesToAddress([]byte{0})
+	MIN_VALIDATOR_DEPOSIT                                  *big.Int       = params.EtherToWei(big.NewInt(5000000))
+	MIN_BLOCK_DEPOSIT                                      *big.Int       = params.EtherToWei(big.NewInt(500000000000))
+	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE    *big.Int       = big.NewInt(70)
+	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2 *big.Int       = big.NewInt(60)
+	ZERO_HASH                                              common.Hash    = common.BytesToHash([]byte{0})
+	ZERO_ADDRESS                                           common.Address = common.BytesToAddress([]byte{0})
 )
 
 type BlockRoundDetails struct {
@@ -489,7 +490,7 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	return proposer, nil
 }
 
-func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big.Int) (filteredValidators map[common.Address]bool, filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
+func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64) (filteredValidators map[common.Address]bool, filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
 	validatorsDepositMap := *valDepMap
 
 	totalDepositValue := big.NewInt(0)
@@ -583,7 +584,14 @@ func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big
 		return nil, nil, nil, errors.New("min block deposit not met for filteredDepositValue")
 	}
 
-	blockMinWeightedProposalsRequired = common.SafeRelativePercentageBigInt(filteredDepositValue, MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE)
+	var minPercentage *big.Int
+	if blockNumber >= SixtyVoteStartBlock {
+		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2
+	} else {
+		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE
+	}
+
+	blockMinWeightedProposalsRequired = common.SafeRelativePercentageBigInt(filteredDepositValue, minPercentage)
 
 	return filteredValidators, filteredDepositValue, blockMinWeightedProposalsRequired, nil
 }
@@ -616,7 +624,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	preFilterValidatorCount := len(validators)
 
 	var filteredValidators map[common.Address]bool
-	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(parentHash, &validators)
+	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(parentHash, &validators, blockNumber)
 	if err != nil {
 		delete(cph.blockStateDetailsMap, parentHash)
 		return err
@@ -2431,21 +2439,25 @@ func (cph *ConsensusHandler) commitBlock(parentHash common.Hash) error {
 	return cph.broadCast(packet)
 }
 
-func (cph *ConsensusHandler) shouldBreakglassNilVote(blockNumber uint64) (bool, error) {
+func (cph *ConsensusHandler) shouldBreakglassNilVote(blockNumber uint64) bool {
 	blockNumStr := strconv.FormatUint(blockNumber, 10)
 
 	datadir := node.DefaultDataDir()
 	hashFilePath := filepath.Join(datadir, blockNumStr)
 	log.Trace("shouldBreakglassNilVote", "path", hashFilePath, "blockNumber", blockNumber)
 
-	if _, err := os.Stat(hashFilePath); errors.Is(err, os.ErrNotExist) {
-		log.Trace("shouldBreakglassNilVote nilvote not found", "blockNumStr", blockNumStr)
-		return false, nil
+	_, err := os.Stat(hashFilePath)
+
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			log.Trace("shouldBreakglassNilVote nilvote not found", "blockNumStr", blockNumStr)
+		}
+		return false
 	}
 
 	log.Warn("shouldBreakglassNilVote file exists", "path", hashFilePath, "blockNumber", blockNumber)
 
-	return true, nil
+	return true
 }
 
 func (cph *ConsensusHandler) DoesPreviousHashMatch(parentHash common.Hash) (bool, error) {
@@ -2614,7 +2626,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 			cph.proposeBlock(parentHash, txns, blockNumber)
 		} else {
 
-			if shouldBreakglassNilVote(blockNumber) {
+			if cph.shouldBreakglassNilVote(blockNumber) {
 				log.Warn("Breakglassing force nil vote")
 				cph.ackBlockProposalTimeout(parentHash)
 			} else {
