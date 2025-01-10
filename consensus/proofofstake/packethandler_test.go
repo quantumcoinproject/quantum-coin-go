@@ -1737,7 +1737,7 @@ func TestPacketHandler_packet_loss_txns_some_unresponsive_extended(t *testing.T)
 }
 
 func testFilterValidatorsTest(t *testing.T, parentHash common.Hash, validatorsDepositMap map[common.Address]*big.Int, shouldPass bool) *big.Int {
-	resultMap, filteredDepositValue, _, err := filterValidators(parentHash, &validatorsDepositMap)
+	resultMap, filteredDepositValue, _, err := filterValidators(parentHash, &validatorsDepositMap, 1)
 	if err == nil {
 		if shouldPass == false {
 			t.Fatalf("failed")

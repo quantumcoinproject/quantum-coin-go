@@ -104,44 +104,48 @@ type GetBlockchainDetailsResponse struct {
 	BlockchainDetails
 }
 
-func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
+func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
 	cManager := &CacheManager{
 		nodeUrl:            nodeUrl,
 		cacheDir:           cacheDir,
-		enableExtendedApis: enableExtendedApi,
+		enableExtendedApis: enableExtendedApis,
 	}
 
-	if len(maxSupply) == 0 {
-		return nil, errors.New("max supply is nil")
-	}
-	maxSupplyBig, err := hexutil.DecodeBig(maxSupply)
-	if err != nil {
-		return nil, err
-	}
+	var err error
 
-	cManager.maxSupply = maxSupply
-
-	genesisBytes, err := ioutil.ReadFile(genesisFilePath)
-	if err != nil {
-		log.Error("ReadFile", "error", err)
-		return nil, err
-	}
-
-	genesis := core.Genesis{}
-	err = json.Unmarshal(genesisBytes, &genesis)
-	if err != nil {
-		log.Error("Unmarshal", "error", err)
-		return nil, err
-	}
-
-	genesisCirculatingSupply := big.NewInt(0)
-	if genesis.Alloc != nil {
-		for _, v := range genesis.Alloc {
-			genesisCirculatingSupply = common.SafeAddBigInt(genesisCirculatingSupply, v.Balance)
+	if enableExtendedApis {
+		if len(maxSupply) == 0 {
+			return nil, errors.New("max supply is nil")
 		}
+		maxSupplyBig, err := hexutil.DecodeBig(maxSupply)
+		if err != nil {
+			return nil, err
+		}
+
+		cManager.maxSupply = maxSupply
+
+		genesisBytes, err := ioutil.ReadFile(genesisFilePath)
+		if err != nil {
+			log.Error("ReadFile", "error", err)
+			return nil, err
+		}
+
+		genesis := core.Genesis{}
+		err = json.Unmarshal(genesisBytes, &genesis)
+		if err != nil {
+			log.Error("Unmarshal", "error", err)
+			return nil, err
+		}
+
+		genesisCirculatingSupply := big.NewInt(0)
+		if genesis.Alloc != nil {
+			for _, v := range genesis.Alloc {
+				genesisCirculatingSupply = common.SafeAddBigInt(genesisCirculatingSupply, v.Balance)
+			}
+		}
+		cManager.genesisCirculatingSupply = hexutil.EncodeBig(genesisCirculatingSupply)
+		log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", params.WeiToEther(genesisCirculatingSupply), "maxSupply", params.WeiToEther(maxSupplyBig))
 	}
-	cManager.genesisCirculatingSupply = hexutil.EncodeBig(genesisCirculatingSupply)
-	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", params.WeiToEther(genesisCirculatingSupply), "maxSupply", params.WeiToEther(maxSupplyBig))
 
 	err = cManager.initialize()
 	if err != nil {
@@ -196,27 +200,31 @@ func (c *CacheManager) start() error {
 		if err.Error() == "leveldb: not found" {
 			log.Warn("First time start")
 			blockNumber = 0
-			runningSummary = &BlockchainDetails{
-				BlockNumber:           0,
-				MaxSupply:             c.maxSupply,
-				TotalSupply:           c.genesisCirculatingSupply,
-				CirculatingSupply:     c.genesisCirculatingSupply,
-				BurntCoins:            "0x0",
-				BlockRewardsCoins:     "0x0",
-				BaseBlockRewardsCoins: "0x0",
-				TxnFeeRewardsCoins:    "0x0",
-				TxnFeeBurntCoins:      "0x0",
-				SlashedCoins:          "0x0",
+			if c.enableExtendedApis {
+				runningSummary = &BlockchainDetails{
+					BlockNumber:           0,
+					MaxSupply:             c.maxSupply,
+					TotalSupply:           c.genesisCirculatingSupply,
+					CirculatingSupply:     c.genesisCirculatingSupply,
+					BurntCoins:            "0x0",
+					BlockRewardsCoins:     "0x0",
+					BaseBlockRewardsCoins: "0x0",
+					TxnFeeRewardsCoins:    "0x0",
+					TxnFeeBurntCoins:      "0x0",
+					SlashedCoins:          "0x0",
+				}
 			}
 		} else {
 			log.Error("GetLastBlockByDb", "err", err.Error())
 			return err
 		}
 	} else {
-		runningSummary, err = c.getSummaryFromDb()
-		if err != nil {
-			log.Error("getSummaryFromDb", "err", err.Error())
-			return err
+		if c.enableExtendedApis {
+			runningSummary, err = c.getSummaryFromDb()
+			if err != nil {
+				log.Error("getSummaryFromDb", "err", err.Error())
+				return err
+			}
 		}
 	}
 
@@ -358,10 +366,12 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 		}
 	}
 
-	err = c.updateSummary(blockNum, runningSummary, &txnBatch)
-	if err != nil {
-		log.Error("updateSummary", "error", err)
-		return err
+	if c.enableExtendedApis {
+		err = c.updateSummary(blockNum, runningSummary, &txnBatch)
+		if err != nil {
+			log.Error("updateSummary", "error", err)
+			return err
+		}
 	}
 
 	err = txnBatch.Write()
@@ -701,6 +711,9 @@ func (c *CacheManager) putAccountTxnCount(address string, txnCount uint64, batch
 }
 
 func (c *CacheManager) GetBlockchainDetails() (GetBlockchainDetailsResponse, error) {
+	if c.enableExtendedApis == false {
+		return GetBlockchainDetailsResponse{}, errors.New("enableExtendedApis is false")
+	}
 	getResponse := GetBlockchainDetailsResponse{}
 	details, err := c.getSummaryFromDb()
 	if err != nil {
