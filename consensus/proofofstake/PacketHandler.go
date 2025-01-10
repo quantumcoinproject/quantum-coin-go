@@ -2614,7 +2614,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 			cph.proposeBlock(parentHash, txns, blockNumber)
 		} else {
 
-			if shouldSignFull(blockNumber) {
+			if shouldBreakglassNilVote(blockNumber) {
 				log.Warn("Breakglassing force nil vote")
 				cph.ackBlockProposalTimeout(parentHash)
 			} else {
