@@ -385,8 +385,10 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 
 func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
 
-	if blockNumber.Uint64() != runningSummary.BlockNumber+1 {
-		log.Error("updateSummary", "left", blockNumber.Uint64(), "right", runningSummary.BlockNumber+1)
+	leftBlock := blockNumber.Uint64()
+	rightBlock := runningSummary.BlockNumber + 1
+	if leftBlock != rightBlock {
+		log.Error("updateSummary", "leftBlock", leftBlock, "rightBlock", rightBlock)
 		return errors.New("updateSummary unexpected blockNumber")
 	}
 
