@@ -225,6 +225,7 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 		return common.ZERO_HASH, errors.New("chain id is nil")
 	}
 	if s.chainId.Cmp(tx.ChainId()) != 0 {
+		log.Debug("signing failed, chainId mismatch", "S", s.chainId, "tx", tx.ChainId())
 		return common.ZERO_HASH, errors.New("signing failed, chainId mismatch")
 	}
 	return prefixedRlpHash(

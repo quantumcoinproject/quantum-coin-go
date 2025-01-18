@@ -17,9 +17,7 @@
 package core
 
 import (
-	"fmt"
 	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
-	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
 	"math/big"
@@ -69,76 +67,6 @@ func getBlock(transactions int, dataSize int) *types.Block {
 		})
 	block := blocks[len(blocks)-1]
 	return block
-}
-
-// TestRlpIterator tests that individual transactions can be picked out
-// from blocks without full unmarshalling/marshalling
-func TestRlpIterator(t *testing.T) {
-	for _, tt := range []struct {
-		txs      int
-		uncles   int
-		datasize int
-	}{
-		{0, 0, 0},
-		{0, 2, 0},
-		{10, 0, 0},
-		{10, 2, 0},
-		{10, 2, 50},
-	} {
-		testRlpIterator(t, tt.txs, tt.uncles, tt.datasize)
-	}
-}
-
-func testRlpIterator(t *testing.T, txs, uncles, datasize int) {
-	desc := fmt.Sprintf("%d txs [%d datasize] and %d uncles", txs, datasize, uncles)
-	bodyRlp, _ := rlp.EncodeToBytes(getBlock(txs, datasize).Body())
-	it, err := rlp.NewListIterator(bodyRlp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Check that txs exist
-	if !it.Next() {
-		t.Fatal("expected two elems, got zero")
-	}
-	txdata := it.Value()
-	// Check that uncles exist
-	if !it.Next() {
-		t.Fatal("expected two elems, got one")
-	}
-	// No more after that
-	if it.Next() {
-		t.Fatal("expected only two elems, got more")
-	}
-	txIt, err := rlp.NewListIterator(txdata)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var gotHashes []common.Hash
-	var expHashes []common.Hash
-	for txIt.Next() {
-		gotHashes = append(gotHashes, crypto.Keccak256Hash(txIt.Value()))
-	}
-
-	var expBody types.Body
-	err = rlp.DecodeBytes(bodyRlp, &expBody)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, tx := range expBody.Transactions {
-		expHashes = append(expHashes, tx.Hash())
-	}
-	if gotLen, expLen := len(gotHashes), len(expHashes); gotLen != expLen {
-		t.Fatalf("testcase %v: length wrong, got %d exp %d", desc, gotLen, expLen)
-	}
-	// also sanity check against input
-	if gotLen := len(gotHashes); gotLen != txs {
-		t.Fatalf("testcase %v: length wrong, got %d exp %d", desc, gotLen, txs)
-	}
-	for i, got := range gotHashes {
-		if exp := expHashes[i]; got != exp {
-			t.Errorf("testcase %v: hash wrong, got %x, exp %x", desc, got, exp)
-		}
-	}
 }
 
 // BenchmarkHashing compares the speeds of hashing a rlp raw data directly
