@@ -17,6 +17,7 @@
 package keystore
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -333,6 +334,15 @@ func TestUpdatedKeyfileContents(t *testing.T) {
 	file := filepath.Join(dir, "aaa")
 
 	// Place one of our testfiles in there
+	_, err := os.Stat(file)
+	if errors.Is(err, os.ErrNotExist) {
+		// path/to/whatever does not exist
+	} else {
+		err = os.Remove(file)
+		if err != nil {
+			t.Fatalf("failed")
+		}
+	}
 	if err := cp.CopyFile(file, cachetestAccounts[0].URL.Path); err != nil {
 		t.Fatal(err)
 	}
