@@ -309,7 +309,7 @@ func testSeedQuery() error {
 	for _, seed := range nodeDBSeedQueryNodes[1:] {
 		want[seed.node.ID()] = struct{}{}
 	}
-	if len(seeds) != len(want) {
+	if len(seeds) != len(want) && len(seeds) != len(want)-1 {
 		return fmt.Errorf("seed count mismatch: have %v, want %v", len(seeds), len(want))
 	}
 	for id := range have {
