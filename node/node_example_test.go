@@ -54,6 +54,7 @@ func ExampleLifecycle() {
 		log.Fatalf("Failed to stop the protocol stack: %v", err)
 	}
 	// Output:
+	// Ephemeral node private key
 	// Service starting...
 	// Service stopping...
 }

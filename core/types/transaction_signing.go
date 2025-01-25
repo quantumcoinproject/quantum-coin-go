@@ -225,6 +225,7 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 		return common.ZERO_HASH, errors.New("chain id is nil")
 	}
 	if s.chainId.Cmp(tx.ChainId()) != 0 {
+		log.Debug("signing failed, chainId mismatch", "S", s.chainId, "tx", tx.ChainId())
 		return common.ZERO_HASH, errors.New("signing failed, chainId mismatch")
 	}
 	return prefixedRlpHash(
@@ -262,7 +263,7 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 	}
 	V := byte(Vb.Uint64() - 27)
 	if !cryptobase.SigAlg.ValidateSignatureValues(sighash[:], V, R, S) {
-		log.Error("recoverPlain", "hash", sighash)
+		log.Debug("recoverPlain failed, ErrInvalidSig", "hash", sighash)
 		return common.Address{}, ErrInvalidSig
 	}
 	// encode the signature in uncompressed format

@@ -260,7 +260,11 @@ func TestTransactionSortIncreasing(t *testing.T) {
 		addr := cryptobase.SigAlg.PublicKeyToAddressNoError(&key.PublicKey)
 		txnCount = txnCount + 1
 		for i := 0; i < txnCount; i++ {
-			tx, _ := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+			tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+			if err != nil {
+				fmt.Println(err)
+				t.Fatalf("failed")
+			}
 			tx.time = time.Unix(0, int64(len(keys)-start))
 			overallCount = overallCount + 1
 			groups[addr] = append(groups[addr], tx)

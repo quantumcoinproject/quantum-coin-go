@@ -510,7 +510,6 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 	log.Trace("WriteMsg")
 	if msg.Code >= rw.Length {
 		log.Trace("WriteMsg code", msg.Code, "length", rw.Length, "Version", rw.Version)
-		panic("unexpected msgcode") //todo: fix
 		return newPeerError(errInvalidMsgCode, "not handled")
 	}
 	msg.meterCap = rw.cap()

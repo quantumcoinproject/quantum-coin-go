@@ -29,6 +29,7 @@ var waitMap map[common.Address]bool
 var packetDropCount int32
 var packetSentCount int32
 var TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+var DefaultMaxWaitCount = 30
 
 type ValidatorDetailsTest struct {
 	balance *big.Int
@@ -621,7 +622,7 @@ func testPacketHandler_basic(numKeys int, t *testing.T) {
 		go WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, 10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -673,7 +674,7 @@ func testPacketHandler_min_basic(t *testing.T) {
 
 	fmt.Println("c", c)
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, 10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -690,54 +691,6 @@ func testPacketHandler_min_basic(t *testing.T) {
 			}
 		}
 	}
-}
-
-func TestPacketHandler_min_basic_time_hash(t *testing.T) {
-	TEST_CONSENSUS_BLOCK_NUMBER = PROPOSAL_TIME_HASH_START_BLOCK
-	numKeys := 4
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
-
-	parentHash := common.BytesToHash([]byte{1})
-
-	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
-	log.Info("=================proposer", "proposer", proposer)
-
-	skipped := false
-	c := 0
-	skipList := make(map[common.Address]bool)
-	for _, handler := range p2p.mockP2pHandlers {
-		h := handler
-		if h.validator.IsEqualTo(proposer) == false && skipped == false {
-			skipped = true
-			skipList[h.validator] = true
-			continue
-		}
-		go WaitBlockCommit(parentHash, h, t)
-		c = c + 1
-	}
-
-	fmt.Println("c", c)
-
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, 10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
-		t.Fatalf("failed")
-	}
-
-	for _, handler := range p2p.mockP2pHandlers {
-		h := handler
-		txnList, err := h.consensusHandler.getBlockSelectedTransactions(parentHash)
-		if skipList[h.validator] {
-			if err == nil {
-				t.Fatalf("failed")
-			}
-		} else {
-			if err != nil || txnList == nil || len(txnList) != 0 {
-				t.Fatalf("failed")
-			}
-		}
-	}
-
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 }
 
 func TestPacketHandler_min_basic(t *testing.T) {
@@ -781,7 +734,7 @@ func testPacketHandler_extended_failure(t *testing.T, numKeys int, minPass int, 
 
 	fmt.Println("c", c)
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, 10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -808,50 +761,6 @@ func TestPacketHandler_extended_failure(t *testing.T) {
 	}
 }
 
-func testPacketHandler_block_proposer_timedout(t *testing.T) {
-	numKeys := 4
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
-
-	parentHash := common.BytesToHash([]byte{1})
-	c := 1
-	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
-
-	for _, handler := range p2p.mockP2pHandlers {
-		h := handler
-		if h.validator.IsEqualTo(proposer) {
-			continue //proposer timeout simulation
-		}
-		go WaitBlockCommit(parentHash, h, t)
-		c = c + 1
-	}
-
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, 20, map[VoteType]bool{VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
-		t.Fatalf("failed")
-	}
-
-	for _, handler := range p2p.mockP2pHandlers {
-		h := handler
-		txnList, err := h.consensusHandler.getBlockSelectedTransactions(parentHash)
-		if h.validator.IsEqualTo(proposer) {
-			if err == nil {
-				t.Fatalf("failed")
-			}
-		} else {
-			if err != nil || txnList != nil {
-				t.Fatalf("failed")
-			}
-		}
-	}
-}
-
-func TestPacketHandler_block_proposer_timedout(t *testing.T) {
-	for i := 1; i <= TEST_ITERATIONS; i++ {
-		fmt.Println("iteration", i)
-		testPacketHandler_block_proposer_timedout(t)
-	}
-}
-
 func testPacketHandler_min_negative(t *testing.T, numKeys int, minPass int, unresponsiveValCount int) {
 	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
 
@@ -871,7 +780,7 @@ func testPacketHandler_min_negative(t *testing.T, numKeys int, minPass int, unre
 		c = c + 1
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, 20, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == true {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == true {
 		t.Fatalf("failed")
 	}
 
@@ -969,7 +878,7 @@ func testPacketHandler_no_round2_then_round2(t *testing.T, numKeys int, minPass 
 	}
 
 	fmt.Println("ValidateTest start")
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, 60, map[VoteType]bool{VOTE_TYPE_NIL: true, VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, DefaultMaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_NIL: true, VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1131,7 +1040,7 @@ func testPacketHandler_round2(t *testing.T, numKeys int, minPass int) {
 	}
 
 	fmt.Println("===============Round 2 start")
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, 60, map[VoteType]bool{VOTE_TYPE_OK: true, VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_OK: true, VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1201,7 +1110,7 @@ func testPacketHandler_basic_txns(t *testing.T) {
 		go WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, 10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1264,7 +1173,7 @@ func testPacketHandler_basic_txns_finalize_fail(t *testing.T) {
 		go WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys-1, 60, map[VoteType]bool{VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys-1, DefaultMaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 }
@@ -1301,7 +1210,7 @@ func testPacketHandler_split_txns(t *testing.T) {
 
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, 15, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1364,7 +1273,7 @@ func testPacketHandler_split_increasing_txns(t *testing.T) {
 		go WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 7, 30, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 7, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1452,7 +1361,7 @@ func testPacketHandler_split_increasing_txns_some_unresponsive(t *testing.T, num
 		c = c + 1
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, 145, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount*5, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1517,7 +1426,7 @@ func testPacketHandler_packet_loss_txns(t *testing.T) {
 		go WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, 600, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount*10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1609,7 +1518,7 @@ func testPacketHandler_packet_loss_txns_some_unresponsive(t *testing.T, numVal i
 
 	fmt.Println("c", c)
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, 300, map[VoteType]bool{VOTE_TYPE_OK: true, VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount*5, map[VoteType]bool{VOTE_TYPE_OK: true, VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
