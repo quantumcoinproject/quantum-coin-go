@@ -503,6 +503,19 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
+func (ec *Client) TxPoolContent(ctx context.Context) (error, *map[string]map[string]map[string]*rpcTransaction) {
+	content := map[string]map[string]map[string]*rpcTransaction{
+		"pending": make(map[string]map[string]*rpcTransaction),
+		"queued":  make(map[string]map[string]*rpcTransaction),
+	}
+	err := ec.c.CallContext(ctx, &content, "txpool_content")
+	if err != nil {
+		return err, &content
+	}
+
+	return nil, &content
+}
+
 func toBlockNumArg(number *big.Int) string {
 	if number == nil {
 		return "latest"
