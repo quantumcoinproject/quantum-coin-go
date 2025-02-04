@@ -12,9 +12,9 @@ import (
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/secp256k1"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"github.com/QuantumCoinProject/qc/log"
+	"github.com/dustinxie/ecc"
 	"github.com/status-im/keycard-go/hexutils"
 	"strings"
 )
@@ -292,12 +292,12 @@ func sigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 		return nil, err
 	}
 
-	x, y := elliptic.Unmarshal(S256(), s)
-	return &ecdsa.PublicKey{Curve: S256(), X: x, Y: y}, nil
+	x, y := elliptic.Unmarshal(ecc.P256k1(), s)
+	return &ecdsa.PublicKey{Curve: ecc.P256k1(), X: x, Y: y}, nil
 }
 
 func ecrecover(hash, sig []byte) ([]byte, error) {
-	return secp256k1.RecoverPubkey(hash, sig)
+	return ecc.RecoverEthereum(hash, sig)
 }
 
 func pubkeyToAddress(p ecdsa.PublicKey) []byte {
@@ -309,11 +309,7 @@ func fromECDSAPub(pub *ecdsa.PublicKey) []byte {
 	if pub == nil || pub.X == nil || pub.Y == nil {
 		return nil
 	}
-	return elliptic.Marshal(S256(), pub.X, pub.Y)
-}
-
-func S256() elliptic.Curve {
-	return secp256k1.S256()
+	return elliptic.Marshal(ecc.P256k1(), pub.X, pub.Y)
 }
 
 func bytesToAddress(b []byte) []byte {

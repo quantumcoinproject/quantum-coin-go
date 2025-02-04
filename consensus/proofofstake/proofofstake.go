@@ -127,8 +127,8 @@ var (
 	errMissingVanity = errors.New("extra-data 32 byte vanity prefix missing")
 
 	// errMissingSignature is returned if a block's extra-data section doesn't seem
-	// to contain a 65 byte secp256k1 signature.
-	errMissingSignature = errors.New("extra-data 65 byte signature suffix missing")
+	// to contain a signature.
+	errMissingSignature = errors.New("extra-data signature suffix missing")
 
 	// errMismatchingEpochValidators is returned if a sprint block contains a
 	// list of filteredValidatorsDepositMap different than the one the local node calculated.

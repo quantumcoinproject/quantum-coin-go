@@ -127,7 +127,7 @@ func (n *Node) Address() (common.Address, error) {
 	return cryptobase.SigAlg.PublicKeyToAddress(n.Pubkey())
 }
 
-// Pubkey returns the secp256k1 public key of the node, if present.
+// Pubkey returns the public key of the node, if present.
 func (n *Node) Pubkey() *signaturealgorithm.PublicKey {
 	var key signaturealgorithm.PublicKey
 	if n.Load((*PqPubKey)(&key)) != nil {

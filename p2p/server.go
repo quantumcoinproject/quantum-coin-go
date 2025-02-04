@@ -79,7 +79,7 @@ type RequestPeers func() error
 
 // Config holds Server options.
 type Config struct {
-	// This field must be set to a valid secp256k1 private key.
+	// This field must be set to a valid private key.
 	PrivateKey *signaturealgorithm.PrivateKey `toml:"-"`
 
 	// MaxPeers is the maximum number of peers that can be
@@ -1031,7 +1031,7 @@ func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *enode.Node) erro
 		dialPubkey = new(signaturealgorithm.PublicKey)
 		if err := dialDest.Load((*enode.PqPubKey)(dialPubkey)); err != nil {
 
-			err = errors.New("dial destination doesn't have a secp256k1 public key")
+			err = errors.New("dial destination doesn't have a public key")
 			srv.log.Trace("Setting up connection failed", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
 			return err
 		}
