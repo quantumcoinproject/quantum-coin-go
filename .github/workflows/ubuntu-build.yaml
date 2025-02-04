@@ -52,7 +52,7 @@ jobs:
          sha256sum ${{ github.workspace }}/build/dp-release-ubuntu-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-ubuntu-${{  github.ref_name }}.txt
          
     - name: 'Upload Artifact'
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: dp-release-ubuntu
         path: |
