@@ -80,7 +80,7 @@ var (
 	errMissingVanity = errors.New("extra-data 32 byte vanity prefix missing")
 
 	// errMissingSignature is returned if a block's extra-data section doesn't seem
-	// to contain a 65 byte secp256k1 signature.
+	// to contain a 65 byte signature.
 	errMissingSignature = errors.New("extra-data 65 byte signature suffix missing")
 
 	// errMismatchingEpochValidators is returned if a sprint block contains a

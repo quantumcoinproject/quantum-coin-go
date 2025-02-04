@@ -30,7 +30,7 @@ func DumpRecord(out io.Writer, r *enr.Record) {
 func DumpNodeURL(out io.Writer, n *Node) {
 	var key PqPubKey
 	if n.Load(&key) != nil {
-		return // no secp256k1 public key
+		return // no public key
 	}
 	fmt.Fprintf(out, "URLv4:   %s\n", n.URLv4())
 }
