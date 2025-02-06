@@ -3,13 +3,14 @@ package relay
 import "errors"
 
 var (
-	InfoTitleLatestBlockDetails      = "Get latest block details"
-	InfoTitleAccountDetails          = "Get account details"
-	InfoTitleTransaction             = "Get Transaction"
-	InfoTitleSendTransaction         = "Send Transaction"
-	InfoTitleListAccountTransactions = "List Account Transactions"
-	InfoTitleGetBlockchainDetails    = "Get Blockchain details"
-	InfoTitleQueryDetails            = "Query details"
+	InfoTitleLatestBlockDetails             = "Get latest block details"
+	InfoTitleAccountDetails                 = "Get account details"
+	InfoTitleTransaction                    = "Get Transaction"
+	InfoTitleSendTransaction                = "Send Transaction"
+	InfoTitleListAccountTransactions        = "List Account Transactions"
+	InfoTitleListAccountPendingTransactions = "List Account Pending Transactions"
+	InfoTitleGetBlockchainDetails           = "Get Blockchain details"
+	InfoTitleQueryDetails                   = "Query details"
 )
 
 var (

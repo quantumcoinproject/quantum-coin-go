@@ -330,7 +330,30 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 
 	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
-	listResponse, err := s.cacheManager.ListTransactionByAccount(common.HexToAddress(address), pageNumber)
+	listResponse, err := s.cacheManager.ListTransactionsByAccount(common.HexToAddress(address), pageNumber)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+	}
+
+	return Response(http.StatusOK,listResponse),	nil
+}
+
+// ListAccountPendingTransactions - List account pending transactions
+func (s *ReadApiAPIService) ListAccountPendingTransactions(ctx context.Context, address string, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleListAccountPendingTransactions)
+
+	if common.IsHexAddressDeep(address) == false {
+		return Response(http.StatusInternalServerError, nil), relay.ErrInvalidAddress
+	}
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleListAccountPendingTransactions, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	listResponse, err := s.cacheManager.ListPendingTransactionsByAccount(common.HexToAddress(address), pageNumber)
 	if err != nil {
 		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
 	}

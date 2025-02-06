@@ -31,9 +31,13 @@ type CacheManager struct {
 	cacheLock                sync.Mutex
 	cacheDb                  ethdb.Database
 	client                   *ethclient.Client
+	pendingTxClient          *ethclient.Client
 	enableExtendedApis       bool
 	genesisCirculatingSupply string
 	maxSupply                string
+	pendingTxLock            sync.Mutex
+	pendingTxMapLock         sync.RWMutex
+	pendingTransactions      *map[string]map[string]map[string]*ethclient.TxPoolTransaction
 }
 
 var SummaryKey = "summary"
@@ -85,6 +89,23 @@ type AccountTransactionCompact struct {
 type ListAccountTransactionsResponse struct {
 	PageCount uint64                      `json:"pageCount"`
 	Items     []AccountTransactionCompact `json:"items"`
+}
+
+type AccountPendingTransactionCompact struct {
+	Hash string `json:"hash,omitempty"`
+
+	From string `json:"from,omitempty"`
+
+	To string `json:"to,omitempty"`
+
+	Value string `json:"value,omitempty"`
+
+	Nonce uint64 `json:"nonce,omitempty"`
+}
+
+type ListAccountPendingTransactionsResponse struct {
+	Items     []AccountPendingTransactionCompact `json:"items"`
+	PageCount uint64                             `json:"pageCount"`
 }
 
 type BlockchainDetails struct {
@@ -175,6 +196,11 @@ func (c *CacheManager) initialize() error {
 		return err
 	}
 
+	pendingTxClient, err := ethclient.Dial(c.nodeUrl)
+	if err != nil {
+		return err
+	}
+
 	chainID, err = client.NetworkID(context.Background())
 	if err != nil {
 		log.Error("initialize NetworkID", "error", err)
@@ -182,6 +208,7 @@ func (c *CacheManager) initialize() error {
 	}
 
 	c.client = client
+	c.pendingTxClient = pendingTxClient
 
 	return nil
 }
@@ -235,6 +262,8 @@ func (c *CacheManager) start() error {
 		for {
 			select {
 			case <-cacheTimer.C:
+				go c.processPendingTransactions()
+
 				blockNumberToGet := blockNumber + 1
 				log.Info("Batch Start ", "Block Number ", blockNumberToGet)
 				err := c.processByCacheManager(blockNumberToGet, runningSummary)
@@ -266,6 +295,27 @@ func (c *CacheManager) start() error {
 	}()
 
 	return nil
+}
+
+func (c *CacheManager) processPendingTransactions() {
+	c.pendingTxLock.Lock()
+	defer c.pendingTxLock.Unlock()
+
+	err, txnList := c.pendingTxClient.TxPoolContent(context.Background())
+	if err != nil {
+		log.Error("processPendingTransactions", "err", err)
+		return
+	}
+
+	if txnList == nil {
+		log.Warn("processPendingTransactions txnList is nil")
+		return
+	}
+
+	c.pendingTxMapLock.Lock()
+	defer c.pendingTxMapLock.Unlock()
+
+	c.pendingTransactions = txnList
 }
 
 func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary *BlockchainDetails) error {
@@ -566,6 +616,10 @@ func (c *CacheManager) putSummary(summary *BlockchainDetails, batch *ethdb.Batch
 }
 
 func (c *CacheManager) close() error {
+	c.pendingTxLock.Lock()
+	defer c.pendingTxLock.Unlock()
+	c.pendingTxClient.Close()
+
 	cacheDb := c.cacheDb
 	err := cacheDb.Close()
 	if err != nil {
@@ -574,7 +628,6 @@ func (c *CacheManager) close() error {
 	}
 
 	c.client.Close()
-
 	return nil
 }
 
@@ -727,7 +780,7 @@ func (c *CacheManager) GetBlockchainDetails() (GetBlockchainDetailsResponse, err
 	return getResponse, nil
 }
 
-func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTransactionsResponse, error) {
+func (c *CacheManager) ListTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTransactionsResponse, error) {
 	listResponse := ListAccountTransactionsResponse{}
 	address := strings.ToLower(accountAddress.Hex())
 
@@ -790,6 +843,82 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 	listResponse.PageCount = pageCount
 
 	return listResponse, nil
+}
+
+func (c *CacheManager) ListPendingTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountPendingTransactionsResponse, error) {
+	c.pendingTxMapLock.RLock()
+	defer c.pendingTxMapLock.RUnlock()
+
+	log.Info("ListPendingTransactionsByAccount", "account", accountAddress)
+
+	address := accountAddress.Hex()
+
+	response := ListAccountPendingTransactionsResponse{
+		Items: make([]AccountPendingTransactionCompact, 0),
+	}
+
+	txnMap := *c.pendingTransactions
+	pendingTxnMap := txnMap["pending"]
+	queuedTxnMap := txnMap["queued"]
+
+	log.Info("txncount", "c", len(txnMap))
+	for k, v := range txnMap {
+		log.Info("level0", "k", k, "v=%v", v)
+		for k1, v1 := range v {
+			log.Info("     level1", "k", k1, "v=%v", v1)
+			for k2, v2 := range v1 {
+				log.Info("          level2", "k", k2, "v=%v", v2)
+			}
+		}
+	}
+
+	if queuedTxnMap != nil {
+		queuedAccountTxnMap := queuedTxnMap[address]
+		if queuedAccountTxnMap != nil {
+			for _, tx := range queuedAccountTxnMap {
+				txn := AccountPendingTransactionCompact{
+					From:  strings.ToLower(tx.From.Hex()),
+					Value: tx.Value.String(),
+				}
+				if tx.To != nil {
+					txn.To = strings.ToLower(tx.To.Hex())
+				}
+				txn.Hash = tx.Hash.Hex()
+				txn.Nonce = uint64(tx.Nonce)
+				response.Items = append(response.Items, txn)
+				if len(response.Items) == int(PageSize) {
+					break
+				}
+			}
+		}
+	}
+
+	if pendingTxnMap != nil && len(response.Items) < int(PageSize) {
+		pendingAccountTxnMap := pendingTxnMap[address]
+		if pendingAccountTxnMap != nil {
+			for _, tx := range pendingAccountTxnMap {
+				txn := AccountPendingTransactionCompact{
+					From:  strings.ToLower(tx.From.Hex()),
+					Value: tx.Value.String(),
+				}
+				if tx.To != nil {
+					txn.To = strings.ToLower(tx.To.Hex())
+				}
+				txn.Hash = tx.Hash.Hex()
+				txn.Nonce = uint64(tx.Nonce)
+				response.Items = append(response.Items, txn)
+				if len(response.Items) == int(PageSize) {
+					break
+				}
+			}
+		}
+	}
+
+	if len(response.Items) > 0 {
+		response.PageCount = 1
+	}
+
+	return response, nil
 }
 
 func getAccountPageKey(address string, pageCount uint64) []byte {
