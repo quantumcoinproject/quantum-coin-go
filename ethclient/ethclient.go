@@ -168,6 +168,14 @@ type rpcTransaction struct {
 	TxExtraInfo
 }
 
+type TxPoolTransaction struct {
+	From  common.Address  `json:"from"`
+	To    *common.Address `json:"to"`
+	Value *hexutil.Big    `json:"value"`
+	Nonce hexutil.Uint64  `json:"nonce"`
+	Hash  common.Hash     `json:"hash"`
+}
+
 type TxExtraInfo struct {
 	BlockNumber *string         `json:"blockNumber,omitempty"`
 	BlockHash   *common.Hash    `json:"blockHash,omitempty"`
@@ -503,17 +511,17 @@ func (ec *Client) SendTransaction(ctx context.Context, tx *types.Transaction) er
 	return ec.c.CallContext(ctx, nil, "eth_sendRawTransaction", hexutil.Encode(data))
 }
 
-func (ec *Client) TxPoolContent(ctx context.Context) (error, *map[string]map[string]map[string]*rpcTransaction) {
-	content := map[string]map[string]map[string]*rpcTransaction{
-		"pending": make(map[string]map[string]*rpcTransaction),
-		"queued":  make(map[string]map[string]*rpcTransaction),
+func (ec *Client) TxPoolContent(ctx context.Context) (err error, content *map[string]map[string]map[string]*TxPoolTransaction) {
+	content = &map[string]map[string]map[string]*TxPoolTransaction{
+		"pending": make(map[string]map[string]*TxPoolTransaction),
+		"queued":  make(map[string]map[string]*TxPoolTransaction),
 	}
-	err := ec.c.CallContext(ctx, &content, "txpool_content")
+	err = ec.c.CallContext(ctx, content, "txpool_content")
 	if err != nil {
-		return err, &content
+		return err, content
 	}
 
-	return nil, &content
+	return nil, content
 }
 
 func toBlockNumArg(number *big.Int) string {
