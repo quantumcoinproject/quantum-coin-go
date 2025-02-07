@@ -60,7 +60,6 @@ jobs:
          copy ${{ github.workspace }}\resources\*.* ${{ github.workspace }}\build\dp\
          del ${{ github.workspace }}\build\dp\connect.sh
          del ${{ github.workspace }}\build\dp\connectvalidator.sh
-         del ${{ github.workspace }}\build\dp\startrelay.sh
          powershell Compress-Archive ${{ github.workspace }}\build\dp ${{ github.workspace }}\build\qc-release-windows-${{  github.ref_name }}.zip
          powershell Get-FileHash ${{ github.workspace }}\build\qc-release-windows-${{  github.ref_name }}.zip > ${{ github.workspace }}\build\releasehash-windows-${{  github.ref_name }}.txt
          

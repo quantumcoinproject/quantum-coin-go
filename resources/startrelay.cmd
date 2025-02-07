@@ -1,1 +1,0 @@
-relay.exe relay-config-windows.json

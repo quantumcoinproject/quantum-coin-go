@@ -33,13 +33,14 @@ An example relay configuration is given below.
 6) Once the relay is started, the APIs can be accessed following the definitions shared in the yaml files linked above.
 7) The `enableExtendedApis` parameter can be used to control whether APIs such as GetBlockchainDetails, QueryDetails are enabled or not. If not enabled, the response returns a 404.
 
+#### Example Linux Configuration
 ```
 [
   {
     "api": "read",
     "ip": "127.0.0.1",
     "port": "9090",
-    "nodeUrl": "http://127.0.0.1:8545",
+    "nodeUrl": "./data/geth.ipc",
     "corsAllowedOrigins": "*",
     "enableAuth": false,
     "apiKeys": "",
@@ -52,7 +53,39 @@ An example relay configuration is given below.
     "api": "write",
     "ip": "127.0.0.1",
     "port": "9091",
-    "nodeUrl": "http://127.0.0.1:8545",
+    "nodeUrl": "./data/geth.ipc",
+    "corsAllowedOrigins": "*",
+    "enableAuth": false,
+    "apiKeys": "",
+    "cachePath": ".",
+    "enableExtendedApis": false,
+    "genesisFilePath": "genesis.json"
+  }
+]
+```
+
+#### Example Windows Configuration
+
+```
+[
+  {
+    "api": "read",
+    "ip": "127.0.0.1",
+    "port": "9090",
+    "nodeUrl": "//./pipe/geth.ipc",
+    "corsAllowedOrigins": "*",
+    "enableAuth": false,
+    "apiKeys": "",
+    "cachePath": ".",
+    "enableExtendedApis": false,
+    "genesisFilePath": "genesis.json",
+    "maxSupply": "0x4EE2D6D415B85ACEF8100000000"
+  },
+  {
+    "api": "write",
+    "ip": "127.0.0.1",
+    "port": "9091",
+    "nodeUrl": "//./pipe/geth.ipc",
     "corsAllowedOrigins": "*",
     "enableAuth": false,
     "apiKeys": "",
