@@ -16,11 +16,24 @@ https://github.com/quantumcoinproject/quantum-coin-go/blob/dogep/relay/read-api.
 Write APIs:
 https://github.com/quantumcoinproject/quantum-coin-go/blob/dogep/relay/write-api.yaml
 
-### Running A Relay
+## Running A Relay
 
-First, start Quantum Coin blockchain node. Then run relay using the following command:
+1) First, start Quantum Coin blockchain node. See steps to start the node: https://quantumcoin.org/connecting-to-mainnet-snapshot.html
+2) Open Terminal (Linux) or Command Prompt (Windows) and switch to the folder where the relay and other files are located.
+3) Run the following command to start the relay:
 
-```relay config.json```
+#### Windows:
+
+```relay.exe config.json```
+
+#### Linux:
+
+Replace $HOME/dp with the directory path where the relay file is located.
+
+```
+export LD_LIBRARY_PATH=$HOME/dp
+./relay ./config.json
+```
 
 An example relay configuration is given below. 
 
