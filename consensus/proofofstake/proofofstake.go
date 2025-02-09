@@ -99,6 +99,8 @@ var (
 	TxnFeeRewardsPercentage = int64(50)
 
 	SixtyVoteStartBlock = uint64(1386825)
+
+	SixtySevenVoteStartBlock = uint64(1929840)
 )
 
 // Various error messages to mark blocks invalid. These should be private to

@@ -184,6 +184,7 @@ var (
 	MIN_BLOCK_DEPOSIT                                      *big.Int       = params.EtherToWei(big.NewInt(500000000000))
 	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE    *big.Int       = big.NewInt(70)
 	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2 *big.Int       = big.NewInt(60)
+	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V3 *big.Int       = big.NewInt(67)
 	ZERO_HASH                                              common.Hash    = common.BytesToHash([]byte{0})
 	ZERO_ADDRESS                                           common.Address = common.BytesToAddress([]byte{0})
 )
@@ -585,7 +586,9 @@ func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big
 	}
 
 	var minPercentage *big.Int
-	if blockNumber >= SixtyVoteStartBlock {
+	if blockNumber >= SixtySevenVoteStartBlock {
+		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V3
+	} else if blockNumber >= SixtyVoteStartBlock {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2
 	} else {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE

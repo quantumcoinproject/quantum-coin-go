@@ -33,9 +33,6 @@ import (
 
 func TestTxnFee(t *testing.T) {
 
-	b := []byte{115, 101, 99, 112, 50, 53, 54, 107, 49}
-	fmt.Println(string(b[:]))
-
 	txnFeeTotal := common.SafeMulBigInt(big.NewInt(types.DEFAULT_PRICE), new(big.Int).SetUint64(21000))
 	burnAmount, txnFeeRewards := calculateTxnFeeSplitCoins(txnFeeTotal)
 	log.Info("TestTxnFee1", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
