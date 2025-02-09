@@ -72,7 +72,9 @@ var (
 	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
 	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
 
-	slashAmount = params.EtherToWei(big.NewInt(10))
+	SLASH_AMOUNT = params.EtherToWei(big.NewInt(10))
+
+	SLASH_AMOUNT_V2 = params.EtherToWei(big.NewInt(100))
 
 	rewardStartBlockNumber = uint64(277204)
 	slashStartBlockNumber  = uint64(1497600)
@@ -99,6 +101,8 @@ var (
 	TxnFeeRewardsPercentage = int64(50)
 
 	SixtyVoteStartBlock = uint64(1386825)
+
+	SlashV2StartBlock = uint64(1931480)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -706,6 +710,8 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 	}
 
+	blockNumber := header.Number.Uint64()
+
 	// should not happen. Once happen, stop the node is better than broadcast the block
 	if header.GasLimit < header.GasUsed {
 		return errors.New("gas consumption of system txs exceed the gas limit")
@@ -732,7 +738,15 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	//Block Slashing
 	//If Round = 1, then it means PROPOSER was likely offline, as opposed to Round = 2 which means validators were not able to get consensus on time
-	if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= slashStartBlockNumber {
+	if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= slashStartBlockNumber {
+
+		var slashAmount *big.Int
+		if blockNumber >= SlashV2StartBlock {
+			slashAmount = SLASH_AMOUNT
+		} else {
+			slashAmount = SLASH_AMOUNT_V2
+		}
+
 		for _, val := range blockConsensusData.SlashedBlockProposers {
 			depositor, err := c.GetDepositorOfValidator(val, header.ParentHash)
 			if err != nil {
@@ -755,7 +769,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	//Validator nil block
 	//If Round = 1, then it means PROPOSER was likely offline, as opposed to Round = 2 which means validators were not able to get consensus on time
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL && blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil &&
-		len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= VALIDATOR_NIL_BLOCK_START_BLOCK {
+		len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= VALIDATOR_NIL_BLOCK_START_BLOCK {
 		for _, val := range blockConsensusData.SlashedBlockProposers {
 			err = c.SetNilBlock(val, state, header)
 			if err != nil {
@@ -766,7 +780,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	}
 
 	//Block Rewards
-	if blockConsensusData.VoteType == VOTE_TYPE_OK && header.Number.Uint64() >= rewardStartBlockNumber {
+	if blockConsensusData.VoteType == VOTE_TYPE_OK && blockNumber >= rewardStartBlockNumber {
 		blockProposerRewardAmount := GetReward(header.Number)
 
 		//Add same amount of reward to Staking Contract, so that it is available for withdrawal later on
@@ -784,7 +798,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 
 		//If txn fee for proposer criteria is met and the block has transactions
-		if header.Number.Uint64() >= core.TXN_FEE_CUTTOFF_BLOCK && len(txs) > 0 {
+		if blockNumber >= core.TXN_FEE_CUTTOFF_BLOCK && len(txs) > 0 {
 			txnFeeTotal, rewardsAmountTxnFee, burnAmountTxnFee, err := calculateTxnFeeSplit(blockProposerRewardAmount, txs, receipts)
 			if err != nil {
 				return err
@@ -817,7 +831,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 
 		//Validator nil block reset
-		if header.Number.Uint64() > VALIDATOR_NIL_BLOCK_START_BLOCK {
+		if blockNumber > VALIDATOR_NIL_BLOCK_START_BLOCK {
 			err = c.ResetNilBlock(blockConsensusData.BlockProposer, state, header)
 			if err != nil {
 				log.Error("ResetNilBlock err", "err", err)
@@ -827,21 +841,21 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	}
 
 	//Staking V2
-	if header.Number.Uint64() == STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber == STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		log.Info("Setting stakingv2 contract code", "blockNumber", STAKING_CONTRACT_V2_CUTOFF_BLOCK)
 		stakingContractCode := common.FromHex(stakingv2.STAKING_RUNTIME_BIN)
 		state.SetCode(staking.STAKING_CONTRACT_ADDRESS, stakingContractCode)
 	}
 
 	//Consensus Context
-	if header.Number.Uint64() == CONSENSUS_CONTEXT_START_BLOCK {
+	if blockNumber == CONSENSUS_CONTEXT_START_BLOCK {
 		log.Info("Setting consensus context contract code", "blockNumber", CONSENSUS_CONTEXT_START_BLOCK)
 		consensuscontextContractCode := common.FromHex(consensuscontext.CONSENSUS_CONTEXT_RUNTIME_BIN)
 		state.SetCode(consensuscontext.CONSENSUS_CONTEXT_CONTRACT_ADDRESS, consensuscontextContractCode)
 	}
 
-	if header.Number.Uint64() > CONSENSUS_CONTEXT_START_BLOCK {
-		key, err := GetConsensusContextKey(header.Number.Uint64())
+	if blockNumber > CONSENSUS_CONTEXT_START_BLOCK {
+		key, err := GetConsensusContextKey(blockNumber)
 		if err != nil {
 			log.Error("GetBlockConsensusContextFn err", "err", err)
 			return err
@@ -855,8 +869,8 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 
 		//Remove the oldest key
-		if header.Number.Uint64() > (CONSENSUS_CONTEXT_START_BLOCK + CONSENSUS_CONTEXT_MAX_BLOCK_COUNT) {
-			oldKey, err := GetConsensusContextKey(header.Number.Uint64() - CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
+		if blockNumber > (CONSENSUS_CONTEXT_START_BLOCK + CONSENSUS_CONTEXT_MAX_BLOCK_COUNT) {
+			oldKey, err := GetConsensusContextKey(blockNumber - CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
 			if err != nil {
 				log.Error("GetBlockConsensusContextKey oldKey err", "err", err)
 				return err
@@ -871,8 +885,8 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	}
 
 	//Fix blocktime
-	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
-	if (header.Number.Uint64() == 1 || header.Number.Uint64()%BLOCK_PERIOD_TIME_CHANGE == 0 || header.Number.Uint64() >= BLOCK_TIME_ORIG_START_BLOCK) && blockConsensusData.VoteType == VOTE_TYPE_OK && parent.Time < blockConsensusData.BlockTime {
+	parent := chain.GetHeader(header.ParentHash, blockNumber-1)
+	if (blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= BLOCK_TIME_ORIG_START_BLOCK) && blockConsensusData.VoteType == VOTE_TYPE_OK && parent.Time < blockConsensusData.BlockTime {
 		header.Time = blockConsensusData.BlockTime
 	} else {
 		header.Time = parent.Time + c.config.Period
