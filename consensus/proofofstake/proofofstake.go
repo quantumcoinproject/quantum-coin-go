@@ -761,7 +761,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			log.Trace("slashed amount", "slashTotal", slashTotal, "slashAmount", slashAmount, "depositor", depositor)
 
 			if c.signFn != nil && val.IsEqualTo(c.validator) {
-				log.Warn("You account got a slashing!", "parentHash", header.ParentHash)
+				log.Warn("Your account got a slashing!", "parentHash", header.ParentHash)
 			}
 		}
 	}

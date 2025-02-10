@@ -113,7 +113,6 @@ var SKIP_HASH_CHECK = false
 var STALE_BLOCK_WARN_TIME = int64(1800 * 1000)
 var BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER = uint64(2)
 var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT = uint64(1024)
-
 var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2 = uint64(16384)
 
 var MIN_VALIDATORS int = 3
@@ -159,7 +158,8 @@ const (
 )
 
 const (
-	MAX_VALIDATORS int = 128
+	MAX_VALIDATORS                                int = 128
+	MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION int = 90 //70% of 128
 )
 
 const (
@@ -186,6 +186,7 @@ var (
 	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2 *big.Int       = big.NewInt(60)
 	ZERO_HASH                                              common.Hash    = common.BytesToHash([]byte{0})
 	ZERO_ADDRESS                                           common.Address = common.BytesToAddress([]byte{0})
+	MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE                                = big.NewInt(85) //(100 * 51) / MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2. This is to ensure worst case minimum of 51% of total staked coins needed to create a block
 )
 
 type BlockRoundDetails struct {
@@ -490,7 +491,7 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	return proposer, nil
 }
 
-func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64) (filteredValidators map[common.Address]bool, filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
+func filterValidators(consensusContext common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64) (filteredValidators map[common.Address]bool, filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
 	validatorsDepositMap := *valDepMap
 
 	totalDepositValue := big.NewInt(0)
@@ -520,58 +521,11 @@ func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big
 			filteredValidators[validator] = true
 		}
 	} else {
-		rng, err := cryptobase.DRNG.InitializeWithSeed(parentHash)
+		filteredValidatorsRet, err := getMaxFilteredValidators(consensusContext, totalDepositValue, valDepMap)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-
-		zero := big.NewInt(0)
-		byteMax := big.NewInt(255)
-		depositValueSoFar := big.NewInt(0)
-
-		validatorList := make([]common.Address, len(validatorsDepositMap))
-		ctr := 0
-		for validator, _ := range validatorsDepositMap {
-			validatorList[ctr] = validator
-			ctr = ctr + 1
-		}
-
-		sort.Slice(validatorList, func(i, j int) bool {
-			vi := crypto.Keccak256Hash(parentHash.Bytes(), validatorList[i].Bytes()).Bytes()
-			vj := crypto.Keccak256Hash(parentHash.Bytes(), validatorList[j].Bytes()).Bytes()
-			return bytes.Compare(vi, vj) == -1
-		})
-
-		for _, validator := range validatorList {
-			depositValue := validatorsDepositMap[validator]
-			randByte := big.NewInt(int64(rng.NextByte()))
-
-			//normalize depositValue to byte-max value since random generator only returns bytes
-			normalizedDepositValue := common.SafeDivBigInt(common.SafeMulBigInt(byteMax, depositValue), totalDepositValue)
-			if normalizedDepositValue.Cmp(zero) < 0 || normalizedDepositValue.Cmp(byteMax) > 0 {
-				return nil, nil, nil, errors.New("invalid normalizedDepositValue")
-			}
-
-			if normalizedDepositValue.Cmp(randByte) >= 0 {
-				filteredValidators[validator] = true
-				depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
-			}
-		}
-
-		if len(filteredValidators) < MAX_VALIDATORS || MIN_BLOCK_DEPOSIT.Cmp(depositValueSoFar) > 0 {
-			for _, validator := range validatorList {
-				_, ok := filteredValidators[validator]
-				if ok == false {
-					//this needs optimization, since validators first in the list get the benefit
-					filteredValidators[validator] = true
-					depositValue := validatorsDepositMap[validator]
-					depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
-					if len(filteredValidators) == MAX_VALIDATORS && MIN_BLOCK_DEPOSIT.Cmp(depositValueSoFar) <= 0 {
-						break
-					}
-				}
-			}
-		}
+		filteredValidators = *filteredValidatorsRet
 	}
 
 	filteredDepositValue = big.NewInt(0)
@@ -594,6 +548,67 @@ func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big
 	blockMinWeightedProposalsRequired = common.SafeRelativePercentageBigInt(filteredDepositValue, minPercentage)
 
 	return filteredValidators, filteredDepositValue, blockMinWeightedProposalsRequired, nil
+}
+
+func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *big.Int, valDepMap *map[common.Address]*big.Int) (*map[common.Address]bool, error) {
+	validatorsDepositMap := *valDepMap
+
+	depositValueSoFar := big.NewInt(0)
+	blockMinWeightedStake := common.SafeRelativePercentageBigInt(big.NewInt(int64(MAX_VALIDATORS)), MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE)
+	log.Debug("getMaxFilteredValidators", "blockMinWeightedStake", blockMinWeightedStake, "totalDepositValue", totalDepositValue)
+	filteredValidators := make(map[common.Address]bool)
+
+	validatorList := make([]common.Address, len(validatorsDepositMap))
+	ctr := 0
+	for validator, _ := range validatorsDepositMap {
+		validatorList[ctr] = validator
+		ctr = ctr + 1
+	}
+
+	//First pass, fill weighted at-least blockMinWeightedStake percentage of coins
+	sort.SliceStable(validatorList, func(i, j int) bool { //SliceStable needed since values can be equal
+		valDepI := validatorsDepositMap[validatorList[i]]
+		valDepJ := validatorsDepositMap[validatorList[j]]
+		cmpResult := valDepI.Cmp(valDepJ)
+		if cmpResult == 0 { //equal deposit, sort by consensus context + validator address combo
+			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
+			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		}
+		return cmpResult > 0
+	})
+	for _, validator := range validatorList {
+		filteredValidators[validator] = true
+		depositValue := validatorsDepositMap[validator]
+		depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
+		if len(filteredValidators) == MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION || depositValueSoFar.Cmp(blockMinWeightedStake) > 0 {
+			log.Info("getMaxFilteredValidators first pass", "len(filteredValidators)", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
+			break
+		}
+	}
+
+	//Second pass, fill by consensus context sort order
+	if len(filteredValidators) < MAX_VALIDATORS {
+		//Sort based on consensus context
+		sort.Slice(validatorList, func(i, j int) bool {
+			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
+			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		})
+
+		for _, validator := range validatorList {
+			_, ok := filteredValidators[validator]
+			if ok == true {
+				continue
+			}
+			filteredValidators[validator] = true
+			if len(filteredValidators) == MAX_VALIDATORS {
+				break
+			}
+		}
+	}
+
+	return &filteredValidators, nil
 }
 
 func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Hash, blockNumber uint64) error {
@@ -623,8 +638,23 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	preFilterValidatorCount := len(validators)
 
+	//Consensus Context
+	if blockNumber >= CONTEXT_BASED_START_BLOCK {
+		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
+		if err != nil {
+			return err
+		}
+		blockContext, err := cph.getBlockConsensusContext(contextKey, cph.currentParentHash)
+		if err != nil {
+			return err
+		}
+		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
+	} else {
+		blockStateDetails.consensusContext = parentHash
+	}
+
 	var filteredValidators map[common.Address]bool
-	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(parentHash, &validators, blockNumber)
+	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(blockStateDetails.consensusContext, &validators, blockNumber)
 	if err != nil {
 		delete(cph.blockStateDetailsMap, parentHash)
 		return err
@@ -666,19 +696,6 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	cph.blockStateDetailsMap[parentHash] = blockStateDetails
 	cph.currentParentHash = parentHash
-
-	//Consensus Context
-	if blockNumber >= CONTEXT_BASED_START_BLOCK {
-		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
-		if err != nil {
-			return err
-		}
-		blockContext, err := cph.getBlockConsensusContext(contextKey, cph.currentParentHash)
-		if err != nil {
-			return err
-		}
-		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
-	}
 
 	log.Debug("blockStateDetails", "totalBlockDepositValue", blockStateDetails.totalBlockDepositValue,
 		"blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired, "consensusContext", blockStateDetails.consensusContext)

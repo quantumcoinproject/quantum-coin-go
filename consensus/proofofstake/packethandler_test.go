@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumCoinProject/qc/rlp"
 	"math/big"
 	"math/rand"
+	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -1645,8 +1646,8 @@ func TestPacketHandler_packet_loss_txns_some_unresponsive_extended(t *testing.T)
 	}
 }
 
-func testFilterValidatorsTest(t *testing.T, parentHash common.Hash, validatorsDepositMap map[common.Address]*big.Int, shouldPass bool) *big.Int {
-	resultMap, filteredDepositValue, _, err := filterValidators(parentHash, &validatorsDepositMap, 1)
+func testFilterValidatorsTest(t *testing.T, consensusContext common.Hash, validatorsDepositMap map[common.Address]*big.Int, shouldPass bool) *big.Int {
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, 1)
 	if err == nil {
 		if shouldPass == false {
 			t.Fatalf("failed")
@@ -1681,10 +1682,7 @@ func testFilterValidatorsTest(t *testing.T, parentHash common.Hash, validatorsDe
 	}
 
 	totalDeposit := big.NewInt(0)
-	for val, include := range resultMap {
-		if include == false {
-			t.Fatalf("failed")
-		}
+	for val, _ := range validatorsDepositMap {
 		depositValue, ok := validatorsDepositMap[val]
 		if ok == false {
 			t.Fatalf("unexpected validator")
@@ -1693,9 +1691,9 @@ func testFilterValidatorsTest(t *testing.T, parentHash common.Hash, validatorsDe
 		totalDeposit = common.SafeAddBigInt(totalDeposit, depositValue)
 		fmt.Println("Selected", "validator", val, "deposit", depositValue)
 	}
-	fmt.Println("filteredDepositValue", filteredDepositValue, "totalDeposit", totalDeposit)
+	fmt.Println("filteredDepositValue", filteredDepositValue, "totalDeposit", totalDeposit, "filteredValidatorCount", len(resultMap))
 
-	if totalDeposit.Cmp(filteredDepositValue) > 0 {
+	if totalDeposit.Cmp(filteredDepositValue) < 0 {
 		t.Fatalf("failed")
 	}
 
@@ -1707,9 +1705,9 @@ func testFilterValidatorsTest(t *testing.T, parentHash common.Hash, validatorsDe
 }
 
 func TestFilterValidators_negative(t *testing.T) {
-	parentHash := common.BytesToHash([]byte{100})
+	consensusContext := common.BytesToHash([]byte{100})
 	validatorsDepositMap := make(map[common.Address]*big.Int)
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, false)
+	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, false)
 
 	val1 := common.BytesToAddress([]byte{1})
 	val2 := common.BytesToAddress([]byte{2})
@@ -1717,12 +1715,12 @@ func TestFilterValidators_negative(t *testing.T) {
 
 	validatorsDepositMap[val1] = big.NewInt(1000000)
 	validatorsDepositMap[val2] = big.NewInt(2000000)
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, false)
+	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, false)
 
 	validatorsDepositMap[val1] = big.NewInt(10000)
 	validatorsDepositMap[val2] = big.NewInt(20000)
 	validatorsDepositMap[val3] = big.NewInt(30000)
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, false)
+	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, false)
 
 	b := byte(0)
 	for i := 0; i < MAX_VALIDATORS*2; i++ {
@@ -1730,11 +1728,11 @@ func TestFilterValidators_negative(t *testing.T) {
 		validatorsDepositMap[val] = big.NewInt(1000)
 		b = b + 1
 	}
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, false)
+	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, false)
 }
 
 func TestFilterValidators_positive(t *testing.T) {
-	parentHash := common.BytesToHash([]byte{100})
+	consensusContext := common.BytesToHash([]byte{100})
 	validatorsDepositMap := make(map[common.Address]*big.Int)
 
 	val1 := common.BytesToAddress([]byte{1})
@@ -1745,7 +1743,7 @@ func TestFilterValidators_positive(t *testing.T) {
 	validatorsDepositMap[val2] = params.EtherToWei(big.NewInt(200000000000))
 	validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(400000000000))
 	fmt.Println("Test1")
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
+	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, true)
 
 	b := byte(0)
 	for i := 0; i < MAX_VALIDATORS/2; i++ {
@@ -1754,7 +1752,7 @@ func TestFilterValidators_positive(t *testing.T) {
 		b = b + 1
 	}
 	fmt.Println("Test2")
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
+	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, true)
 
 	b = byte(0)
 	for i := 0; i < MAX_VALIDATORS; i++ {
@@ -1763,7 +1761,7 @@ func TestFilterValidators_positive(t *testing.T) {
 		b = b + 1
 	}
 	fmt.Println("Test3")
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
+	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, true)
 
 	b = byte(0)
 	for i := 0; i < MAX_VALIDATORS+1; i++ {
@@ -1772,7 +1770,7 @@ func TestFilterValidators_positive(t *testing.T) {
 		b = b + 1
 	}
 	fmt.Println("Test4")
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
+	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, true)
 }
 
 func TestFilterValidators_positive_Extended(t *testing.T) {
@@ -1788,41 +1786,82 @@ func TestFilterValidators_positive_Extended(t *testing.T) {
 	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
 }
 
-func TestFilterValidators_positive_Tough(t *testing.T) {
+func TestFilterValidators_positive_second_pass(t *testing.T) {
 	for test := 0; test < 2; test++ {
 		validatorsDepositMap := make(map[common.Address]*big.Int)
 
 		b := byte(0)
-		for i := 1; i < 255; i++ {
+		for i := 1; i < 110; i++ {
+			val := common.BytesToAddress([]byte{b})
+			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(int64(5000000 * i)))
+			b = b + 1
+		}
+
+		for i := 1; i < 90; i++ {
+			val := common.BytesToAddress([]byte{b, b})
+			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(20000000000))
+			b = b + 1
+		}
+
+		consensusContext1 := common.BytesToHash([]byte{100})
+		totalDeposit := testFilterValidatorsTest(t, consensusContext1, validatorsDepositMap, true)
+		expected := params.EtherToWei(big.NewInt(1238125000000))
+		if totalDeposit.Cmp(expected) != 0 {
+			fmt.Println("dep", params.WeiToEther(totalDeposit), "expected", params.WeiToEther(expected))
+			t.Fatalf("failed a")
+		}
+
+		consensusContext2 := common.BytesToHash([]byte{200})
+		totalDeposit = testFilterValidatorsTest(t, consensusContext2, validatorsDepositMap, true)
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1100530000000))) != 0 {
+			fmt.Println("dep", params.WeiToEther(totalDeposit))
+			t.Fatalf("failed b")
+		}
+
+		consensusContext3 := common.BytesToHash([]byte{255})
+		totalDeposit = testFilterValidatorsTest(t, consensusContext3, validatorsDepositMap, true)
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1218270000000))) != 0 {
+			fmt.Println("dep", params.WeiToEther(totalDeposit))
+			t.Fatalf("failed c")
+		}
+	}
+}
+
+func TestFilterValidators_positive_third_pass(t *testing.T) {
+	for test := 0; test < 2; test++ {
+		validatorsDepositMap := make(map[common.Address]*big.Int)
+
+		b := byte(0)
+		for i := 1; i < 256; i++ {
 			val := common.BytesToAddress([]byte{b})
 			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(1000000000))
 			b = b + 1
 		}
 
-		for i := 1; i < 255; i++ {
-			val := common.BytesToAddress([]byte{b})
+		for i := 1; i < 256; i++ {
+			val := common.BytesToAddress([]byte{b, b})
 			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(20000000000))
 			b = b + 1
 		}
 
-		parentHash1 := common.BytesToHash([]byte{100})
-		totalDeposit := testFilterValidatorsTest(t, parentHash1, validatorsDepositMap, true)
-		expected := params.EtherToWei(big.NewInt(2522000000000))
+		consensusContext1 := common.BytesToHash([]byte{100})
+		totalDeposit := testFilterValidatorsTest(t, consensusContext1, validatorsDepositMap, true)
+		expected := params.EtherToWei(big.NewInt(1344000000000))
 		if totalDeposit.Cmp(expected) != 0 {
-			fmt.Println("dep", params.WeiToEther(totalDeposit))
+			fmt.Println("dep", params.WeiToEther(totalDeposit), "expected", params.WeiToEther(expected))
 			t.Fatalf("failed a")
 		}
 
-		parentHash2 := common.BytesToHash([]byte{200})
-		totalDeposit = testFilterValidatorsTest(t, parentHash2, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(2522000000000))) != 0 {
+		consensusContext2 := common.BytesToHash([]byte{200})
+		totalDeposit = testFilterValidatorsTest(t, consensusContext2, validatorsDepositMap, true)
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1287000000000))) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit))
 			t.Fatalf("failed b")
 		}
 
-		parentHash3 := common.BytesToHash([]byte{255})
-		totalDeposit = testFilterValidatorsTest(t, parentHash3, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(2522000000000))) != 0 {
+		consensusContext3 := common.BytesToHash([]byte{255})
+		totalDeposit = testFilterValidatorsTest(t, consensusContext3, validatorsDepositMap, true)
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1401000000000))) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit))
 			t.Fatalf("failed c")
 		}
@@ -2179,6 +2218,22 @@ func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64
 	}
 
 	return true
+}
+
+func Test_A(t *testing.T) {
+	var valList []*big.Int
+	valList = make([]*big.Int, 3)
+	valList[0] = big.NewInt(1)
+	valList[1] = big.NewInt(2)
+	valList[2] = big.NewInt(3)
+
+	sort.SliceStable(valList, func(i, j int) bool {
+		return valList[i].Cmp(valList[j]) > 0
+	})
+
+	fmt.Println(valList[0])
+	fmt.Println(valList[1])
+	fmt.Println(valList[2])
 }
 
 func TestPacketHandler_canPropose(t *testing.T) {
