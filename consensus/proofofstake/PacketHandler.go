@@ -158,8 +158,9 @@ const (
 )
 
 const (
-	MAX_VALIDATORS                                int = 128
-	MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION int = 90 //70% of 128
+	MAX_VALIDATORS                                        int = 128
+	MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION_CUTOFF  int = 90                                                        //70% of 128
+	MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF int = MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION_CUTOFF + 26 //20% of 128
 )
 
 const (
@@ -581,30 +582,60 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 		filteredValidators[validator] = true
 		depositValue := validatorsDepositMap[validator]
 		depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
-		if len(filteredValidators) == MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION || depositValueSoFar.Cmp(blockMinWeightedStake) > 0 {
+		if len(filteredValidators) == MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION_CUTOFF || depositValueSoFar.Cmp(blockMinWeightedStake) > 0 {
 			log.Info("getMaxFilteredValidators first pass", "len(filteredValidators)", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
 			break
 		}
 	}
 
-	//Second pass, fill by consensus context sort order
-	if len(filteredValidators) < MAX_VALIDATORS {
-		//Sort based on consensus context
-		sort.Slice(validatorList, func(i, j int) bool {
-			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
-			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
-			return bytes.Compare(vi, vj) == -1
-		})
-
-		for _, validator := range validatorList {
-			_, ok := filteredValidators[validator]
-			if ok == true {
-				continue
-			}
+	//Second pass, fill based no weighted sort order, but randomness based on consensus context. This ensures those with higher stake have a greater probability of being selected for validation.
+	for _, validator := range validatorList {
+		_, ok := filteredValidators[validator]
+		if ok == true {
+			continue
+		}
+		//Note, we do Keccak256Hash to reduce risk from generation of validator address that are more likely to be lower than just comparing with consensus-context
+		leftHash := crypto.Keccak256Hash(consensusContext.Bytes(), validator.Bytes()).Bytes()
+		rightHash := crypto.Keccak256Hash(validator.Bytes(), consensusContext.Bytes()).Bytes()
+		if bytes.Compare(leftHash, rightHash) > 0 {
 			filteredValidators[validator] = true
-			if len(filteredValidators) == MAX_VALIDATORS {
+			if len(filteredValidators) == MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
 				break
 			}
+		}
+	}
+
+	/*
+		//Third pass, if we didn't fill buffer for second pass, add by original weighted order
+		if len(filteredValidators) < MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
+			for _, validator := range validatorList {
+				_, ok := filteredValidators[validator]
+				if ok == true {
+					continue
+				}
+				filteredValidators[validator] = true
+				if len(filteredValidators) == MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
+					break
+				}
+			}
+		}*/
+
+	//Third pass, fill by consensus context sort order, if the buffer is not full even after second pass. This is to ensure fairness even for validators with lower number of staked coins
+	//Sort based on consensus context
+	sort.Slice(validatorList, func(i, j int) bool {
+		vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
+		vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
+		return bytes.Compare(vi, vj) == -1
+	})
+
+	for _, validator := range validatorList {
+		_, ok := filteredValidators[validator]
+		if ok == true {
+			continue
+		}
+		filteredValidators[validator] = true
+		if len(filteredValidators) == MAX_VALIDATORS {
+			break
 		}
 	}
 
