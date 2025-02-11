@@ -741,7 +741,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= slashStartBlockNumber {
 
 		var slashAmount *big.Int
-		if blockNumber >= SlashV2StartBlock {
+		if blockNumber < SlashV2StartBlock {
 			slashAmount = SLASH_AMOUNT
 		} else {
 			slashAmount = SLASH_AMOUNT_V2

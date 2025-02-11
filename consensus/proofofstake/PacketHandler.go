@@ -555,7 +555,7 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 	validatorsDepositMap := *valDepMap
 
 	depositValueSoFar := big.NewInt(0)
-	blockMinWeightedStake := common.SafeRelativePercentageBigInt(big.NewInt(int64(MAX_VALIDATORS)), MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE)
+	blockMinWeightedStake := common.SafeRelativePercentageBigInt(totalDepositValue, MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE)
 	log.Debug("getMaxFilteredValidators", "blockMinWeightedStake", blockMinWeightedStake, "totalDepositValue", totalDepositValue)
 	filteredValidators := make(map[common.Address]bool)
 
@@ -588,6 +588,8 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 		}
 	}
 
+	log.Trace("validator count after first pass", "filteredValidators", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
+
 	//Second pass, fill based no weighted sort order, but randomness based on consensus context. This ensures those with higher stake have a greater probability of being selected for validation.
 	for _, validator := range validatorList {
 		_, ok := filteredValidators[validator]
@@ -602,23 +604,12 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 			if len(filteredValidators) == MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
 				break
 			}
+		} else {
+			log.Trace("validator skip second pass", "validator", validator)
 		}
 	}
 
-	/*
-		//Third pass, if we didn't fill buffer for second pass, add by original weighted order
-		if len(filteredValidators) < MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
-			for _, validator := range validatorList {
-				_, ok := filteredValidators[validator]
-				if ok == true {
-					continue
-				}
-				filteredValidators[validator] = true
-				if len(filteredValidators) == MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
-					break
-				}
-			}
-		}*/
+	log.Trace("validator count after second pass", "filteredValidators", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
 
 	//Third pass, fill by consensus context sort order, if the buffer is not full even after second pass. This is to ensure fairness even for validators with lower number of staked coins
 	//Sort based on consensus context
