@@ -15,7 +15,6 @@ import (
 	"github.com/QuantumCoinProject/qc/rlp"
 	"math/big"
 	"math/rand"
-	"sort"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -1647,7 +1646,7 @@ func TestPacketHandler_packet_loss_txns_some_unresponsive_extended(t *testing.T)
 }
 
 func testFilterValidatorsTest(t *testing.T, consensusContext common.Hash, validatorsDepositMap map[common.Address]*big.Int, shouldPass bool) *big.Int {
-	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, 1)
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, 1, nil)
 	if err == nil {
 		if shouldPass == false {
 			t.Fatalf("failed")
@@ -1771,6 +1770,63 @@ func TestFilterValidators_positive(t *testing.T) {
 	}
 	fmt.Println("Test4")
 	testFilterValidatorsTest(t, consensusContext, validatorsDepositMap, true)
+}
+
+func TestFilterValidators_offline_validator(t *testing.T) {
+	consensusContext := common.BytesToHash([]byte{100})
+	validatorsDepositMap := make(map[common.Address]*big.Int)
+
+	validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+
+	val1 := common.BytesToAddress([]byte{1})
+	val2 := common.BytesToAddress([]byte{2})
+	val3 := common.BytesToAddress([]byte{3})
+	val4 := common.BytesToAddress([]byte{4})
+
+	validatorsDDetailsMap[val1] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD)),
+		LastNiLBlock:  big.NewInt(int64(OfflineValidatorDeferStartBlock) + int64(10)),
+	}
+
+	validatorsDDetailsMap[val2] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD) - 1),
+		LastNiLBlock:  big.NewInt(int64(OfflineValidatorDeferStartBlock) - 10),
+	}
+
+	validatorsDDetailsMap[val3] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(1),
+		LastNiLBlock:  big.NewInt(int64(OfflineValidatorDeferStartBlock) - 100),
+	}
+
+	validatorsDDetailsMap[val4] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(0),
+		LastNiLBlock:  big.NewInt(0),
+	}
+
+	validatorsDepositMap[val1] = params.EtherToWei(big.NewInt(100000000000))
+	validatorsDepositMap[val2] = params.EtherToWei(big.NewInt(200000000000))
+	validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(400000000000))
+	validatorsDepositMap[val4] = params.EtherToWei(big.NewInt(500000000000))
+
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, OfflineValidatorDeferStartBlock, &validatorsDDetailsMap)
+	if err != nil {
+		log.Error("error", "msg", err)
+		t.Fatalf("failed1")
+	}
+
+	_, ok := resultMap[val1]
+	if ok == true {
+		t.Fatalf("failed2")
+	}
+
+	if len(resultMap) != 3 {
+		t.Fatalf("failed3")
+	}
+
+	if filteredDepositValue.Cmp(params.EtherToWei(big.NewInt(1100000000000))) != 0 {
+		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue)
+		t.Fatalf("failed4")
+	}
 }
 
 func TestFilterValidators_positive_Extended(t *testing.T) {
@@ -2261,22 +2317,6 @@ func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64
 	return true
 }
 
-func Test_A(t *testing.T) {
-	var valList []*big.Int
-	valList = make([]*big.Int, 3)
-	valList[0] = big.NewInt(1)
-	valList[1] = big.NewInt(2)
-	valList[2] = big.NewInt(3)
-
-	sort.SliceStable(valList, func(i, j int) bool {
-		return valList[i].Cmp(valList[j]) > 0
-	})
-
-	fmt.Println(valList[0])
-	fmt.Println(valList[1])
-	fmt.Println(valList[2])
-}
-
 func TestPacketHandler_canPropose(t *testing.T) {
 	if canProposeTest(0, 0, 100, true) == false {
 		t.Fatalf("failed")
@@ -2473,7 +2513,7 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	var blockNumbers = []uint64{1, rewardStartBlockNumber, slashStartBlockNumber, FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
 		FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, STAKING_CONTRACT_V2_CUTOFF_BLOCK, CONSENSUS_CONTEXT_START_BLOCK, CONSENSUS_CONTEXT_MAX_BLOCK_COUNT, VALIDATOR_NIL_BLOCK_START_BLOCK, BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
 		CONTEXT_BASED_START_BLOCK, CONTEXT_BASED_BLOCK_THRESHOLD, BLOCK_TIME_ORIG_START_BLOCK, PACKET_PROTOCOL_START_BLOCK,
-		PROPOSAL_TIME_HASH_START_BLOCK, BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, SixtyVoteStartBlock,
+		PROPOSAL_TIME_HASH_START_BLOCK, BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, SixtyVoteStartBlock, OfflineValidatorDeferStartBlock,
 	}
 
 	for _, b := range blockNumbers {
@@ -2486,4 +2526,33 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	}
 	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 	fmt.Println("TestPacketHandler_basic_various_blocks done")
+}
+
+func canValidateTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64, expected bool) bool {
+	valDetails := &ValidatorDetailsV2{
+		LastNiLBlock:  big.NewInt(lastNilBlock),
+		NilBlockCount: big.NewInt(nilBlockCount),
+	}
+
+	result := canValidate(valDetails, currentBlock)
+	if result != expected {
+		return false
+	}
+
+	return true
+}
+
+func TestPacketHandler_canValidate(t *testing.T) {
+	if canValidateTest(0, 0, 100, true) == false {
+		t.Fatalf("failed1")
+	}
+	if canValidateTest(0, 10, 100, true) == false {
+		t.Fatalf("failed2")
+	}
+	if canValidateTest(int64(OfflineValidatorDeferStartBlock+1000), 127, uint64(OfflineValidatorDeferStartBlock+100), true) == false {
+		t.Fatalf("failed3")
+	}
+	if canValidateTest(int64(OfflineValidatorDeferStartBlock+1000), 128, uint64(OfflineValidatorDeferStartBlock+100), false) == false {
+		t.Fatalf("failed4")
+	}
 }

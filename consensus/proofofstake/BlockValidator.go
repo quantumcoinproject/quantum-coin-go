@@ -402,7 +402,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	}
 
 	valMap := *validatorDepositMap
-	filteredValidators, totalBlockDepositValue, minDepositRequired, err := filterValidators(consensusContext, &valMap, blockNumber)
+	filteredValidators, totalBlockDepositValue, minDepositRequired, err := filterValidators(consensusContext, &valMap, blockNumber, valDetailsMap)
 	if err != nil {
 		return err
 	}
@@ -428,7 +428,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 
 	if blockNumber >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		for valAddr, valDetails := range *valDetailsMap {
-			if valDetails.IsValidationPaused {
+			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidatorDepositMap
 				delete(*valDetailsMap, valAddr)
 				continue
 			}

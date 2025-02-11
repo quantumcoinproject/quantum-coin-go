@@ -115,6 +115,9 @@ var BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER = uint64(2)
 var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT = uint64(1024)
 var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2 = uint64(16384)
 
+var OFFLINE_VALIDATOR_DEFER_THRESHOLD = uint64(128)
+var OFFLINE_VALIDATOR_DEFER_COUNT = uint64(16384)
+
 var MIN_VALIDATORS int = 3
 
 type BlockRoundState byte
@@ -425,22 +428,37 @@ func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[c
 	return proposer, nil
 }
 
+func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool {
+	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
+		return true
+	}
+	if valDetails.NilBlockCount.Uint64() < OFFLINE_VALIDATOR_DEFER_THRESHOLD {
+		return true
+	}
+
+	result := currentBlockNumber >= valDetails.LastNiLBlock.Uint64()+OFFLINE_VALIDATOR_DEFER_COUNT
+
+	log.Debug("canValidate", "validator", valDetails.Validator, "result", result, "currentBlockNumber", currentBlockNumber, "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount)
+
+	return result
+}
+
 func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool {
 	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
 		return true
 	}
 
-	var maxBlockdelay uint64
+	var maxBlockDelay uint64
 	if currentBlockNumber >= BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
-		maxBlockdelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
+		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
 	} else {
-		maxBlockdelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
+		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
 	}
 
 	slotsMissed := float64(valDetails.NilBlockCount.Uint64() / BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER)
 	blockDelay := uint64(math.Pow(2.0, slotsMissed))
-	if blockDelay > maxBlockdelay {
-		blockDelay = maxBlockdelay
+	if blockDelay > maxBlockDelay {
+		blockDelay = maxBlockDelay
 	}
 
 	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
@@ -492,16 +510,26 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	return proposer, nil
 }
 
-func filterValidators(consensusContext common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64) (filteredValidators map[common.Address]bool, filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
+func filterValidators(consensusContext common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) (filteredValidators map[common.Address]bool,
+	filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
+
 	validatorsDepositMap := *valDepMap
 
 	totalDepositValue := big.NewInt(0)
 	valCount := 0
-	for val, depositValue := range validatorsDepositMap { //todo: this should be based on netBalance
+	for val, depositValue := range validatorsDepositMap {
 		if depositValue.Cmp(MIN_VALIDATOR_DEPOSIT) == -1 {
 			log.Trace("Skipping validator with low balance", "val", val, "depositValue", depositValue)
 			delete(validatorsDepositMap, val)
 			continue
+		}
+		if blockNumber >= OfflineValidatorDeferStartBlock {
+			valDetailsMap := *validatorDetailsMap
+			if canValidate(valDetailsMap[val], blockNumber) == false {
+				log.Trace("Skipping offline validator", "val", val, "depositValue", depositValue)
+				delete(validatorsDepositMap, val)
+				continue
+			}
 		}
 		totalDepositValue = common.SafeAddBigInt(totalDepositValue, depositValue)
 		valCount = valCount + 1
@@ -583,7 +611,7 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 		depositValue := validatorsDepositMap[validator]
 		depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
 		if len(filteredValidators) == MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION_CUTOFF || depositValueSoFar.Cmp(blockMinWeightedStake) > 0 {
-			log.Info("getMaxFilteredValidators first pass", "len(filteredValidators)", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
+			log.Trace("getMaxFilteredValidators first pass", "len(filteredValidators)", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
 			break
 		}
 	}
@@ -675,21 +703,25 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		blockStateDetails.consensusContext = parentHash
 	}
 
+	var validatorDetailsMap map[common.Address]*ValidatorDetailsV2
+	if blockNumber >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+		validatorDetailsMap, err = cph.listValidatorsFn(parentHash)
+		if err != nil {
+			log.Error("listValidatorsFn", "err", err)
+			return err
+		}
+	}
+
 	var filteredValidators map[common.Address]bool
-	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(blockStateDetails.consensusContext, &validators, blockNumber)
+	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(blockStateDetails.consensusContext, &validators, blockNumber, &validatorDetailsMap)
 	if err != nil {
 		delete(cph.blockStateDetailsMap, parentHash)
 		return err
 	}
 
 	if blockNumber >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
-		validatorDetailsMap, err := cph.listValidatorsFn(parentHash)
-		if err != nil {
-			log.Error("listValidatorsFn", "err", err)
-			return err
-		}
 		for valAddr, valDetails := range validatorDetailsMap {
-			if valDetails.IsValidationPaused {
+			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidators
 				delete(validatorDetailsMap, valAddr)
 				continue
 			}
