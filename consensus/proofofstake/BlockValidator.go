@@ -23,102 +23,193 @@ type PacketMap struct {
 	commitDetailsMap      map[common.Address]*CommitDetails
 }
 
+type PacketDetail struct {
+	round              byte
+	packetType         ConsensusPacketType
+	proposalDetails    *ProposalDetails
+	proposalAckDetails *ProposalAckDetails
+	precommitDetails   *PreCommitDetails
+	commitDetails      *CommitDetails
+	validator          common.Address
+}
+
+func ParseConsensusPacket(parentHash common.Hash, packet *eth.ConsensusPacket, filteredValidatorDepositMap map[common.Address]*big.Int,
+	blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, consensusContext common.Hash) (packetDetail *PacketDetail, err error) {
+
+	if packet.ParentHash.IsEqualTo(parentHash) == false {
+		return nil, errors.New("unexpected parenthash")
+	}
+
+	if packet.Signature == nil || packet.ConsensusData == nil || len(packet.Signature) == 0 || len(packet.ConsensusData) == 0 {
+		return nil, errors.New("invalid consensus packet, nil data")
+	}
+
+	dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
+	digestHash := crypto.Keccak256(dataToVerify)
+	var pubKey *signaturealgorithm.PublicKey
+
+	var startIndex int
+	if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
+		startIndex = 2
+	} else {
+		startIndex = 1
+	}
+
+	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
+	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength() { //for verify, it is ok not to check the blockNumber for full
+		pubKey, err = cryptobase.SigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
+		if err != nil {
+			return nil, InvalidPacketErr
+		}
+
+		if cryptobase.SigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, []byte{crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID}) == false {
+			return nil, InvalidPacketErr
+		}
+	} else {
+		pubKey, err = cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+		if err != nil {
+			return nil, err
+		}
+		if cryptobase.SigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+			return nil, InvalidPacketErr
+		}
+	}
+
+	validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+	if err != nil {
+		log.Trace("invalid 3", "err", err)
+		return nil, err
+	}
+
+	_, ok := filteredValidatorDepositMap[validator]
+	if ok == false {
+		return nil, errors.New("validator not part of block")
+	}
+
+	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK {
+		details := ProposalDetails{}
+
+		err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
+		if err != nil {
+			return nil, err
+		}
+
+		if details.Round < byte(1) || details.Round > MAX_ROUND {
+			return nil, errors.New("invalid round d")
+		}
+
+		blockProposer, err := getBlockProposer(parentHash, &filteredValidatorDepositMap, details.Round, validatorDetailsMap, blockNumber, consensusContext)
+		if err != nil {
+			return nil, err
+		}
+		if blockProposer.IsEqualTo(validator) == false {
+			log.Warn("invalid block proposer", "expected", blockProposer, "actual", validator)
+			return nil, errors.New("invalid block proposer")
+		}
+		log.Trace("parseconsensuspackets propose", "details.Round", details.Round)
+		packetDetail = &PacketDetail{
+			packetType:      packetType,
+			proposalDetails: &details,
+			validator:       validator,
+			round:           details.Round,
+		}
+		return packetDetail, nil
+	} else if packetType == CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL {
+		details := ProposalAckDetails{}
+
+		err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
+		if err != nil {
+			return nil, err
+		}
+
+		if details.Round < byte(1) || details.Round > MAX_ROUND {
+			return nil, errors.New("invalid round e")
+		}
+
+		packetDetail = &PacketDetail{
+			packetType:         packetType,
+			proposalAckDetails: &details,
+			validator:          validator,
+			round:              details.Round,
+		}
+		return packetDetail, nil
+	} else if packetType == CONSENSUS_PACKET_TYPE_PRECOMMIT_BLOCK {
+		details := PreCommitDetails{}
+
+		err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
+		if err != nil {
+			return nil, err
+		}
+
+		if details.Round < byte(1) || details.Round > MAX_ROUND {
+			return nil, errors.New("invalid round c")
+		}
+
+		packetDetail = &PacketDetail{
+			packetType:       packetType,
+			precommitDetails: &details,
+			validator:        validator,
+			round:            details.Round,
+		}
+		return packetDetail, nil
+	} else if packetType == CONSENSUS_PACKET_TYPE_COMMIT_BLOCK {
+		details := CommitDetails{}
+
+		err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
+		if err != nil {
+			return nil, err
+		}
+
+		if details.Round < byte(1) || details.Round > MAX_ROUND {
+			return nil, errors.New("invalid roun 4")
+		}
+
+		packetDetail = &PacketDetail{
+			packetType:    packetType,
+			commitDetails: &details,
+			validator:     validator,
+			round:         details.Round,
+		}
+		return packetDetail, nil
+	} else {
+		return nil, errors.New("unknown packet type")
+	}
+}
+
 func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.ConsensusPacket, filteredValidatorDepositMap map[common.Address]*big.Int,
 	blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, consensusContext common.Hash) (packetRoundMap map[byte]*PacketMap, err error) {
 	packetRoundMap = make(map[byte]*PacketMap)
 
 	packets := *consensusPackets
 	for index, packet := range packets {
-		if packet.ParentHash.IsEqualTo(parentHash) == false {
-			return nil, errors.New("unexpected parenthash")
-		}
-
-		if packet.Signature == nil || packet.ConsensusData == nil || len(packet.Signature) == 0 || len(packet.ConsensusData) == 0 {
-			return nil, errors.New("invalid consensus packet, nil data")
-		}
-
-		dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
-		digestHash := crypto.Keccak256(dataToVerify)
-		var pubKey *signaturealgorithm.PublicKey
-		var err error
-
-		var startIndex int
-		if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
-			startIndex = 2
-		} else {
-			startIndex = 1
-		}
-
-		packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
-		if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength() { //for verify, it is ok not to check the blockNumber for full
-			pubKey, err = cryptobase.SigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
-			if err != nil {
-				return nil, InvalidPacketErr
-			}
-
-			if cryptobase.SigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, []byte{crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID}) == false {
-				return nil, InvalidPacketErr
-			}
-		} else {
-			pubKey, err = cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
-			if err != nil {
-				return nil, err
-			}
-			if cryptobase.SigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
-				return nil, InvalidPacketErr
-			}
-		}
-
-		validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+		packetDetails, err := ParseConsensusPacket(parentHash, &packet, filteredValidatorDepositMap, blockNumber, validatorDetailsMap, consensusContext)
 		if err != nil {
-			log.Trace("invalid 3", "err", err)
 			return nil, err
 		}
 
-		_, ok := filteredValidatorDepositMap[validator]
+		_, ok := packetRoundMap[packetDetails.round]
 		if ok == false {
-			return nil, errors.New("validator not part of block")
+			packetRoundMap[packetDetails.round] = &PacketMap{
+				round:                 packetDetails.round,
+				proposalDetailsMap:    make(map[common.Address]*ProposalDetails),
+				proposalAckDetailsMap: make(map[common.Address]*ProposalAckDetails),
+				precommitDetailsMap:   make(map[common.Address]*PreCommitDetails),
+				commitDetailsMap:      make(map[common.Address]*CommitDetails),
+			}
 		}
 
-		if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK {
-			details := ProposalDetails{}
-
-			err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
-			if err != nil {
-				return nil, err
-			}
-
-			if details.Round < byte(1) || details.Round > MAX_ROUND {
-				return nil, errors.New("invalid round d")
-			}
-
-			blockProposer, err := getBlockProposer(parentHash, &filteredValidatorDepositMap, details.Round, validatorDetailsMap, blockNumber, consensusContext)
-			if err != nil {
-				return nil, err
-			}
-			if blockProposer.IsEqualTo(validator) == false {
-				log.Warn("invalid block proposer", "expected", blockProposer, "actual", validator)
-				return nil, errors.New("invalid block proposer")
-			}
+		if packetDetails.packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK {
+			details := packetDetails.proposalDetails
 			log.Trace("parseconsensuspackets propose", "details.Round", details.Round)
-			_, ok := packetRoundMap[details.Round]
-			if ok == false {
-				packetRoundMap[details.Round] = &PacketMap{
-					round:                 details.Round,
-					proposalDetailsMap:    make(map[common.Address]*ProposalDetails),
-					proposalAckDetailsMap: make(map[common.Address]*ProposalAckDetails),
-					precommitDetailsMap:   make(map[common.Address]*PreCommitDetails),
-					commitDetailsMap:      make(map[common.Address]*CommitDetails),
-				}
-			}
+
 			packetMap := packetRoundMap[details.Round]
-			pktTest, ok := packetMap.proposalDetailsMap[validator]
+			pktTest, ok := packetMap.proposalDetailsMap[packetDetails.validator]
 			if ok == true {
-				log.Trace("duplicate proposal packet", "validator", validator, "details.Round", details.Round,
+				log.Trace("duplicate proposal packet", "validator", packetDetails.validator, "details.Round", details.Round,
 					"txn count", len(details.Txns), "pktTest.Round", pktTest.Round, "len(pktTest.Txns)", len(pktTest.Txns), "index", index, "len(*consensusPackets)", len(*consensusPackets))
 				return nil, errors.New("duplicate proposal packet")
 			} else {
-				log.Trace("proposal packet", "validator", validator, "Round", details.Round, "count", len(details.Txns), "index", index)
+				log.Trace("proposal packet", "validator", packetDetails.validator, "Round", details.Round, "count", len(details.Txns), "index", index)
 			}
 			proposalDetails := &ProposalDetails{
 				Round: details.Round,
@@ -127,35 +218,14 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 			for i, txn := range details.Txns {
 				proposalDetails.Txns[i].CopyFrom(txn)
 			}
-			packetMap.proposalDetailsMap[validator] = proposalDetails
+			packetMap.proposalDetailsMap[packetDetails.validator] = proposalDetails
 			packetRoundMap[details.Round] = packetMap
-		} else if packetType == CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL {
-			details := ProposalAckDetails{}
-
-			err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
-			if err != nil {
-				return nil, err
-			}
-
-			if details.Round < byte(1) || details.Round > MAX_ROUND {
-				return nil, errors.New("invalid round e")
-			}
-
-			_, ok := packetRoundMap[details.Round]
-			if ok == false {
-				packetRoundMap[details.Round] = &PacketMap{
-					round:                 details.Round,
-					proposalDetailsMap:    make(map[common.Address]*ProposalDetails),
-					proposalAckDetailsMap: make(map[common.Address]*ProposalAckDetails),
-					precommitDetailsMap:   make(map[common.Address]*PreCommitDetails),
-					commitDetailsMap:      make(map[common.Address]*CommitDetails),
-				}
-			}
-
+		} else if packetDetails.packetType == CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL {
+			details := packetDetails.proposalAckDetails
 			packetMap := packetRoundMap[details.Round]
-			_, ok = packetMap.proposalAckDetailsMap[validator]
+			_, ok := packetMap.proposalAckDetailsMap[packetDetails.validator]
 			if ok == true {
-				log.Warn("duplicate ack proposal packet", "validator", validator)
+				log.Warn("duplicate ack proposal packet", "validator", packetDetails.validator)
 				return nil, errors.New("duplicate ack proposal packet")
 			}
 			proposalAckDetails := &ProposalAckDetails{
@@ -173,35 +243,15 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 				return nil, errors.New("invalid vote type expecting nil")
 			}
 
-			packetMap.proposalAckDetailsMap[validator] = proposalAckDetails
+			packetMap.proposalAckDetailsMap[packetDetails.validator] = proposalAckDetails
 			packetRoundMap[details.Round] = packetMap
-		} else if packetType == CONSENSUS_PACKET_TYPE_PRECOMMIT_BLOCK {
-			details := PreCommitDetails{}
-
-			err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
-			if err != nil {
-				return nil, err
-			}
-
-			if details.Round < byte(1) || details.Round > MAX_ROUND {
-				return nil, errors.New("invalid round c")
-			}
-
-			_, ok := packetRoundMap[details.Round]
-			if ok == false {
-				packetRoundMap[details.Round] = &PacketMap{
-					round:                 details.Round,
-					proposalDetailsMap:    make(map[common.Address]*ProposalDetails),
-					proposalAckDetailsMap: make(map[common.Address]*ProposalAckDetails),
-					precommitDetailsMap:   make(map[common.Address]*PreCommitDetails),
-					commitDetailsMap:      make(map[common.Address]*CommitDetails),
-				}
-			}
+		} else if packetDetails.packetType == CONSENSUS_PACKET_TYPE_PRECOMMIT_BLOCK {
+			details := packetDetails.precommitDetails
 
 			packetMap := packetRoundMap[details.Round]
-			_, ok = packetMap.precommitDetailsMap[validator]
+			_, ok := packetMap.precommitDetailsMap[packetDetails.validator]
 			if ok == true {
-				log.Warn("duplicate precommit packet", "validator", validator)
+				log.Warn("duplicate precommit packet", "validator", packetDetails.validator)
 				return nil, errors.New("duplicate precommit packet")
 			}
 			precommitDetails := &PreCommitDetails{
@@ -209,34 +259,15 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 			}
 			precommitDetails.PrecommitHash.CopyFrom(details.PrecommitHash)
 
-			packetMap.precommitDetailsMap[validator] = precommitDetails
+			packetMap.precommitDetailsMap[packetDetails.validator] = precommitDetails
 			packetRoundMap[details.Round] = packetMap
-		} else if packetType == CONSENSUS_PACKET_TYPE_COMMIT_BLOCK {
-			details := CommitDetails{}
+		} else if packetDetails.packetType == CONSENSUS_PACKET_TYPE_COMMIT_BLOCK {
+			details := packetDetails.commitDetails
 
-			err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
-			if err != nil {
-				return nil, err
-			}
-
-			if details.Round < byte(1) || details.Round > MAX_ROUND {
-				return nil, errors.New("invalid roun 4")
-			}
-
-			_, ok := packetRoundMap[details.Round]
-			if ok == false {
-				packetRoundMap[details.Round] = &PacketMap{
-					round:                 details.Round,
-					proposalDetailsMap:    make(map[common.Address]*ProposalDetails),
-					proposalAckDetailsMap: make(map[common.Address]*ProposalAckDetails),
-					precommitDetailsMap:   make(map[common.Address]*PreCommitDetails),
-					commitDetailsMap:      make(map[common.Address]*CommitDetails),
-				}
-			}
 			packetMap := packetRoundMap[details.Round]
-			_, ok = packetMap.commitDetailsMap[validator]
+			_, ok := packetMap.commitDetailsMap[packetDetails.validator]
 			if ok == true {
-				log.Warn("duplicate commit packet", "validator", validator)
+				log.Warn("duplicate commit packet", "validator", packetDetails.validator)
 				return nil, errors.New("duplicate commit packet")
 			}
 			commitDetails := &CommitDetails{
@@ -244,7 +275,7 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 			}
 			commitDetails.CommitHash.CopyFrom(details.CommitHash)
 
-			packetMap.commitDetailsMap[validator] = commitDetails
+			packetMap.commitDetailsMap[packetDetails.validator] = commitDetails
 			packetRoundMap[details.Round] = packetMap
 		} else {
 			return nil, errors.New("unknown packet type")
