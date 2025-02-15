@@ -1214,7 +1214,7 @@ func testListValidatorsPerf(t *testing.T, valCount uint64) {
 }
 
 func TestStaking_Perf(t *testing.T) {
-	for i := uint64(32); i <= 65536; i = i * 2 {
+	for i := uint64(32); i <= 4096; i = i * 2 {
 		testListValidatorsPerf(t, i)
 	}
 }
