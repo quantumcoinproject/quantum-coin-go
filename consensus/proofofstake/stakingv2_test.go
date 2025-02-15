@@ -1198,6 +1198,8 @@ func testListValidatorsPerf(t *testing.T, valCount uint64) {
 	if uint64(len(valList)) != valCount {
 		t.Fatal("failed valCount")
 	}
+	log.Info("testListValidatorsPerf", "valCount", valCount, "time taken ListValidators", time.Since(startTime))
+	startTime = time.Now()
 	for _, v := range valList {
 		_, err = GetDepositorOfValidator(state, v)
 		if err != nil {
