@@ -21,6 +21,7 @@ import (
 	"math/big"
 	"strconv"
 	"testing"
+	"time"
 )
 
 const STAKING_CONTRACT_V2 = "0x0000000000000000000000000000000000000000000000000000000000001000"
@@ -1170,4 +1171,48 @@ func TestStaking_Basic(t *testing.T) {
 
 	fmt.Println("StakingDetails withdrawalblock", stakingDetails.WithdrawalBlock.Uint64())
 	fmt.Println("StakingDetails withdrawalbamount", stakingDetails.WithdrawalAmount.Uint64())
+}
+
+func testListValidatorsPerf(t *testing.T, valCount uint64) {
+	state := newStakingStateDb()
+
+	for i := uint64(1); i <= valCount; i++ {
+		depositor := common.RandomAddress()
+		validator := common.RandomAddress()
+
+		balance := params.EtherToWei(big.NewInt(10000000))
+		state.SetBalance(depositor, balance)
+		//state.Finalise(true)
+
+		err := NewDeposit(state, depositor, validator, MIN_VALIDATOR_DEPOSIT)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	startTime := time.Now()
+	valList, err := ListValidators(state)
+	if err != nil {
+		t.Fatal("failed ListValidators")
+	}
+	if uint64(len(valList)) != valCount {
+		t.Fatal("failed valCount")
+	}
+	for _, v := range valList {
+		_, err = GetDepositorOfValidator(state, v)
+		if err != nil {
+			t.Fatal("failed GetDepositorOfValidator")
+		}
+		_, err = GetStakingDetails(state, v)
+		if err != nil {
+			t.Fatal("failed GetStakingDetails")
+		}
+	}
+	log.Info("testListValidatorsPerf", "valCount", valCount, "time taken", time.Since(startTime))
+}
+
+func TestStaking_Perf(t *testing.T) {
+	for i := uint64(32); i <= 65536; i = i * 2 {
+		testListValidatorsPerf(t, i)
+	}
 }
