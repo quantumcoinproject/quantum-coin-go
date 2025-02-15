@@ -129,6 +129,8 @@ type NewRoundReason byte
 var InvalidPacketErr = errors.New("invalid packet")
 var OutOfOrderPackerErr = errors.New("packet received out of order")
 var UnknownParentHashErr = errors.New("unknown parent hash")
+var PacketsOverLimitErr = errors.New("packet count exceeded threshold")
+var UnknownPacketTypeErr = errors.New("unknown packet type")
 
 const (
 	BLOCK_STATE_UNKNOWN                   BlockRoundState = 0
