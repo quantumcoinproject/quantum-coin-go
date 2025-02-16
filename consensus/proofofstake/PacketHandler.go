@@ -696,7 +696,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		if err != nil {
 			return err
 		}
-		blockContext, err := cph.getBlockConsensusContext(contextKey, cph.currentParentHash)
+		blockContext, err := cph.getBlockConsensusContext(contextKey, parentHash)
 		if err != nil {
 			return err
 		}
