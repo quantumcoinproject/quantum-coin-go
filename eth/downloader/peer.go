@@ -20,7 +20,6 @@
 package downloader
 
 import (
-	"context"
 	"errors"
 	"math/big"
 	"sort"
@@ -46,7 +45,7 @@ var (
 	errNotRegistered     = errors.New("peer is not registered")
 )
 
-var limiter = rate.NewLimiter(rate.Every(6*time.Second), 1) //todo: adjust this dynamically depending on Finalize() speed
+var limiter = rate.NewLimiter(rate.Every(60*time.Second), 10) //todo: adjust this dynamically depending on Finalize() speed
 
 // peerConnection represents an active peer from which hashes and blocks are retrieved.
 type peerConnection struct {
@@ -135,7 +134,10 @@ func (p *peerConnection) Reset() {
 
 // FetchHeaders sends a header retrieval request to the remote peer.
 func (p *peerConnection) FetchHeaders(from uint64, count int) error {
-	limiter.Wait(context.Background())
+	if !limiter.Allow() {
+		log.Trace("Skipping FetchHeaders")
+		return nil
+	}
 
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.headerIdle, 0, 1) {
