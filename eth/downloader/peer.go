@@ -32,7 +32,6 @@ import (
 	"github.com/QuantumCoinProject/qc/event"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/p2p/msgrate"
-	"golang.org/x/time/rate"
 )
 
 const (
@@ -44,8 +43,6 @@ var (
 	errAlreadyRegistered = errors.New("peer is already registered")
 	errNotRegistered     = errors.New("peer is not registered")
 )
-
-var limiter = rate.NewLimiter(rate.Every(60*time.Second), 10) //todo: adjust this dynamically depending on Finalize() speed
 
 // peerConnection represents an active peer from which hashes and blocks are retrieved.
 type peerConnection struct {
@@ -134,11 +131,6 @@ func (p *peerConnection) Reset() {
 
 // FetchHeaders sends a header retrieval request to the remote peer.
 func (p *peerConnection) FetchHeaders(from uint64, count int) error {
-	if !limiter.Allow() {
-		log.Trace("Skipping FetchHeaders", "peer", p.id)
-		return nil
-	}
-
 	// Short circuit if the peer is already fetching
 	if !atomic.CompareAndSwapInt32(&p.headerIdle, 0, 1) {
 		return errAlreadyFetching
