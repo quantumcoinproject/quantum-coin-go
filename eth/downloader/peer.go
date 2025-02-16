@@ -135,7 +135,7 @@ func (p *peerConnection) Reset() {
 // FetchHeaders sends a header retrieval request to the remote peer.
 func (p *peerConnection) FetchHeaders(from uint64, count int) error {
 	if !limiter.Allow() {
-		log.Trace("Skipping FetchHeaders")
+		log.Trace("Skipping FetchHeaders", "peer", p.id)
 		return nil
 	}
 
