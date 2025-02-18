@@ -217,7 +217,7 @@ var (
 	defaultFreezerMode = ethconfig.Defaults.FreezerMode
 	FreezerMode        = cli.StringFlag{
 		Name:  "freezermode",
-		Usage: `If empty or skipall, skips freezer. if skipappend, skips appending to ancient (chaindata) but truncates from current db. if skipnone, truncates from current db and appends to ancient.'`,
+		Usage: `If empty or skipall, skips freezer. if skipancient, skips appending to ancient (chaindata) but truncates from current db. if skipnone, truncates from current db and appends to ancient.'`,
 	}
 	GCModeFlag = cli.StringFlag{
 		Name:  "gcmode",
@@ -1773,7 +1773,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	} else {
 		name := "chaindata"
 		freezerMode := ctx.GlobalString(FreezerMode.Name)
-		if freezerMode != "" && freezerMode != "skipall" && freezerMode != "skipappend" && freezerMode != "skipnone" {
+		if freezerMode != "" && freezerMode != "skipall" && freezerMode != "skipancient" && freezerMode != "skipnone" {
 			log.Warn("freezerMode is incorrect. setting to default", "freezerMode", freezerMode)
 			freezerMode = ""
 		}
