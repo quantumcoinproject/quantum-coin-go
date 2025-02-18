@@ -211,7 +211,7 @@ func verifyState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
-		log.Error("Failed to load head block")
+		log.Error("verifyState: Failed to load head block")
 		return errors.New("no head block")
 	}
 	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, headBlock.Root(), false, false, false)
@@ -249,7 +249,7 @@ func traverseState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
-		log.Error("Failed to load head block")
+		log.Error("traverseState: Failed to load head block")
 		return errors.New("no head block")
 	}
 	if ctx.NArg() > 1 {
@@ -339,7 +339,7 @@ func traverseRawState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
-		log.Error("Failed to load head block")
+		log.Error("traverseRawState: Failed to load head block")
 		return errors.New("no head block")
 	}
 	if ctx.NArg() > 1 {
