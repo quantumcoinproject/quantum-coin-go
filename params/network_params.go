@@ -59,7 +59,7 @@ const (
 	// the freezer as the cutoff threshold and by clique as the snapshot trust limit.
 	FullImmutabilityThreshold = 9000000000
 
-	FreezerFullImmutabilityThreshold = 90000
+	FreezerFullImmutabilityThreshold = 9000000000
 
 	// LightImmutabilityThreshold is the number of blocks after which a header chain
 	// segment is considered immutable for light client(i.e. soft finality). It is used by
