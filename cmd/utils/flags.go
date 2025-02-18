@@ -1483,7 +1483,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 		cfg.FreezerMode = ctx.GlobalString(FreezerModeFlag.Name)
 		log.Info("FreezerModeFlag is set", "FreezerMode", cfg.FreezerMode)
 	} else {
-		cfg.FreezerMode = rawdb.FreezerModeSkipAll
 		log.Info("FreezerModeFlag is not set")
 	}
 	setEtherbase(ctx, ks, cfg)
@@ -1781,10 +1780,7 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 	} else {
 		name := "chaindata"
 		freezerMode := ctx.GlobalString(FreezerModeFlag.Name)
-		if freezerMode == "" {
-			freezerMode = rawdb.FreezerModeSkipAll
-		}
-		if freezerMode == rawdb.FreezerModeSkipAll || freezerMode == rawdb.FreezerModeSkipAppend || freezerMode == rawdb.FreezerModeSkipNone {
+		if freezerMode == "" || freezerMode == rawdb.FreezerModeSkipAll || freezerMode == rawdb.FreezerModeSkipAppend || freezerMode == rawdb.FreezerModeSkipNone {
 			log.Info("MakeChainDatabase OpenDatabaseWithFreezer", "freezerMode", freezerMode)
 			chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly, freezerMode)
 		} else {

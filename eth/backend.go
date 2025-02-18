@@ -118,10 +118,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	// Assemble the Ethereum object
 	freezerMode := config.FreezerMode
-	if freezerMode == "" {
-		freezerMode = rawdb.FreezerModeSkipAll
-	}
-	if freezerMode == rawdb.FreezerModeSkipAll || freezerMode == rawdb.FreezerModeSkipAppend || freezerMode == rawdb.FreezerModeSkipNone {
+	if freezerMode == "" || freezerMode == rawdb.FreezerModeSkipAll || freezerMode == rawdb.FreezerModeSkipAppend || freezerMode == rawdb.FreezerModeSkipNone {
 		log.Info("Backend OpenDatabaseWithFreezer", "freezerMode", freezerMode)
 	} else {
 		log.Warn("Backend freezerMode is incorrect. setting to default", "freezerMode", freezerMode)

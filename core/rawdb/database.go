@@ -179,7 +179,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 			// We might have duplicate blocks (crash after freezer write but before key-value
 			// store deletion, but that's fine).
 		} else {
-			if freezerMode == FreezerModeSkipAppend || freezerMode == FreezerModeSkipAll {
+			if freezerMode == FreezerModeSkipAppend {
 				log.Info("NewDatabaseWithFreezer set to skipappend, skipping startup check")
 			} else {
 				// If the freezer is empty, ensure nothing was moved yet from the key-value

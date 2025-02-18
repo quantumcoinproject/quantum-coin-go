@@ -206,6 +206,7 @@ func (f *freezer) AncientSize(kind string) (uint64, error) {
 // injection will be rejected. But if two injections with same number happen at
 // the same time, we can get into the trouble.
 func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td []byte) (err error) {
+	log.Info("=============AppendAncient")
 	if f.readonly {
 		return errReadOnly
 	}
@@ -288,7 +289,7 @@ func (f *freezer) Sync() error {
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
 func (f *freezer) freeze(db ethdb.KeyValueStore) {
-	if f.freezerMode == FreezerModeSkipAll {
+	if f.freezerMode == FreezerModeSkipAll || f.freezerMode == "" {
 		log.Info("Freezer skipping", "freezerMode", f.freezerMode)
 		return
 	}
@@ -361,7 +362,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			limit = f.frozen + freezerBatchLimit
 		}
 
-		log.Trace("Freezer info", "limit", limit, "frozen", f.frozen, "number", *number, "threshold", threshold)
+		log.Info("free info", "limit", limit, "frozen", f.frozen, "number", *number, "threshold", threshold)
 
 		var (
 			start    = time.Now()
@@ -409,7 +410,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			log.Error("Freezer unexpected freezerMode")
 			return
 		}
-		log.Trace("Freezer truncating", "length", len(ancients))
+		log.Info("============Freezer truncating", "length", len(ancients))
 
 		// Batch of blocks have been frozen, flush them before wiping from leveldb
 		if err := f.Sync(); err != nil {
