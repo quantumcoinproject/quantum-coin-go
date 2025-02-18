@@ -98,7 +98,6 @@ The dumpgenesis command dumps the genesis block configuration in JSON format to 
 			utils.MetricsInfluxDBPasswordFlag,
 			utils.MetricsInfluxDBTagsFlag,
 			utils.TxLookupLimitFlag,
-			utils.FreezerMode,
 		},
 		Category: "BLOCKCHAIN COMMANDS",
 		Description: `

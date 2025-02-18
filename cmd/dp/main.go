@@ -151,7 +151,6 @@ var (
 		utils.EnableBackupsFlag,
 		utils.RebroadcastCountFlag,
 		utils.ProfPortFlag,
-		utils.FreezerMode,
 	}
 
 	rpcFlags = []cli.Flag{
