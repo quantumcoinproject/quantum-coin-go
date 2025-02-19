@@ -19,6 +19,7 @@ package ethconfig
 
 import (
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
+	"github.com/QuantumCoinProject/qc/core/rawdb"
 	"github.com/QuantumCoinProject/qc/internal/ethapi"
 	"math/big"
 	"os"
@@ -60,7 +61,7 @@ var LightClientGPO = gasprice.Config{
 // Defaults contains default settings for use on the Ethereum main net.
 var Defaults = Config{
 	SyncMode:                downloader.FullSync,
-	FreezerMode:             "",
+	FreezerMode:             rawdb.FreezerModeSkipAll,
 	NetworkId:               1,
 	TxLookupLimit:           2350000,
 	LightPeers:              100,
