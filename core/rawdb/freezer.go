@@ -409,7 +409,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			log.Error("Freezer unexpected freezerMode")
 			return
 		}
-		log.Trace("Freezer truncating", "length", len(ancients))
+		log.Info("Freezer truncating", "length", len(ancients), "frozen", f.frozen)
 
 		// Batch of blocks have been frozen, flush them before wiping from leveldb
 		if err := f.Sync(); err != nil {
