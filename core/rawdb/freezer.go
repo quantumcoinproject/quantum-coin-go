@@ -385,7 +385,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 				break
 			}
 			log.Trace("Deep froze ancient block", "number", f.frozen, "hash", hash)
-			if f.freezerMode == "skipancient" {
+			if f.freezerMode == "skipappend" {
 				log.Debug("skipping appending to ancient")
 			} else {
 				// Inject all the components into the relevant data tables
@@ -396,8 +396,8 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			ancients = append(ancients, hash)
 		}
 
-		//since only allowed modes are "","skipall","skipancient", "skipnone" and we alrready checked for skipall at start of function
-		if f.freezerMode != "skipancient" && f.freezerMode != "skipnone" {
+		//since only allowed modes are "","skipall","skipappend", "skipnone" and we already checked for skipall at start of function
+		if f.freezerMode != "skipappend" && f.freezerMode != "skipnone" {
 			log.Warn("unexpected freezerMode")
 			return
 		}
