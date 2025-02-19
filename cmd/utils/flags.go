@@ -214,6 +214,11 @@ var (
 		Usage: `Blockchain sync mode ("fast", "full", "snap" or "light")`,
 		Value: &defaultSyncMode,
 	}
+	defaultFreezerMode = ethconfig.Defaults.FreezerMode
+	FreezerMode        = cli.StringFlag{
+		Name:  "freezermode",
+		Usage: `If empty or skipall, skips freezer. if skipancient, skips appending to ancient (chaindata) but truncates from current db. if skipnone, truncates from current db and appends to ancient.'`,
+	}
 	GCModeFlag = cli.StringFlag{
 		Name:  "gcmode",
 		Usage: `Blockchain garbage collection mode ("full", "archive")`,
@@ -1767,7 +1772,12 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		chainDb, err = stack.OpenDatabase(name, cache, handles, "", readonly)
 	} else {
 		name := "chaindata"
-		chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly)
+		freezerMode := ctx.GlobalString(FreezerMode.Name)
+		if freezerMode != "" && freezerMode != "skipall" && freezerMode != "skipancient" && freezerMode != "skipnone" {
+			log.Warn("freezerMode is incorrect. setting to default", "freezerMode", freezerMode)
+			freezerMode = ""
+		}
+		chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly, freezerMode)
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)

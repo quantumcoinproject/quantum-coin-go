@@ -78,6 +78,7 @@ type freezer struct {
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	readonly     bool
+	freezerMode  string
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
 
@@ -90,7 +91,7 @@ type freezer struct {
 
 // newFreezer creates a chain freezer that moves ancient chain data into
 // append-only flat file containers.
-func newFreezer(datadir string, namespace string, readonly bool) (*freezer, error) {
+func newFreezer(datadir string, namespace string, readonly bool, freezerMode string) (*freezer, error) {
 	// Create the initial freezer object
 	var (
 		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
@@ -118,6 +119,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		instanceLock: lock,
 		trigger:      make(chan chan struct{}),
 		quit:         make(chan struct{}),
+		freezerMode:  freezerMode,
 	}
 	for name, disableSnappy := range FreezerNoSnappy {
 		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
@@ -280,6 +282,11 @@ func (f *freezer) Sync() error {
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
 func (f *freezer) freeze(db ethdb.KeyValueStore) {
+	if f.freezerMode == "skipall" || f.freezerMode == "" {
+		log.Debug("skipping freeze")
+		return
+	}
+
 	nfdb := &nofreezedb{KeyValueStore: db}
 
 	var (
@@ -320,7 +327,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 		switch {
 		case number == nil:
-			log.Error("Current full block number unavailable", "hash", hash)
+			log.Debug("Current full block number unavailable", "hash", hash)
 			backoff = true
 			continue
 
@@ -378,12 +385,23 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 				break
 			}
 			log.Trace("Deep froze ancient block", "number", f.frozen, "hash", hash)
-			// Inject all the components into the relevant data tables
-			if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, td); err != nil {
-				break
+			if f.freezerMode == "skipancient" {
+				log.Debug("skipping appending to ancient")
+			} else {
+				// Inject all the components into the relevant data tables
+				if err := f.AppendAncient(f.frozen, hash[:], header, body, receipts, td); err != nil {
+					break
+				}
 			}
 			ancients = append(ancients, hash)
 		}
+
+		//since only allowed modes are "","skipall","skipancient", "skipnone" and we alrready checked for skipall at start of function
+		if f.freezerMode != "skipancient" && f.freezerMode != "skipnone" {
+			log.Warn("unexpected freezerMode")
+			return
+		}
+
 		// Batch of blocks have been frozen, flush them before wiping from leveldb
 		if err := f.Sync(); err != nil {
 			log.Crit("Failed to flush frozen tables", "err", err)
@@ -459,7 +477,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		if n := len(ancients); n > 0 {
 			context = append(context, []interface{}{"hash", ancients[n-1]}...)
 		}
-		log.Info("Deep froze chain segment", context...)
+		log.Debug("Deep froze chain segment", context...)
 
 		// Avoid database thrashing with tiny writes
 		if f.frozen-first < freezerBatchLimit {
