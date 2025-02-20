@@ -458,6 +458,9 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool 
 	}
 
 	slotsMissed := float64(valDetails.NilBlockCount.Uint64() / BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER)
+	if slotsMissed >= 16 { //to avoid overflow errors
+		slotsMissed = 16
+	}
 	blockDelay := uint64(math.Pow(2.0, slotsMissed))
 	if blockDelay > maxBlockDelay {
 		blockDelay = maxBlockDelay
@@ -465,8 +468,8 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool 
 
 	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
 	result := currentBlockNumber >= nextProposalBlock
-	log.Debug("canPropose", "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount,
-		"slotsMissed", slotsMissed, "blockDelay", blockDelay, "nextProposalBlock", nextProposalBlock,
+	log.Info("canPropose", "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount,
+		"slotsMissed", slotsMissed, "blockDelay", blockDelay, "nextProposalBlock", nextProposalBlock, "maxBlockDelay", maxBlockDelay,
 		"currentBlockNumber", currentBlockNumber, "canPropose", result, "validator", valDetails.Validator)
 	return result
 }

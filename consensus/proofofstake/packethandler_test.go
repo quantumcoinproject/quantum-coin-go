@@ -1930,6 +1930,10 @@ func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64
 }
 
 func TestPacketHandler_canPropose(t *testing.T) {
+	if canProposeTest(1744781, 128000, 1744781, false) == false {
+		t.Fatalf("failed")
+	}
+
 	if canProposeTest(0, 0, 100, true) == false {
 		t.Fatalf("failed")
 	}
