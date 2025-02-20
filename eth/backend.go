@@ -117,7 +117,18 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	log.Info("Allocated trie memory caches", "clean", common.StorageSize(config.TrieCleanCache)*1024*1024, "dirty", common.StorageSize(config.TrieDirtyCache)*1024*1024)
 
 	// Assemble the Ethereum object
-	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false)
+	freezerMode := config.FreezerMode
+	if freezerMode == "" {
+		freezerMode = rawdb.FreezerModeSkipAll
+	}
+	if freezerMode == rawdb.FreezerModeSkipAll || freezerMode == rawdb.FreezerModeSkipAppend || freezerMode == rawdb.FreezerModeSkipNone {
+		log.Info("Backend OpenDatabaseWithFreezer", "freezerMode", freezerMode)
+	} else {
+		log.Warn("Backend freezerMode is incorrect. setting to default", "freezerMode", freezerMode)
+		freezerMode = ""
+	}
+
+	chainDb, err := stack.OpenDatabaseWithFreezer("chaindata", config.DatabaseCache, config.DatabaseHandles, config.DatabaseFreezer, "eth/db/chaindata/", false, config.FreezerMode)
 	if err != nil {
 		return nil, err
 	}

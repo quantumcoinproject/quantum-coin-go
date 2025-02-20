@@ -8,5 +8,3 @@ import (
 var SigAlg = hybrideds.CreateHybridedsSig(true)
 
 var DRNG = &ChaCha20.ChaCha20DRNGInitializer{}
-
-//var SigAlg = mocksignaturealgorithm.CreateMockSig()

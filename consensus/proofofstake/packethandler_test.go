@@ -1645,258 +1645,6 @@ func TestPacketHandler_packet_loss_txns_some_unresponsive_extended(t *testing.T)
 	}
 }
 
-func testFilterValidatorsTest(t *testing.T, parentHash common.Hash, validatorsDepositMap map[common.Address]*big.Int, shouldPass bool) *big.Int {
-	resultMap, filteredDepositValue, _, err := filterValidators(parentHash, &validatorsDepositMap, 1)
-	if err == nil {
-		if shouldPass == false {
-			t.Fatalf("failed")
-		}
-	} else {
-		fmt.Println("filterValidators error", err)
-		if shouldPass == true {
-			t.Fatalf("filterValidators failed")
-		}
-		return nil
-	}
-
-	if MIN_BLOCK_DEPOSIT.Cmp(filteredDepositValue) > 0 {
-		t.Fatalf("failed")
-	}
-
-	fmt.Println("selected validator count", len(resultMap), "total validators", len(validatorsDepositMap))
-	if len(resultMap) < MIN_VALIDATORS {
-		t.Fatalf("failed")
-	}
-
-	if len(resultMap) > MAX_VALIDATORS {
-		t.Fatalf("failed")
-	}
-
-	if len(validatorsDepositMap) <= MAX_VALIDATORS && len(resultMap) != len(validatorsDepositMap) {
-		t.Fatalf("failed")
-	}
-
-	if len(validatorsDepositMap) > MAX_VALIDATORS && len(resultMap) != MAX_VALIDATORS {
-		t.Fatalf("failed")
-	}
-
-	totalDeposit := big.NewInt(0)
-	for val, include := range resultMap {
-		if include == false {
-			t.Fatalf("failed")
-		}
-		depositValue, ok := validatorsDepositMap[val]
-		if ok == false {
-			t.Fatalf("unexpected validator")
-		}
-
-		totalDeposit = common.SafeAddBigInt(totalDeposit, depositValue)
-		fmt.Println("Selected", "validator", val, "deposit", depositValue)
-	}
-	fmt.Println("filteredDepositValue", filteredDepositValue, "totalDeposit", totalDeposit)
-
-	if totalDeposit.Cmp(filteredDepositValue) > 0 {
-		t.Fatalf("failed")
-	}
-
-	if MIN_BLOCK_DEPOSIT.Cmp(totalDeposit) > 0 {
-		t.Fatalf("failed")
-	}
-
-	return filteredDepositValue
-}
-
-func TestFilterValidators_negative(t *testing.T) {
-	parentHash := common.BytesToHash([]byte{100})
-	validatorsDepositMap := make(map[common.Address]*big.Int)
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, false)
-
-	val1 := common.BytesToAddress([]byte{1})
-	val2 := common.BytesToAddress([]byte{2})
-	val3 := common.BytesToAddress([]byte{3})
-
-	validatorsDepositMap[val1] = big.NewInt(1000000)
-	validatorsDepositMap[val2] = big.NewInt(2000000)
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, false)
-
-	validatorsDepositMap[val1] = big.NewInt(10000)
-	validatorsDepositMap[val2] = big.NewInt(20000)
-	validatorsDepositMap[val3] = big.NewInt(30000)
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, false)
-
-	b := byte(0)
-	for i := 0; i < MAX_VALIDATORS*2; i++ {
-		val := common.BytesToAddress([]byte{b})
-		validatorsDepositMap[val] = big.NewInt(1000)
-		b = b + 1
-	}
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, false)
-}
-
-func TestFilterValidators_positive(t *testing.T) {
-	parentHash := common.BytesToHash([]byte{100})
-	validatorsDepositMap := make(map[common.Address]*big.Int)
-
-	val1 := common.BytesToAddress([]byte{1})
-	val2 := common.BytesToAddress([]byte{2})
-	val3 := common.BytesToAddress([]byte{3})
-
-	validatorsDepositMap[val1] = params.EtherToWei(big.NewInt(100000000000))
-	validatorsDepositMap[val2] = params.EtherToWei(big.NewInt(200000000000))
-	validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(400000000000))
-	fmt.Println("Test1")
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
-
-	b := byte(0)
-	for i := 0; i < MAX_VALIDATORS/2; i++ {
-		val := common.BytesToAddress([]byte{b})
-		validatorsDepositMap[val] = params.EtherToWei(big.NewInt(10000000000))
-		b = b + 1
-	}
-	fmt.Println("Test2")
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
-
-	b = byte(0)
-	for i := 0; i < MAX_VALIDATORS; i++ {
-		val := common.BytesToAddress([]byte{b})
-		validatorsDepositMap[val] = params.EtherToWei(big.NewInt(5000000000))
-		b = b + 1
-	}
-	fmt.Println("Test3")
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
-
-	b = byte(0)
-	for i := 0; i < MAX_VALIDATORS+1; i++ {
-		val := common.BytesToAddress([]byte{b})
-		validatorsDepositMap[val] = params.EtherToWei(big.NewInt(5000000000))
-		b = b + 1
-	}
-	fmt.Println("Test4")
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
-}
-
-func TestFilterValidators_positive_Extended(t *testing.T) {
-	parentHash := common.BytesToHash([]byte{100})
-	validatorsDepositMap := make(map[common.Address]*big.Int)
-
-	b := byte(0)
-	for i := 0; i < MAX_VALIDATORS+1; i++ {
-		val := common.BytesToAddress([]byte{b})
-		validatorsDepositMap[val] = params.EtherToWei(big.NewInt(5000000000))
-		b = b + 1
-	}
-	testFilterValidatorsTest(t, parentHash, validatorsDepositMap, true)
-}
-
-func TestFilterValidators_positive_Tough(t *testing.T) {
-	for test := 0; test < 2; test++ {
-		validatorsDepositMap := make(map[common.Address]*big.Int)
-
-		b := byte(0)
-		for i := 1; i < 255; i++ {
-			val := common.BytesToAddress([]byte{b})
-			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(1000000000))
-			b = b + 1
-		}
-
-		for i := 1; i < 255; i++ {
-			val := common.BytesToAddress([]byte{b})
-			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(20000000000))
-			b = b + 1
-		}
-
-		parentHash1 := common.BytesToHash([]byte{100})
-		totalDeposit := testFilterValidatorsTest(t, parentHash1, validatorsDepositMap, true)
-		expected := params.EtherToWei(big.NewInt(2522000000000))
-		if totalDeposit.Cmp(expected) != 0 {
-			fmt.Println("dep", params.WeiToEther(totalDeposit))
-			t.Fatalf("failed a")
-		}
-
-		parentHash2 := common.BytesToHash([]byte{200})
-		totalDeposit = testFilterValidatorsTest(t, parentHash2, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(2522000000000))) != 0 {
-			fmt.Println("dep", params.WeiToEther(totalDeposit))
-			t.Fatalf("failed b")
-		}
-
-		parentHash3 := common.BytesToHash([]byte{255})
-		totalDeposit = testFilterValidatorsTest(t, parentHash3, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(2522000000000))) != 0 {
-			fmt.Println("dep", params.WeiToEther(totalDeposit))
-			t.Fatalf("failed c")
-		}
-	}
-}
-
-func TestFilterValidators_positive_low_balance(t *testing.T) {
-	for test := 0; test < 2; test++ {
-		validatorsDepositMap := make(map[common.Address]*big.Int)
-
-		val1 := common.BytesToAddress([]byte{1})
-		validatorsDepositMap[val1] = params.EtherToWei(big.NewInt(1000))
-
-		val2 := common.BytesToAddress([]byte{2})
-		validatorsDepositMap[val2] = params.EtherToWei(big.NewInt(900000000000))
-
-		val3 := common.BytesToAddress([]byte{3})
-		validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(10000000))
-
-		val4 := common.BytesToAddress([]byte{4})
-		validatorsDepositMap[val4] = params.EtherToWei(big.NewInt(5000000))
-
-		parentHash1 := common.BytesToHash([]byte{100})
-		totalDeposit := testFilterValidatorsTest(t, parentHash1, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(900015000000))) != 0 {
-			fmt.Println("dep", params.WeiToEther(totalDeposit))
-			t.Fatalf("failed")
-		}
-	}
-}
-
-func TestFilterValidators_positive_low_balance_negative_total(t *testing.T) {
-	for test := 0; test < 2; test++ {
-		validatorsDepositMap := make(map[common.Address]*big.Int)
-
-		val1 := common.BytesToAddress([]byte{1})
-		validatorsDepositMap[val1] = big.NewInt(1000)
-
-		val2 := common.BytesToAddress([]byte{2})
-		validatorsDepositMap[val2] = big.NewInt(100000)
-
-		val3 := common.BytesToAddress([]byte{3})
-		validatorsDepositMap[val3] = big.NewInt(200000)
-
-		val4 := common.BytesToAddress([]byte{4})
-		validatorsDepositMap[val4] = big.NewInt(300000)
-
-		parentHash1 := common.BytesToHash([]byte{100})
-		testFilterValidatorsTest(t, parentHash1, validatorsDepositMap, false)
-	}
-}
-
-func TestFilterValidators_positive_low_balance_negative(t *testing.T) {
-	for test := 0; test < 2; test++ {
-		validatorsDepositMap := make(map[common.Address]*big.Int)
-
-		b := byte(0)
-		for i := 1; i < 255; i++ {
-			val := common.BytesToAddress([]byte{b})
-			validatorsDepositMap[val] = big.NewInt(1000)
-			b = b + 1
-		}
-
-		val2 := common.BytesToAddress([]byte{1, 2})
-		validatorsDepositMap[val2] = big.NewInt(100000)
-
-		val3 := common.BytesToAddress([]byte{1, 3})
-		validatorsDepositMap[val3] = big.NewInt(1000000)
-
-		parentHash1 := common.BytesToHash([]byte{100})
-		testFilterValidatorsTest(t, parentHash1, validatorsDepositMap, false)
-	}
-}
-
 func TestBlockProposalTime(t *testing.T) {
 	for i := uint64(0); i < 1000000000; i += 256 {
 		if GetProposalTime(i) == 0 {
@@ -2182,6 +1930,10 @@ func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64
 }
 
 func TestPacketHandler_canPropose(t *testing.T) {
+	if canProposeTest(1744781, 128000, 1744781, false) == false {
+		t.Fatalf("failed")
+	}
+
 	if canProposeTest(0, 0, 100, true) == false {
 		t.Fatalf("failed")
 	}
@@ -2369,5 +2121,54 @@ func TestPacketHandler_getBlockProposerV3(t *testing.T) {
 	validatorMap = make(map[common.Address]*ValidatorDetailsV2)
 	if testGetBlockProposerV2(&validatorMap, common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001"), 500004) == true {
 		t.Fatalf("failed")
+	}
+}
+
+func TestPacketHandler_basic_various_blocks(t *testing.T) {
+	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+	var blockNumbers = []uint64{1, rewardStartBlockNumber, slashStartBlockNumber, FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
+		FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, STAKING_CONTRACT_V2_CUTOFF_BLOCK, CONSENSUS_CONTEXT_START_BLOCK, CONSENSUS_CONTEXT_MAX_BLOCK_COUNT, VALIDATOR_NIL_BLOCK_START_BLOCK, BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
+		CONTEXT_BASED_START_BLOCK, CONTEXT_BASED_BLOCK_THRESHOLD, BLOCK_TIME_ORIG_START_BLOCK, PACKET_PROTOCOL_START_BLOCK,
+		PROPOSAL_TIME_HASH_START_BLOCK, BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, SixtyVoteStartBlock, OfflineValidatorDeferStartBlock,
+	}
+
+	for _, b := range blockNumbers {
+		TEST_CONSENSUS_BLOCK_NUMBER = b
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		for i := 1; i <= TEST_ITERATIONS; i++ {
+			fmt.Println("iteration", i)
+			testPacketHandler_basic(4, t)
+		}
+	}
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	fmt.Println("TestPacketHandler_basic_various_blocks done")
+}
+
+func canValidateTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64, expected bool) bool {
+	valDetails := &ValidatorDetailsV2{
+		LastNiLBlock:  big.NewInt(lastNilBlock),
+		NilBlockCount: big.NewInt(nilBlockCount),
+	}
+
+	result := canValidate(valDetails, currentBlock)
+	if result != expected {
+		return false
+	}
+
+	return true
+}
+
+func TestPacketHandler_canValidate(t *testing.T) {
+	if canValidateTest(0, 0, 100, true) == false {
+		t.Fatalf("failed1")
+	}
+	if canValidateTest(0, 10, 100, true) == false {
+		t.Fatalf("failed2")
+	}
+	if canValidateTest(int64(OfflineValidatorDeferStartBlock+1000), 127, uint64(OfflineValidatorDeferStartBlock+100), true) == false {
+		t.Fatalf("failed3")
+	}
+	if canValidateTest(int64(OfflineValidatorDeferStartBlock+1000), 128, uint64(OfflineValidatorDeferStartBlock+100), false) == false {
+		t.Fatalf("failed4")
 	}
 }

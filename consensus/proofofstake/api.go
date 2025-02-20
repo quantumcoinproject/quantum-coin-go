@@ -351,6 +351,14 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 		totalSlashings := big.NewInt(0)
 		if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= slashStartBlockNumber {
 			blockRewardsInfo.SlashedValidators = make([]*Slashing, len(blockConsensusData.SlashedBlockProposers))
+
+			var slashAmount *big.Int
+			if header.Number.Uint64() >= SlashV2StartBlock {
+				slashAmount = SLASH_AMOUNT
+			} else {
+				slashAmount = SLASH_AMOUNT_V2
+			}
+
 			for i, val := range blockConsensusData.SlashedBlockProposers {
 				slashing := &Slashing{
 					SlashedValidator: val,
