@@ -1,0 +1,160 @@
+    /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":68:391  contract Simple {... */
+  mstore(0x40, 0x80)
+    /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":116:182  0xa000000000000000000000000000000000000000000000000000000000001000 */
+  0xa000000000000000000000000000000000000000000000000000000000001000
+    /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":93:182  address testAddress1 = 0xa000000000000000000000000000000000000000000000000000000000001000 */
+  0x00
+  sstore
+    /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":68:391  contract Simple {... */
+  callvalue
+  dup1
+  iszero
+  tag_1
+  jumpi
+  0x00
+  dup1
+  revert
+tag_1:
+  pop
+  dataSize(sub_0)
+  dup1
+  dataOffset(sub_0)
+  0x00
+  codecopy
+  0x00
+  return
+stop
+
+sub_0: assembly {
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":68:391  contract Simple {... */
+      mstore(0x40, 0x80)
+      callvalue
+      dup1
+      iszero
+      tag_1
+      jumpi
+      0x00
+      dup1
+      revert
+    tag_1:
+      pop
+      jumpi(tag_2, lt(calldatasize, 0x04))
+      shr(0xe0, calldataload(0x00))
+      dup1
+      0x38cc4831
+      eq
+      tag_3
+      jumpi
+      dup1
+      0x449caa2b
+      eq
+      tag_4
+      jumpi
+    tag_2:
+      0x00
+      dup1
+      revert
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":191:280  function getAddress() public view returns(address) {... */
+    tag_3:
+      tag_5
+      tag_6
+      jump	// in
+    tag_5:
+      mload(0x40)
+      dup1
+      dup3
+      dup2
+      mstore
+      0x20
+      add
+      swap2
+      pop
+      pop
+      mload(0x40)
+      dup1
+      swap2
+      sub
+      swap1
+      return
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":288:388  function getInputAddress(address input) public pure returns(address) {... */
+    tag_4:
+      tag_7
+      0x04
+      dup1
+      calldatasize
+      sub
+      0x20
+      dup2
+      lt
+      iszero
+      tag_8
+      jumpi
+      0x00
+      dup1
+      revert
+    tag_8:
+      dup2
+      add
+      swap1
+      dup1
+      dup1
+      calldataload
+      swap1
+      0x20
+      add
+      swap1
+      swap3
+      swap2
+      swap1
+      pop
+      pop
+      pop
+      tag_9
+      jump	// in
+    tag_7:
+      mload(0x40)
+      dup1
+      dup3
+      dup2
+      mstore
+      0x20
+      add
+      swap2
+      pop
+      pop
+      mload(0x40)
+      dup1
+      swap2
+      sub
+      swap1
+      return
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":191:280  function getAddress() public view returns(address) {... */
+    tag_6:
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":233:240  address */
+      0x00
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":260:272  testAddress1 */
+      dup1
+      sload
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":253:272  return testAddress1 */
+      swap1
+      pop
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":191:280  function getAddress() public view returns(address) {... */
+      swap1
+      jump	// out
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":288:388  function getInputAddress(address input) public pure returns(address) {... */
+    tag_9:
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":348:355  address */
+      0x00
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":375:380  input */
+      dup2
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":368:380  return input */
+      swap1
+      pop
+        /* "c:/github/quantum-coin-go/tests/solidity/address/simple/simple.sol":288:388  function getInputAddress(address input) public pure returns(address) {... */
+      swap2
+      swap1
+      pop
+      jump	// out
+
+    auxdata: 0xa2646970667358221220d45c4dc24b726a869d113e2cafe4418860e6934def94c239e19669112023813d64736f6c637827302e372e362d646576656c6f702e323032352e322e31332b636f6d6d69742e34663635373333610058
+}
