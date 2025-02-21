@@ -261,8 +261,16 @@ contract Runner {
     event DeployedContractsCount(uint256 count);
     event DeployedContractAddress(uint256 index, address contractAddress);
 
-    address testAddress1 = 0x0000000000000000000000000000000000000000000000000000000000001000;
+    address testAddress1 = 0x000000000000000000000000000000000000000000000000000000000000001;
     address testAddress2 = 0x0000000000000000000000000000000000000000000000000000000000002000;
+
+    function getAddress() public view returns(address) {
+        return testAddress1;
+    }
+
+    function getInputAddress(address input) public pure returns(address) {
+        return input;
+    }
 
     function runAllTestsWithDefaultAddress(address payable _addressChecker) public {
         require(_addressChecker != address(0), "Invalid AddressChecker contract address a");
