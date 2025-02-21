@@ -170,7 +170,9 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup is the database has a more recent head.
 				if *ReadHeaderNumber(db, ReadHeadHeaderHash(db)) > frozen-1 {
-					return nil, fmt.Errorf("gap (#%d) in the chain between ancients and leveldb", frozen)
+					if freezerMode != FreezerModeSkipAppend {
+						return nil, fmt.Errorf("gap (#%d) in the chain between ancients and leveldb", frozen)
+					}
 				}
 				// Database contains only older data than the freezer, this happens if the
 				// state was wiped and reinited from an existing freezer.
@@ -180,7 +182,7 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 			// store deletion, but that's fine).
 		} else {
 			if freezerMode == FreezerModeSkipAppend || freezerMode == FreezerModeSkipAll {
-				log.Info("NewDatabaseWithFreezer set to skipappend, skipping startup check")
+				log.Info("NewDatabaseWithFreezer skipping startup check")
 			} else {
 				// If the freezer is empty, ensure nothing was moved yet from the key-value
 				// store, otherwise we'll end up missing data. We check block #1 to decide

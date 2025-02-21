@@ -229,6 +229,8 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td 
 		log.Error("Failed to append ancient hash", "number", f.frozen, "hash", hash, "err", err)
 		return err
 	}
+	items := atomic.LoadUint64(&f.tables[freezerHashTable].items)
+	log.Trace("AppendAncient", "freezerHashTable count", items)
 	if f.freezerMode != FreezerModeSkipAppend {
 		if err := f.tables[freezerHeaderTable].Append(f.frozen, header); err != nil {
 			log.Error("Failed to append ancient header", "number", f.frozen, "hash", hash, "err", err)
@@ -361,7 +363,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			limit = f.frozen + freezerBatchLimit
 		}
 
-		log.Trace("Freezer info", "limit", limit, "frozen", f.frozen, "number", *number, "threshold", threshold)
+		log.Info("Freezer info", "limit", limit, "frozen", f.frozen, "number", *number, "threshold", threshold)
 
 		var (
 			start    = time.Now()
@@ -447,11 +449,15 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 // repair truncates all data tables to the same length.
 func (f *freezer) repair() error {
+	if f.freezerMode == FreezerModeSkipAll {
+		return nil
+	}
 	if f.freezerMode == FreezerModeSkipAppend {
 		tbl, ok := f.tables[freezerHashTable]
 		if ok == true {
 			items := atomic.LoadUint64(&tbl.items)
 			atomic.StoreUint64(&f.frozen, items)
+			log.Debug("Freezer repair", "freezerHashTable item count", items)
 		}
 		return nil
 	}
