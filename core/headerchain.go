@@ -503,6 +503,7 @@ func (hc *HeaderChain) GetHeader(hash common.Hash, number uint64) *types.Header 
 func (hc *HeaderChain) GetHeaderByHash(hash common.Hash) *types.Header {
 	number := hc.GetBlockNumber(hash)
 	if number == nil {
+		log.Debug("GetHeaderByHash", "nil", hash)
 		return nil
 	}
 	return hc.GetHeader(hash, *number)

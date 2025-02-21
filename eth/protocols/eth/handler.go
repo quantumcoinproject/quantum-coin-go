@@ -37,7 +37,7 @@ const (
 	softResponseLimit = 2 * 1024 * 1024
 
 	// estHeaderSize is the approximate size of an RLP encoded block header.
-	estHeaderSize = 500
+	estHeaderSize = 10000
 
 	// maxHeadersServe is the maximum number of block headers to serve. This number
 	// is there to limit the number of disk lookups.

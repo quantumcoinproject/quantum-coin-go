@@ -457,7 +457,7 @@ func (f *freezer) repair() error {
 		if ok == true {
 			items := atomic.LoadUint64(&tbl.items)
 			atomic.StoreUint64(&f.frozen, items)
-			log.Debug("Freezer repair", "freezerHashTable item count", items)
+			log.Debug("Freezer", "freezerHashTable item count", items)
 		}
 		return nil
 	}
