@@ -10,8 +10,10 @@ import (
 	"time"
 )
 
+var TestFilterValidatorsBlockNumber = SixtyVoteStartBlock
+
 func testFilterValidatorsTest(t *testing.T, consensusContext common.Hash, validatorsDepositMap map[common.Address]*big.Int, shouldPass bool) *big.Int {
-	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, 1, nil)
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, TestFilterValidatorsBlockNumber, nil)
 	if err == nil {
 		if shouldPass == false {
 			t.Fatalf("failed")
@@ -137,6 +139,7 @@ func TestFilterValidators_positive(t *testing.T) {
 }
 
 func TestFilterValidators_offline_validator(t *testing.T) {
+	TestFilterValidatorsBlockNumber = OfflineValidatorDeferStartBlock
 	consensusContext := common.BytesToHash([]byte{100})
 	validatorsDepositMap := make(map[common.Address]*big.Int)
 
@@ -191,6 +194,7 @@ func TestFilterValidators_offline_validator(t *testing.T) {
 		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue)
 		t.Fatalf("failed4")
 	}
+	TestFilterValidatorsBlockNumber = SixtyVoteStartBlock
 }
 
 func TestFilterValidators_positive_Extended(t *testing.T) {
@@ -415,4 +419,63 @@ func TestFilterValidators_positive_large(t *testing.T) {
 		testLargeValidator(t, i)
 	}
 	testLargeValidator(t, 1000000)
+}
+
+func TestFilterValidators_offline_validator_sixty_seven(t *testing.T) {
+	TestFilterValidatorsBlockNumber = SixtySevenVoteStartBlock
+	consensusContext := common.BytesToHash([]byte{100})
+	validatorsDepositMap := make(map[common.Address]*big.Int)
+
+	validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+
+	val1 := common.BytesToAddress([]byte{1})
+	val2 := common.BytesToAddress([]byte{2})
+	val3 := common.BytesToAddress([]byte{3})
+	val4 := common.BytesToAddress([]byte{4})
+
+	validatorsDDetailsMap[val1] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD)),
+		LastNiLBlock:  big.NewInt(int64(SixtySevenVoteStartBlock) + int64(10)),
+	}
+
+	validatorsDDetailsMap[val2] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD) - 1),
+		LastNiLBlock:  big.NewInt(int64(SixtySevenVoteStartBlock) - 10),
+	}
+
+	validatorsDDetailsMap[val3] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(1),
+		LastNiLBlock:  big.NewInt(int64(SixtySevenVoteStartBlock) - 100),
+	}
+
+	validatorsDDetailsMap[val4] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(0),
+		LastNiLBlock:  big.NewInt(0),
+	}
+
+	validatorsDepositMap[val1] = params.EtherToWei(big.NewInt(100000000000))
+	validatorsDepositMap[val2] = params.EtherToWei(big.NewInt(200000000000))
+	validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(400000000000))
+	validatorsDepositMap[val4] = params.EtherToWei(big.NewInt(500000000000))
+
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, SixtySevenVoteStartBlock, &validatorsDDetailsMap)
+	if err != nil {
+		log.Error("error", "msg", err)
+		t.Fatalf("failed1")
+	}
+
+	_, ok := resultMap[val1]
+	if ok == true {
+		t.Fatalf("failed2")
+	}
+
+	if len(resultMap) != 3 {
+		t.Fatalf("failed3")
+	}
+
+	if filteredDepositValue.Cmp(params.EtherToWei(big.NewInt(1100000000000))) != 0 {
+		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue)
+		t.Fatalf("failed4")
+	}
+	TestFilterValidatorsBlockNumber = SixtyVoteStartBlock
 }

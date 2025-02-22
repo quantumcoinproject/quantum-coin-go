@@ -190,6 +190,7 @@ var (
 	MIN_BLOCK_DEPOSIT                                      *big.Int       = params.EtherToWei(big.NewInt(500000000000))
 	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE    *big.Int       = big.NewInt(70)
 	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2 *big.Int       = big.NewInt(60)
+	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V3 *big.Int       = big.NewInt(67) //66.7 round off to 67, so there can be no permanent forked chain
 	ZERO_HASH                                              common.Hash    = common.BytesToHash([]byte{0})
 	ZERO_ADDRESS                                           common.Address = common.BytesToAddress([]byte{0})
 	MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE                                = big.NewInt(85) //(100 * 51) / MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2. This is to ensure worst case minimum of 51% of total staked coins needed to create a block
@@ -573,7 +574,9 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	}
 
 	var minPercentage *big.Int
-	if blockNumber >= SixtyVoteStartBlock {
+	if blockNumber >= SixtySevenVoteStartBlock {
+		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V3
+	} else if blockNumber >= SixtyVoteStartBlock {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2
 	} else {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE

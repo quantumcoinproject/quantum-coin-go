@@ -103,7 +103,9 @@ var (
 	SixtyVoteStartBlock = uint64(1386825)
 
 	SlashV2StartBlock               = uint64(1931480)
-	OfflineValidatorDeferStartBlock = SlashV2StartBlock
+	OfflineValidatorDeferStartBlock = SlashV2StartBlock + 10
+
+	SixtySevenVoteStartBlock = uint64(OfflineValidatorDeferStartBlock + 10)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
