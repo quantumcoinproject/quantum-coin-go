@@ -251,6 +251,9 @@ contract AddressChecker {
 }
 
 contract Runner {
+    address testAddress1 = 0xa000000000000000000000000000000000000000000000000000000000001000;
+    address testAddress2 = 0xB000000000000000000000000000000000000000000000000000000000002000;
+
     AddressChecker private addressChecker;
     uint256 public testDelNumber; // Storage to be updated via delegatecall
 
@@ -260,9 +263,6 @@ contract Runner {
     event DelegateCallExecuted(address indexed caller, uint256 newValue);
     event DeployedContractsCount(uint256 count);
     event DeployedContractAddress(uint256 index, address contractAddress);
-
-    address testAddress1 = 0xa000000000000000000000000000000000000000000000000000000000001000;
-    address testAddress2 = 0xB000000000000000000000000000000000000000000000000000000000002000;
 
     function getAddress() public view returns(address) {
         return testAddress1;
