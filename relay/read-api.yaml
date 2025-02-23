@@ -117,7 +117,7 @@ paths:
         - name: address
           in: path
           required: true
-          description: the string representing the address
+          description: the string representing the account address
           schema:
             type: string
         - name: x-request-id
@@ -133,6 +133,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+  '/account/{address}/tokens/{contractAddress}':
+    get:
+      tags:
+        - Read
+      summary: Get account token details
+      operationId: GetAccountTokenDetails
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: the string representing the account address
+          schema:
+            type: string
+        - name: contractAddress
+          in: path
+          required: true
+          description: the string representing the token's contract address
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountTokenDetailsResponse'
         '400':
           description: Bad Request
           content:
@@ -343,7 +405,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
-
+  '/token/{contractAddress}':
+    get:
+      tags:
+        - Read
+      summary: Get token details
+      operationId: GetTokenDetails
+      parameters:
+        - name: contractAddress
+          in: path
+          required: true
+          description: the string representing the token's contract address
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
 components:
   schemas:
     BlockDetails:
@@ -383,6 +500,53 @@ components:
         result:
           allOf:
             - $ref: '#/components/schemas/AccountDetails'
+      additionalProperties: false
+    TokenDetails:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: The name of the token
+        owner:
+          type: string
+          nullable: true
+          description: The account owner of the token. Not all token's implement this interface, in which case the value will be zero address
+        symbol:
+          type: string
+          nullable: true
+          description: The symbol of the token
+        totalSupply:
+          type: string
+          nullable: true
+          description: The totalSupply of the token in hex
+        decimals:
+          type: string
+          nullable: true
+          description: The decimals of the token in hex
+      additionalProperties: false
+    TokenDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/TokenDetails'
+    AccountTokenDetails:
+      type: object
+      properties:
+        balance:
+          type: string
+          nullable: true
+        contractAddress:
+          type: string
+          nullable: false
+      additionalProperties: false
+    AccountTokenDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/AccountTokenDetails'
       additionalProperties: false
     TransactionType:
       enum:

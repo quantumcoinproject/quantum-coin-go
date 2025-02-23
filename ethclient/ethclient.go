@@ -27,6 +27,7 @@ import (
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/QuantumCoinProject/qc/token"
 	"math/big"
@@ -556,16 +557,64 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	return arg
 }
 
-func (ec *Client) GetTokenBalance(contactAddress common.Address, accountAddress common.Address) (string, error) {
+type TokenDetails struct {
+	Name        string
+	Symbol      string
+	Owner       common.Address
+	TotalSupply *big.Int
+	Decimals    *big.Int
+}
+
+func (ec *Client) GetTokenDetails(contactAddress common.Address) (*TokenDetails, error) {
+	log.Info("GetTokenDetails", "contactAddress", contactAddress)
 	contract, err := token.NewToken(contactAddress, ec)
 	if err != nil {
-		return "", err
+		return nil, err
+	}
+
+	tokenDetails := TokenDetails{}
+
+	tokenDetails.Name, err = contract.Name(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenDetails.Symbol, err = contract.Symbol(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenDetails.TotalSupply, err = contract.TotalSupply(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenDetails.Decimals, err = contract.TotalSupply(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenDetails.Owner, err = contract.Owner(nil)
+	if err != nil {
+		//owner is ok to fail, not a part of ERC20 interface
+		log.Debug("GetTokenDetails Owner", "error", err)
+		tokenDetails.Owner.CopyFrom(common.ZERO_ADDRESS)
+	}
+
+	return &tokenDetails, nil
+}
+
+func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountAddress common.Address) (*big.Int, error) {
+	log.Info("GetAccountTokenBalance", "contactAddress", contactAddress, "accountAddress", accountAddress)
+	contract, err := token.NewToken(contactAddress, ec)
+	if err != nil {
+		return nil, err
 	}
 
 	balance, err := contract.BalanceOf(nil, accountAddress)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return hexutil.EncodeBig(balance), nil
+	return balance, nil
 }

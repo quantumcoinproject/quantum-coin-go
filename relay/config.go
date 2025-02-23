@@ -11,6 +11,8 @@ var (
 	InfoTitleListAccountPendingTransactions = "List Account Pending Transactions"
 	InfoTitleGetBlockchainDetails           = "Get Blockchain details"
 	InfoTitleQueryDetails                   = "Query details"
+	InfoTitleAccountTokenDetails            = "Get account token details"
+	InfoTitleTokenDetails                   = "Get token details"
 )
 
 var (
@@ -28,6 +30,7 @@ var (
 	MsgTimeDuration       = "Time Duration"
 	MsgStatus             = "Status"
 	MsgError              = "Error"
+	MsgContractAddress    = "Contract Address"
 )
 
 var (

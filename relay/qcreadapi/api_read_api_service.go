@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"context"
 	"encoding/json"
+	"github.com/QuantumCoinProject/qc/ethclient"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/params"
 	"github.com/QuantumCoinProject/qc/relay"
@@ -21,6 +22,7 @@ import (
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/QuantumCoinProject/qc/cachemanager"
+	"math/big"
 	"net/http"
 	"errors"
 	"github.com/mattn/go-colorable"
@@ -402,4 +404,107 @@ func (s *ReadApiAPIService) QueryDetails(ctx context.Context, queryTerm string) 
 func Dump(data interface{}){
 	b,_:=json.MarshalIndent(data, "", "  ")
 	fmt.Print(string(b))
+}
+
+// GetAccountTokenDetails - Get account token details
+func (s *ReadApiAPIService) GetAccountTokenDetails(ctx context.Context, address string, contractAddress string) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleAccountDetails, relay.MsgDial, s.DpUrl)
+
+	if !common.IsHexAddressDeep(address) {
+		log.Error(relay.MsgAddress, relay.MsgAddress, address, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), relay.ErrInvalidAddress
+	}
+
+	if !common.IsHexAddressDeep(contractAddress) {
+		log.Error(relay.MsgContractAddress, relay.MsgContractAddress, contractAddress, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), relay.ErrInvalidAddress
+	}
+
+	var client *ethclient.Client
+
+	client, err := ethclient.Dial(s.DpUrl)
+	if err != nil {
+		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+	defer client.Close()
+
+	var balance *big.Int
+	balance, err = client.GetAccountTokenBalance(common.HexToAddress(contractAddress), common.HexToAddress(address))
+	if err != nil {
+		log.Error("GetTokenBalance", relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+	hexBalance := hexutil.EncodeBig(balance)
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleAccountTokenDetails, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
+
+	accountTokenDetails := AccountTokenDetails{
+		Balance: &hexBalance,
+		ContractAddress: &contractAddress,
+	}
+
+	accountTokenDetailsResponse := AccountTokenDetailsResponse{
+		Result: accountTokenDetails,
+	}
+
+	return Response(http.StatusOK, accountTokenDetailsResponse), nil
+}
+
+// GetTokenDetails - Get account token details
+func (s *ReadApiAPIService) GetTokenDetails(ctx context.Context, contractAddress string) (ImplResponse, error) {
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleAccountDetails, relay.MsgDial, s.DpUrl)
+
+	if !common.IsHexAddressDeep(contractAddress) {
+		log.Error(relay.MsgContractAddress, relay.MsgContractAddress, contractAddress, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), relay.ErrInvalidAddress
+	}
+
+	var client *ethclient.Client
+
+	client, err := ethclient.Dial(s.DpUrl)
+	if err != nil {
+		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+	defer client.Close()
+
+	var tokenDetails *ethclient.TokenDetails
+	tokenDetails, err = client.GetTokenDetails(common.HexToAddress(contractAddress))
+	if err != nil {
+		log.Error("GetTokenDetails", relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+
+	log.Error("aaaaaaaaaaaaaaaaaaaaaa 1")
+	var result TokenDetails
+	result.Name = &tokenDetails.Name
+	result.Symbol = &tokenDetails.Symbol
+	owner := tokenDetails.Owner.Hex()
+	result.Owner = &owner
+
+	totalSupply := hexutil.EncodeBig(tokenDetails.TotalSupply)
+	result.TotalSupply = &totalSupply
+
+	decimals := hexutil.EncodeBig(tokenDetails.Decimals)
+	result.Decimals = &decimals
+
+	duration := time.Now().Sub(startTime)
+
+	log.Error("aaaaaaaaaaaaaaaaaaaaaa 2")
+
+	log.Info(relay.InfoTitleTokenDetails, relay.MsgAddress, contractAddress, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
+
+	tokenDetailsResponse := TokenDetailsResponse{
+		Result: result,
+	}
+
+	return Response(http.StatusOK, tokenDetailsResponse), nil
 }
