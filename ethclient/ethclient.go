@@ -28,6 +28,7 @@ import (
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/QuantumCoinProject/qc/token"
 	"math/big"
 )
 
@@ -553,4 +554,18 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 		arg["gasPrice"] = (*hexutil.Big)(msg.GasPrice)
 	}
 	return arg
+}
+
+func (ec *Client) GetTokenBalance(contactAddress common.Address, accountAddress common.Address) (string, error) {
+	contract, err := token.NewToken(contactAddress, ec)
+	if err != nil {
+		return "", err
+	}
+
+	balance, err := contract.BalanceOf(nil, accountAddress)
+	if err != nil {
+		return "", err
+	}
+
+	return hexutil.EncodeBig(balance), nil
 }
