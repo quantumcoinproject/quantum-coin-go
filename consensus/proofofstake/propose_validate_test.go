@@ -14,7 +14,7 @@ func canValidateTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint6
 		NilBlockCount: big.NewInt(nilBlockCount),
 	}
 
-	result := canValidate(valDetails, currentBlock)
+	result, _ := canValidate(valDetails, currentBlock)
 	if result != expected {
 		return false
 	}

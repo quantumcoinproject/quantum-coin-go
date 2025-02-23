@@ -116,6 +116,10 @@ func (api *API) GetStakingDetailsByValidatorAddress(validator common.Address, bl
 		if err != nil {
 			return nil, err
 		}
+
+		_, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
+		_, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+
 		validatorDetails := &ValidatorDetails{
 			Depositor:          validatorDetailsV2.Depositor,
 			Validator:          validatorDetailsV2.Validator,
@@ -128,6 +132,11 @@ func (api *API) GetStakingDetailsByValidatorAddress(validator common.Address, bl
 			WithdrawalAmount:   hexutil.EncodeBig(validatorDetailsV2.WithdrawalAmount),
 			LastNiLBlock:       hexutil.EncodeBig(validatorDetailsV2.LastNiLBlock),
 			NilBlockCount:      hexutil.EncodeBig(validatorDetailsV2.NilBlockCount),
+		}
+
+		if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
+			validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
+			validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
 		}
 
 		return validatorDetails, nil
@@ -164,6 +173,10 @@ func (api *API) GetStakingDetailsByDepositorAddress(depositor common.Address, bl
 		if err != nil {
 			return nil, err
 		}
+
+		_, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
+		_, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+
 		validatorDetails := &ValidatorDetails{
 			Depositor:          validatorDetailsV2.Depositor,
 			Validator:          validatorDetailsV2.Validator,
@@ -178,6 +191,10 @@ func (api *API) GetStakingDetailsByDepositorAddress(depositor common.Address, bl
 			NilBlockCount:      hexutil.EncodeBig(validatorDetailsV2.NilBlockCount),
 		}
 
+		if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
+			validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
+			validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+		}
 		return validatorDetails, nil
 	}
 }

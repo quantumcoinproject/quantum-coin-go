@@ -432,19 +432,21 @@ func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[c
 	return proposer, nil
 }
 
-func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool {
+func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
 	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
-		return true
+		return true, currentBlockNumber
 	}
 	if valDetails.NilBlockCount.Uint64() < OFFLINE_VALIDATOR_DEFER_THRESHOLD {
-		return true
+		return true, currentBlockNumber
 	}
 
-	result := currentBlockNumber >= valDetails.LastNiLBlock.Uint64()+OFFLINE_VALIDATOR_DEFER_COUNT
+	nextValidationBlock := valDetails.LastNiLBlock.Uint64() + OFFLINE_VALIDATOR_DEFER_COUNT
+	result := currentBlockNumber >= nextValidationBlock
 
-	log.Debug("canValidate", "validator", valDetails.Validator, "result", result, "currentBlockNumber", currentBlockNumber, "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount)
+	log.Debug("canValidate", "validator", valDetails.Validator, "result", result, "currentBlockNumber", currentBlockNumber, "LastNiLBlock", valDetails.LastNiLBlock,
+		"NilBlockCount", valDetails.NilBlockCount, "nextValidationBlock", nextValidationBlock)
 
-	return result
+	return result, nextValidationBlock
 }
 
 func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
@@ -535,7 +537,8 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 		}
 		if blockNumber >= OfflineValidatorDeferStartBlock {
 			valDetailsMap := *validatorDetailsMap
-			if canValidate(valDetailsMap[val], blockNumber) == false {
+			canVal, _ := canValidate(valDetailsMap[val], blockNumber)
+			if canVal == false {
 				log.Trace("Skipping offline validator", "val", val, "depositValue", depositValue)
 				delete(validatorsDepositMap, val)
 				continue
@@ -546,6 +549,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	}
 
 	if valCount < MIN_VALIDATORS {
+		log.Warn("Validator count", "count", valCount, "MIN_VALIDATORS", MIN_VALIDATORS)
 		return nil, nil, nil, errors.New("number of validators less than minimum")
 	}
 
