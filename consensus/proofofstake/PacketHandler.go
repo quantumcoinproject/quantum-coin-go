@@ -447,9 +447,9 @@ func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool
 	return result
 }
 
-func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool {
+func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
 	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
-		return true
+		return true, currentBlockNumber
 	}
 
 	var maxBlockDelay uint64
@@ -475,7 +475,7 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool 
 	log.Debug("canPropose", "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount,
 		"slotsMissed", slotsMissed, "blockDelay", blockDelay, "nextProposalBlock", nextProposalBlock, "maxBlockDelay", maxBlockDelay,
 		"currentBlockNumber", currentBlockNumber, "canPropose", result, "validator", valDetails.Validator)
-	return result
+	return result, nextProposalBlock
 }
 
 func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Address]*ValidatorDetailsV2, round byte, blockNumber uint64) (common.Address, error) {
@@ -487,7 +487,8 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 
 	selectedValMap := make(map[common.Address]*ValidatorDetailsV2)
 	for valAddr, valDetails := range *validatorMap {
-		if canPropose(valDetails, blockNumber) == false {
+		canProp, _ := canPropose(valDetails, blockNumber)
+		if canProp == false {
 			continue
 		}
 		selectedValMap[valAddr] = valDetails

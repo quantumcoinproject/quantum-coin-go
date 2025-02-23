@@ -43,7 +43,7 @@ func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64
 		NilBlockCount: big.NewInt(nilBlockCount),
 	}
 
-	result := canPropose(valDetails, currentBlock)
+	result, _ := canPropose(valDetails, currentBlock)
 	if result != expected {
 		return false
 	}
