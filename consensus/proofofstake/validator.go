@@ -1067,8 +1067,8 @@ func (p *ProofOfStake) ListValidators(blockHash common.Hash, blockNumber uint64)
 				return nil, err
 			}
 
-			_, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
-			_, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+			canVal, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
+			canProp, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
 
 			validatorDetails = &ValidatorDetails{
 				Depositor:          validatorDetailsV2.Depositor,
@@ -1084,8 +1084,12 @@ func (p *ProofOfStake) ListValidators(blockHash common.Hash, blockNumber uint64)
 				NilBlockCount:      hexutil.EncodeBig(validatorDetailsV2.NilBlockCount),
 			}
 			if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
-				validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
-				validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+				if canVal == false {
+					validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
+				}
+				if canProp == false {
+					validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+				}
 			}
 		}
 

@@ -117,8 +117,8 @@ func (api *API) GetStakingDetailsByValidatorAddress(validator common.Address, bl
 			return nil, err
 		}
 
-		_, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
-		_, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+		canVal, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
+		canProp, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
 
 		validatorDetails := &ValidatorDetails{
 			Depositor:          validatorDetailsV2.Depositor,
@@ -135,8 +135,12 @@ func (api *API) GetStakingDetailsByValidatorAddress(validator common.Address, bl
 		}
 
 		if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
-			validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
-			validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+			if canVal == false {
+				validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
+			}
+			if canProp == false {
+				validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+			}
 		}
 
 		return validatorDetails, nil
@@ -174,8 +178,8 @@ func (api *API) GetStakingDetailsByDepositorAddress(depositor common.Address, bl
 			return nil, err
 		}
 
-		_, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
-		_, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+		canVal, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
+		canProp, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
 
 		validatorDetails := &ValidatorDetails{
 			Depositor:          validatorDetailsV2.Depositor,
@@ -192,8 +196,12 @@ func (api *API) GetStakingDetailsByDepositorAddress(depositor common.Address, bl
 		}
 
 		if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
-			validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
-			validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+			if canVal == false {
+				validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
+			}
+			if canProp == false {
+				validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+			}
 		}
 		return validatorDetails, nil
 	}
