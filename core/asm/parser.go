@@ -9,7 +9,7 @@ import (
 const FunctionSignatureLength = 4
 const PlainHex = "0xffffffff"
 
-var Erc20Methods = []string{"0x18160ddd", "0x70a08231", "0xdd62ed3e", "0xa9059cbb", "0x095ea7b3", "0x23b872dd"}
+var Erc20Methods = []string{"0x18160ddd", "0x70a08231", "0xdd62ed3e", "0xa9059cbb", "0x095ea7b3", "0x23b872dd"} //refer to token/token.go for definition of these methods
 
 func ParseMethodList(runtimeBinCode string) (map[string]bool, error) {
 
