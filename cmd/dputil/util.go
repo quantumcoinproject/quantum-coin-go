@@ -21,6 +21,7 @@ import (
 	"github.com/QuantumCoinProject/qc/systemcontracts/staking"
 	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv1"
 	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv2"
+	"github.com/QuantumCoinProject/qc/token"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -1480,6 +1481,57 @@ func resumeValidation(key *signaturealgorithm.PrivateKey) error {
 	}
 
 	fmt.Println("Your request to resume validation has been added to the queue for processing.")
+	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash())
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return nil
+}
+
+func transferTokens(contractAddr string, toAddr string, tokenTransferAmount *big.Int, key *signaturealgorithm.PrivateKey) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+
+	fromAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+
+	if err != nil {
+		return err
+	}
+
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	toAddress := common.HexToAddress(toAddr)
+
+	contractAddress := common.HexToAddress(contractAddr)
+	txnOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(123123))
+
+	if err != nil {
+		return err
+	}
+
+	txnOpts.From = fromAddress
+	txnOpts.Nonce = big.NewInt(int64(nonce))
+	txnOpts.GasLimit = uint64(2500000)
+	txnOpts.Value = big.NewInt(0)
+
+	var tx *types.Transaction
+	contract, err := token.NewToken(contractAddress, client)
+	if err != nil {
+		return err
+	}
+
+	tx, err = contract.Transfer(txnOpts, toAddress, tokenTransferAmount)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Your request to transfer tokens has been added to the queue for processing. Please check your account balance after 10 minutes.")
 	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash())
 	fmt.Println()
 
