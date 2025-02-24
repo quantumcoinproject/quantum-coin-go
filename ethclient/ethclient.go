@@ -23,10 +23,12 @@ import (
 	"errors"
 	"fmt"
 	ethereum "github.com/QuantumCoinProject/qc"
+	"github.com/QuantumCoinProject/qc/accounts/abi/bind"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/QuantumCoinProject/qc/core/vm"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/QuantumCoinProject/qc/token"
@@ -557,45 +559,71 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	return arg
 }
 
+var NotATokenError = errors.New("invalid erc20 token")
+
 type TokenDetails struct {
 	Name        string
 	Symbol      string
 	Owner       common.Address
 	TotalSupply *big.Int
-	Decimals    *big.Int
+	Decimals    uint8
 }
 
 func (ec *Client) GetTokenDetails(contactAddress common.Address) (*TokenDetails, error) {
-	log.Info("GetTokenDetails", "contactAddress", contactAddress)
+	log.Debug("GetTokenDetails", "contactAddress", contactAddress)
 	contract, err := token.NewToken(contactAddress, ec)
 	if err != nil {
+		log.Debug("GetTokenDetails", "error", err)
+		if err == bind.ErrNoCode {
+			return nil, NotATokenError
+		}
 		return nil, err
 	}
 
 	tokenDetails := TokenDetails{}
 
+	tokenDetails.TotalSupply, err = contract.TotalSupply(nil)
+	if err != nil {
+		log.Debug("GetTokenDetails TotalSupply", "error", err, "contactAddress", contactAddress)
+		if err == vm.ErrExecutionReverted {
+			return nil, NotATokenError
+		}
+		return nil, err
+	}
+
 	tokenDetails.Name, err = contract.Name(nil)
 	if err != nil {
-		return nil, err
+		if err != vm.ErrExecutionReverted {
+			log.Debug("GetTokenDetails Name", "error", err, "contactAddress", contactAddress)
+			return nil, err
+		}
+		tokenDetails.Name = ""
 	}
 
 	tokenDetails.Symbol, err = contract.Symbol(nil)
 	if err != nil {
-		return nil, err
+		if err != vm.ErrExecutionReverted {
+			log.Debug("GetTokenDetails Symbol", "error", err, "contactAddress", contactAddress)
+			return nil, err
+		}
+		tokenDetails.Symbol = ""
 	}
 
-	tokenDetails.TotalSupply, err = contract.TotalSupply(nil)
+	tokenDetails.Decimals, err = contract.Decimals(nil)
 	if err != nil {
-		return nil, err
-	}
-
-	tokenDetails.Decimals, err = contract.TotalSupply(nil)
-	if err != nil {
-		return nil, err
+		if err != vm.ErrExecutionReverted {
+			log.Debug("GetTokenDetails Decimals", "error", err, "contactAddress", contactAddress)
+			return nil, err
+		}
+		tokenDetails.Decimals = 0
 	}
 
 	tokenDetails.Owner, err = contract.Owner(nil)
 	if err != nil {
+		if err != vm.ErrExecutionReverted {
+			log.Error("GetTokenDetails Owner", "error", err, "contactAddress", contactAddress)
+			return nil, err
+		}
 		//owner is ok to fail, not a part of ERC20 interface
 		log.Debug("GetTokenDetails Owner", "error", err)
 		tokenDetails.Owner.CopyFrom(common.ZERO_ADDRESS)
@@ -605,7 +633,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address) (*TokenDetails,
 }
 
 func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountAddress common.Address) (*big.Int, error) {
-	log.Info("GetAccountTokenBalance", "contactAddress", contactAddress, "accountAddress", accountAddress)
+	log.Debug("GetAccountTokenBalance", "contactAddress", contactAddress, "accountAddress", accountAddress)
 	contract, err := token.NewToken(contactAddress, ec)
 	if err != nil {
 		return nil, err
@@ -613,6 +641,10 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 
 	balance, err := contract.BalanceOf(nil, accountAddress)
 	if err != nil {
+		if err == vm.ErrExecutionReverted {
+			log.Debug("GetAccountTokenBalance", "error", err, "contactAddress", contactAddress)
+			return nil, NotATokenError
+		}
 		return nil, err
 	}
 

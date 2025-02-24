@@ -493,7 +493,7 @@ func (s *ReadApiAPIService) GetTokenDetails(ctx context.Context, contractAddress
 	totalSupply := hexutil.EncodeBig(tokenDetails.TotalSupply)
 	result.TotalSupply = &totalSupply
 
-	decimals := hexutil.EncodeBig(tokenDetails.Decimals)
+	decimals := hexutil.EncodeUint64(uint64(tokenDetails.Decimals))
 	result.Decimals = &decimals
 
 	duration := time.Now().Sub(startTime)
