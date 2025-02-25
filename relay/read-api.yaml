@@ -3,7 +3,7 @@ info:
   title: Quantum Coin Read API
   version: v1
 servers:
-  - url: https://relayread.dpapi.org
+  - url: https://sdk.readrelay.quantumcoinapi.com
 paths:
   '/latestblock':
     get:
