@@ -60,7 +60,11 @@ const (
 
 	// freezerBatchLimit is the maximum number of blocks to freeze in one batch
 	// before doing an fsync and deleting it from the key-value store.
-	freezerBatchLimit = 30000
+	freezerBatchLimit = 1024
+
+	FreezerModeSkipAppend = "skipappend"
+	FreezerModeSkipNone   = "skipnone"
+	FreezerModeSkipAll    = "skipall"
 )
 
 // freezer is an memory mapped append-only database to store immutable chain data
@@ -78,6 +82,7 @@ type freezer struct {
 	threshold uint64 // Number of recent blocks not to freeze (params.FullImmutabilityThreshold apart from tests)
 
 	readonly     bool
+	freezerMode  string
 	tables       map[string]*freezerTable // Data tables for storing everything
 	instanceLock fileutil.Releaser        // File-system lock to prevent double opens
 
@@ -90,7 +95,7 @@ type freezer struct {
 
 // newFreezer creates a chain freezer that moves ancient chain data into
 // append-only flat file containers.
-func newFreezer(datadir string, namespace string, readonly bool) (*freezer, error) {
+func newFreezer(datadir string, namespace string, readonly bool, freezerMode string) (*freezer, error) {
 	// Create the initial freezer object
 	var (
 		readMeter  = metrics.NewRegisteredMeter(namespace+"ancient/read", nil)
@@ -118,6 +123,7 @@ func newFreezer(datadir string, namespace string, readonly bool) (*freezer, erro
 		instanceLock: lock,
 		trigger:      make(chan chan struct{}),
 		quit:         make(chan struct{}),
+		freezerMode:  freezerMode,
 	}
 	for name, disableSnappy := range FreezerNoSnappy {
 		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
@@ -223,21 +229,25 @@ func (f *freezer) AppendAncient(number uint64, hash, header, body, receipts, td 
 		log.Error("Failed to append ancient hash", "number", f.frozen, "hash", hash, "err", err)
 		return err
 	}
-	if err := f.tables[freezerHeaderTable].Append(f.frozen, header); err != nil {
-		log.Error("Failed to append ancient header", "number", f.frozen, "hash", hash, "err", err)
-		return err
-	}
-	if err := f.tables[freezerBodiesTable].Append(f.frozen, body); err != nil {
-		log.Error("Failed to append ancient body", "number", f.frozen, "hash", hash, "err", err)
-		return err
-	}
-	if err := f.tables[freezerReceiptTable].Append(f.frozen, receipts); err != nil {
-		log.Error("Failed to append ancient receipts", "number", f.frozen, "hash", hash, "err", err)
-		return err
-	}
-	if err := f.tables[freezerDifficultyTable].Append(f.frozen, td); err != nil {
-		log.Error("Failed to append ancient difficulty", "number", f.frozen, "hash", hash, "err", err)
-		return err
+	items := atomic.LoadUint64(&f.tables[freezerHashTable].items)
+	log.Trace("AppendAncient", "freezerHashTable count", items)
+	if f.freezerMode != FreezerModeSkipAppend {
+		if err := f.tables[freezerHeaderTable].Append(f.frozen, header); err != nil {
+			log.Error("Failed to append ancient header", "number", f.frozen, "hash", hash, "err", err)
+			return err
+		}
+		if err := f.tables[freezerBodiesTable].Append(f.frozen, body); err != nil {
+			log.Error("Failed to append ancient body", "number", f.frozen, "hash", hash, "err", err)
+			return err
+		}
+		if err := f.tables[freezerReceiptTable].Append(f.frozen, receipts); err != nil {
+			log.Error("Failed to append ancient receipts", "number", f.frozen, "hash", hash, "err", err)
+			return err
+		}
+		if err := f.tables[freezerDifficultyTable].Append(f.frozen, td); err != nil {
+			log.Error("Failed to append ancient difficulty", "number", f.frozen, "hash", hash, "err", err)
+			return err
+		}
 	}
 	atomic.AddUint64(&f.frozen, 1) // Only modify atomically
 	return nil
@@ -280,6 +290,12 @@ func (f *freezer) Sync() error {
 // This functionality is deliberately broken off from block importing to avoid
 // incurring additional data shuffling delays on block propagation.
 func (f *freezer) freeze(db ethdb.KeyValueStore) {
+	if f.freezerMode == FreezerModeSkipAll {
+		log.Info("Freezer skipping", "freezerMode", f.freezerMode)
+		return
+	}
+	log.Info("Freezer starting", "freezerMode", f.freezerMode, "frozen", f.frozen)
+
 	nfdb := &nofreezedb{KeyValueStore: db}
 
 	var (
@@ -320,7 +336,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 		switch {
 		case number == nil:
-			log.Error("Current full block number unavailable", "hash", hash)
+			log.Debug("Current full block number unavailable", "hash", hash)
 			backoff = true
 			continue
 
@@ -334,6 +350,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			backoff = true
 			continue
 		}
+
 		head := ReadHeader(nfdb, hash, *number)
 		if head == nil {
 			log.Error("Current full block unavailable", "number", *number, "hash", hash)
@@ -345,11 +362,15 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		if limit-f.frozen > freezerBatchLimit {
 			limit = f.frozen + freezerBatchLimit
 		}
+
+		log.Info("Freezer info", "limit", limit, "frozen", f.frozen, "number", *number, "threshold", threshold)
+
 		var (
 			start    = time.Now()
 			first    = f.frozen
 			ancients = make([]common.Hash, 0, limit-f.frozen)
 		)
+
 		for f.frozen <= limit {
 			// Retrieves all the components of the canonical block
 			hash := ReadCanonicalHash(nfdb, f.frozen)
@@ -384,11 +405,19 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			}
 			ancients = append(ancients, hash)
 		}
+
+		//since only allowed modes are "","skipall",FreezerModeSkipAppend, "skipnone" and we already checked for skipall at start of function
+		if f.freezerMode != FreezerModeSkipAppend && f.freezerMode != FreezerModeSkipNone {
+			log.Error("Freezer unexpected freezerMode")
+			return
+		}
+		log.Info("Freezer truncating", "length", len(ancients), "frozen", f.frozen)
+
 		// Batch of blocks have been frozen, flush them before wiping from leveldb
 		if err := f.Sync(); err != nil {
 			log.Crit("Failed to flush frozen tables", "err", err)
 		}
-		// Wipe out all data from the active database
+		// Wipe out all data to be truncated, from the active database
 		batch := db.NewBatch()
 		for i := 0; i < len(ancients); i++ {
 			// Always keep the genesis block in active database
@@ -402,56 +431,6 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		}
 		batch.Reset()
 
-		// Wipe out side chains also and track dangling side chians
-		var dangling []common.Hash
-		for number := first; number < f.frozen; number++ {
-			// Always keep the genesis block in active database
-			if number != 0 {
-				dangling = ReadAllHashes(db, number)
-				for _, hash := range dangling {
-					log.Trace("Deleting side chain", "number", number, "hash", hash)
-					DeleteBlock(batch, hash, number)
-				}
-			}
-		}
-		if err := batch.Write(); err != nil {
-			log.Crit("Failed to delete frozen side blocks", "err", err)
-		}
-		batch.Reset()
-
-		// Step into the future and delete and dangling side chains
-		if f.frozen > 0 {
-			tip := f.frozen
-			for len(dangling) > 0 {
-				drop := make(map[common.Hash]struct{})
-				for _, hash := range dangling {
-					log.Debug("Dangling parent from freezer", "number", tip-1, "hash", hash)
-					drop[hash] = struct{}{}
-				}
-				children := ReadAllHashes(db, tip)
-				for i := 0; i < len(children); i++ {
-					// Dig up the child and ensure it's dangling
-					child := ReadHeader(nfdb, children[i], tip)
-					if child == nil {
-						log.Error("Missing dangling header", "number", tip, "hash", children[i])
-						continue
-					}
-					if _, ok := drop[child.ParentHash]; !ok {
-						children = append(children[:i], children[i+1:]...)
-						i--
-						continue
-					}
-					// Delete all block data associated with the child
-					log.Debug("Deleting dangling block", "number", tip, "hash", children[i], "parent", child.ParentHash)
-					DeleteBlock(batch, children[i], tip)
-				}
-				dangling = children
-				tip++
-			}
-			if err := batch.Write(); err != nil {
-				log.Crit("Failed to delete dangling side blocks", "err", err)
-			}
-		}
 		// Log something friendly for the user
 		context := []interface{}{
 			"blocks", f.frozen - first, "elapsed", common.PrettyDuration(time.Since(start)), "number", f.frozen - 1,
@@ -459,7 +438,7 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		if n := len(ancients); n > 0 {
 			context = append(context, []interface{}{"hash", ancients[n-1]}...)
 		}
-		log.Info("Deep froze chain segment", context...)
+		log.Debug("Deep froze chain segment", context...)
 
 		// Avoid database thrashing with tiny writes
 		if f.frozen-first < freezerBatchLimit {
@@ -470,18 +449,30 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 
 // repair truncates all data tables to the same length.
 func (f *freezer) repair() error {
-	min := uint64(math.MaxUint64)
+	if f.freezerMode == FreezerModeSkipAll {
+		return nil
+	}
+	if f.freezerMode == FreezerModeSkipAppend {
+		tbl, ok := f.tables[freezerHashTable]
+		if ok == true {
+			items := atomic.LoadUint64(&tbl.items)
+			atomic.StoreUint64(&f.frozen, items)
+			log.Debug("Freezer", "freezerHashTable item count", items)
+		}
+		return nil
+	}
+	minVal := uint64(math.MaxUint64)
 	for _, table := range f.tables {
 		items := atomic.LoadUint64(&table.items)
-		if min > items {
-			min = items
+		if minVal > items {
+			minVal = items
 		}
 	}
 	for _, table := range f.tables {
-		if err := table.truncate(min); err != nil {
+		if err := table.truncate(minVal); err != nil {
 			return err
 		}
 	}
-	atomic.StoreUint64(&f.frozen, min)
+	atomic.StoreUint64(&f.frozen, minVal)
 	return nil
 }

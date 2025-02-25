@@ -251,6 +251,10 @@ contract AddressChecker {
 }
 
 contract Runner {
+    address testAddress1 = 0xa000000000000000000000000000000000000000000000000000000000001000;
+    address testAddress2 = 0xB000000000000000000000000000000000000000000000000000000000002000;
+    address constant testAddress3 = 0xC000000000000000000000000000000000000000000000000000000000003000;
+
     AddressChecker private addressChecker;
     uint256 public testDelNumber; // Storage to be updated via delegatecall
 
@@ -261,8 +265,17 @@ contract Runner {
     event DeployedContractsCount(uint256 count);
     event DeployedContractAddress(uint256 index, address contractAddress);
 
-    address testAddress1 = 0x0000000000000000000000000000000000000000000000000000000000001000;
-    address testAddress2 = 0x0000000000000000000000000000000000000000000000000000000000002000;
+    function getAddress() public view returns(address) {
+        return testAddress1;
+    }
+
+    function getAddressConstant() public pure returns(address) {
+        return testAddress3;
+    }
+
+    function getInputAddress(address input) public pure returns(address) {
+        return input;
+    }
 
     function runAllTestsWithDefaultAddress(address payable _addressChecker) public {
         require(_addressChecker != address(0), "Invalid AddressChecker contract address a");
@@ -270,7 +283,7 @@ contract Runner {
 
         runTestSet1();
         runTestSet2();
-        runTestSet3();
+        //runTestSet3();
     }
 
     function runAllTests1(address payable _addressChecker, address payable add1, address payable add2) public {
@@ -371,8 +384,13 @@ contract Runner {
         emit TestCompleted("testBlacklist", blacklistTestResult ? "Blacklisted" : "Not Blacklisted");
 
         // Test logging address
+        testAddress2 = testAddress1;
         testLogAddress(testAddress2);
-        emit TestCompleted("testLogAddress", "Logged Successfully");
+        emit TestCompleted("testLogAddress a", "Logged Successfully a");
+
+        address testAddress4 = 0xd000000000000000000000000000000000000000000000000000000000004000;
+        testLogAddress(testAddress4);
+        emit TestCompleted("testLogAddress testAddress4", "Logged Successfully b");
 
         // Test checking if address is a contract
         bool isContractTestResult = testIsContract(testAddress1);

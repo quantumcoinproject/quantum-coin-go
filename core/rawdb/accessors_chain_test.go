@@ -434,7 +434,7 @@ func TestAncientStorage(t *testing.T) {
 	}
 	defer os.Remove(frdir)
 
-	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false)
+	db, err := NewDatabaseWithFreezer(NewMemoryDatabase(), frdir, "", false, "skipnone")
 	if err != nil {
 		t.Fatalf("failed to create database with ancient backend")
 	}
