@@ -26,6 +26,8 @@ type TransactionReceipt struct {
 	Hash string `json:"hash,omitempty"`
 
 	Type string `json:"type,omitempty"`
+
+	ContractAddress string `json:"contractAddress,omitempty"`
 }
 
 // AssertTransactionReceiptRequired checks if the required fields are not zero-ed

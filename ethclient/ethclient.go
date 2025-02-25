@@ -27,6 +27,7 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
+	"github.com/QuantumCoinProject/qc/core/asm"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/core/vm"
 	"github.com/QuantumCoinProject/qc/log"
@@ -60,6 +61,10 @@ func NewClient(c *rpc.Client) *Client {
 
 func (ec *Client) Close() {
 	ec.c.Close()
+}
+
+func (ec *Client) GetRpcClient() *rpc.Client {
+	return ec.c
 }
 
 // Blockchain Access
@@ -569,8 +574,24 @@ type TokenDetails struct {
 	Decimals    uint8
 }
 
-func (ec *Client) GetTokenDetails(contactAddress common.Address) (*TokenDetails, error) {
+func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*TokenDetails, error) {
 	log.Debug("GetTokenDetails", "contactAddress", contactAddress)
+	byteCode, err := ec.CodeAt(context.Background(), contactAddress, blockNumber)
+	if err != nil {
+		log.Debug("GetTokenDetails", "contactAddress", contactAddress, "error", err)
+		if err == bind.ErrNoCode {
+			return nil, NotATokenError
+		}
+		return nil, err
+	}
+
+	//Verify token is a smart contract
+	byteCodeHex := hexutil.Encode(byteCode)
+	if !asm.IsErc20(byteCodeHex) {
+		log.Debug("GetTokenDetails IsErc20 fail", "contactAddress", contactAddress)
+		return nil, NotATokenError
+	}
+
 	contract, err := token.NewToken(contactAddress, ec)
 	if err != nil {
 		log.Debug("GetTokenDetails", "error", err)

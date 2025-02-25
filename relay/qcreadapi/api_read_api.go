@@ -153,7 +153,7 @@ func (c *ReadApiAPIController) authorize(req *http.Request) bool {
 
 // GetLatestBlockDetails - Get latest block details
 func (c *ReadApiAPIController) GetLatestBlockDetails(w http.ResponseWriter, r *http.Request) {
-	log.Info("GetLatestBlockDetails aaf")
+	log.Info("GetLatestBlockDetails")
 	requestId := ""
 	if r.Header != nil {
 		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
@@ -311,6 +311,7 @@ func (c *ReadApiAPIController) GetBlockchainDetails(w http.ResponseWriter, r *ht
 
 	c.setupCORS(&w, r)
 	if (*r).Method == "OPTIONS" {
+		log.Info("GetBlockchainDetails OPTIONS", "requestId", requestId)
 		return
 	}
 

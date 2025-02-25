@@ -255,9 +255,13 @@ func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash stri
 			status := receipt["status"].(string)
 			txnReceiptHash := receipt["transactionHash"].(string)
 			t := receipt["type"].(string)
+			contractAddress := ""
+			if receipt["contractAddress"] != nil {
+				contractAddress = receipt["contractAddress"].(string)
+			}
 			transactionReceipt =  TransactionReceipt{
 				cumulativeGasUsed, effectiveGasPrice, gasUsed,
-				status, txnReceiptHash, t}
+				status, txnReceiptHash, t,contractAddress}
 		} else {
 			duration := time.Now().Sub(startTime)
 
@@ -467,7 +471,12 @@ func (s *ReadApiAPIService) GetTokenDetails(ctx context.Context, contractAddress
 		return Response(http.StatusBadRequest, nil), relay.ErrInvalidAddress
 	}
 
-	var client *ethclient.Client
+	tokenDetailsResponse, err := s.cacheManager.GetTokenDetails(contractAddress)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+
+	/*var client *ethclient.Client
 
 	client, err := ethclient.Dial(s.DpUrl)
 	if err != nil {
@@ -476,14 +485,19 @@ func (s *ReadApiAPIService) GetTokenDetails(ctx context.Context, contractAddress
 	}
 	defer client.Close()
 
+	blockNumber, err := s.getLatestBlockNumber(context.Background(), client)
+	if err != nil {
+		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+
 	var tokenDetails *ethclient.TokenDetails
-	tokenDetails, err = client.GetTokenDetails(common.HexToAddress(contractAddress))
+	tokenDetails, err = client.GetTokenDetails(common.HexToAddress(contractAddress), blockNumber)
 	if err != nil {
 		log.Error("GetTokenDetails", relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
 		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
 	}
 
-	log.Error("aaaaaaaaaaaaaaaaaaaaaa 1")
 	var result TokenDetails
 	result.Name = &tokenDetails.Name
 	result.Symbol = &tokenDetails.Symbol
@@ -494,17 +508,11 @@ func (s *ReadApiAPIService) GetTokenDetails(ctx context.Context, contractAddress
 	result.TotalSupply = &totalSupply
 
 	decimals := hexutil.EncodeUint64(uint64(tokenDetails.Decimals))
-	result.Decimals = &decimals
+	result.Decimals = &decimals*/
 
 	duration := time.Now().Sub(startTime)
 
-	log.Error("aaaaaaaaaaaaaaaaaaaaaa 2")
-
 	log.Info(relay.InfoTitleTokenDetails, relay.MsgAddress, contractAddress, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
-
-	tokenDetailsResponse := TokenDetailsResponse{
-		Result: result,
-	}
 
 	return Response(http.StatusOK, tokenDetailsResponse), nil
 }
