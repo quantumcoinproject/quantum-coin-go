@@ -595,6 +595,11 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	return filteredValidators, filteredDepositValue, blockMinWeightedProposalsRequired, nil
 }
 
+/*
+For security of the network, the goal is to select validators in a way that at-least 51% of staked coins are selected,
+while at the same time allowing even validators will lesser amount of staked coins (relative to others), to get selected for validation.
+It might not always be possible to select validators in a way that 51% of staked coins are selected, but the algorithm tries to establish a balance.
+*/
 func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *big.Int, valDepMap *map[common.Address]*big.Int) (*map[common.Address]bool, error) {
 	validatorsDepositMap := *valDepMap
 
@@ -761,7 +766,8 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
 	if ok == false {
-		log.Error("Not a validator in this block")
+		log.Info("Not a validator in this block. This is normal if your node hasn't yet downloaded all the blocks or if your validator is under offline penalty or validation is paused.",
+			"blockNumber", blockNumber, "validator address", cph.account.Address)
 	}
 
 	cph.blockStateDetailsMap[parentHash] = blockStateDetails
