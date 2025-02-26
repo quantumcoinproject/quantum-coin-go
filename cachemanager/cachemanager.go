@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumCoinProject/qc/ethdb"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/token"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -429,18 +430,19 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 		}
 	}
 
-	for k, v := range liveAccountMap {
-		err = c.processAccountTransactions(k, &v, &txnBatch)
+	//First store new tokens before processing account transactions!
+	for _, tkn := range tokensCreated {
+		err = c.putTokenInDb(tkn, &txnBatch)
 		if err != nil {
-			log.Error("processAccountTransaction", "error", err, "address", k)
+			log.Error("putTokenInDb", "error", err)
 			return err
 		}
 	}
 
-	for _, token := range tokensCreated {
-		err = c.putTokenInDb(token, &txnBatch)
+	for k, v := range liveAccountMap {
+		err = c.processAccountTransactions(k, &v, &txnBatch)
 		if err != nil {
-			log.Error("putTokenInDb", "error", err)
+			log.Error("processAccountTransaction", "error", err, "address", k)
 			return err
 		}
 	}
@@ -960,9 +962,9 @@ func (c *CacheManager) getTransactionType(from string, txn *types.Transaction, r
 	if txn.To() == nil {
 		if receipt.Status == 1 { //success
 			if receipt.ContractAddress.IsEqualTo(common.ZERO_ADDRESS) == false {
-				token, err := c.client.GetTokenDetails(receipt.ContractAddress, receipt.BlockNumber)
+				tok, err := c.client.GetTokenDetails(receipt.ContractAddress, receipt.BlockNumber)
 				if err != nil {
-					if err == ethclient.NotATokenError {
+					if err == token.NotATokenError {
 						return NEW_SMART_CONTRACT, nil, nil
 					} else {
 						return NEW_SMART_CONTRACT, nil, nil
@@ -973,10 +975,10 @@ func (c *CacheManager) getTransactionType(from string, txn *types.Transaction, r
 						CreatorAddress:         strings.ToLower(from),
 						CreatedTransactionHash: strings.ToLower(txn.Hash().Hex()),
 						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
-						Name:                   token.Name,
-						Symbol:                 token.Symbol,
-						TotalSupply:            hexutil.EncodeBig(token.TotalSupply),
-						Decimals:               hexutil.EncodeUint64(uint64(token.Decimals)),
+						Name:                   tok.Name,
+						Symbol:                 tok.Symbol,
+						TotalSupply:            hexutil.EncodeBig(tok.TotalSupply),
+						Decimals:               hexutil.EncodeUint64(uint64(tok.Decimals)),
 					}
 					return NEW_TOKEN, tokenDetails, nil
 				}

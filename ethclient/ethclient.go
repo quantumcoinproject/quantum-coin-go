@@ -30,6 +30,7 @@ import (
 	"github.com/QuantumCoinProject/qc/core/asm"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/QuantumCoinProject/qc/eth/tracers"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/QuantumCoinProject/qc/token"
@@ -564,23 +565,13 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	return arg
 }
 
-var NotATokenError = errors.New("invalid erc20 token")
-
-type TokenDetails struct {
-	Name        string
-	Symbol      string
-	Owner       common.Address
-	TotalSupply *big.Int
-	Decimals    uint8
-}
-
-func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*TokenDetails, error) {
+func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*token.TokenDetails, error) {
 	log.Debug("GetTokenDetails", "contactAddress", contactAddress)
 	byteCode, err := ec.CodeAt(context.Background(), contactAddress, blockNumber)
 	if err != nil {
 		log.Debug("GetTokenDetails", "contactAddress", contactAddress, "error", err)
 		if err == bind.ErrNoCode {
-			return nil, NotATokenError
+			return nil, token.NotATokenError
 		}
 		return nil, err
 	}
@@ -589,25 +580,25 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 	byteCodeHex := hexutil.Encode(byteCode)
 	if !asm.IsErc20(byteCodeHex) {
 		log.Debug("GetTokenDetails IsErc20 fail", "contactAddress", contactAddress)
-		return nil, NotATokenError
+		return nil, token.NotATokenError
 	}
 
 	contract, err := token.NewToken(contactAddress, ec)
 	if err != nil {
 		log.Debug("GetTokenDetails", "error", err)
 		if err == bind.ErrNoCode {
-			return nil, NotATokenError
+			return nil, token.NotATokenError
 		}
 		return nil, err
 	}
 
-	tokenDetails := TokenDetails{}
+	tokenDetails := token.TokenDetails{}
 
 	tokenDetails.TotalSupply, err = contract.TotalSupply(nil)
 	if err != nil {
 		log.Debug("GetTokenDetails TotalSupply", "error", err, "contactAddress", contactAddress)
 		if err == vm.ErrExecutionReverted {
-			return nil, NotATokenError
+			return nil, token.NotATokenError
 		}
 		return nil, err
 	}
@@ -664,10 +655,33 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 	if err != nil {
 		if err == vm.ErrExecutionReverted {
 			log.Debug("GetAccountTokenBalance", "error", err, "contactAddress", contactAddress)
-			return nil, NotATokenError
+			return nil, token.NotATokenError
 		}
 		return nil, err
 	}
 
 	return balance, nil
+}
+
+type InternalTransactionDetails struct {
+	From  string                       `json:"from,omitempty"`
+	To    string                       `json:"to,omitempty"`
+	Value string                       `json:"value,omitempty"`
+	Calls []InternalTransactionDetails `json:"calls,omitempty"`
+}
+
+func (ec *Client) GetInternalTransactions(ctx context.Context, txnHash common.Hash) (*InternalTransactionDetails, error) {
+	var tracedTransactions InternalTransactionDetails
+	tracer := "callTracer"
+
+	traceConfig := tracers.TraceConfig{
+		Tracer: &tracer,
+	}
+	err := ec.c.CallContext(ctx, &tracedTransactions, "debug_traceTransaction", txnHash, traceConfig)
+	if err != nil {
+		log.Debug("TraceTransaction error", "err", err)
+		return nil, err
+	}
+
+	return &tracedTransactions, nil
 }
