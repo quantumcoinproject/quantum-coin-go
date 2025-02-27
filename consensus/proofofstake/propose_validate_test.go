@@ -248,7 +248,7 @@ func TestPacketHandler_getBlockProposerV3(t *testing.T) {
 
 func TestPacketHandler_canPropose_v3_positive(t *testing.T) {
 	lastNilBlock := int64(OfflineValidatorDeferStartBlock + 1000)
-	currentBlock := uint64(1932746)
+	currentBlock := uint64(2083437)
 	if canProposeTest(lastNilBlock, 17, currentBlock, true) == false {
 		t.Fatalf("failed")
 	}
@@ -257,7 +257,7 @@ func TestPacketHandler_canPropose_v3_positive(t *testing.T) {
 
 func TestPacketHandler_canPropose_v3_positive_max_block_delay_equal(t *testing.T) {
 	lastNilBlock := int64(OfflineValidatorDeferStartBlock + 1000)
-	currentBlock := uint64(1998026)
+	currentBlock := uint64(2148717)
 	if canProposeTest(lastNilBlock, 32, currentBlock, true) == false {
 		t.Fatalf("failed")
 	}
@@ -266,7 +266,7 @@ func TestPacketHandler_canPropose_v3_positive_max_block_delay_equal(t *testing.T
 
 func TestPacketHandler_canPropose_v3_positive_max_block_delay_greater(t *testing.T) {
 	lastNilBlock := int64(OfflineValidatorDeferStartBlock + 1000)
-	currentBlock := uint64(1998026)
+	currentBlock := uint64(2148717)
 	if canProposeTest(lastNilBlock, 33, currentBlock, true) == false {
 		t.Fatalf("failed")
 	}
@@ -275,7 +275,7 @@ func TestPacketHandler_canPropose_v3_positive_max_block_delay_greater(t *testing
 
 func TestPacketHandler_canPropose_v3_negative_max_block_delay_greater(t *testing.T) {
 	lastNilBlock := int64(OfflineValidatorDeferStartBlock + 1000)
-	currentBlock := uint64(1998026 - 1)
+	currentBlock := uint64(2148717 - 1)
 	if canProposeTest(lastNilBlock, 33, currentBlock, false) == false {
 		t.Fatalf("failed")
 	}
