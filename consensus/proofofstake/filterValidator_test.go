@@ -229,7 +229,7 @@ func TestFilterValidators_positive_second_pass(t *testing.T) {
 
 		consensusContext1 := common.BytesToHash([]byte{100})
 		totalDeposit := testFilterValidatorsTest(t, consensusContext1, validatorsDepositMap, true)
-		expected := params.EtherToWei(big.NewInt(1774315000000))
+		expected := params.EtherToWei(big.NewInt(1496770000000))
 		if totalDeposit.Cmp(expected) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit), "expected", params.WeiToEther(expected))
 			t.Fatalf("failed a")
@@ -237,14 +237,14 @@ func TestFilterValidators_positive_second_pass(t *testing.T) {
 
 		consensusContext2 := common.BytesToHash([]byte{200})
 		totalDeposit = testFilterValidatorsTest(t, consensusContext2, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1774850000000))) != 0 {
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1595535000000))) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit))
 			t.Fatalf("failed b")
 		}
 
 		consensusContext3 := common.BytesToHash([]byte{255})
 		totalDeposit = testFilterValidatorsTest(t, consensusContext3, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1774265000000))) != 0 {
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1592665000000))) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit))
 			t.Fatalf("failed c")
 		}
@@ -270,7 +270,7 @@ func TestFilterValidators_positive_third_pass(t *testing.T) {
 
 		consensusContext1 := common.BytesToHash([]byte{100})
 		totalDeposit := testFilterValidatorsTest(t, consensusContext1, validatorsDepositMap, true)
-		expected := params.EtherToWei(big.NewInt(2446000023609))
+		expected := params.EtherToWei(big.NewInt(2123000022057))
 		if totalDeposit.Cmp(expected) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit), "expected", params.WeiToEther(expected))
 			t.Fatalf("failed a")
@@ -278,14 +278,14 @@ func TestFilterValidators_positive_third_pass(t *testing.T) {
 
 		consensusContext2 := common.BytesToHash([]byte{200})
 		totalDeposit = testFilterValidatorsTest(t, consensusContext2, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(2427000023828))) != 0 {
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(2180000022119))) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit))
 			t.Fatalf("failed b")
 		}
 
 		consensusContext3 := common.BytesToHash([]byte{255})
 		totalDeposit = testFilterValidatorsTest(t, consensusContext3, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(2389000024140))) != 0 {
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(2142000022027))) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit))
 			t.Fatalf("failed c")
 		}
@@ -311,7 +311,7 @@ func TestFilterValidators_positive_real(t *testing.T) {
 
 		consensusContext1 := common.BytesToHash([]byte{100})
 		totalDeposit := testFilterValidatorsTest(t, consensusContext1, validatorsDepositMap, true)
-		expected := params.EtherToWei(big.NewInt(1480600016992))
+		expected := params.EtherToWei(big.NewInt(1480600018701))
 		if totalDeposit.Cmp(expected) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit), "expected", params.WeiToEther(expected))
 			t.Fatalf("failed a")
@@ -319,14 +319,14 @@ func TestFilterValidators_positive_real(t *testing.T) {
 
 		consensusContext2 := common.BytesToHash([]byte{200})
 		totalDeposit = testFilterValidatorsTest(t, consensusContext2, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1480600018094))) != 0 {
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1480600019514))) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit))
 			t.Fatalf("failed b")
 		}
 
 		consensusContext3 := common.BytesToHash([]byte{255})
 		totalDeposit = testFilterValidatorsTest(t, consensusContext3, validatorsDepositMap, true)
-		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1480600018052))) != 0 {
+		if totalDeposit.Cmp(params.EtherToWei(big.NewInt(1480600019249))) != 0 {
 			fmt.Println("dep", params.WeiToEther(totalDeposit))
 			t.Fatalf("failed c")
 		}
