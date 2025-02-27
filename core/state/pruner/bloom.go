@@ -20,6 +20,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
+	"runtime"
 
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/core/rawdb"
@@ -94,9 +95,13 @@ func (bloom *stateBloom) Commit(filename, tempname string) error {
 	if err != nil {
 		return err
 	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return err
+	if runtime.GOOS == "windows" {
+		log.Debug("Skipping fsync in windows")
+	} else {
+		if err := f.Sync(); err != nil {
+			f.Close()
+			return err
+		}
 	}
 	f.Close()
 

@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumCoinProject/qc/ethdb"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/token"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -44,6 +45,7 @@ var SummaryKey = "summary"
 var LastBlockKey = "last-block"
 var AccountTxnCountKey = "account-txn-count-%s"                  //%s is account address
 var AccountTransactionPageKey = "account-transaction-list-%s-%d" //%s is account address, %d is page number
+var TokenDetailsKey = "erc20-%s"
 var chainID *big.Int
 
 const TimeLayout = "2006-01-02T15:04:05Z"
@@ -65,6 +67,21 @@ const (
 	NEW_SMART_CONTRACT TransactionType = "NewSmartContract"
 	SMART_CONTRACT     TransactionType = "SmartContract"
 )
+
+type TokenDetails struct {
+	ContractAddress        string `json:"contractAddress,omitempty"`
+	CreatorAddress         string `json:"creatorAddress,omitempty"`
+	CreatedBlockNumber     uint64 `json:"createdBlockNumber,omitempty"`
+	CreatedTransactionHash string `json:"createdTransactionHash,omitempty"`
+	Name                   string `json:"name,omitempty"`
+	Symbol                 string `json:"symbol,omitempty"`
+	TotalSupply            string `json:"totalSupply,omitempty"`
+	Decimals               string `json:"decimals,omitempty"`
+}
+
+type GetTokenDetailsResponse struct {
+	Result TokenDetails `json:"result,omitempty"`
+}
 
 type AccountTransactionCompact struct {
 	Hash string `json:"hash,omitempty"`
@@ -339,6 +356,8 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 	var liveAccountMap map[string][]AccountTransactionCompact //address to transactions in block mapping
 	liveAccountMap = make(map[string][]AccountTransactionCompact)
 
+	tokensCreated := make([]*TokenDetails, 0)
+
 	var receipts types.Receipts
 	receipts = make(types.Receipts, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
@@ -384,10 +403,13 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 			transaction.Status = "0x0"
 		}
 
-		//todo: fix
-		txType, err := getTransactionType(tx)
+		txType, tokenDetails, err := c.getTransactionType(fromAddress, tx, receipt)
 		if err != nil {
 			log.Error("getTransactionType", "error", err, "tx", tx.Hash())
+			return err
+		}
+		if txType == NEW_TOKEN {
+			tokensCreated = append(tokensCreated, tokenDetails)
 		}
 		transaction.TransactionType = string(txType)
 
@@ -405,6 +427,15 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 				}
 				liveAccountMap[toAddress] = append(liveAccountMap[toAddress], transaction)
 			}
+		}
+	}
+
+	//First store new tokens before processing account transactions!
+	for _, tkn := range tokensCreated {
+		err = c.putTokenInDb(tkn, &txnBatch)
+		if err != nil {
+			log.Error("putTokenInDb", "error", err)
+			return err
 		}
 	}
 
@@ -926,13 +957,80 @@ func getAccountPageKey(address string, pageCount uint64) []byte {
 	return []byte(pageKey)
 }
 
-// todo: handle TokenTransfer, NewToken
-func getTransactionType(txn *types.Transaction) (TransactionType, error) {
+// todo: handle TokenTransfer
+func (c *CacheManager) getTransactionType(from string, txn *types.Transaction, receipt *types.Receipt) (TransactionType, *TokenDetails, error) {
 	if txn.To() == nil {
-		return NEW_SMART_CONTRACT, nil
+		if receipt.Status == 1 { //success
+			if receipt.ContractAddress.IsEqualTo(common.ZERO_ADDRESS) == false {
+				tok, err := c.client.GetTokenDetails(receipt.ContractAddress, receipt.BlockNumber)
+				if err != nil {
+					if err == token.NotATokenError {
+						return NEW_SMART_CONTRACT, nil, nil
+					} else {
+						return NEW_SMART_CONTRACT, nil, nil
+					}
+				} else {
+					tokenDetails := &TokenDetails{
+						ContractAddress:        strings.ToLower(receipt.ContractAddress.Hex()),
+						CreatorAddress:         strings.ToLower(from),
+						CreatedTransactionHash: strings.ToLower(txn.Hash().Hex()),
+						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
+						Name:                   tok.Name,
+						Symbol:                 tok.Symbol,
+						TotalSupply:            hexutil.EncodeBig(tok.TotalSupply),
+						Decimals:               hexutil.EncodeUint64(uint64(tok.Decimals)),
+					}
+					return NEW_TOKEN, tokenDetails, nil
+				}
+			} else {
+				log.Warn("getTransactionType unexpected zero address for contract")
+			}
+		}
+		return NEW_SMART_CONTRACT, nil, nil
 	}
 	if txn.Data() == nil || len(txn.Data()) == 0 {
-		return COIN_TRANSFER, nil
+		return COIN_TRANSFER, nil, nil
 	}
-	return SMART_CONTRACT, nil
+	return SMART_CONTRACT, nil, nil
+}
+
+func (c *CacheManager) GetTokenDetails(contractAddress string) (*GetTokenDetailsResponse, error) {
+	contractAddress = strings.ToLower(contractAddress)
+	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
+
+	db := c.cacheDb
+	tokenBlob, err := db.Get([]byte(key))
+	if err != nil {
+		return nil, err
+	}
+
+	var tokenDetails TokenDetails
+	err = json.Unmarshal(tokenBlob, &tokenDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetTokenDetailsResponse{
+		Result: tokenDetails,
+	}, nil
+}
+
+func (c *CacheManager) putTokenInDb(tokenDetails *TokenDetails, batch *ethdb.Batch) error {
+	txnBatch := *batch
+
+	blob, err := json.Marshal(tokenDetails)
+	if err != nil {
+		return err
+	}
+
+	contractAddress := strings.ToLower(tokenDetails.ContractAddress)
+	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
+	keyBlob := []byte(key)
+
+	err = txnBatch.Put(keyBlob, blob)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

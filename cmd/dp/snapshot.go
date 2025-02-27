@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"time"
 
@@ -171,6 +172,19 @@ The argument is interpreted as block number or hash. If none is provided, the la
 block is used.
 `,
 			},
+			{
+				Name:      "compact-chaindb",
+				Usage:     "Compact chaindb offline",
+				ArgsUsage: "<root>",
+				Action:    utils.MigrateFlags(compactChainDb),
+				Category:  "MISCELLANEOUS COMMANDS",
+				Flags: []cli.Flag{
+					utils.DataDirFlag,
+				},
+				Description: `
+geth offline compact-chaindb compacts the chaindb. This can take mmany hours to complete.
+`,
+			},
 		},
 	}
 )
@@ -211,7 +225,7 @@ func verifyState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
-		log.Error("Failed to load head block")
+		log.Error("verifyState: Failed to load head block")
 		return errors.New("no head block")
 	}
 	snaptree, err := snapshot.New(chaindb, trie.NewDatabase(chaindb), 256, headBlock.Root(), false, false, false)
@@ -249,7 +263,7 @@ func traverseState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
-		log.Error("Failed to load head block")
+		log.Error("traverseState: Failed to load head block")
 		return errors.New("no head block")
 	}
 	if ctx.NArg() > 1 {
@@ -339,7 +353,7 @@ func traverseRawState(ctx *cli.Context) error {
 	chaindb := utils.MakeChainDatabase(ctx, stack, true)
 	headBlock := rawdb.ReadHeadBlock(chaindb)
 	if headBlock == nil {
-		log.Error("Failed to load head block")
+		log.Error("traverseRawState: Failed to load head block")
 		return errors.New("no head block")
 	}
 	if ctx.NArg() > 1 {
@@ -525,5 +539,26 @@ func dumpState(ctx *cli.Context) error {
 	}
 	log.Info("Snapshot dumping complete", "accounts", accounts,
 		"elapsed", common.PrettyDuration(time.Since(start)))
+	return nil
+}
+
+func compactChainDb(ctx *cli.Context) error {
+	stack, _ := makeConfigNode(ctx)
+	defer stack.Close()
+
+	log.Info("Starting to comptact chaindb. This can take mmany hours to complete.")
+
+	chaindb := utils.MakeChainDatabase(ctx, stack, false)
+
+	for b := byte(0); b < 255; b++ {
+		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1), "progress", b+1, "of total", 256)
+		if err := chaindb.Compact([]byte{b}, []byte{b + 1}); err != nil {
+			log.Error("Database compaction failed", "err", err)
+			return err
+		}
+	}
+
+	log.Info("Completed compacting chaindb")
+
 	return nil
 }

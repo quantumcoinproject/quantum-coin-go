@@ -113,8 +113,11 @@ var SKIP_HASH_CHECK = false
 var STALE_BLOCK_WARN_TIME = int64(1800 * 1000)
 var BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER = uint64(2)
 var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT = uint64(1024)
-
 var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2 = uint64(16384)
+var BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V3 = uint64(65536)
+
+var OFFLINE_VALIDATOR_DEFER_THRESHOLD = uint64(128)
+var OFFLINE_VALIDATOR_DEFER_COUNT = uint64(16384)
 
 var MIN_VALIDATORS int = 3
 
@@ -127,6 +130,8 @@ type NewRoundReason byte
 var InvalidPacketErr = errors.New("invalid packet")
 var OutOfOrderPackerErr = errors.New("packet received out of order")
 var UnknownParentHashErr = errors.New("unknown parent hash")
+var PacketsOverLimitErr = errors.New("packet count exceeded threshold")
+var UnknownPacketTypeErr = errors.New("unknown packet type")
 
 const (
 	BLOCK_STATE_UNKNOWN                   BlockRoundState = 0
@@ -159,7 +164,9 @@ const (
 )
 
 const (
-	MAX_VALIDATORS int = 128
+	MAX_VALIDATORS                                        int = 128
+	MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION_CUTOFF  int = 90                                                        //70% of 128
+	MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF int = MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION_CUTOFF + 26 //20% of 128
 )
 
 const (
@@ -184,8 +191,10 @@ var (
 	MIN_BLOCK_DEPOSIT                                      *big.Int       = params.EtherToWei(big.NewInt(500000000000))
 	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE    *big.Int       = big.NewInt(70)
 	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2 *big.Int       = big.NewInt(60)
+	MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V3 *big.Int       = big.NewInt(67) //66.7 round off to 67, so there can be no permanent forked chain
 	ZERO_HASH                                              common.Hash    = common.BytesToHash([]byte{0})
 	ZERO_ADDRESS                                           common.Address = common.BytesToAddress([]byte{0})
+	MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE                                = big.NewInt(85) //(100 * 51) / MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2. This is to ensure worst case minimum of 51% of total staked coins needed to create a block
 )
 
 type BlockRoundDetails struct {
@@ -423,30 +432,52 @@ func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[c
 	return proposer, nil
 }
 
-func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) bool {
+func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
 	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
-		return true
+		return true, currentBlockNumber
+	}
+	if valDetails.NilBlockCount.Uint64() < OFFLINE_VALIDATOR_DEFER_THRESHOLD {
+		return true, currentBlockNumber
 	}
 
-	var maxBlockdelay uint64
-	if currentBlockNumber >= BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
-		maxBlockdelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
+	nextValidationBlock := valDetails.LastNiLBlock.Uint64() + OFFLINE_VALIDATOR_DEFER_COUNT
+	result := currentBlockNumber >= nextValidationBlock
+
+	log.Debug("canValidate", "validator", valDetails.Validator, "result", result, "currentBlockNumber", currentBlockNumber, "LastNiLBlock", valDetails.LastNiLBlock,
+		"NilBlockCount", valDetails.NilBlockCount, "nextValidationBlock", nextValidationBlock)
+
+	return result, nextValidationBlock
+}
+
+func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
+	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
+		return true, currentBlockNumber
+	}
+
+	var maxBlockDelay uint64
+	if currentBlockNumber >= OfflineValidatorDeferStartBlock {
+		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V3
+	} else if currentBlockNumber >= BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
+		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
 	} else {
-		maxBlockdelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
+		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
 	}
 
 	slotsMissed := float64(valDetails.NilBlockCount.Uint64() / BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER)
+	if slotsMissed >= 16 { //to avoid overflow errors
+		slotsMissed = 16
+	}
 	blockDelay := uint64(math.Pow(2.0, slotsMissed))
-	if blockDelay > maxBlockdelay {
-		blockDelay = maxBlockdelay
+	if blockDelay > maxBlockDelay {
+		blockDelay = maxBlockDelay
 	}
 
 	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
 	result := currentBlockNumber >= nextProposalBlock
 	log.Debug("canPropose", "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount,
-		"slotsMissed", slotsMissed, "blockDelay", blockDelay, "nextProposalBlock", nextProposalBlock,
+		"slotsMissed", slotsMissed, "blockDelay", blockDelay, "nextProposalBlock", nextProposalBlock, "maxBlockDelay", maxBlockDelay,
 		"currentBlockNumber", currentBlockNumber, "canPropose", result, "validator", valDetails.Validator)
-	return result
+	return result, nextProposalBlock
 }
 
 func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Address]*ValidatorDetailsV2, round byte, blockNumber uint64) (common.Address, error) {
@@ -458,7 +489,8 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 
 	selectedValMap := make(map[common.Address]*ValidatorDetailsV2)
 	for valAddr, valDetails := range *validatorMap {
-		if canPropose(valDetails, blockNumber) == false {
+		canProp, _ := canPropose(valDetails, blockNumber)
+		if canProp == false {
 			continue
 		}
 		selectedValMap[valAddr] = valDetails
@@ -490,22 +522,34 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	return proposer, nil
 }
 
-func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64) (filteredValidators map[common.Address]bool, filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
+func filterValidators(consensusContext common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) (filteredValidators map[common.Address]bool,
+	filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
+
 	validatorsDepositMap := *valDepMap
 
 	totalDepositValue := big.NewInt(0)
 	valCount := 0
-	for val, depositValue := range validatorsDepositMap { //todo: this should be based on netBalance
+	for val, depositValue := range validatorsDepositMap {
 		if depositValue.Cmp(MIN_VALIDATOR_DEPOSIT) == -1 {
 			log.Trace("Skipping validator with low balance", "val", val, "depositValue", depositValue)
 			delete(validatorsDepositMap, val)
 			continue
+		}
+		if blockNumber >= OfflineValidatorDeferStartBlock {
+			valDetailsMap := *validatorDetailsMap
+			canVal, _ := canValidate(valDetailsMap[val], blockNumber)
+			if canVal == false {
+				log.Trace("Skipping offline validator", "val", val, "depositValue", depositValue)
+				delete(validatorsDepositMap, val)
+				continue
+			}
 		}
 		totalDepositValue = common.SafeAddBigInt(totalDepositValue, depositValue)
 		valCount = valCount + 1
 	}
 
 	if valCount < MIN_VALIDATORS {
+		log.Warn("Validator count", "count", valCount, "MIN_VALIDATORS", MIN_VALIDATORS)
 		return nil, nil, nil, errors.New("number of validators less than minimum")
 	}
 
@@ -520,58 +564,11 @@ func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big
 			filteredValidators[validator] = true
 		}
 	} else {
-		rng, err := cryptobase.DRNG.InitializeWithSeed(parentHash)
+		filteredValidatorsRet, err := getMaxFilteredValidators(consensusContext, totalDepositValue, valDepMap)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-
-		zero := big.NewInt(0)
-		byteMax := big.NewInt(255)
-		depositValueSoFar := big.NewInt(0)
-
-		validatorList := make([]common.Address, len(validatorsDepositMap))
-		ctr := 0
-		for validator, _ := range validatorsDepositMap {
-			validatorList[ctr] = validator
-			ctr = ctr + 1
-		}
-
-		sort.Slice(validatorList, func(i, j int) bool {
-			vi := crypto.Keccak256Hash(parentHash.Bytes(), validatorList[i].Bytes()).Bytes()
-			vj := crypto.Keccak256Hash(parentHash.Bytes(), validatorList[j].Bytes()).Bytes()
-			return bytes.Compare(vi, vj) == -1
-		})
-
-		for _, validator := range validatorList {
-			depositValue := validatorsDepositMap[validator]
-			randByte := big.NewInt(int64(rng.NextByte()))
-
-			//normalize depositValue to byte-max value since random generator only returns bytes
-			normalizedDepositValue := common.SafeDivBigInt(common.SafeMulBigInt(byteMax, depositValue), totalDepositValue)
-			if normalizedDepositValue.Cmp(zero) < 0 || normalizedDepositValue.Cmp(byteMax) > 0 {
-				return nil, nil, nil, errors.New("invalid normalizedDepositValue")
-			}
-
-			if normalizedDepositValue.Cmp(randByte) >= 0 {
-				filteredValidators[validator] = true
-				depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
-			}
-		}
-
-		if len(filteredValidators) < MAX_VALIDATORS || MIN_BLOCK_DEPOSIT.Cmp(depositValueSoFar) > 0 {
-			for _, validator := range validatorList {
-				_, ok := filteredValidators[validator]
-				if ok == false {
-					//this needs optimization, since validators first in the list get the benefit
-					filteredValidators[validator] = true
-					depositValue := validatorsDepositMap[validator]
-					depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
-					if len(filteredValidators) == MAX_VALIDATORS && MIN_BLOCK_DEPOSIT.Cmp(depositValueSoFar) <= 0 {
-						break
-					}
-				}
-			}
-		}
+		filteredValidators = *filteredValidatorsRet
 	}
 
 	filteredDepositValue = big.NewInt(0)
@@ -585,7 +582,9 @@ func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big
 	}
 
 	var minPercentage *big.Int
-	if blockNumber >= SixtyVoteStartBlock {
+	if blockNumber >= SixtySevenVoteStartBlock {
+		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V3
+	} else if blockNumber >= SixtyVoteStartBlock {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2
 	} else {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE
@@ -594,6 +593,93 @@ func filterValidators(parentHash common.Hash, valDepMap *map[common.Address]*big
 	blockMinWeightedProposalsRequired = common.SafeRelativePercentageBigInt(filteredDepositValue, minPercentage)
 
 	return filteredValidators, filteredDepositValue, blockMinWeightedProposalsRequired, nil
+}
+
+/*
+For security of the network, the goal is to select validators in a way that at-least 51% of staked coins are selected,
+while at the same time allowing even validators will lesser amount of staked coins (relative to others), to get selected for validation.
+It might not always be possible to select validators in a way that 51% of staked coins are selected, but the algorithm tries to establish a balance.
+*/
+func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *big.Int, valDepMap *map[common.Address]*big.Int) (*map[common.Address]bool, error) {
+	validatorsDepositMap := *valDepMap
+
+	depositValueSoFar := big.NewInt(0)
+	blockMinWeightedStake := common.SafeRelativePercentageBigInt(totalDepositValue, MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE)
+	log.Debug("getMaxFilteredValidators", "blockMinWeightedStake", blockMinWeightedStake, "totalDepositValue", totalDepositValue)
+	filteredValidators := make(map[common.Address]bool)
+
+	validatorList := make([]common.Address, len(validatorsDepositMap))
+	ctr := 0
+	for validator, _ := range validatorsDepositMap {
+		validatorList[ctr] = validator
+		ctr = ctr + 1
+	}
+
+	//First pass, fill weighted at-least blockMinWeightedStake percentage of coins
+	sort.SliceStable(validatorList, func(i, j int) bool { //SliceStable needed since values can be equal
+		valDepI := validatorsDepositMap[validatorList[i]]
+		valDepJ := validatorsDepositMap[validatorList[j]]
+		cmpResult := valDepI.Cmp(valDepJ)
+		if cmpResult == 0 { //equal deposit, sort by consensus context + validator address combo
+			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
+			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		}
+		return cmpResult > 0
+	})
+	for _, validator := range validatorList {
+		filteredValidators[validator] = true
+		depositValue := validatorsDepositMap[validator]
+		depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
+		if len(filteredValidators) == MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION_CUTOFF || depositValueSoFar.Cmp(blockMinWeightedStake) > 0 {
+			log.Trace("getMaxFilteredValidators first pass", "len(filteredValidators)", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
+			break
+		}
+	}
+
+	log.Trace("validator count after first pass", "filteredValidators", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
+
+	//Second pass, fill based no weighted sort order, but randomness based on consensus context. This ensures those with higher stake have a greater probability of being selected for validation.
+	for _, validator := range validatorList {
+		_, ok := filteredValidators[validator]
+		if ok == true {
+			continue
+		}
+		//Note, we do Keccak256Hash to reduce risk from generation of validator address that are more likely to be lower than just comparing with consensus-context
+		leftHash := crypto.Keccak256Hash(consensusContext.Bytes(), validator.Bytes()).Bytes()
+		rightHash := crypto.Keccak256Hash(validator.Bytes(), consensusContext.Bytes()).Bytes()
+		if bytes.Compare(leftHash, rightHash) > 0 {
+			filteredValidators[validator] = true
+			if len(filteredValidators) == MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
+				break
+			}
+		} else {
+			log.Trace("validator skip second pass", "validator", validator)
+		}
+	}
+
+	log.Trace("validator count after second pass", "filteredValidators", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
+
+	//Third pass, fill by consensus context sort order, if the buffer is not full even after second pass. This is to ensure fairness even for validators with lower number of staked coins
+	//Sort based on consensus context
+	sort.Slice(validatorList, func(i, j int) bool {
+		vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
+		vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
+		return bytes.Compare(vi, vj) == -1
+	})
+
+	for _, validator := range validatorList {
+		_, ok := filteredValidators[validator]
+		if ok == true {
+			continue
+		}
+		filteredValidators[validator] = true
+		if len(filteredValidators) == MAX_VALIDATORS {
+			break
+		}
+	}
+
+	return &filteredValidators, nil
 }
 
 func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Hash, blockNumber uint64) error {
@@ -623,21 +709,40 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	preFilterValidatorCount := len(validators)
 
+	//Consensus Context
+	if blockNumber >= CONTEXT_BASED_START_BLOCK {
+		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
+		if err != nil {
+			return err
+		}
+		blockContext, err := cph.getBlockConsensusContext(contextKey, parentHash)
+		if err != nil {
+			return err
+		}
+		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
+	} else {
+		blockStateDetails.consensusContext = parentHash
+	}
+
+	var validatorDetailsMap map[common.Address]*ValidatorDetailsV2
+	if blockNumber >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+		validatorDetailsMap, err = cph.listValidatorsFn(parentHash)
+		if err != nil {
+			log.Error("listValidatorsFn", "err", err)
+			return err
+		}
+	}
+
 	var filteredValidators map[common.Address]bool
-	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(parentHash, &validators, blockNumber)
+	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(blockStateDetails.consensusContext, &validators, blockNumber, &validatorDetailsMap)
 	if err != nil {
 		delete(cph.blockStateDetailsMap, parentHash)
 		return err
 	}
 
 	if blockNumber >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
-		validatorDetailsMap, err := cph.listValidatorsFn(parentHash)
-		if err != nil {
-			log.Error("listValidatorsFn", "err", err)
-			return err
-		}
 		for valAddr, valDetails := range validatorDetailsMap {
-			if valDetails.IsValidationPaused {
+			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidators
 				delete(validatorDetailsMap, valAddr)
 				continue
 			}
@@ -661,24 +766,12 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
 	if ok == false {
-		log.Error("Not a validator in this block")
+		log.Info("Not a validator in this block. This is normal if your node hasn't yet downloaded all the blocks or if your validator is under offline penalty or validation is paused.",
+			"blockNumber", blockNumber, "validator address", cph.account.Address)
 	}
 
 	cph.blockStateDetailsMap[parentHash] = blockStateDetails
 	cph.currentParentHash = parentHash
-
-	//Consensus Context
-	if blockNumber >= CONTEXT_BASED_START_BLOCK {
-		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
-		if err != nil {
-			return err
-		}
-		blockContext, err := cph.getBlockConsensusContext(contextKey, cph.currentParentHash)
-		if err != nil {
-			return err
-		}
-		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
-	}
 
 	log.Debug("blockStateDetails", "totalBlockDepositValue", blockStateDetails.totalBlockDepositValue,
 		"blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired, "consensusContext", blockStateDetails.consensusContext)

@@ -17,17 +17,19 @@ import (
 )
 
 type ValidatorDetails struct {
-	Depositor          common.Address `json:"depositor"     gencodec:"required"`
-	Validator          common.Address `json:"validator"     gencodec:"required"`
-	Balance            string         `json:"balance"       gencodec:"required"`
-	NetBalance         string         `json:"netBalance"    gencodec:"required"`
-	BlockRewards       string         `json:"blockRewards"  gencodec:"required"`
-	Slashings          string         `json:"slashings"  gencodec:"required"`
-	IsValidationPaused bool           `json:"isValidationPaused"  gencodec:"required"`
-	WithdrawalBlock    string         `json:"withdrawalBlock"  gencodec:"required"`
-	WithdrawalAmount   string         `json:"withdrawalAmount"  gencodec:"required"`
-	LastNiLBlock       string         `json:"lastNiLBlock" gencodec:"required"`
-	NilBlockCount      string         `json:"nilBlockCount" gencodec:"required"`
+	Depositor               common.Address `json:"depositor"     gencodec:"required"`
+	Validator               common.Address `json:"validator"     gencodec:"required"`
+	Balance                 string         `json:"balance"       gencodec:"required"`
+	NetBalance              string         `json:"netBalance"    gencodec:"required"`
+	BlockRewards            string         `json:"blockRewards"  gencodec:"required"`
+	Slashings               string         `json:"slashings"  gencodec:"required"`
+	IsValidationPaused      bool           `json:"isValidationPaused"  gencodec:"required"`
+	WithdrawalBlock         string         `json:"withdrawalBlock"  gencodec:"required"`
+	WithdrawalAmount        string         `json:"withdrawalAmount"  gencodec:"required"`
+	LastNiLBlock            string         `json:"lastNiLBlock" gencodec:"required"`
+	NilBlockCount           string         `json:"nilBlockCount" gencodec:"required"`
+	BlockProposerResetBlock string         `json:"blockProposerResetBlock" gencodec:"required"`
+	ValidatorResetBlock     string         `json:"validatorResetBlock" gencodec:"required"`
 }
 
 type ValidatorDetailsV2 struct {
@@ -1064,6 +1066,10 @@ func (p *ProofOfStake) ListValidators(blockHash common.Hash, blockNumber uint64)
 			if err != nil {
 				return nil, err
 			}
+
+			canVal, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
+			canProp, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+
 			validatorDetails = &ValidatorDetails{
 				Depositor:          validatorDetailsV2.Depositor,
 				Validator:          validatorDetailsV2.Validator,
@@ -1076,6 +1082,14 @@ func (p *ProofOfStake) ListValidators(blockHash common.Hash, blockNumber uint64)
 				WithdrawalAmount:   hexutil.EncodeBig(validatorDetailsV2.WithdrawalAmount),
 				LastNiLBlock:       hexutil.EncodeBig(validatorDetailsV2.LastNiLBlock),
 				NilBlockCount:      hexutil.EncodeBig(validatorDetailsV2.NilBlockCount),
+			}
+			if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
+				if canVal == false {
+					validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
+				}
+				if canProp == false {
+					validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+				}
 			}
 		}
 
