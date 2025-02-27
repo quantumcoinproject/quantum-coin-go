@@ -35,7 +35,7 @@ import (
 const TxnContractRuntimeBin = "608060405260043610601c5760003560e01c8063d0e30db0146021575b600080fd5b6027603d565b6040518082815260200191505060405180910390f35b600080349050605681600054606590919063ffffffff16565b60008190555060005491505090565b600080828401905083811015607657fe5b809150509291505056fea2646970667358221220f2a9c298fd8e42f28b414deb38136c23f2479330a95a99542b014e0456fcd44464736f6c637827302e372e362d646576656c6f702e323032352e322e31332b636f6d6d69742e34663635373333610058"
 const GENESIS_BLOCK_HASH = "0x2c8127f13d50434052128a88c9c9f79a27d44a1145e51f6fd250b6e247369e99"
 
-var txnContractAddress = common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000003000")
+var txnToAddress = common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000003000")
 var messageSenderAddress = common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000005000")
 
 func newStateDb() *state.StateDB {
@@ -43,9 +43,6 @@ func newStateDb() *state.StateDB {
 	fmt.Println("txntest db path", dname)
 	db, _ := rawdb.NewLevelDBDatabase(dname, 0, 0, "", false)
 	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db), nil)
-
-	statedb.CreateAccount(txnContractAddress)
-	statedb.SetCode(txnContractAddress, common.FromHex(TxnContractRuntimeBin))
 
 	for i := 0; i <= 9999999; i++ {
 		statedb.AddBalance(messageSenderAddress, big.NewInt(9000000000000000000))
@@ -122,7 +119,7 @@ func execute(tcc *TestChainContext, data []byte, from common.Address, state *sta
 
 	args := ethapi.TransactionArgs{
 		From:  &from,
-		To:    &txnContractAddress,
+		To:    &txnToAddress,
 		Data:  &msgData,
 		Value: (*hexutil.Big)(value),
 	}
@@ -170,18 +167,27 @@ func GetTxnContract_ABI() (abi.ABI, error) {
 	return abi, err
 }
 
-func executeTxn(state *state.StateDB, iterations uint64) error {
+func executeTxn(state *state.StateDB, iterations uint64, toContract bool) error {
 	method := "deposit"
-	abiData, err := GetTxnContract_ABI()
-	if err != nil {
-		log.Error("deposit abi error", "err", err)
-		return err
-	}
-	// call
-	data, err := encodeCall(&abiData, method)
-	if err != nil {
-		log.Error("Unable to pack deposit", "error", err)
-		return err
+	var data []byte
+	var err error
+	var abiData abi.ABI
+
+	if toContract {
+		state.CreateAccount(txnToAddress)
+		state.SetCode(txnToAddress, common.FromHex(TxnContractRuntimeBin))
+
+		abiData, err = GetTxnContract_ABI()
+		if err != nil {
+			log.Error("deposit abi error", "err", err)
+			return err
+		}
+		// call
+		data, err = encodeCall(&abiData, method)
+		if err != nil {
+			log.Error("Unable to pack deposit", "error", err)
+			return err
+		}
 	}
 
 	header := tcc.GetHeader(common.ZERO_HASH, uint64(1))
@@ -197,22 +203,26 @@ func executeTxn(state *state.StateDB, iterations uint64) error {
 			return err
 		}
 
-		if len(result) == 0 {
+		if toContract && len(result) == 0 {
 			return errors.New("deposit result is 0")
 		}
 	}
 	timeTaken := time.Since(startTime)
-	fmt.Println("deposit", "iterations", iterations, "time taken", timeTaken)
+	fmt.Println("deposit", "iterations", iterations, "toContract", toContract, "time taken", timeTaken)
 
-	var (
-		totalDeposited = big.NewInt(0)
-	)
+	if toContract {
+		var (
+			totalDeposited = big.NewInt(0)
+		)
 
-	if err = abiData.UnpackIntoInterface(&totalDeposited, method, result); err != nil {
-		log.Error("deposit UnpackIntoInterface", "err", err, "totalDeposited", totalDeposited)
+		if err = abiData.UnpackIntoInterface(&totalDeposited, method, result); err != nil {
+			log.Error("deposit UnpackIntoInterface", "err", err, "totalDeposited", totalDeposited)
+		}
+
+		fmt.Println("deposit", "totalDeposited", totalDeposited, "toContract", toContract)
+	} else {
+		fmt.Println("deposit", "balance", state.GetBalance(txnToAddress), "toContract", toContract)
 	}
-
-	fmt.Println("deposit", "totalDeposited", totalDeposited)
 
 	return nil
 }
@@ -222,7 +232,7 @@ func TestTxnSingle(t *testing.T) {
 
 	sdb := newStateDb()
 
-	err = executeTxn(sdb, 1)
+	err = executeTxn(sdb, 1, true)
 	if err != nil {
 		fmt.Println("error a", err)
 		t.Fatalf("failed a")
@@ -230,12 +240,12 @@ func TestTxnSingle(t *testing.T) {
 
 }
 
-func TestTxnTen(t *testing.T) {
+func TestTxnTenContract(t *testing.T) {
 	var err error
 
 	sdb := newStateDb()
 
-	err = executeTxn(sdb, 1)
+	err = executeTxn(sdb, 1, true)
 	if err != nil {
 		fmt.Println("error a", err)
 		t.Fatalf("failed a")
@@ -243,12 +253,38 @@ func TestTxnTen(t *testing.T) {
 
 }
 
-func TestTxnHundred(t *testing.T) {
+func TestTxnHundredContract(t *testing.T) {
 	var err error
 
 	sdb := newStateDb()
 
-	err = executeTxn(sdb, 100)
+	err = executeTxn(sdb, 100, true)
+	if err != nil {
+		fmt.Println("error a", err)
+		t.Fatalf("failed a")
+	}
+
+}
+
+func TestTxnThousandContract(t *testing.T) {
+	var err error
+
+	sdb := newStateDb()
+
+	err = executeTxn(sdb, 1000, true)
+	if err != nil {
+		fmt.Println("error a", err)
+		t.Fatalf("failed a")
+	}
+
+}
+
+func TestTxnTenThousandContract(t *testing.T) {
+	var err error
+
+	sdb := newStateDb()
+
+	err = executeTxn(sdb, 10000, true)
 	if err != nil {
 		fmt.Println("error a", err)
 		t.Fatalf("failed a")
@@ -261,7 +297,7 @@ func TestTxnThousand(t *testing.T) {
 
 	sdb := newStateDb()
 
-	err = executeTxn(sdb, 1000)
+	err = executeTxn(sdb, 1000, false)
 	if err != nil {
 		fmt.Println("error a", err)
 		t.Fatalf("failed a")
@@ -274,20 +310,7 @@ func TestTxnTenThousand(t *testing.T) {
 
 	sdb := newStateDb()
 
-	err = executeTxn(sdb, 10000)
-	if err != nil {
-		fmt.Println("error a", err)
-		t.Fatalf("failed a")
-	}
-
-}
-
-func TestTxnHundredThousand(t *testing.T) {
-	var err error
-
-	sdb := newStateDb()
-
-	err = executeTxn(sdb, 1000000)
+	err = executeTxn(sdb, 10000, false)
 	if err != nil {
 		fmt.Println("error a", err)
 		t.Fatalf("failed a")
