@@ -565,8 +565,37 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 	return arg
 }
 
+type AccountType string
+
+const (
+	ACCOUNT_TYPE_REGULAR  AccountType = "REGULAR"
+	ACCOUNT_TYPE_CONTRACT AccountType = "CONTRACT"
+	ACCOUNT_TYPE_TOKEN    AccountType = "TOKEN"
+)
+
+func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (AccountType, error) {
+	log.Debug("GetAccountType", "address", address, "blockNumber", blockNumber)
+	byteCode, err := ec.CodeAt(context.Background(), address, blockNumber)
+	if err != nil {
+		log.Debug("GetAccountType", "address", address, "error", err)
+		if err == bind.ErrNoCode {
+			return ACCOUNT_TYPE_REGULAR, nil
+		}
+		return "", err
+	}
+
+	//Verify token is a smart contract
+	byteCodeHex := hexutil.Encode(byteCode)
+	if asm.IsErc20(byteCodeHex) {
+		log.Debug("GetAccountType IsErc20 fail", "contactAddress", address)
+		return ACCOUNT_TYPE_TOKEN, token.NotATokenError
+	}
+
+	return ACCOUNT_TYPE_CONTRACT, err
+}
+
 func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*token.TokenDetails, error) {
-	log.Debug("GetTokenDetails", "contactAddress", contactAddress)
+	log.Debug("GetTokenDetails", "contactAddress", contactAddress, "blockNumber", blockNumber)
 	byteCode, err := ec.CodeAt(context.Background(), contactAddress, blockNumber)
 	if err != nil {
 		log.Debug("GetTokenDetails", "contactAddress", contactAddress, "error", err)
@@ -667,6 +696,7 @@ type InternalTransactionDetails struct {
 	From  string                       `json:"from,omitempty"`
 	To    string                       `json:"to,omitempty"`
 	Value string                       `json:"value,omitempty"`
+	Type  string                       `json:"type,omitempty"`
 	Calls []InternalTransactionDetails `json:"calls,omitempty"`
 }
 
