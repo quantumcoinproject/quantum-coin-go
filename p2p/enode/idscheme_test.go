@@ -45,8 +45,8 @@ func TestEmptyNodeID(t *testing.T) {
 	assert.Equal(t, expected, hex.EncodeToString(ValidSchemes.NodeAddr(&r)))
 }
 
-// TestGetSetSecp256k1 tests encoding/decoding and setting/getting of the PqPubKey key.
-func TestGetSetSecp256k1(t *testing.T) {
+// TestGetSetKey tests encoding/decoding and setting/getting of the PqPubKey key.
+func TestGetSetKey(t *testing.T) {
 	var r enr.Record
 	if err := SignV4(&r, privkey); err != nil {
 		t.Fatal(err)

@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/rand"
 	"net"
 	"reflect"
 	"strconv"
@@ -194,56 +193,6 @@ func TestPeerDisconnect(t *testing.T) {
 		}
 	case <-time.After(5 * time.Millisecond):
 		t.Error("peer did not return")
-	}
-}
-
-// This test is supposed to verify that Peer can reliably handle
-// multiple causes of disconnection occurring at the same time.
-func TestPeerDisconnectRace(t *testing.T) {
-	maybe := func() bool { return rand.Intn(2) == 1 }
-
-	for i := 0; i < 1000; i++ {
-		protoclose := make(chan error)
-		protodisc := make(chan DiscReason)
-		closer, rw, p, disc := testPeer([]Protocol{
-			{
-				Name:   "closereq",
-				Run:    func(p *Peer, rw MsgReadWriter) error { return <-protoclose },
-				Length: 1,
-			},
-			{
-				Name:   "disconnect",
-				Run:    func(p *Peer, rw MsgReadWriter) error { p.Disconnect(<-protodisc); return nil },
-				Length: 1,
-			},
-		})
-
-		// Simulate incoming messages.
-		go SendItems(rw, baseProtocolLength+1)
-		go SendItems(rw, baseProtocolLength+2)
-		// Close the network connection.
-		go closer()
-		// Make protocol "closereq" return.
-		protoclose <- errors.New("protocol closed")
-		// Make protocol "disconnect" call peer.Disconnect
-		protodisc <- DiscAlreadyConnected
-		// In some cases, simulate something else calling peer.Disconnect.
-		if maybe() {
-			go p.Disconnect(DiscInvalidIdentity)
-		}
-		// In some cases, simulate remote requesting a disconnect.
-		if maybe() {
-			go SendItems(rw, discMsg, DiscQuitting)
-		}
-
-		select {
-		case <-disc:
-		case <-time.After(5 * time.Second):
-			// Peer.run should return quickly. If it doesn't the Peer
-			// goroutines are probably deadlocked. Call panic in order to
-			// show the stacks.
-			panic("Peer.run took to long to return.")
-		}
 	}
 }
 

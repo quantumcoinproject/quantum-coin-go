@@ -214,6 +214,12 @@ var (
 		Usage: `Blockchain sync mode ("fast", "full", "snap" or "light")`,
 		Value: &defaultSyncMode,
 	}
+	defaultFreezerMode = ethconfig.Defaults.FreezerMode
+	FreezerModeFlag    = cli.StringFlag{
+		Name:  "freezermode",
+		Usage: `If empty or skipall, skips freezer. if skipappend, skips appending to ancient (chaindata) but truncates from current db. if skipnone, truncates from current db and appends to ancient.'`,
+		Value: defaultFreezerMode,
+	}
 	GCModeFlag = cli.StringFlag{
 		Name:  "gcmode",
 		Usage: `Blockchain garbage collection mode ("full", "archive")`,
@@ -1473,6 +1479,13 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	if keystores := stack.AccountManager().Backends(keystore.KeyStoreType); len(keystores) > 0 {
 		ks = keystores[0].(*keystore.KeyStore)
 	}
+	if ctx.GlobalIsSet(FreezerModeFlag.Name) {
+		cfg.FreezerMode = ctx.GlobalString(FreezerModeFlag.Name)
+		log.Info("FreezerModeFlag is set", "FreezerMode", cfg.FreezerMode)
+	} else {
+		cfg.FreezerMode = rawdb.FreezerModeSkipAll
+		log.Info("FreezerModeFlag is not set")
+	}
 	setEtherbase(ctx, ks, cfg)
 	setGPO(ctx, &cfg.GPO, ctx.GlobalString(SyncModeFlag.Name) == "light")
 	setTxPool(ctx, &cfg.TxPool)
@@ -1767,7 +1780,17 @@ func MakeChainDatabase(ctx *cli.Context, stack *node.Node, readonly bool) ethdb.
 		chainDb, err = stack.OpenDatabase(name, cache, handles, "", readonly)
 	} else {
 		name := "chaindata"
-		chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly)
+		freezerMode := ctx.GlobalString(FreezerModeFlag.Name)
+		if freezerMode == "" {
+			freezerMode = rawdb.FreezerModeSkipAll
+		}
+		if freezerMode == rawdb.FreezerModeSkipAll || freezerMode == rawdb.FreezerModeSkipAppend || freezerMode == rawdb.FreezerModeSkipNone {
+			log.Info("MakeChainDatabase OpenDatabaseWithFreezer", "freezerMode", freezerMode)
+			chainDb, err = stack.OpenDatabaseWithFreezer(name, cache, handles, ctx.GlobalString(AncientFlag.Name), "", readonly, freezerMode)
+		} else {
+			log.Warn("MakeChainDatabase freezerMode is incorrect. setting to default", "freezerMode", freezerMode)
+			freezerMode = ""
+		}
 	}
 	if err != nil {
 		Fatalf("Could not open database: %v", err)

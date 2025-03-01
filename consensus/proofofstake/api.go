@@ -116,6 +116,10 @@ func (api *API) GetStakingDetailsByValidatorAddress(validator common.Address, bl
 		if err != nil {
 			return nil, err
 		}
+
+		canVal, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
+		canProp, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+
 		validatorDetails := &ValidatorDetails{
 			Depositor:          validatorDetailsV2.Depositor,
 			Validator:          validatorDetailsV2.Validator,
@@ -128,6 +132,15 @@ func (api *API) GetStakingDetailsByValidatorAddress(validator common.Address, bl
 			WithdrawalAmount:   hexutil.EncodeBig(validatorDetailsV2.WithdrawalAmount),
 			LastNiLBlock:       hexutil.EncodeBig(validatorDetailsV2.LastNiLBlock),
 			NilBlockCount:      hexutil.EncodeBig(validatorDetailsV2.NilBlockCount),
+		}
+
+		if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
+			if canVal == false {
+				validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
+			}
+			if canProp == false {
+				validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+			}
 		}
 
 		return validatorDetails, nil
@@ -164,6 +177,10 @@ func (api *API) GetStakingDetailsByDepositorAddress(depositor common.Address, bl
 		if err != nil {
 			return nil, err
 		}
+
+		canVal, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
+		canProp, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+
 		validatorDetails := &ValidatorDetails{
 			Depositor:          validatorDetailsV2.Depositor,
 			Validator:          validatorDetailsV2.Validator,
@@ -178,6 +195,14 @@ func (api *API) GetStakingDetailsByDepositorAddress(depositor common.Address, bl
 			NilBlockCount:      hexutil.EncodeBig(validatorDetailsV2.NilBlockCount),
 		}
 
+		if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
+			if canVal == false {
+				validatorDetails.ValidatorResetBlock = hexutil.EncodeUint64(validatorResetBlock)
+			}
+			if canProp == false {
+				validatorDetails.BlockProposerResetBlock = hexutil.EncodeUint64(blockProposerResetBlock)
+			}
+		}
 		return validatorDetails, nil
 	}
 }
@@ -351,6 +376,14 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 		totalSlashings := big.NewInt(0)
 		if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= slashStartBlockNumber {
 			blockRewardsInfo.SlashedValidators = make([]*Slashing, len(blockConsensusData.SlashedBlockProposers))
+
+			var slashAmount *big.Int
+			if header.Number.Uint64() >= SlashV2StartBlock {
+				slashAmount = SLASH_AMOUNT
+			} else {
+				slashAmount = SLASH_AMOUNT_V2
+			}
+
 			for i, val := range blockConsensusData.SlashedBlockProposers {
 				slashing := &Slashing{
 					SlashedValidator: val,

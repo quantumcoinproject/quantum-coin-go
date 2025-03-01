@@ -45,7 +45,7 @@ var (
 	MaxReceiptFetch = 256 // Amount of transaction receipts to allow fetching per request
 	MaxStateFetch   = 384 // Amount of node state values to allow fetching per request
 
-	maxQueuedHeaders            = 32 * 1024                         // [eth/62] Maximum number of headers to queue for import (DOS protection)
+	maxQueuedHeaders            = 32 * 32                           // [eth/62] Maximum number of headers to queue for import (DOS protection)
 	maxHeadersProcess           = 2048                              // Number of header download results to import at once into the chain
 	maxResultsProcess           = 2048                              // Number of content download results to import at once into the chain
 	fullMaxForkAncestry  uint64 = params.FullImmutabilityThreshold  // Maximum chain reorganisation (locally redeclared so tests can reduce it)
@@ -156,9 +156,6 @@ type Downloader struct {
 type LightChain interface {
 	// HasHeader verifies a header's presence in the local chain.
 	HasHeader(common.Hash, uint64) bool
-
-	// GetHeaderByHash retrieves a header from the local chain.
-	GetHeaderByHash(common.Hash) *types.Header
 
 	// CurrentHeader retrieves the head header from the local chain.
 	CurrentHeader() *types.Header
@@ -931,14 +928,14 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 					end = check
 					break
 				}
-				header := d.lightchain.GetHeaderByHash(h) // Independent of sync mode, header surely exists
-				if header == nil || header.Number == nil {
-					p.log.Warn("Header or number is nil")
+				exists := d.lightchain.HasHeader(h, n) // Independent of sync mode, header surely exists
+				if exists == false {
+					p.log.Warn("Header or number is nil", "hash", h, "number", n)
 					return 0, errBadPeer
 				}
-				if header.Number.Uint64() != check {
-					p.log.Warn("Received non requested header", "number", header.Number, "hash", header.Hash(), "request", check)
-					return 0, fmt.Errorf("%w: non-requested header (%d)", errBadPeer, header.Number)
+				if n != check {
+					p.log.Warn("Received non requested header", "number", n, "hash", h, "request", check)
+					return 0, fmt.Errorf("%w: non-requested header (%d)", errBadPeer, n)
 				}
 				start = check
 				hash = h

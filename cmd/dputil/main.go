@@ -97,6 +97,9 @@ func printHelp() {
 	fmt.Println("dputil resumevalidation DEPOSITOR_ADDRESS")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil transfertokens CONTRACT_ADDRESS FROM_ADDRESS TO_ADDRESS amount")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -212,6 +215,11 @@ func main() {
 		}
 	} else if os.Args[1] == "completewithdrawal" {
 		err := CompleteWithdrawal()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "transfertokens" {
+		err := TransferTokens()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1397,4 +1405,80 @@ func ResumeValidation() error {
 	}
 
 	return resumeValidation(depKey)
+}
+
+func TransferTokens() error {
+	if len(os.Args) < 6 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	if len(os.Getenv("DP_KEY_FILE_DIR")) == 0 {
+		return errors.New("set the keyfile directory environment variable DP_KEY_FILE_DIR")
+	}
+
+	contractAddr := os.Args[2]
+	fromAddr := os.Args[3]
+	toAddr := os.Args[4]
+	transferAmt := os.Args[5]
+
+	if common.IsHexAddress(contractAddr) == false {
+		return errors.New("invalid contract address " + contractAddr)
+	}
+
+	if common.IsHexAddress(fromAddr) == false {
+		return errors.New("invalid from address " + fromAddr)
+	}
+
+	if common.IsHexAddress(toAddr) == false {
+		return errors.New("invalid to address " + toAddr)
+	}
+
+	val, err := ParseBigFloat(transferAmt)
+	if err != nil {
+		return err
+	}
+	tokenTransferAmount := etherToWeiFloat(val)
+
+	fromAccountKeyFile, err := findKeyFile(fromAddr)
+	if err != nil {
+		return errors.New("error finding FROM_ADDRESS in DP_KEY_FILE_DIR " + err.Error())
+	}
+
+	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the depositor wallet password : "))
+	if err != nil {
+		return err
+	}
+	if len(fromAccountPwd) == 0 {
+		return errors.New("from account password is not set")
+	}
+
+	fromKey, err := GetKeyFromFile(fromAccountKeyFile, fromAccountPwd)
+	if err != nil {
+		return errors.New("error decrypting depositor key " + err.Error())
+	}
+
+	fmt.Println()
+
+	fromAccountPasswordConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to transfer %s tokens for contract %s from %s to %s?",
+		transferAmt, contractAddr, fromAddr, toAddr))
+	if err != nil {
+		return err
+	}
+	if fromAccountPasswordConfirm != true {
+		return errors.New("confirmation not made")
+	}
+	fmt.Println()
+
+	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	if err != nil {
+		return errors.New("from account public key to address " + err.Error())
+	}
+
+	if !fromAddressFromKey.IsEqualTo(common.HexToAddress(fromAddr)) {
+		return errors.New("from account key address check failed " + err.Error())
+	}
+
+	return transferTokens(contractAddr, toAddr, tokenTransferAmount, fromKey)
 }

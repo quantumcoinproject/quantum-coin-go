@@ -28,6 +28,8 @@ import (
 	"github.com/QuantumCoinProject/qc/rlp"
 )
 
+var enrKeyVal = string(([]byte{115, 101, 99, 112, 50, 53, 54, 107, 49})[:])
+
 // List of known secure identity schemes.
 var ValidSchemes = enr.SchemeMap{
 	"v4": V4ID{},
@@ -93,10 +95,10 @@ func (V4ID) NodeAddr(r *enr.Record) []byte {
 	return crypto.Keccak256(buf)
 }
 
-// PqPubKey is the "secp256k1" key, which holds a public key.
+// PqPubKey is the key, which holds a public key.
 type PqPubKey signaturealgorithm.PublicKey
 
-func (v PqPubKey) ENRKey() string { return "secp256k1" }
+func (v PqPubKey) ENRKey() string { return enrKeyVal } //this is Post-Quantum key, just named this way
 
 // EncodeRLP implements rlp.Encoder.
 func (v PqPubKey) EncodeRLP(w io.Writer) error {
@@ -123,13 +125,13 @@ func (v *PqPubKey) DecodeRLP(s *rlp.Stream) error {
 	return nil
 }
 
-// s256raw is an unparsed secp256k1 public key entry.
+// s256raw is an unparsed public key entry.
 type s256raw []byte
 
-func (s256raw) ENRKey() string { return "secp256k1" }
+func (s256raw) ENRKey() string { return enrKeyVal } //post quantum key, just named this way
 
 // v4CompatID is a weaker and insecure version of the "v4" scheme which only checks for the
-// presence of a secp256k1 public key, but doesn't verify the signature.
+// presence of a public key, but doesn't verify the signature.
 type v4CompatID struct {
 	V4ID
 }

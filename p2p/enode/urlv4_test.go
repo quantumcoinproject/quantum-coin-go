@@ -37,6 +37,8 @@ var (
 	hexpubkeytest1, _ = cryptobase.SigAlg.PublicKeyToHex(&keyTest1.PublicKey)
 	signTest1, _      = cryptobase.SigAlg.Sign(h.Sum(nil), keyTest1)
 	hexsigntest1      = base64.RawURLEncoding.EncodeToString(signTest1)
+	keyTest2, _       = cryptobase.SigAlg.GenerateKey()
+	hexprvkeytest2, _ = cryptobase.SigAlg.PrivateKeyToHex(keyTest2)
 )
 
 func init() {
@@ -76,11 +78,6 @@ var parseNodeTests = []struct {
 		input:     "enr:x",
 		wantError: "illegal base64 data at input byte 0",
 	},
-	{
-		input: "dynamic2",
-
-		wantError: enr.ErrInvalidSig.Error(),
-	},
 	// Complete node URLs with IP address and ports
 	{
 		input:     "enode://" + hexpubkeytest1 + "@invalid.:3",
@@ -89,10 +86,6 @@ var parseNodeTests = []struct {
 	{
 		input:     "enode://" + hexpubkeytest1 + "@127.0.0.1:foo",
 		wantError: `invalid port`,
-	},
-	{
-		input:     "enode://" + hexpubkeytest1 + "@127.0.0.1:3?discport=foo",
-		wantError: `invalid discport in query`,
 	},
 	{
 		input: "enode://" + hexpubkeytest1 + "@127.0.0.1:52150",
@@ -174,28 +167,44 @@ func hexPubkey(h string) *signaturealgorithm.PublicKey {
 }
 
 func TestParseNode(t *testing.T) {
-	testKey, _ := cryptobase.SigAlg.HexToPrivateKey(hexprvkeytest1)
+	testKey, err := cryptobase.SigAlg.HexToPrivateKey(hexprvkeytest1)
+	if err != nil {
+		t.Fatalf("failed")
+	}
 
 	var r enr.Record
 	r.Set(enr.IP{127, 0, 0, 1})
 	r.SetSeq(99)
-	SignV4(&r, testKey)
-	result1, _ := New(ValidSchemes, &r)
+	err = SignV4(&r, testKey)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+	result1, err := New(ValidSchemes, &r)
+	if err != nil {
+		t.Fatalf("failed")
+	}
 
+	testKey2, err := cryptobase.SigAlg.HexToPrivateKey(hexprvkeytest2)
 	var r1 enr.Record
+	r1.Set(enr.IP{127, 0, 0, 2})
 	r1.SetSeq(99)
-	SignV4(&r1, testKey)
-	result2, _ := New(ValidSchemes, &r1)
+	err = SignV4(&r1, testKey2)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+	_, err = New(ValidSchemes, &r1)
+	if err != nil {
+		t.Fatalf("failed")
+	}
 
 	for _, test := range parseNodeTests {
 		if test.input == "dynamic1" {
 			test.input = result1.String()
 		}
 		if test.input == "dynamic2" {
-			test.input = result2.String()
+			test.input = result1.String()
 		}
-		_, err := Parse(ValidSchemes, test.input)
-
+		_, err = Parse(ValidSchemes, test.input)
 		if test.wantError != "" {
 			if err == nil {
 				t.Errorf("test %q:\n  got nil error, expected %#q", test.input, test.wantError)

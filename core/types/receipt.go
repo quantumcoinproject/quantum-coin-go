@@ -121,7 +121,17 @@ type v3StoredReceiptRLP struct {
 // NewReceipt creates a barebone transaction receipt, copying the init fields.
 // Deprecated: create receipts using a struct literal instead.
 func NewReceipt(root []byte, failed bool, cumulativeGasUsed uint64) *Receipt {
-	return nil //todo fix
+	r := &Receipt{
+		Type:              DefaultFeeTxType,
+		PostState:         common.CopyBytes(root),
+		CumulativeGasUsed: cumulativeGasUsed,
+	}
+	if failed {
+		r.Status = ReceiptStatusFailed
+	} else {
+		r.Status = ReceiptStatusSuccessful
+	}
+	return r
 }
 
 // EncodeRLP implements rlp.Encoder, and flattens the consensus fields of a receipt

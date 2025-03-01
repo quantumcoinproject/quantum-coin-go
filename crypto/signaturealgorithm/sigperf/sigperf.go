@@ -35,8 +35,8 @@ func main() {
 
 	fmt.Println("Multi routine test done")
 
-	SigPerf("hybrideds", sig1, nil)
-	SigPerf("hybrideds", sig2, nil)
+	SigPerf("hybrideds native verify", sig1, nil)
+	SigPerf("hybrideds non native verify", sig2, nil)
 }
 
 func SigPerf(name string, sig signaturealgorithm.SignatureAlgorithm, wg *sync.WaitGroup) {

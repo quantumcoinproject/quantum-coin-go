@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumCoinProject/qc/ethdb"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/params"
+	"github.com/QuantumCoinProject/qc/token"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -31,15 +32,20 @@ type CacheManager struct {
 	cacheLock                sync.Mutex
 	cacheDb                  ethdb.Database
 	client                   *ethclient.Client
+	pendingTxClient          *ethclient.Client
 	enableExtendedApis       bool
 	genesisCirculatingSupply string
 	maxSupply                string
+	pendingTxLock            sync.Mutex
+	pendingTxMapLock         sync.RWMutex
+	pendingTransactions      *map[string]map[string]map[string]*ethclient.TxPoolTransaction
 }
 
 var SummaryKey = "summary"
 var LastBlockKey = "last-block"
 var AccountTxnCountKey = "account-txn-count-%s"                  //%s is account address
 var AccountTransactionPageKey = "account-transaction-list-%s-%d" //%s is account address, %d is page number
+var TokenDetailsKey = "erc20-%s"
 var chainID *big.Int
 
 const TimeLayout = "2006-01-02T15:04:05Z"
@@ -61,6 +67,21 @@ const (
 	NEW_SMART_CONTRACT TransactionType = "NewSmartContract"
 	SMART_CONTRACT     TransactionType = "SmartContract"
 )
+
+type TokenDetails struct {
+	ContractAddress        string `json:"contractAddress,omitempty"`
+	CreatorAddress         string `json:"creatorAddress,omitempty"`
+	CreatedBlockNumber     uint64 `json:"createdBlockNumber,omitempty"`
+	CreatedTransactionHash string `json:"createdTransactionHash,omitempty"`
+	Name                   string `json:"name,omitempty"`
+	Symbol                 string `json:"symbol,omitempty"`
+	TotalSupply            string `json:"totalSupply,omitempty"`
+	Decimals               string `json:"decimals,omitempty"`
+}
+
+type GetTokenDetailsResponse struct {
+	Result TokenDetails `json:"result,omitempty"`
+}
 
 type AccountTransactionCompact struct {
 	Hash string `json:"hash,omitempty"`
@@ -87,6 +108,23 @@ type ListAccountTransactionsResponse struct {
 	Items     []AccountTransactionCompact `json:"items"`
 }
 
+type AccountPendingTransactionCompact struct {
+	Hash string `json:"hash,omitempty"`
+
+	From string `json:"from,omitempty"`
+
+	To string `json:"to,omitempty"`
+
+	Value string `json:"value,omitempty"`
+
+	Nonce uint64 `json:"nonce,omitempty"`
+}
+
+type ListAccountPendingTransactionsResponse struct {
+	Items     []AccountPendingTransactionCompact `json:"items"`
+	PageCount uint64                             `json:"pageCount"`
+}
+
 type BlockchainDetails struct {
 	BlockNumber           uint64 `json:"blockNumber" gencodec:"required"`
 	MaxSupply             string `json:"maxSupply" gencodec:"required"`
@@ -104,40 +142,48 @@ type GetBlockchainDetailsResponse struct {
 	BlockchainDetails
 }
 
-func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApi bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
+func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
 	cManager := &CacheManager{
 		nodeUrl:            nodeUrl,
 		cacheDir:           cacheDir,
-		enableExtendedApis: enableExtendedApi,
+		enableExtendedApis: enableExtendedApis,
 	}
 
-	if len(maxSupply) == 0 {
-		return nil, errors.New("max supply is nil")
-	}
+	var err error
 
-	cManager.maxSupply = maxSupply
-
-	genesisBytes, err := ioutil.ReadFile(genesisFilePath)
-	if err != nil {
-		log.Error("ReadFile", "error", err)
-		return nil, err
-	}
-
-	genesis := core.Genesis{}
-	err = json.Unmarshal(genesisBytes, &genesis)
-	if err != nil {
-		log.Error("Unmarshal", "error", err)
-		return nil, err
-	}
-
-	genesisCirculatingSupply := big.NewInt(0)
-	if genesis.Alloc != nil {
-		for _, v := range genesis.Alloc {
-			genesisCirculatingSupply = common.SafeAddBigInt(genesisCirculatingSupply, v.Balance)
+	if enableExtendedApis {
+		if len(maxSupply) == 0 {
+			return nil, errors.New("max supply is nil")
 		}
+		maxSupplyBig, err := hexutil.DecodeBig(maxSupply)
+		if err != nil {
+			return nil, err
+		}
+
+		cManager.maxSupply = maxSupply
+
+		genesisBytes, err := ioutil.ReadFile(genesisFilePath)
+		if err != nil {
+			log.Error("ReadFile", "error", err)
+			return nil, err
+		}
+
+		genesis := core.Genesis{}
+		err = json.Unmarshal(genesisBytes, &genesis)
+		if err != nil {
+			log.Error("Unmarshal", "error", err)
+			return nil, err
+		}
+
+		genesisCirculatingSupply := big.NewInt(0)
+		if genesis.Alloc != nil {
+			for _, v := range genesis.Alloc {
+				genesisCirculatingSupply = common.SafeAddBigInt(genesisCirculatingSupply, v.Balance)
+			}
+		}
+		cManager.genesisCirculatingSupply = hexutil.EncodeBig(genesisCirculatingSupply)
+		log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", params.WeiToEther(genesisCirculatingSupply), "maxSupply", params.WeiToEther(maxSupplyBig))
 	}
-	cManager.genesisCirculatingSupply = hexutil.EncodeBig(params.WeiToEther(genesisCirculatingSupply))
-	log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", cManager.genesisCirculatingSupply, "maxSupply", maxSupply)
 
 	err = cManager.initialize()
 	if err != nil {
@@ -167,6 +213,11 @@ func (c *CacheManager) initialize() error {
 		return err
 	}
 
+	pendingTxClient, err := ethclient.Dial(c.nodeUrl)
+	if err != nil {
+		return err
+	}
+
 	chainID, err = client.NetworkID(context.Background())
 	if err != nil {
 		log.Error("initialize NetworkID", "error", err)
@@ -174,6 +225,7 @@ func (c *CacheManager) initialize() error {
 	}
 
 	c.client = client
+	c.pendingTxClient = pendingTxClient
 
 	return nil
 }
@@ -192,27 +244,31 @@ func (c *CacheManager) start() error {
 		if err.Error() == "leveldb: not found" {
 			log.Warn("First time start")
 			blockNumber = 0
-			runningSummary = &BlockchainDetails{
-				BlockNumber:           0,
-				MaxSupply:             c.maxSupply,
-				TotalSupply:           c.genesisCirculatingSupply,
-				CirculatingSupply:     c.genesisCirculatingSupply,
-				BurntCoins:            "0x0",
-				BlockRewardsCoins:     "0x0",
-				BaseBlockRewardsCoins: "0x0",
-				TxnFeeRewardsCoins:    "0x0",
-				TxnFeeBurntCoins:      "0x0",
-				SlashedCoins:          "0x0",
+			if c.enableExtendedApis {
+				runningSummary = &BlockchainDetails{
+					BlockNumber:           0,
+					MaxSupply:             c.maxSupply,
+					TotalSupply:           c.genesisCirculatingSupply,
+					CirculatingSupply:     c.genesisCirculatingSupply,
+					BurntCoins:            "0x0",
+					BlockRewardsCoins:     "0x0",
+					BaseBlockRewardsCoins: "0x0",
+					TxnFeeRewardsCoins:    "0x0",
+					TxnFeeBurntCoins:      "0x0",
+					SlashedCoins:          "0x0",
+				}
 			}
 		} else {
 			log.Error("GetLastBlockByDb", "err", err.Error())
 			return err
 		}
 	} else {
-		runningSummary, err = c.getSummaryFromDb()
-		if err != nil {
-			log.Error("getSummaryFromDb", "err", err.Error())
-			return err
+		if c.enableExtendedApis {
+			runningSummary, err = c.getSummaryFromDb()
+			if err != nil {
+				log.Error("getSummaryFromDb", "err", err.Error())
+				return err
+			}
 		}
 	}
 
@@ -223,6 +279,8 @@ func (c *CacheManager) start() error {
 		for {
 			select {
 			case <-cacheTimer.C:
+				go c.processPendingTransactions()
+
 				blockNumberToGet := blockNumber + 1
 				log.Info("Batch Start ", "Block Number ", blockNumberToGet)
 				err := c.processByCacheManager(blockNumberToGet, runningSummary)
@@ -256,6 +314,27 @@ func (c *CacheManager) start() error {
 	return nil
 }
 
+func (c *CacheManager) processPendingTransactions() {
+	c.pendingTxLock.Lock()
+	defer c.pendingTxLock.Unlock()
+
+	err, txnList := c.pendingTxClient.TxPoolContent(context.Background())
+	if err != nil {
+		log.Error("processPendingTransactions", "err", err)
+		return
+	}
+
+	if txnList == nil {
+		log.Warn("processPendingTransactions txnList is nil")
+		return
+	}
+
+	c.pendingTxMapLock.Lock()
+	defer c.pendingTxMapLock.Unlock()
+
+	c.pendingTransactions = txnList
+}
+
 func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary *BlockchainDetails) error {
 	blockNum := new(big.Int).SetUint64(blockNumber)
 	block, err := c.client.BlockByNumber(context.Background(), blockNum)
@@ -276,6 +355,8 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 
 	var liveAccountMap map[string][]AccountTransactionCompact //address to transactions in block mapping
 	liveAccountMap = make(map[string][]AccountTransactionCompact)
+
+	tokensCreated := make([]*TokenDetails, 0)
 
 	var receipts types.Receipts
 	receipts = make(types.Receipts, len(block.Transactions()))
@@ -322,10 +403,13 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 			transaction.Status = "0x0"
 		}
 
-		//todo: fix
-		txType, err := getTransactionType(tx)
+		txType, tokenDetails, err := c.getTransactionType(fromAddress, tx, receipt)
 		if err != nil {
 			log.Error("getTransactionType", "error", err, "tx", tx.Hash())
+			return err
+		}
+		if txType == NEW_TOKEN {
+			tokensCreated = append(tokensCreated, tokenDetails)
 		}
 		transaction.TransactionType = string(txType)
 
@@ -346,6 +430,15 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 		}
 	}
 
+	//First store new tokens before processing account transactions!
+	for _, tkn := range tokensCreated {
+		err = c.putTokenInDb(tkn, &txnBatch)
+		if err != nil {
+			log.Error("putTokenInDb", "error", err)
+			return err
+		}
+	}
+
 	for k, v := range liveAccountMap {
 		err = c.processAccountTransactions(k, &v, &txnBatch)
 		if err != nil {
@@ -354,10 +447,12 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 		}
 	}
 
-	err = c.updateSummary(blockNum, runningSummary, &txnBatch)
-	if err != nil {
-		log.Error("updateSummary", "error", err)
-		return err
+	if c.enableExtendedApis {
+		err = c.updateSummary(blockNum, runningSummary, &txnBatch)
+		if err != nil {
+			log.Error("updateSummary", "error", err)
+			return err
+		}
 	}
 
 	err = txnBatch.Write()
@@ -371,8 +466,10 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 
 func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
 
-	if blockNumber.Uint64() != runningSummary.BlockNumber+1 {
-		log.Error("updateSummary", "left", blockNumber.Uint64(), "right", runningSummary.BlockNumber+1)
+	leftBlock := blockNumber.Uint64()
+	rightBlock := runningSummary.BlockNumber + 1
+	if leftBlock != rightBlock {
+		log.Error("updateSummary", "leftBlock", leftBlock, "rightBlock", rightBlock)
 		return errors.New("updateSummary unexpected blockNumber")
 	}
 
@@ -469,13 +566,12 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 		log.Error("updateSummary BalanceAt", "error", err)
 		return err
 	}
-	burntCoins := params.WeiToEther(burntCoinsWei)
 
-	runningSummary.BurntCoins = hexutil.EncodeBig(burntCoins)
+	runningSummary.BurntCoins = hexutil.EncodeBig(burntCoinsWei)
 	genesisCirculatingSupplyBig, _ := hexutil.DecodeBig(c.genesisCirculatingSupply)
 	blockRewardsCoinsBig, _ := hexutil.DecodeBig(runningSummary.BlockRewardsCoins)
 	coinsNew := common.SafeAddBigInt(genesisCirculatingSupplyBig, blockRewardsCoinsBig)
-	runningSummary.CirculatingSupply = hexutil.EncodeBig(common.SafeSubBigInt(coinsNew, burntCoins))
+	runningSummary.CirculatingSupply = hexutil.EncodeBig(common.SafeSubBigInt(coinsNew, burntCoinsWei))
 	runningSummary.TotalSupply = runningSummary.CirculatingSupply
 
 	err = c.putSummary(runningSummary, &txnBatch)
@@ -551,6 +647,10 @@ func (c *CacheManager) putSummary(summary *BlockchainDetails, batch *ethdb.Batch
 }
 
 func (c *CacheManager) close() error {
+	c.pendingTxLock.Lock()
+	defer c.pendingTxLock.Unlock()
+	c.pendingTxClient.Close()
+
 	cacheDb := c.cacheDb
 	err := cacheDb.Close()
 	if err != nil {
@@ -559,7 +659,6 @@ func (c *CacheManager) close() error {
 	}
 
 	c.client.Close()
-
 	return nil
 }
 
@@ -698,6 +797,9 @@ func (c *CacheManager) putAccountTxnCount(address string, txnCount uint64, batch
 }
 
 func (c *CacheManager) GetBlockchainDetails() (GetBlockchainDetailsResponse, error) {
+	if c.enableExtendedApis == false {
+		return GetBlockchainDetailsResponse{}, errors.New("enableExtendedApis is false")
+	}
 	getResponse := GetBlockchainDetailsResponse{}
 	details, err := c.getSummaryFromDb()
 	if err != nil {
@@ -709,7 +811,7 @@ func (c *CacheManager) GetBlockchainDetails() (GetBlockchainDetailsResponse, err
 	return getResponse, nil
 }
 
-func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTransactionsResponse, error) {
+func (c *CacheManager) ListTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTransactionsResponse, error) {
 	listResponse := ListAccountTransactionsResponse{}
 	address := strings.ToLower(accountAddress.Hex())
 
@@ -774,18 +876,161 @@ func (c *CacheManager) ListTransactionByAccount(accountAddress common.Address, p
 	return listResponse, nil
 }
 
+func (c *CacheManager) ListPendingTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountPendingTransactionsResponse, error) {
+	c.pendingTxMapLock.RLock()
+	defer c.pendingTxMapLock.RUnlock()
+
+	log.Info("ListPendingTransactionsByAccount", "account", accountAddress)
+
+	address := accountAddress.Hex()
+
+	response := ListAccountPendingTransactionsResponse{
+		Items: make([]AccountPendingTransactionCompact, 0),
+	}
+
+	txnMap := *c.pendingTransactions
+	pendingTxnMap := txnMap["pending"]
+	queuedTxnMap := txnMap["queued"]
+
+	log.Info("txncount", "c", len(txnMap))
+	for k, v := range txnMap {
+		log.Info("level0", "k", k, "v=%v", v)
+		for k1, v1 := range v {
+			log.Info("     level1", "k", k1, "v=%v", v1)
+			for k2, v2 := range v1 {
+				log.Info("          level2", "k", k2, "v=%v", v2)
+			}
+		}
+	}
+
+	if queuedTxnMap != nil {
+		queuedAccountTxnMap := queuedTxnMap[address]
+		if queuedAccountTxnMap != nil {
+			for _, tx := range queuedAccountTxnMap {
+				txn := AccountPendingTransactionCompact{
+					From:  strings.ToLower(tx.From.Hex()),
+					Value: tx.Value.String(),
+				}
+				if tx.To != nil {
+					txn.To = strings.ToLower(tx.To.Hex())
+				}
+				txn.Hash = tx.Hash.Hex()
+				txn.Nonce = uint64(tx.Nonce)
+				response.Items = append(response.Items, txn)
+				if len(response.Items) == int(PageSize) {
+					break
+				}
+			}
+		}
+	}
+
+	if pendingTxnMap != nil && len(response.Items) < int(PageSize) {
+		pendingAccountTxnMap := pendingTxnMap[address]
+		if pendingAccountTxnMap != nil {
+			for _, tx := range pendingAccountTxnMap {
+				txn := AccountPendingTransactionCompact{
+					From:  strings.ToLower(tx.From.Hex()),
+					Value: tx.Value.String(),
+				}
+				if tx.To != nil {
+					txn.To = strings.ToLower(tx.To.Hex())
+				}
+				txn.Hash = tx.Hash.Hex()
+				txn.Nonce = uint64(tx.Nonce)
+				response.Items = append(response.Items, txn)
+				if len(response.Items) == int(PageSize) {
+					break
+				}
+			}
+		}
+	}
+
+	if len(response.Items) > 0 {
+		response.PageCount = 1
+	}
+
+	return response, nil
+}
+
 func getAccountPageKey(address string, pageCount uint64) []byte {
 	pageKey := fmt.Sprintf(AccountTransactionPageKey, strings.ToLower(address), pageCount)
 	return []byte(pageKey)
 }
 
-// todo: handle TokenTransfer, NewToken
-func getTransactionType(txn *types.Transaction) (TransactionType, error) {
+// todo: handle TokenTransfer
+func (c *CacheManager) getTransactionType(from string, txn *types.Transaction, receipt *types.Receipt) (TransactionType, *TokenDetails, error) {
 	if txn.To() == nil {
-		return NEW_SMART_CONTRACT, nil
+		if receipt.Status == 1 { //success
+			if receipt.ContractAddress.IsEqualTo(common.ZERO_ADDRESS) == false {
+				tok, err := c.client.GetTokenDetails(receipt.ContractAddress, receipt.BlockNumber)
+				if err != nil {
+					if err == token.NotATokenError {
+						return NEW_SMART_CONTRACT, nil, nil
+					} else {
+						return NEW_SMART_CONTRACT, nil, nil
+					}
+				} else {
+					tokenDetails := &TokenDetails{
+						ContractAddress:        strings.ToLower(receipt.ContractAddress.Hex()),
+						CreatorAddress:         strings.ToLower(from),
+						CreatedTransactionHash: strings.ToLower(txn.Hash().Hex()),
+						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
+						Name:                   tok.Name,
+						Symbol:                 tok.Symbol,
+						TotalSupply:            hexutil.EncodeBig(tok.TotalSupply),
+						Decimals:               hexutil.EncodeUint64(uint64(tok.Decimals)),
+					}
+					return NEW_TOKEN, tokenDetails, nil
+				}
+			} else {
+				log.Warn("getTransactionType unexpected zero address for contract")
+			}
+		}
+		return NEW_SMART_CONTRACT, nil, nil
 	}
 	if txn.Data() == nil || len(txn.Data()) == 0 {
-		return COIN_TRANSFER, nil
+		return COIN_TRANSFER, nil, nil
 	}
-	return SMART_CONTRACT, nil
+	return SMART_CONTRACT, nil, nil
+}
+
+func (c *CacheManager) GetTokenDetails(contractAddress string) (*GetTokenDetailsResponse, error) {
+	contractAddress = strings.ToLower(contractAddress)
+	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
+
+	db := c.cacheDb
+	tokenBlob, err := db.Get([]byte(key))
+	if err != nil {
+		return nil, err
+	}
+
+	var tokenDetails TokenDetails
+	err = json.Unmarshal(tokenBlob, &tokenDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetTokenDetailsResponse{
+		Result: tokenDetails,
+	}, nil
+}
+
+func (c *CacheManager) putTokenInDb(tokenDetails *TokenDetails, batch *ethdb.Batch) error {
+	txnBatch := *batch
+
+	blob, err := json.Marshal(tokenDetails)
+	if err != nil {
+		return err
+	}
+
+	contractAddress := strings.ToLower(tokenDetails.ContractAddress)
+	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
+	keyBlob := []byte(key)
+
+	err = txnBatch.Put(keyBlob, blob)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

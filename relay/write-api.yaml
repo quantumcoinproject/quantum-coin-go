@@ -3,7 +3,7 @@ info:
   title: Quantum Coin Write API
   version: v1
 servers:
-  - url: https://relaywrite.dpapi.org
+  - url: https://sdk.writerelay.quantumcoinapi.com
 paths:
   '/transactions':
     post:

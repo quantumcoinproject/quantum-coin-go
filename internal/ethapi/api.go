@@ -463,11 +463,8 @@ func (s *PrivateAccountAPI) SignTransaction(ctx context.Context, args Transactio
 	return &SignTransactionResult{data, signed}, nil
 }
 
-// Sign calculates an Ethereum ECDSA signature for:
+// Sign calculates an signature for:
 // keccack256("\x19Ethereum Signed Message:\n" + len(message) + message))
-//
-// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
-// where the V value will be 27 or 28 for legacy reasons.
 //
 // The key used to calculate the signature is decrypted with the given password.
 //
@@ -495,9 +492,6 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 // the address of:
 // hash = keccak256("\x19Ethereum Signed Message:\n"${message length}${message})
 // addr = ecrecover(hash, signature)
-//
-// Note, the signature must conform to the secp256k1 curve R, S and V values, where
-// the V value must be 27 or 28 for legacy reasons.
 //
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
@@ -1641,9 +1635,6 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 
 // Sign calculates an ECDSA signature for:
 // keccack256("\x19Ethereum Signed Message:\n" + len(message) + message).
-//
-// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
-// where the V value will be 27 or 28 for legacy reasons.
 //
 // The account associated with addr must be unlocked.
 //

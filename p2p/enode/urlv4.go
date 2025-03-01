@@ -144,7 +144,7 @@ func parseComplete(rawurl string) (*Node, error) {
 	return NewV4(id, ip, int(tcpPort)), nil
 }
 
-// parsePubkey parses a hex-encoded secp256k1 public key.
+// parsePubkey parses a hex-encoded public key.
 func parsePubkey(in string) (*signaturealgorithm.PublicKey, error) {
 	b, err := hex.DecodeString(in)
 	if err != nil {

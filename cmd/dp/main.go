@@ -48,7 +48,7 @@ const (
 	clientIdentifier = "geth" // Client identifier to advertise over the network
 )
 
-const VERSION_NUMBER = "v2.0.57"
+const VERSION_NUMBER = "v2.0.63"
 
 var (
 	// Git SHA1 commit hash of the release (set via linker flags)
@@ -151,6 +151,7 @@ var (
 		utils.EnableBackupsFlag,
 		utils.RebroadcastCountFlag,
 		utils.ProfPortFlag,
+		utils.FreezerModeFlag,
 	}
 
 	rpcFlags = []cli.Flag{

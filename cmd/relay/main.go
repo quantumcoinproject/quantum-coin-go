@@ -97,7 +97,7 @@ func main() {
 				log.Error("NewCacheManager failed", "error", err)
 				panic(err)
 			}
-			go qcReadApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys, cacheManager)
+			go qcReadApi(ip, port, nodeUrl, corsAllowedOrigins,enableAuth,apiKeys, cacheManager, config.EnableExtendedApis)
 		}
 
 		if strings.EqualFold(api ,"write") {
@@ -109,8 +109,8 @@ func main() {
 	<-make(chan int)
 }
 
-func qcReadApi(ip string, port string, nodeUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheManager *cachemanager.CacheManager) {
-	ReadApiAPIService, err := qcreadapi.NewReadApiAPIService(nodeUrl, cacheManager)
+func qcReadApi(ip string, port string, nodeUrl string, corsAllowedOrigins string, enableAuth bool, apiKeys string, cacheManager *cachemanager.CacheManager, enableExtendedApis bool) {
+	ReadApiAPIService, err := qcreadapi.NewReadApiAPIService(nodeUrl, cacheManager, enableExtendedApis)
 	if err != nil {
 		panic(err)
 	}

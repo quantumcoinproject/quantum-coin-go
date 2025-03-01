@@ -117,9 +117,6 @@ type TypedDataDomain struct {
 var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
 
 // sign receives a request and produces a signature
-//
-// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
-// where the V value will be 27 or 28 for legacy reasons, if legacyV==true.
 func (api *SignerAPI) sign(req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
 	// We make the request prior to looking up if we actually have the account, to prevent
 	// account-enumeration via the API
@@ -625,8 +622,6 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hex
 	// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
 	// addr = ecrecover(hash, signature)
 	//
-	// Note, the signature must conform to the secp256k1 curve R, S and V values, where
-	// the V value must be be 27 or 28 for legacy reasons.
 	//
 	// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 

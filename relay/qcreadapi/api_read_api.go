@@ -94,6 +94,11 @@ func (c *ReadApiAPIController) Routes() Routes {
 			"/account/{address}/transactions/{pageNumber}",
 			c.ListAccountTransactions,
 		},
+		"ListAccountPendingTransactions": Route{
+			strings.ToUpper("Get"),
+			"/account/{address}/transactions/pending/{pageNumber}",
+			c.ListAccountPendingTransactions,
+		},
 		"GetBlockchainDetailsResponse": Route{
 			strings.ToUpper("Get"),
 			"/blockchaindetails",
@@ -103,6 +108,16 @@ func (c *ReadApiAPIController) Routes() Routes {
 			strings.ToUpper("Get"),
 			"/api",
 			c.QueryDetails,
+		},
+		"GetTokenDetails": Route{
+			strings.ToUpper("Get"),
+			"/token/{contractAddress}",
+			c.GetTokenDetails,
+		},
+		"GetAccountTokenDetails": Route{
+			strings.ToUpper("Get"),
+			"/account/{address}/tokens/{contractAddress}",
+			c.GetAccountTokenDetails,
 		},
 	}
 }
@@ -138,7 +153,7 @@ func (c *ReadApiAPIController) authorize(req *http.Request) bool {
 
 // GetLatestBlockDetails - Get latest block details
 func (c *ReadApiAPIController) GetLatestBlockDetails(w http.ResponseWriter, r *http.Request) {
-	log.Info("GetLatestBlockDetails aaf")
+	log.Info("GetLatestBlockDetails")
 	requestId := ""
 	if r.Header != nil {
 		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
@@ -296,6 +311,7 @@ func (c *ReadApiAPIController) GetBlockchainDetails(w http.ResponseWriter, r *ht
 
 	c.setupCORS(&w, r)
 	if (*r).Method == "OPTIONS" {
+		log.Info("GetBlockchainDetails OPTIONS", "requestId", requestId)
 		return
 	}
 
@@ -391,6 +407,73 @@ func (c *ReadApiAPIController) ListAccountTransactions(w http.ResponseWriter, r 
 	log.Info("ListAccountTransactions ok", "requestId", requestId)
 }
 
+// ListAccountPendingTransactions - List account pending transactions
+func (c *ReadApiAPIController) ListAccountPendingTransactions(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
+	if r.Header != nil {
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("ListAccountPendingTransactions", "requestId", requestId)
+	}
+
+	c.setupCORS(&w, r)
+	if (*r).Method == "OPTIONS" {
+		return
+	}
+
+	if c.authorize(r) == false {
+		result := Response(http.StatusUnauthorized, nil)
+		// If no error, encode the body and the result code
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+		log.Error("ListAccountPendingTransactions", "requestId", requestId, "error", "Unauthorized")
+		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
+		return
+	}
+
+	params := mux.Vars(r)
+	addressParam := params["address"]
+	if addressParam == "" {
+		c.errorHandler(w, r, &RequiredError{"address"}, nil)
+		log.Error("ListAccountPendingTransactions address is empty", "requestId", requestId)
+		return
+	}
+
+	if !common.IsHexAddressDeep(addressParam) {
+		log.Error(relay.MsgAddress, relay.MsgAddress, addressParam, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest, "requestId", requestId)
+		c.errorHandler(w, r, &ParsingError{"address", errors.New("Invalid address")}, nil)
+		return
+	}
+
+	pageNumber := int64(-1)
+	pageNumberParam := params["pageNumber"]
+	var err error
+	if len(pageNumberParam) > 0 {
+		pageNumber, err = strconv.ParseInt(pageNumberParam, 10, 64)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{"pageNumber", err}, nil)
+			log.Error("ListAccountPendingTransactions", "requestId", requestId, "error", "invalid pageNumber")
+			return
+		}
+		if pageNumber <= 0 {
+			pageNumber = -1
+		}
+	}
+
+	result, err := c.service.ListAccountPendingTransactions(r.Context(), addressParam, pageNumber)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		log.Error("ListAccountPendingTransactions", "requestId", requestId, "error", err)
+		return
+	}
+
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("ListAccountPendingTransactions ok", "requestId", requestId)
+}
 
 func (c *ReadApiAPIController) QueryDetails(w http.ResponseWriter, r *http.Request) {
 	requestId := ""
@@ -431,4 +514,127 @@ func (c *ReadApiAPIController) QueryDetails(w http.ResponseWriter, r *http.Reque
 	_ = EncodeTextResponse(result.Body, &result.Code, w)
 
 	log.Info("QueryDetails ok", "requestId", requestId)
+}
+
+// GetTokenDetails - Get account details
+func (c *ReadApiAPIController) GetTokenDetails(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
+	if r.Header != nil {
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("GetTokenDetails", "requestId", requestId)
+	}
+
+	c.setupCORS(&w, r)
+	if (*r).Method == "OPTIONS" {
+		log.Info("GetTokenDetails OPTIONS", "requestId", requestId)
+		return
+	}
+
+	if c.authorize(r) == false {
+		result := Response(http.StatusUnauthorized, nil)
+		// If no error, encode the body and the result code
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+		log.Error("GetTokenDetails", "requestId", requestId, "error", "Unauthorized");
+
+		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
+		return
+	}
+
+	params := mux.Vars(r)
+	contractAddressParam := params["contractAddress"]
+	if contractAddressParam == "" {
+		c.errorHandler(w, r, &RequiredError{"contractAddress"}, nil)
+		log.Error("GetTokenDetails", "requestId", requestId, "error", "contractAddress is empty")
+		return
+	}
+
+	if !common.IsHexAddressDeep(contractAddressParam) {
+		log.Error(relay.MsgContractAddress, relay.MsgContractAddress, contractAddressParam, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest, "requestId", requestId)
+		c.errorHandler(w, r, &ParsingError{"contractAddress", errors.New("Invalid contractAddress")}, nil)
+		return
+	}
+
+	log.Info("GetTokenDetails", "requestId", requestId, "contractAddressParam", contractAddressParam)
+	result, err := c.service.GetTokenDetails(r.Context(), contractAddressParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		log.Error("GetTokenDetails", "requestId", requestId, "error", err)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("GetTokenDetails ok", "requestId", requestId)
+}
+
+// GetAccountTokenDetails - Get account details
+func (c *ReadApiAPIController) GetAccountTokenDetails(w http.ResponseWriter, r *http.Request) {
+	requestId := ""
+	if r.Header != nil {
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("GetAccountTokenDetails", "requestId", requestId)
+	}
+
+	c.setupCORS(&w, r)
+	if (*r).Method == "OPTIONS" {
+		log.Info("GetAccountTokenDetails OPTIONS", "requestId", requestId)
+		return
+	}
+
+	if c.authorize(r) == false {
+		result := Response(http.StatusUnauthorized, nil)
+		// If no error, encode the body and the result code
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+		log.Error("GetAccountTokenDetails", "requestId", requestId, "error", "Unauthorized");
+
+		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
+		return
+	}
+
+	params := mux.Vars(r)
+	addressParam := params["address"]
+	if addressParam == "" {
+		c.errorHandler(w, r, &RequiredError{"address"}, nil)
+		log.Error("GetAccountTokenDetails", "requestId", requestId, "error", "address is empty")
+		return
+	}
+
+	if !common.IsHexAddressDeep(addressParam) {
+		log.Error(relay.MsgAddress, relay.MsgAddress, addressParam, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest, "requestId", requestId)
+		c.errorHandler(w, r, &ParsingError{"address", errors.New("Invalid address")}, nil)
+		return
+	}
+
+	contractAddressParam := params["contractAddress"]
+	if contractAddressParam == "" {
+		c.errorHandler(w, r, &RequiredError{"contractAddress"}, nil)
+		log.Error("GetAccountTokenDetails", "requestId", requestId, "error", "contractAddress is empty")
+		return
+	}
+
+	if !common.IsHexAddressDeep(contractAddressParam) {
+		log.Error(relay.MsgContractAddress, relay.MsgContractAddress, contractAddressParam, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest, "requestId", requestId)
+		c.errorHandler(w, r, &ParsingError{"contractAddress", errors.New("Invalid contractAddress")}, nil)
+		return
+	}
+
+	log.Info("GetAccountTokenDetails", "requestId", requestId, "addressParam", addressParam, "contractAddressParam", contractAddressParam)
+	result, err := c.service.GetAccountTokenDetails(r.Context(), addressParam, contractAddressParam)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		c.errorHandler(w, r, err, &result)
+		log.Error("GetAccountTokenDetails", "requestId", requestId, "error", err)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("GetAccountTokenDetails ok", "requestId", requestId)
 }

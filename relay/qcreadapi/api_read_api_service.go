@@ -14,12 +14,15 @@ import (
 	"fmt"
 	"context"
 	"encoding/json"
+	"github.com/QuantumCoinProject/qc/ethclient"
 	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/params"
 	"github.com/QuantumCoinProject/qc/relay"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/QuantumCoinProject/qc/cachemanager"
+	"math/big"
 	"net/http"
 	"errors"
 	"github.com/mattn/go-colorable"
@@ -34,6 +37,7 @@ import (
 type ReadApiAPIService struct {
   DpUrl string
   cacheManager *cachemanager.CacheManager
+	enableExtendedApis bool
 }
 
 type RPCTransaction struct {
@@ -53,11 +57,12 @@ type RPCTransaction struct {
 }
 
 // NewReadApiAPIService creates a default api service
-func NewReadApiAPIService(dpUrl string, cacheManager *cachemanager.CacheManager) (*ReadApiAPIService, error) {
+func NewReadApiAPIService(dpUrl string, cacheManager *cachemanager.CacheManager,enableExtendedApis bool) (*ReadApiAPIService, error) {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(3), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 	return &ReadApiAPIService{
 		DpUrl: dpUrl,
 		cacheManager: cacheManager,
+		enableExtendedApis: enableExtendedApis,
 	}, nil
 }
 
@@ -250,9 +255,13 @@ func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash stri
 			status := receipt["status"].(string)
 			txnReceiptHash := receipt["transactionHash"].(string)
 			t := receipt["type"].(string)
+			contractAddress := ""
+			if receipt["contractAddress"] != nil {
+				contractAddress = receipt["contractAddress"].(string)
+			}
 			transactionReceipt =  TransactionReceipt{
 				cumulativeGasUsed, effectiveGasPrice, gasUsed,
-				status, txnReceiptHash, t}
+				status, txnReceiptHash, t,contractAddress}
 		} else {
 			duration := time.Now().Sub(startTime)
 
@@ -299,6 +308,10 @@ func (s *ReadApiAPIService) GetBlockchainDetails(ctx context.Context) (ImplRespo
 
 	log.Info(relay.InfoTitleGetBlockchainDetails, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
+	if s.enableExtendedApis == false {
+		return Response(http.StatusNotFound, nil), errors.New("Not Found")
+	}
+
 	getResponse, err := s.cacheManager.GetBlockchainDetails()
 	if err != nil {
 		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
@@ -323,7 +336,30 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 
 	log.Info(relay.InfoTitleListAccountTransactions, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
-	listResponse, err := s.cacheManager.ListTransactionByAccount(common.HexToAddress(address), pageNumber)
+	listResponse, err := s.cacheManager.ListTransactionsByAccount(common.HexToAddress(address), pageNumber)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+	}
+
+	return Response(http.StatusOK,listResponse),	nil
+}
+
+// ListAccountPendingTransactions - List account pending transactions
+func (s *ReadApiAPIService) ListAccountPendingTransactions(ctx context.Context, address string, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleListAccountPendingTransactions)
+
+	if common.IsHexAddressDeep(address) == false {
+		return Response(http.StatusInternalServerError, nil), relay.ErrInvalidAddress
+	}
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleListAccountPendingTransactions, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	listResponse, err := s.cacheManager.ListPendingTransactionsByAccount(common.HexToAddress(address), pageNumber)
 	if err != nil {
 		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
 	}
@@ -342,6 +378,10 @@ func (s *ReadApiAPIService) QueryDetails(ctx context.Context, queryTerm string) 
 
 	log.Info(relay.InfoTitleQueryDetails, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
+	if s.enableExtendedApis == false {
+		return Response(http.StatusNotFound, nil), errors.New("Not Found")
+	}
+
 	getResponse, err := s.cacheManager.GetBlockchainDetails()
 	if err != nil {
 		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
@@ -349,11 +389,17 @@ func (s *ReadApiAPIService) QueryDetails(ctx context.Context, queryTerm string) 
 
 	result := ""
 	if queryTerm == "totalcoins" {
-		val, _ :=  hexutil.DecodeBig(getResponse.TotalSupply)
-		result = strconv.FormatUint(val.Uint64(), 10)
+		val, err :=  hexutil.DecodeBig(getResponse.TotalSupply)
+		if err != nil {
+			return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+		}
+		result = strconv.FormatUint(params.WeiToEther(val).Uint64(), 10)
 	} else if queryTerm == "circulating" {
-		val, _ :=  hexutil.DecodeBig(getResponse.CirculatingSupply)
-		result = strconv.FormatUint(val.Uint64(), 10)
+		val, err :=  hexutil.DecodeBig(getResponse.CirculatingSupply)
+		if err != nil {
+			return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+		}
+		result = strconv.FormatUint(params.WeiToEther(val).Uint64(), 10)
 	}
 
 	return Response(http.StatusOK,result),	nil
@@ -362,4 +408,111 @@ func (s *ReadApiAPIService) QueryDetails(ctx context.Context, queryTerm string) 
 func Dump(data interface{}){
 	b,_:=json.MarshalIndent(data, "", "  ")
 	fmt.Print(string(b))
+}
+
+// GetAccountTokenDetails - Get account token details
+func (s *ReadApiAPIService) GetAccountTokenDetails(ctx context.Context, address string, contractAddress string) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleAccountDetails, relay.MsgDial, s.DpUrl)
+
+	if !common.IsHexAddressDeep(address) {
+		log.Error(relay.MsgAddress, relay.MsgAddress, address, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), relay.ErrInvalidAddress
+	}
+
+	if !common.IsHexAddressDeep(contractAddress) {
+		log.Error(relay.MsgContractAddress, relay.MsgContractAddress, contractAddress, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), relay.ErrInvalidAddress
+	}
+
+	var client *ethclient.Client
+
+	client, err := ethclient.Dial(s.DpUrl)
+	if err != nil {
+		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+	defer client.Close()
+
+	var balance *big.Int
+	balance, err = client.GetAccountTokenBalance(common.HexToAddress(contractAddress), common.HexToAddress(address))
+	if err != nil {
+		log.Error("GetTokenBalance", relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+	hexBalance := hexutil.EncodeBig(balance)
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleAccountTokenDetails, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
+
+	accountTokenDetails := AccountTokenDetails{
+		Balance: &hexBalance,
+		ContractAddress: &contractAddress,
+	}
+
+	accountTokenDetailsResponse := AccountTokenDetailsResponse{
+		Result: accountTokenDetails,
+	}
+
+	return Response(http.StatusOK, accountTokenDetailsResponse), nil
+}
+
+// GetTokenDetails - Get account token details
+func (s *ReadApiAPIService) GetTokenDetails(ctx context.Context, contractAddress string) (ImplResponse, error) {
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleAccountDetails, relay.MsgDial, s.DpUrl)
+
+	if !common.IsHexAddressDeep(contractAddress) {
+		log.Error(relay.MsgContractAddress, relay.MsgContractAddress, contractAddress, relay.MsgError, relay.ErrInvalidAddress, relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), relay.ErrInvalidAddress
+	}
+
+	tokenDetailsResponse, err := s.cacheManager.GetTokenDetails(contractAddress)
+	if err != nil {
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+
+	/*var client *ethclient.Client
+
+	client, err := ethclient.Dial(s.DpUrl)
+	if err != nil {
+		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+	defer client.Close()
+
+	blockNumber, err := s.getLatestBlockNumber(context.Background(), client)
+	if err != nil {
+		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+
+	var tokenDetails *ethclient.TokenDetails
+	tokenDetails, err = client.GetTokenDetails(common.HexToAddress(contractAddress), blockNumber)
+	if err != nil {
+		log.Error("GetTokenDetails", relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+	}
+
+	var result TokenDetails
+	result.Name = &tokenDetails.Name
+	result.Symbol = &tokenDetails.Symbol
+	owner := tokenDetails.Owner.Hex()
+	result.Owner = &owner
+
+	totalSupply := hexutil.EncodeBig(tokenDetails.TotalSupply)
+	result.TotalSupply = &totalSupply
+
+	decimals := hexutil.EncodeUint64(uint64(tokenDetails.Decimals))
+	result.Decimals = &decimals*/
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleTokenDetails, relay.MsgAddress, contractAddress, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
+
+	return Response(http.StatusOK, tokenDetailsResponse), nil
 }

@@ -125,9 +125,9 @@ func NewDatabase(db ethdb.KeyValueStore) ethdb.Database {
 // NewDatabaseWithFreezer creates a high level database on top of a given key-
 // value data store with a freezer moving immutable chain segments into cold
 // storage.
-func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
+func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace string, readonly bool, freezerMode string) (ethdb.Database, error) {
 	// Create the idle freezer instance
-	frdb, err := newFreezer(freezer, namespace, readonly)
+	frdb, err := newFreezer(freezer, namespace, readonly, freezerMode)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,9 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 				// Subsequent header after the freezer limit is missing from the database.
 				// Reject startup is the database has a more recent head.
 				if *ReadHeaderNumber(db, ReadHeadHeaderHash(db)) > frozen-1 {
-					return nil, fmt.Errorf("gap (#%d) in the chain between ancients and leveldb", frozen)
+					if freezerMode != FreezerModeSkipAppend {
+						return nil, fmt.Errorf("gap (#%d) in the chain between ancients and leveldb", frozen)
+					}
 				}
 				// Database contains only older data than the freezer, this happens if the
 				// state was wiped and reinited from an existing freezer.
@@ -179,20 +181,24 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, freezer string, namespace st
 			// We might have duplicate blocks (crash after freezer write but before key-value
 			// store deletion, but that's fine).
 		} else {
-			// If the freezer is empty, ensure nothing was moved yet from the key-value
-			// store, otherwise we'll end up missing data. We check block #1 to decide
-			// if we froze anything previously or not, but do take care of databases with
-			// only the genesis block.
-			if ReadHeadHeaderHash(db) != common.BytesToHash(kvgenesis) {
-				// Key-value store contains more data than the genesis block, make sure we
-				// didn't freeze anything yet.
-				if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
-					return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
+			if freezerMode == FreezerModeSkipAppend || freezerMode == FreezerModeSkipAll {
+				log.Info("NewDatabaseWithFreezer skipping startup check")
+			} else {
+				// If the freezer is empty, ensure nothing was moved yet from the key-value
+				// store, otherwise we'll end up missing data. We check block #1 to decide
+				// if we froze anything previously or not, but do take care of databases with
+				// only the genesis block.
+				if ReadHeadHeaderHash(db) != common.BytesToHash(kvgenesis) {
+					// Key-value store contains more data than the genesis block, make sure we
+					// didn't freeze anything yet.
+					if kvblob, _ := db.Get(headerHashKey(1)); len(kvblob) == 0 {
+						return nil, errors.New("ancient chain segments already extracted, please set --datadir.ancient to the correct path")
+					}
+					// Block #1 is still in the database, we're allowed to init a new feezer
 				}
-				// Block #1 is still in the database, we're allowed to init a new feezer
+				// Otherwise, the head header is still the genesis, we're allowed to init a new
+				// feezer.
 			}
-			// Otherwise, the head header is still the genesis, we're allowed to init a new
-			// feezer.
 		}
 	}
 	// Freezer is consistent with the key-value database, permit combining the two
@@ -234,12 +240,12 @@ func NewLevelDBDatabase(file string, cache int, handles int, namespace string, r
 
 // NewLevelDBDatabaseWithFreezer creates a persistent key-value database with a
 // freezer moving immutable chain segments into cold storage.
-func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer string, namespace string, readonly bool) (ethdb.Database, error) {
+func NewLevelDBDatabaseWithFreezer(file string, cache int, handles int, freezer string, namespace string, readonly bool, freezerMode string) (ethdb.Database, error) {
 	kvdb, err := leveldb.New(file, cache, handles, namespace, readonly)
 	if err != nil {
 		return nil, err
 	}
-	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace, readonly)
+	frdb, err := NewDatabaseWithFreezer(kvdb, freezer, namespace, readonly, freezerMode)
 	if err != nil {
 		kvdb.Close()
 		return nil, err
