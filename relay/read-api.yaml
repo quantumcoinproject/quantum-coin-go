@@ -225,7 +225,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
-  '/account/{address}/tokens/{contractAddress}':
+  '/account/{address}/token/{contractAddress}':
     get:
       tags:
         - Read

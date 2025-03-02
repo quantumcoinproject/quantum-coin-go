@@ -189,6 +189,17 @@ type AccountTokenList struct {
 	Tokens  []AccountTokenSummary `json:"tokens"`
 }
 
+type ListAccountTokensResponse struct {
+	PageCount      uint64                `json:"pageCount"`
+	AccountAddress string                `json:"accountAddress"`
+	Items          []AccountTokenSummary `json:"items"`
+}
+
+type ListAccountTokenTransactionsResponse struct {
+	PageCount uint64                           `json:"pageCount"`
+	Items     []AccountTokenTransactionCompact `json:"items"`
+}
+
 func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
 	cManager := &CacheManager{
 		nodeUrl:            nodeUrl,
@@ -843,7 +854,7 @@ func (c *CacheManager) processAccountTransactions(address string, txnList *[]Acc
 	} else {
 		//Load current state form the cache
 		txnPageCount := getPageCount(newTxnCount)
-		txnPageKey := getAccountPageKey(address, txnPageCount)
+		txnPageKey := getAccountTransactionPageKey(address, txnPageCount)
 
 		log.Info("processAccountTransactions loading from cache", "address", address, "newTxnCount", newTxnCount, "txnPageCount", txnPageCount)
 
@@ -884,7 +895,7 @@ func (c *CacheManager) processAccountTransactions(address string, txnList *[]Acc
 
 			runningTxnCount := txnCount + uint64(i) + 1
 			txnPageCount := getPageCount(runningTxnCount)
-			txnPageKey := getAccountPageKey(address, txnPageCount)
+			txnPageKey := getAccountTransactionPageKey(address, txnPageCount)
 			err = txnBatch.Put(txnPageKey, accountTransactionListBlob)
 			if err != nil {
 				log.Error("txnBatch.Put accountTransactionListBlob", "error", err)
@@ -1102,7 +1113,7 @@ func (c *CacheManager) ListPendingTransactionsByAccount(accountAddress common.Ad
 	return response, nil
 }
 
-func getAccountPageKey(address string, pageCount uint64) []byte {
+func getAccountTransactionPageKey(address string, pageCount uint64) []byte {
 	pageKey := fmt.Sprintf(AccountTransactionPageKey, strings.ToLower(address), pageCount)
 	return []byte(pageKey)
 }
@@ -1467,8 +1478,8 @@ func (c *CacheManager) getAccountTokenPage(address string, pageNumber uint64) (*
 func (c *CacheManager) putAccountTokenPage(address string, accountTokenList *AccountTokenList, pageNumber uint64, batch *ethdb.Batch) error {
 	txnBatch := *batch
 	address = strings.ToLower(address)
-	accountTokenCountKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
-	log.Info("putAccountTokenCount", "address", address, "accountTokenCountKey", accountTokenCountKey, "pageNumber", pageNumber)
+	accountTokenPageKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
+	log.Info("putAccountTokenCount", "address", address, "accountTokenPageKey", accountTokenPageKey, "pageNumber", pageNumber)
 
 	blob, err := json.Marshal(accountTokenList)
 	if err != nil {
@@ -1619,7 +1630,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 		}
 		err = json.Unmarshal(accountTokenListBlob, &accountTokenList)
 		if err != nil {
-			log.Error("json.Unmarshal accountTransactionListBlob", "error", err, "address", address, "tokenPageKey", tokenPageKey)
+			log.Error("json.Unmarshal accountTokenListBlob", "error", err, "address", address, "tokenPageKey", tokenPageKey)
 			return err
 		}
 
@@ -1652,10 +1663,10 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	}
 
 	tokenPageCount := getPageCount(newTokenCount)
-	tokenPageKey := getAccountPageKey(address, tokenPageCount)
-	err = txnBatch.Put(tokenPageKey, accountTokenListBlob)
+	key, tokenPageKeyBlob := getAccountTokenPageKey(address, tokenPageCount)
+	err = txnBatch.Put(tokenPageKeyBlob, accountTokenListBlob)
 	if err != nil {
-		log.Error("txnBatch.Put accountTokenListBlob", "error", err)
+		log.Error("txnBatch.Put accountTokenListBlob", "error", err, "key", key)
 		return err
 	}
 
@@ -1727,4 +1738,69 @@ func (c *CacheManager) putAccountTokenInDb(details *AccountTokenSummary, batch *
 	}
 
 	return nil
+}
+
+func (c *CacheManager) ListTokensByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTokensResponse, error) {
+	listResponse := ListAccountTokensResponse{}
+	address := strings.ToLower(accountAddress.Hex())
+
+	var pageCount uint64
+	accountTokenCount, err := c.getAccountTokenCount(address)
+	if err != nil {
+		log.Error("ListTokensByAccount getAccountTokenCount", "error", err)
+		if err.Error() == LevelDbNoTFoundErrMsg {
+			return ListAccountTokensResponse{PageCount: 0}, nil
+		}
+		return ListAccountTokensResponse{}, err
+	}
+	if accountTokenCount%PageSize == 0 {
+		pageCount = accountTokenCount / PageSize
+	} else {
+		pageCount = (accountTokenCount / PageSize) + 1
+	}
+
+	if pageCount == 0 {
+		return ListAccountTokensResponse{PageCount: 0}, nil
+	}
+
+	var pageNumber uint64
+	if pageNumberInput < 1 {
+		pageNumber = pageCount
+	} else {
+		pageNumber = uint64(pageNumberInput)
+	}
+	log.Info("ListTokensByAccount", "address", address, "pageNumberInput", pageNumberInput, "pageNumber", pageNumber, "pageCount", pageCount, "accountTokenCount", accountTokenCount)
+	if pageNumber > pageCount {
+		log.Error("ListTokensByAccount getAccountTokenCount", "pageNumber", pageNumber, "pageCount", pageCount)
+		return ListAccountTokensResponse{PageCount: pageCount}, nil
+	}
+
+	pageKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
+	log.Info("cache get", "key", pageKey)
+
+	accountTTokenListBlob, err := c.cacheDb.Get(keyBlob)
+	if err != nil {
+		log.Error("ListTokensByAccount cacheDb.Get", "error", err)
+		return ListAccountTokensResponse{}, err
+	}
+	var accountTokenList AccountTokenList
+	err = json.Unmarshal(accountTTokenListBlob, &accountTokenList)
+	if err != nil {
+		log.Error("ListTokensByAccount json.Unmarshal accountTokenList", "error", err)
+		return ListAccountTokensResponse{}, err
+	}
+
+	if strings.ToLower(accountTokenList.Address) != address {
+		log.Error("unexpected address accountTokenList.Address", "address", address, "accountTokenList.Address", accountTokenList.Address)
+		return ListAccountTokensResponse{}, errors.New("unexpected address accountTokenList.Address")
+	}
+
+	listResponse.Items = accountTokenList.Tokens
+	listResponse.PageCount = pageCount
+
+	return listResponse, nil
+}
+
+func (c *CacheManager) ListTokenTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTokenTransactionsResponse, error) {
+	return ListAccountTokenTransactionsResponse{}, nil
 }

@@ -317,7 +317,10 @@ func (s *ReadApiAPIService) GetBlockchainDetails(ctx context.Context) (ImplRespo
 
 	getResponse, err := s.cacheManager.GetBlockchainDetails()
 	if err != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
 	}
 
 	return Response(http.StatusOK,getResponse),	nil
@@ -341,7 +344,10 @@ func (s *ReadApiAPIService) ListAccountTransactions(ctx context.Context, address
 
 	listResponse, err := s.cacheManager.ListTransactionsByAccount(common.HexToAddress(address), pageNumber)
 	if err != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
 	}
 
 	return Response(http.StatusOK,listResponse),	nil
@@ -364,7 +370,10 @@ func (s *ReadApiAPIService) ListAccountPendingTransactions(ctx context.Context, 
 
 	listResponse, err := s.cacheManager.ListPendingTransactionsByAccount(common.HexToAddress(address), pageNumber)
 	if err != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
 	}
 
 	return Response(http.StatusOK,listResponse),	nil
@@ -387,20 +396,23 @@ func (s *ReadApiAPIService) QueryDetails(ctx context.Context, queryTerm string) 
 
 	getResponse, err := s.cacheManager.GetBlockchainDetails()
 	if err != nil {
-		return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
 	}
 
 	result := ""
 	if queryTerm == "totalcoins" {
 		val, err :=  hexutil.DecodeBig(getResponse.Result.TotalSupply)
 		if err != nil {
-			return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+			return Response(http.StatusInternalServerError, nil), InternalError
 		}
 		result = strconv.FormatUint(params.WeiToEther(val).Uint64(), 10)
 	} else if queryTerm == "circulating" {
 		val, err :=  hexutil.DecodeBig(getResponse.Result.CirculatingSupply)
 		if err != nil {
-			return Response(http.StatusInternalServerError, nil), errors.New("Internal Server Error")
+			return Response(http.StatusInternalServerError, nil), InternalError
 		}
 		result = strconv.FormatUint(params.WeiToEther(val).Uint64(), 10)
 	}
@@ -440,7 +452,7 @@ func (s *ReadApiAPIService) GetAccountTokenDetails(ctx context.Context, address 
 			if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
 				return Response(http.StatusNotFound, nil), NotFoundError
 			}
-			return Response(http.StatusBadRequest, nil), InternalError
+			return Response(http.StatusInternalServerError, nil), InternalError
 		}
 		accountTokenDetails = AccountTokenDetails{
 			Balance:         &details.TokenBalance,
@@ -493,46 +505,67 @@ func (s *ReadApiAPIService) GetTokenDetails(ctx context.Context, contractAddress
 
 	tokenDetailsResponse, err := s.cacheManager.GetTokenDetails(contractAddress)
 	if err != nil {
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
 		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
 	}
-
-	/*var client *ethclient.Client
-
-	client, err := ethclient.Dial(s.DpUrl)
-	if err != nil {
-		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
-		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
-	}
-	defer client.Close()
-
-	blockNumber, err := s.getLatestBlockNumber(context.Background(), client)
-	if err != nil {
-		log.Error(relay.MsgDial, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
-		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
-	}
-
-	var tokenDetails *ethclient.TokenDetails
-	tokenDetails, err = client.GetTokenDetails(common.HexToAddress(contractAddress), blockNumber)
-	if err != nil {
-		log.Error("GetTokenDetails", relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
-		return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
-	}
-
-	var result TokenDetails
-	result.Name = &tokenDetails.Name
-	result.Symbol = &tokenDetails.Symbol
-	owner := tokenDetails.Owner.Hex()
-	result.Owner = &owner
-
-	totalSupply := hexutil.EncodeBig(tokenDetails.TotalSupply)
-	result.TotalSupply = &totalSupply
-
-	decimals := hexutil.EncodeUint64(uint64(tokenDetails.Decimals))
-	result.Decimals = &decimals*/
 
 	duration := time.Now().Sub(startTime)
 
 	log.Info(relay.InfoTitleTokenDetails, relay.MsgAddress, contractAddress, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
 
 	return Response(http.StatusOK, tokenDetailsResponse), nil
+}
+
+// ListAccountTokens - List account tokens
+func (s *ReadApiAPIService) ListAccountTokens(ctx context.Context, address string, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleListAccountTransactions)
+
+	if common.IsHexAddressDeep(address) == false {
+		return Response(http.StatusInternalServerError, nil), relay.ErrInvalidAddress
+	}
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info("ListAccountTokens", relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	listResponse, err := s.cacheManager.ListTokensByAccount(common.HexToAddress(address), pageNumber)
+	if err != nil {
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
+	}
+
+	return Response(http.StatusOK,listResponse),	nil
+}
+
+// ListAccountTokenTransactions - List account token transactions
+func (s *ReadApiAPIService) ListAccountTokenTransactions(ctx context.Context, address string, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleListAccountTransactions)
+
+	if common.IsHexAddressDeep(address) == false {
+		return Response(http.StatusInternalServerError, nil), relay.ErrInvalidAddress
+	}
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info("ListTokenTransactionsByAccount", relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	listResponse, err := s.cacheManager.ListTokenTransactionsByAccount(common.HexToAddress(address), pageNumber)
+	if err != nil {
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
+	}
+
+	return Response(http.StatusOK,listResponse),	nil
 }
