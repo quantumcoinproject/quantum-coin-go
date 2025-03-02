@@ -455,7 +455,7 @@ func (s *ReadApiAPIService) GetAccountTokenDetails(ctx context.Context, address 
 			return Response(http.StatusInternalServerError, nil), InternalError
 		}
 		accountTokenDetails = AccountTokenDetails{
-			Balance:         &details.TokenBalance,
+			TokenBalance:         &details.TokenBalance,
 			ContractAddress: &contractAddress,
 		}
 	} else { //always get balance from blockchain node
@@ -477,7 +477,7 @@ func (s *ReadApiAPIService) GetAccountTokenDetails(ctx context.Context, address 
 		hexBalance := hexutil.EncodeBig(balance)
 
 		accountTokenDetails = AccountTokenDetails{
-			Balance:         &hexBalance,
+			TokenBalance:         &hexBalance,
 			ContractAddress: &contractAddress,
 		}
 	}

@@ -596,12 +596,20 @@ components:
     AccountTokenDetails:
       type: object
       properties:
-        balance:
+        tokenBalance:
           type: string
           nullable: true
         contractAddress:
           type: string
           nullable: false
+        name:
+          type: string
+          nullable: true
+          description: The name of the token
+        symbol:
+          type: string
+          nullable: true
+          description: The symbol of the token
       additionalProperties: false
     AccountTokenDetailsResponse:
       type: object
