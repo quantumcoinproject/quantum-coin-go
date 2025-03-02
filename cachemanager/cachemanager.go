@@ -69,11 +69,6 @@ const TimeLayout = "2006-01-02T15:04:05Z"
 
 const PageSize uint64 = 20
 
-type AccountTransactionList struct {
-	Address      string                      `json:"address"`
-	Transactions []AccountTransactionCompact `json:"transactions"`
-}
-
 type TransactionType string
 
 // List of TransactionType
@@ -87,24 +82,100 @@ const (
 
 type ContractType string
 
-type TokenDetails struct {
-	ContractAddress        string `json:"contractAddress,omitempty"`
-	CreatorAddress         string `json:"creatorAddress,omitempty"`
-	CreatedBlockNumber     uint64 `json:"createdBlockNumber,omitempty"`
-	CreatedTransactionHash string `json:"createdTransactionHash,omitempty"`
-	Name                   string `json:"name,omitempty"`
-	Symbol                 string `json:"symbol,omitempty"`
-	TotalSupply            string `json:"totalSupply,omitempty"`
-	Decimals               string `json:"decimals,omitempty"`
-}
-
-type GetTokenDetailsResponse struct {
-	Result TokenDetails `json:"result,omitempty"`
-}
-
 type AccountDetails struct {
 	Address string                `json:"address,omitempty"`
 	AccType ethclient.AccountType `json:"accountType,omitempty"`
+}
+
+type InternalTransactionDetailWithLevel struct {
+	txn   *ethclient.InternalTransactionDetails
+	level byte
+}
+
+type TokenTransfers struct {
+	ContractAddress common.Address
+	From            common.Address
+	To              common.Address
+	Tokens          *big.Int
+}
+
+type TokenApprovals struct {
+	ContractAddress common.Address
+	TokenOwner      common.Address
+	Spender         common.Address
+	Tokens          *big.Int
+}
+
+type InternalTransactionDetail struct {
+	From  string `json:"from,omitempty"`
+	To    string `json:"to,omitempty"`
+	Value string `json:"value,omitempty"`
+	Type  string `json:"type,omitempty"`
+	Level byte   `json:"level,omitempty"`
+}
+
+type TransactionReceipt struct {
+	BlockHash string `json:"blockHash,omitempty"`
+
+	CumulativeGasUsed string `json:"cumulativeGasUsed,omitempty"`
+
+	EffectiveGasPrice string `json:"effectiveGasPrice,omitempty"`
+
+	GasUsed string `json:"gasUsed,omitempty"`
+
+	Status string `json:"status,omitempty"`
+
+	Hash string `json:"hash,omitempty"`
+
+	Type string `json:"type,omitempty"`
+
+	ContractAddress string `json:"contractAddress,omitempty"`
+}
+
+type TokenTransactionCompact struct {
+	TokenFromAddress string `json:"tokenFromAddress,omitempty"`
+
+	TokenToAddress string `json:"tokenToAddress,omitempty"`
+
+	ContractAddress string `json:"contractAddress,omitempty"`
+
+	TokenBalance string `json:"tokenBalance,omitempty"`
+
+	TokenSymbol string `json:"tokenSymbol,omitempty"`
+
+	TokenName string `json:"tokenName,omitempty"`
+}
+
+type TransactionDetails struct {
+	BlockHash string `json:"blockHash,omitempty"`
+
+	BlockNumber uint64 `json:"blockNumber,omitempty"`
+
+	From string `json:"from,omitempty"`
+
+	Gas string `json:"gas,omitempty"`
+
+	GasPrice string `json:"gasPrice,omitempty"`
+
+	Hash string `json:"hash,omitempty"`
+
+	Input string `json:"input,omitempty"`
+
+	Nonce uint64 `json:"nonce,omitempty"`
+
+	To string `json:"to,omitempty"`
+
+	Value string `json:"value,omitempty"`
+
+	Receipt TransactionReceipt `json:"receipt,omitempty"`
+
+	CreatedAt string `json:"createdAt,omitempty"`
+
+	TxnFee string `json:"txnFee,omitempty"`
+
+	TransactionType string `json:"transactionType,omitempty"`
+
+	TokenTransaction TokenTransactionCompact `json:"tokenTransaction,omitempty"`
 }
 
 type AccountTransactionCompact struct {
@@ -125,16 +196,13 @@ type AccountTransactionCompact struct {
 	Status string `json:"status,omitempty"`
 
 	TransactionType string `json:"transactionType,omitempty"`
+
+	TokenTransaction TokenTransactionCompact `json:"tokenTransaction,omitempty"`
 }
 
-type AccountTokenTransactionCompact struct {
-	AccountTransactionCompact
-
-	TokenBalance string `json:"tokenBalance,omitempty"`
-
-	TokenSymbol string `json:"tokenSymbol,omitempty"`
-
-	TokenName string `json:"tokenName,omitempty"`
+type AccountTransactionList struct {
+	Address      string                      `json:"address"`
+	Transactions []AccountTransactionCompact `json:"transactions"`
 }
 
 type ListAccountTransactionsResponse struct {
@@ -176,6 +244,21 @@ type GetBlockchainDetailsResponse struct {
 	Result BlockchainDetails `json:"result" gencodec:"required"`
 }
 
+type TokenDetails struct {
+	ContractAddress        string `json:"contractAddress,omitempty"`
+	CreatorAddress         string `json:"creatorAddress,omitempty"`
+	CreatedBlockNumber     uint64 `json:"createdBlockNumber,omitempty"`
+	CreatedTransactionHash string `json:"createdTransactionHash,omitempty"`
+	Name                   string `json:"name,omitempty"`
+	Symbol                 string `json:"symbol,omitempty"`
+	TotalSupply            string `json:"totalSupply,omitempty"`
+	Decimals               string `json:"decimals,omitempty"`
+}
+
+type GetTokenDetailsResponse struct {
+	Result TokenDetails `json:"result,omitempty"`
+}
+
 type AccountTokenSummary struct {
 	AccountAddress  string `json:"accountAddress,omitempty"`
 	ContractAddress string `json:"contractAddress,omitempty"`
@@ -195,9 +278,14 @@ type ListAccountTokensResponse struct {
 	Items          []AccountTokenSummary `json:"items"`
 }
 
+type AccountTokenTransactionList struct {
+	Address      string                      `json:"address"`
+	Transactions []AccountTransactionCompact `json:"transactions"`
+}
+
 type ListAccountTokenTransactionsResponse struct {
-	PageCount uint64                           `json:"pageCount"`
-	Items     []AccountTokenTransactionCompact `json:"items"`
+	PageCount uint64                      `json:"pageCount"`
+	Items     []AccountTransactionCompact `json:"items"`
 }
 
 func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
@@ -473,26 +561,6 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 		}
 		transaction.TransactionType = string(txType)
 
-		_, ok := liveAccountTxnMap[fromAddress]
-		if ok == false {
-			liveAccountTxnMap[fromAddress] = make([]AccountTransactionCompact, 0)
-		}
-		liveAccountTxnMap[fromAddress] = append(liveAccountTxnMap[fromAddress], transaction)
-
-		if tx.To() != nil {
-			if fromAddress != toAddress {
-				_, ok = liveAccountTxnMap[toAddress]
-				if ok == false {
-					liveAccountTxnMap[toAddress] = make([]AccountTransactionCompact, 0)
-				}
-				liveAccountTxnMap[toAddress] = append(liveAccountTxnMap[toAddress], transaction)
-			}
-			accountsInvolved[strings.ToLower(tx.To().Hex())] = true
-		} else {
-			accountsInvolved[strings.ToLower(receipt.ContractAddress.Hex())] = true
-		}
-		accountsInvolved[fromAddress] = true
-
 		if receipt.Status == 1 {
 			//Find all internal transactions
 			internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
@@ -565,39 +633,46 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 			}
 
 			if transaction.TransactionType == string(TOKEN_TRANSFER) { //only root level transaction (no internal transactions)
-				var accountTokenTransaction AccountTokenTransactionCompact
-				accountTokenTransaction.Hash = transaction.Hash
-				accountTokenTransaction.BlockNumber = blockNumber
-				accountTokenTransaction.CreatedAt = transaction.CreatedAt
-				accountTokenTransaction.From = transaction.From
-				accountTokenTransaction.To = transaction.To
-				accountTokenTransaction.Value = transaction.Value
-				accountTokenTransaction.TxnFee = transaction.TxnFee
-				accountTokenTransaction.Status = transaction.Status
-				accountTokenTransaction.TransactionType = transaction.TransactionType
-
-				tokenDetails, err := c.getTokenDetailsInternal(accountTokenTransaction.To) //token should already have been saved tp db, when it was created
-				if err != nil {
-					log.Error("getTokenDetailsInternal", "error", err)
-					return err
-				}
-				accountTokenTransaction.TokenName = tokenDetails.Name
-				accountTokenTransaction.TokenSymbol = tokenDetails.Symbol
-
 				//First transfer is root level by from address
-				if len(tokenTransfers) == 0 || strings.ToLower(tokenTransfers[0].From.Hex()) != transaction.From {
+				if tokenTransfers == nil || len(tokenTransfers) == 0 || strings.ToLower(tokenTransfers[0].From.Hex()) != transaction.From {
 					log.Error("processByCacheManager missing", "from", transaction.From, "to (contract)", transaction.To)
-					return errors.New("unexpected token transfer missing")
-				}
-				accountTokenTransaction.TokenBalance = hexutil.EncodeBig(tokenTransfers[0].Tokens)
+					transaction.TransactionType = string(SMART_CONTRACT)
+				} else {
+					transaction.TokenTransaction.ContractAddress = strings.ToLower(tokenTransfers[0].ContractAddress.Hex())
+					transaction.TokenTransaction.TokenFromAddress = strings.ToLower(tokenTransfers[0].From.Hex())
+					transaction.TokenTransaction.TokenToAddress = strings.ToLower(tokenTransfers[0].To.Hex())
 
-				err = c.processAccountTokenTransaction(&accountTokenTransaction, &txnBatch)
-				if err != nil {
-					log.Error("processByCacheManager processAccountTokenTransaction", "error", "hash", transaction.Hash)
-					return err
+					tokenDetails, err := c.getTokenDetailsInternal(transaction.TokenTransaction.ContractAddress) //token should already have been saved to db, when it was created
+					if err != nil {
+						log.Error("getTokenDetailsInternal", "error", err)
+						return err
+					}
+					transaction.TokenTransaction.TokenBalance = hexutil.EncodeBig(tokenTransfers[0].Tokens)
+					transaction.TokenTransaction.TokenName = tokenDetails.Name
+					transaction.TokenTransaction.TokenSymbol = tokenDetails.Symbol
 				}
 			}
 		}
+
+		_, ok := liveAccountTxnMap[fromAddress]
+		if ok == false {
+			liveAccountTxnMap[fromAddress] = make([]AccountTransactionCompact, 0)
+		}
+		liveAccountTxnMap[fromAddress] = append(liveAccountTxnMap[fromAddress], transaction)
+
+		if tx.To() != nil {
+			if fromAddress != toAddress {
+				_, ok = liveAccountTxnMap[toAddress]
+				if ok == false {
+					liveAccountTxnMap[toAddress] = make([]AccountTransactionCompact, 0)
+				}
+				liveAccountTxnMap[toAddress] = append(liveAccountTxnMap[toAddress], transaction)
+			}
+			accountsInvolved[strings.ToLower(tx.To().Hex())] = true
+		} else {
+			accountsInvolved[strings.ToLower(receipt.ContractAddress.Hex())] = true
+		}
+		accountsInvolved[fromAddress] = true
 
 		//Loop through all accounts and update account cache
 		for account, _ := range accountsInvolved {
@@ -1324,19 +1399,6 @@ func (c *CacheManager) putAccountInCacheAndDb(accountDetails *AccountDetails, ba
 	return nil
 }
 
-type InternalTransactionDetail struct {
-	From  string `json:"from,omitempty"`
-	To    string `json:"to,omitempty"`
-	Value string `json:"value,omitempty"`
-	Type  string `json:"type,omitempty"`
-	Level byte   `json:"level,omitempty"`
-}
-
-type InternalTransactionDetailWithLevel struct {
-	txn   *ethclient.InternalTransactionDetails
-	level byte
-}
-
 func (c *CacheManager) flattenInternalTransactionDetails(details *ethclient.InternalTransactionDetails) []*InternalTransactionDetail {
 	txnStack := newStack()
 	txnList := make([]*InternalTransactionDetail, 0)
@@ -1489,46 +1551,6 @@ func (c *CacheManager) putAccountTokenPage(address string, accountTokenList *Acc
 	err = txnBatch.Put(keyBlob, blob)
 	if err != nil {
 		log.Error("putAccountTokenCount address", "error", err, "address", address, "pageNumber", pageNumber)
-		return err
-	}
-
-	return nil
-}
-
-func getAccountTokenTxnCountKey(address string) (key string, blob []byte) {
-	key = fmt.Sprintf(AccountTokenTxnCountKey, address)
-	blob = []byte(key)
-	return key, blob
-}
-
-func (c *CacheManager) getAccountTokenTxnCount(address string) (uint64, error) {
-	accountTokenTxnCountKey, keyBlob := getAccountTokenTxnCountKey(address)
-	accountTokenTxnCountBlob, err := c.cacheDb.Get(keyBlob)
-	if err != nil {
-		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Info("getAccountTokenTxnCount not found", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey)
-			return 0, nil
-		} else {
-			log.Error("getAccountTokenTxnCount cacheDb.Get address", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "error", err)
-			return 0, err
-		}
-	} else {
-		tokenTxnCount := common.BytesToUint64(accountTokenTxnCountBlob)
-		log.Info("getAccountTokenTxnCount", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "tokenTxnCount", tokenTxnCount)
-		return tokenTxnCount, nil
-	}
-}
-
-func (c *CacheManager) putAccountTokenTxnCount(address string, tokenTxnCount uint64, batch *ethdb.Batch) error {
-	txnBatch := *batch
-	address = strings.ToLower(address)
-	accountTokenTxnCountKey, keyBlob := getAccountTokenTxnCountKey(address)
-	log.Info("putAccountTokenTxnCount", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "tokenTxnCount", tokenTxnCount)
-
-	blob := common.Uint64ToBytes(tokenTxnCount)
-	err := txnBatch.Put(keyBlob, blob)
-	if err != nil {
-		log.Error("putAccountTokenTxnCount address", "error", err, "address", address, "tokenTxnCount", tokenTxnCount)
 		return err
 	}
 
@@ -1689,12 +1711,6 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	return nil
 }
 
-// Parses and stores list of token transactions with transaction summary
-func (c *CacheManager) processAccountTokenTransaction(txn *AccountTokenTransactionCompact, batch *ethdb.Batch) error {
-
-	return nil
-}
-
 func (c *CacheManager) getAccountTokenDetailsKey(accountAddress string, contractAddress string) []byte {
 	key := fmt.Sprintf(AccountTokenKey, strings.ToLower(accountAddress), strings.ToLower(contractAddress))
 	return []byte(key)
@@ -1776,7 +1792,7 @@ func (c *CacheManager) ListTokensByAccount(accountAddress common.Address, pageNu
 	}
 
 	pageKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
-	log.Info("cache get", "key", pageKey)
+	log.Debug("cache get", "key", pageKey)
 
 	accountTTokenListBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
@@ -1800,6 +1816,167 @@ func (c *CacheManager) ListTokensByAccount(accountAddress common.Address, pageNu
 
 	return listResponse, nil
 }
+
+func getAccountTokenTxnCountKey(address string) (key string, blob []byte) {
+	key = fmt.Sprintf(AccountTokenTxnCountKey, address)
+	blob = []byte(key)
+	return key, blob
+}
+
+func (c *CacheManager) getAccountTokenTxnCount(address string) (uint64, error) {
+	accountTokenTxnCountKey, keyBlob := getAccountTokenTxnCountKey(address)
+	accountTokenTxnCountBlob, err := c.cacheDb.Get(keyBlob)
+	if err != nil {
+		if err.Error() == LevelDbNoTFoundErrMsg {
+			log.Info("getAccountTokenTxnCount not found", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey)
+			return 0, nil
+		} else {
+			log.Error("getAccountTokenTxnCount cacheDb.Get address", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "error", err)
+			return 0, err
+		}
+	} else {
+		tokenTxnCount := common.BytesToUint64(accountTokenTxnCountBlob)
+		log.Info("getAccountTokenTxnCount", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "tokenTxnCount", tokenTxnCount)
+		return tokenTxnCount, nil
+	}
+}
+
+func (c *CacheManager) putAccountTokenTxnCount(address string, tokenTxnCount uint64, batch *ethdb.Batch) error {
+	txnBatch := *batch
+	address = strings.ToLower(address)
+	accountTokenTxnCountKey, keyBlob := getAccountTokenTxnCountKey(address)
+	log.Info("putAccountTokenTxnCount", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "tokenTxnCount", tokenTxnCount)
+
+	blob := common.Uint64ToBytes(tokenTxnCount)
+	err := txnBatch.Put(keyBlob, blob)
+	if err != nil {
+		log.Error("putAccountTokenTxnCount address", "error", err, "address", address, "tokenTxnCount", tokenTxnCount)
+		return err
+	}
+
+	return nil
+}
+
+/*
+// Parses and stores list of token transactions with transaction summary
+func (c *CacheManager) processAccountTokenTransaction(addr common.Address, txn *AccountTokenTransactionCompact, batch *ethdb.Batch) error {
+	txnBatch := *batch
+	var tokenCount uint64
+	var err error
+
+	address := strings.ToLower(addr.Hex())
+	contractAddress := strings.ToLower(tokenDetails.ContractAddress)
+
+	accountTokenSummary := AccountTokenSummary{
+		AccountAddress:  address,
+		ContractAddress: contractAddress,
+		Name:            tokenDetails.Name,
+		Symbol:          tokenDetails.Decimals,
+		TokenBalance:    hexutil.EncodeBig(tokenBalance),
+	}
+
+	err = c.putAccountTokenInDb(&accountTokenSummary, &txnBatch)
+	if err != nil {
+		log.Error("putAccountTokenInDb", "address", address, "contractAddress", contractAddress)
+		return err
+	}
+
+	//Check if already inserted
+	tempMap, ok := c.accountTokenMap[address]
+	if ok == true {
+		cMap := *tempMap
+		_, ok = cMap[contractAddress]
+		if ok {
+			return nil
+		}
+	}
+
+	tokenCount, err = c.getAccountTokenCount(address)
+	if err != nil {
+		return err
+	}
+	newTokenCount := tokenCount + 1
+
+	accountTokenList := AccountTokenList{}
+
+	log.Info("processAccountTokenTransfer", "address", address, "tokenCount", tokenCount, "newTokenCount", newTokenCount)
+
+	if newTokenCount%PageSize == 1 { //if it's the first transaction of the page, won't be in the cache
+		accountTokenList.Tokens = make([]AccountTokenSummary, 0)
+		accountTokenList.Address = address
+		log.Info("processAccountTokenTransfer", "address", address, "newTokenCount", newTokenCount)
+	} else {
+		//Load current state form the cache
+		tokenPageCount := getPageCount(newTokenCount)
+		_, tokenPageKey := getAccountTokenPageKey(address, newTokenCount)
+
+		log.Info("processAccountTokenTransfer loading from cache", "address", address, "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount)
+
+		accountTokenListBlob, err := c.cacheDb.Get(tokenPageKey)
+		if err != nil {
+			log.Error("cacheDb.Get accountTxnPageKey", "error", err)
+			return err
+		}
+		err = json.Unmarshal(accountTokenListBlob, &accountTokenList)
+		if err != nil {
+			log.Error("json.Unmarshal accountTokenListBlob", "error", err, "address", address, "tokenPageKey", tokenPageKey)
+			return err
+		}
+
+		if strings.ToLower(accountTokenList.Address) != address {
+			return errors.New("unexpected address")
+		}
+
+		if accountTokenList.Tokens == nil {
+			return errors.New("unexpected tokens is nul")
+		}
+
+		if len(accountTokenList.Tokens) != int(tokenCount%PageSize) {
+			log.Error("unexpected token count from address", "actual", len(accountTokenList.Tokens), "expected", int(tokenCount%PageSize), "tokenCount", tokenCount)
+			return errors.New("unexpected transactions count")
+		}
+
+		//todo: make this work for pages greater than 1
+		for _, t := range accountTokenList.Tokens {
+			if t.ContractAddress == contractAddress { //token already in list
+				return nil
+			}
+		}
+	}
+
+	accountTokenList.Tokens = append(accountTokenList.Tokens, accountTokenSummary)
+	accountTokenListBlob, err := json.Marshal(accountTokenList)
+	if err != nil {
+		log.Error("json.Marshal accountTokenListBlob", "error", err)
+		return err
+	}
+
+	tokenPageCount := getPageCount(newTokenCount)
+	key, tokenPageKeyBlob := getAccountTokenPageKey(address, tokenPageCount)
+	err = txnBatch.Put(tokenPageKeyBlob, accountTokenListBlob)
+	if err != nil {
+		log.Error("txnBatch.Put accountTokenListBlob", "error", err, "key", key)
+		return err
+	}
+
+	err = c.putAccountTokenCount(address, newTokenCount, batch)
+	if err != nil {
+		return err
+	}
+
+	contractMap, ok := c.accountTokenMap[address]
+	if ok == false {
+		cMap := make(map[string]bool)
+		contractMap = &cMap
+	}
+	conMap := *contractMap
+	conMap[contractAddress] = true
+	c.accountTokenMap[address] = contractMap
+
+	log.Info("inserted account token list", "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount, "address", address)
+
+	return nil
+}*/
 
 func (c *CacheManager) ListTokenTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTokenTransactionsResponse, error) {
 	return ListAccountTokenTransactionsResponse{}, nil
