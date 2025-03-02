@@ -180,6 +180,11 @@ type AccountTokenSummary struct {
 	TokenBalance    string `json:"tokenBalance,omitempty"`
 }
 
+type AccountTokenList struct {
+	Address string                `json:"address"`
+	Tokens  []AccountTokenSummary `json:"tokens"`
+}
+
 func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
 	cManager := &CacheManager{
 		nodeUrl:            nodeUrl,
@@ -315,7 +320,6 @@ func (c *CacheManager) start() error {
 
 	delayNumber := int64(100 * time.Millisecond)
 	cacheTimer := time.NewTimer(time.Duration(delayNumber))
-	blockNumber = 14321
 
 	go func() {
 		for {
@@ -519,14 +523,19 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 		}
 
 		if tokenTransfers != nil && len(tokenTransfers) > 0 {
-			err = c.processAccountTokenTransfers(fromAddress, tokenTransfers, &txnBatch)
+			err = c.processAccountTokenTransfers(tokenTransfers, blockNum, &txnBatch)
 			if err != nil {
-				log.Error("processAccountTokenTransfers", "err", err, "txn", tx.Hash(), "fromAddress", fromAddress)
+				log.Error("processAccountTokenTransfers", "err", err, "txn", tx.Hash())
 				return err
 			}
 		}
 
 		if tokenApprovals != nil && len(tokenApprovals) > 0 {
+			for _, approval := range tokenApprovals {
+				accountsInvolved[strings.ToLower(approval.ContractAddress.Hex())] = true
+				accountsInvolved[strings.ToLower(approval.TokenOwner.Hex())] = true
+				accountsInvolved[strings.ToLower(approval.Spender.Hex())] = true
+			}
 		}
 
 		if tx.To() == nil {
@@ -553,13 +562,13 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 			accountTokenTransaction.Status = transaction.Status
 			accountTokenTransaction.TransactionType = transaction.TransactionType
 
-			tokenDetails, err := c.GetTokenDetails(accountTokenTransaction.To) //token should already have been saved tp db, when it was created
+			tokenDetails, err := c.getTokenDetailsInternal(accountTokenTransaction.To) //token should already have been saved tp db, when it was created
 			if err != nil {
 				log.Error("GetTokenDetails", "error", err)
 				return err
 			}
-			accountTokenTransaction.TokenName = tokenDetails.Result.Name
-			accountTokenTransaction.TokenSymbol = tokenDetails.Result.Symbol
+			accountTokenTransaction.TokenName = tokenDetails.Name
+			accountTokenTransaction.TokenSymbol = tokenDetails.Symbol
 
 			//First transfer is root level by from address
 			if len(tokenTransfers) == 0 || strings.ToLower(tokenTransfers[0].From.Hex()) != transaction.From {
@@ -999,14 +1008,6 @@ func (c *CacheManager) ListTransactionsByAccount(accountAddress common.Address, 
 		return ListAccountTransactionsResponse{}, errors.New("unexpected address accountTransactionList.Address")
 	}
 
-	/*for i, v := range accountTransactionList.Transactions {
-		v.From = strings.ToLower(v.From)
-		if len(v.To) != 0 {
-			v.To = strings.ToLower(v.To)
-		}
-		accountTransactionList.Transactions[i] = v
-	}*/
-
 	listResponse.Items = accountTransactionList.Transactions
 	listResponse.PageCount = pageCount
 
@@ -1139,6 +1140,25 @@ func (c *CacheManager) getTransactionType(txn *types.Transaction, receipt *types
 			return NEW_SMART_CONTRACT, nil
 		}
 	}
+}
+
+func (c *CacheManager) getTokenDetailsInternal(contractAddress string) (*TokenDetails, error) {
+	contractAddress = strings.ToLower(contractAddress)
+	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
+
+	db := c.cacheDb
+	tokenBlob, err := db.Get([]byte(key))
+	if err != nil {
+		return nil, err
+	}
+
+	var tokenDetails TokenDetails
+	err = json.Unmarshal(tokenBlob, &tokenDetails)
+	if err != nil {
+		return nil, err
+	}
+
+	return &tokenDetails, nil
 }
 
 func (c *CacheManager) GetTokenDetails(contractAddress string) (*GetTokenDetailsResponse, error) {
@@ -1394,6 +1414,56 @@ func (c *CacheManager) putAccountTokenCount(address string, tokenCount uint64, b
 	return nil
 }
 
+func getAccountTokenPageKey(address string, page uint64) (key string, blob []byte) {
+	key = fmt.Sprintf(AccountTokenPageKey, address, page)
+	blob = []byte(key)
+	return key, blob
+}
+
+func (c *CacheManager) getAccountTokenPage(address string, pageNumber uint64) (*AccountTokenList, error) {
+	accountTokenPageKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
+	accountTokenPageBlob, err := c.cacheDb.Get(keyBlob)
+	if err != nil {
+		if err.Error() == LevelDbNoTFoundErrMsg {
+			log.Info("getAccountTokenPage not found", "address", address, "accountTokenPageKey", accountTokenPageKey)
+			return nil, nil
+		} else {
+			log.Error("getAccountTokenCount cacheDb.Get address", "address", address, "accountTokenPageKey", accountTokenPageKey, "error", err)
+			return nil, err
+		}
+	} else {
+		accountTokenList := AccountTokenList{}
+		err = json.Unmarshal(accountTokenPageBlob, &accountTokenList)
+		if err != nil {
+			return nil, err
+		}
+
+		log.Info("getAccountTokenPage", "address", address, "accountTokenPageKey", accountTokenPageKey, "accountTokenList", accountTokenList)
+
+		return &accountTokenList, nil
+	}
+}
+
+func (c *CacheManager) putAccountTokenPage(address string, accountTokenList *AccountTokenList, pageNumber uint64, batch *ethdb.Batch) error {
+	txnBatch := *batch
+	address = strings.ToLower(address)
+	accountTokenCountKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
+	log.Info("putAccountTokenCount", "address", address, "accountTokenCountKey", accountTokenCountKey, "pageNumber", pageNumber)
+
+	blob, err := json.Marshal(accountTokenList)
+	if err != nil {
+		return err
+	}
+
+	err = txnBatch.Put(keyBlob, blob)
+	if err != nil {
+		log.Error("putAccountTokenCount address", "error", err, "address", address, "pageNumber", pageNumber)
+		return err
+	}
+
+	return nil
+}
+
 func getAccountTokenTxnCountKey(address string) (key string, blob []byte) {
 	key = fmt.Sprintf(AccountTokenTxnCountKey, address)
 	blob = []byte(key)
@@ -1435,7 +1505,134 @@ func (c *CacheManager) putAccountTokenTxnCount(address string, tokenTxnCount uin
 }
 
 // Parses and stores list of tokens and balance for each token
-func (c *CacheManager) processAccountTokenTransfers(accountAddress string, tokenTransfers []*token.LogTransfer, batch *ethdb.Batch) error {
+func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogTransfer, blockNum *big.Int, batch *ethdb.Batch) error {
+	for _, t := range tokenTransfers {
+		contractAddress := strings.ToLower(t.ContractAddress.Hex())
+		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
+		if err != nil {
+			if err.Error() == LevelDbNoTFoundErrMsg {
+				tokenDet, err := c.client.GetTokenDetails(t.ContractAddress, blockNum)
+				if err != nil {
+					if errors.Is(err, token.NotATokenError) {
+						continue
+					} else {
+						return err
+					}
+				}
+				//new token created via internal transaction
+				tokenDetails = &TokenDetails{
+					ContractAddress: contractAddress,
+					Name:            tokenDet.Name,
+					Symbol:          tokenDet.Symbol,
+				}
+			}
+			return err
+		}
+
+		tokenBalance, err := c.client.GetAccountTokenBalance(t.ContractAddress, t.From)
+		if err != nil {
+			return err
+		}
+		err = c.processAccountTokenTransfer(t.From, tokenDetails, tokenBalance, batch)
+		if err != nil {
+			return err
+		}
+
+		tokenBalance, err = c.client.GetAccountTokenBalance(t.ContractAddress, t.To)
+		if err != nil {
+			return err
+		}
+		err = c.processAccountTokenTransfer(t.To, tokenDetails, tokenBalance, batch)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDetails *TokenDetails, tokenBalance *big.Int, batch *ethdb.Batch) error {
+	txnBatch := *batch
+	var tokenCount uint64
+	var err error
+
+	address := strings.ToLower(addr.Hex())
+
+	tokenCount, err = c.getAccountTokenCount(address)
+	if err != nil {
+		return err
+	}
+	newTokenCount := tokenCount + 1
+
+	accountTokenList := AccountTokenList{}
+
+	log.Info("processAccountTokenTransfer", "address", address, "tokenCount", tokenCount, "newTokenCount", newTokenCount)
+
+	if newTokenCount%PageSize == 1 { //if it's the first transaction of the page, won't be in the cache
+		accountTokenList.Tokens = make([]AccountTokenSummary, 0)
+		accountTokenList.Address = address
+		log.Info("processAccountTokenTransfer", "address", address, "newTokenCount", newTokenCount)
+	} else {
+		//Load current state form the cache
+		tokenPageCount := getPageCount(newTokenCount)
+		_, tokenPageKey := getAccountTokenPageKey(address, newTokenCount)
+
+		log.Info("processAccountTokenTransfer loading from cache", "address", address, "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount)
+
+		accountTokenListBlob, err := c.cacheDb.Get(tokenPageKey)
+		if err != nil {
+			log.Error("cacheDb.Get accountTxnPageKey", "error", err)
+			return err
+		}
+		err = json.Unmarshal(accountTokenListBlob, &accountTokenList)
+		if err != nil {
+			log.Error("json.Unmarshal accountTransactionListBlob", "error", err)
+			return err
+		}
+
+		if strings.ToLower(accountTokenList.Address) != address {
+			return errors.New("unexpected address")
+		}
+
+		if accountTokenList.Tokens == nil {
+			return errors.New("unexpected tokens is nul")
+		}
+
+		if len(accountTokenList.Tokens) != int(tokenCount%PageSize) {
+			log.Error("unexpected token count from address", "actual", len(accountTokenList.Tokens), "expected", int(tokenCount%PageSize), "tokenCount", tokenCount)
+			return errors.New("unexpected transactions count")
+		}
+	}
+
+	accountTokenSummary := AccountTokenSummary{
+		AccountAddress:  address,
+		ContractAddress: strings.ToLower(tokenDetails.ContractAddress),
+		Name:            tokenDetails.Name,
+		Symbol:          tokenDetails.Decimals,
+		TokenBalance:    hexutil.EncodeBig(tokenBalance),
+	}
+
+	accountTokenList.Tokens = append(accountTokenList.Tokens, accountTokenSummary)
+	accountTokenListBlob, err := json.Marshal(accountTokenList)
+	if err != nil {
+		log.Error("json.Marshal accountTokenListBlob", "error", err)
+		return err
+	}
+
+	tokenPageCount := getPageCount(newTokenCount)
+	tokenPageKey := getAccountPageKey(address, tokenPageCount)
+	err = txnBatch.Put(tokenPageKey, accountTokenListBlob)
+	if err != nil {
+		log.Error("txnBatch.Put accountTokenListBlob", "error", err)
+		return err
+	}
+	log.Info("txnBatch.Put", "tokenPageCount", tokenPageCount)
+
+	err = c.putAccountTokenCount(address, newTokenCount, batch)
+	if err != nil {
+		return err
+	}
+
+	log.Info("inserted account token list", "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount, "address", address)
 
 	return nil
 }
