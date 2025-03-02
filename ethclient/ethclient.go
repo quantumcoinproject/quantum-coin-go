@@ -588,7 +588,7 @@ func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (
 	byteCodeHex := hexutil.Encode(byteCode)
 	if asm.IsErc20(byteCodeHex) {
 		log.Debug("GetAccountType IsErc20 fail", "contactAddress", address)
-		return ACCOUNT_TYPE_TOKEN, token.NotATokenError
+		return ACCOUNT_TYPE_TOKEN, nil
 	}
 
 	return ACCOUNT_TYPE_CONTRACT, err
@@ -662,7 +662,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 	tokenDetails.Owner, err = contract.Owner(nil)
 	if err != nil {
 		if err != vm.ErrExecutionReverted {
-			log.Error("GetTokenDetails Owner", "error", err, "contactAddress", contactAddress)
+			log.Debug("GetTokenDetails Owner", "error", err, "contactAddress", contactAddress)
 			return nil, err
 		}
 		//owner is ok to fail, not a part of ERC20 interface

@@ -42,6 +42,8 @@ type CacheManager struct {
 	pendingTxMapLock         sync.RWMutex
 	pendingTransactions      *map[string]map[string]map[string]*ethclient.TxPoolTransaction
 	addressMap               map[string]*AccountDetails
+	tokenMap                 map[string]*TokenDetails
+	accountTokenMap          map[string]*map[string]bool //map[accountAddress]map[contractAddress]bool
 }
 
 var SummaryKey = "summary"
@@ -50,6 +52,8 @@ var AccountSummaryKey = "account-%s"
 var AccountTxnCountKey = "account-txn-count-%s"                  //%s is account address
 var AccountTransactionPageKey = "account-transaction-list-%s-%d" //%s is account address, %d is page number
 var TokenDetailsKey = "erc20-%s"
+
+var AccountTokenKey = "account-token-count-%s-%s" //%s is account address, %s is contract address
 
 var AccountTokenCountKey = "account-token-count-%s"  //%s is account address
 var AccountTokenPageKey = "account-token-list-%s-%d" //%s is account address, %d is page number
@@ -126,7 +130,7 @@ type AccountTransactionCompact struct {
 type AccountTokenTransactionCompact struct {
 	AccountTransactionCompact
 
-	Tokens string `json:"tokens,omitempty"`
+	TokenBalance string `json:"tokenBalance,omitempty"`
 
 	TokenSymbol string `json:"tokenSymbol,omitempty"`
 
@@ -169,7 +173,7 @@ type BlockchainDetails struct {
 }
 
 type GetBlockchainDetailsResponse struct {
-	BlockchainDetails
+	Result BlockchainDetails `json:"result" gencodec:"required"`
 }
 
 type AccountTokenSummary struct {
@@ -190,6 +194,9 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, g
 		nodeUrl:            nodeUrl,
 		cacheDir:           cacheDir,
 		enableExtendedApis: enableExtendedApis,
+		addressMap:         make(map[string]*AccountDetails),
+		tokenMap:           make(map[string]*TokenDetails),
+		accountTokenMap:    make(map[string]*map[string]bool),
 	}
 
 	var err error
@@ -328,11 +335,11 @@ func (c *CacheManager) start() error {
 				go c.processPendingTransactions()
 
 				blockNumberToGet := blockNumber + 1
-				//log.Info("Batch Start ", "Block Number ", blockNumberToGet)
+				log.Info("Batch Start ", "Block Number ", blockNumberToGet)
 				err := c.processByCacheManager(blockNumberToGet, runningSummary)
 				if err == nil {
 					blockNumber = blockNumberToGet
-					//log.Info("Batch Complete", "Block number", blockNumberToGet)
+					log.Info("Batch Complete", "Block number", blockNumberToGet)
 					delayNumber = 0
 				} else {
 					if err.Error() == NotFoundErrMsg {
@@ -470,116 +477,121 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 				liveAccountTxnMap[toAddress] = append(liveAccountTxnMap[toAddress], transaction)
 			}
 			accountsInvolved[strings.ToLower(tx.To().Hex())] = true
+		} else {
+			accountsInvolved[strings.ToLower(receipt.ContractAddress.Hex())] = true
 		}
 		accountsInvolved[fromAddress] = true
 
-		//Find all internal transactions
-		internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
-		log.Error("GetInternalTransactions", "err", err, "txn", tx.Hash())
-		if err != nil {
-			return err
-		}
+		if receipt.Status == 1 {
+			//Find all internal transactions
+			internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
+			if err != nil {
+				log.Error("GetInternalTransactions", "err", err, "txn", tx.Hash())
+				return err
+			}
 
-		//Created tokens
-		internalTxnList := c.flattenInternalTransactionDetails(internalTransactions)
-		for _, iTxn := range internalTxnList {
-			accountsInvolved[strings.ToLower(iTxn.From)] = true
-			accountsInvolved[strings.ToLower(iTxn.To)] = true
+			internalTxnList := c.flattenInternalTransactionDetails(internalTransactions)
 
-			if iTxn.Type == "CREATE" || iTxn.Type == "CREATE2" {
-				tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
-				if err != nil {
-					if errors.Is(err, token.NotATokenError) {
-						continue
-					} else {
+			for _, iTxn := range internalTxnList {
+				accountsInvolved[strings.ToLower(iTxn.From)] = true
+				accountsInvolved[strings.ToLower(iTxn.To)] = true
+
+				if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
+					tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
+					if err != nil {
+						if errors.Is(err, token.NotATokenError) {
+							continue
+						} else {
+							return err
+						}
+					}
+					//new token created via internal transaction
+					tkn := &TokenDetails{
+						ContractAddress:        strings.ToLower(iTxn.To),
+						CreatorAddress:         strings.ToLower(iTxn.From),
+						CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
+						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
+						Name:                   tokenDetails.Name,
+						Symbol:                 tokenDetails.Symbol,
+						TotalSupply:            hexutil.EncodeBig(tokenDetails.TotalSupply),
+						Decimals:               hexutil.EncodeUint64(uint64(tokenDetails.Decimals)),
+					}
+
+					err = c.putTokenInDb(tkn, &txnBatch)
+					if err != nil {
+						log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
 						return err
 					}
 				}
-				//new token created via internal transaction
-				tkn := &TokenDetails{
-					ContractAddress:        strings.ToLower(iTxn.To),
-					CreatorAddress:         strings.ToLower(iTxn.From),
-					CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
-					CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
-					Name:                   tokenDetails.Name,
-					Symbol:                 tokenDetails.Symbol,
-					TotalSupply:            hexutil.EncodeBig(tokenDetails.TotalSupply),
-					Decimals:               hexutil.EncodeUint64(uint64(tokenDetails.Decimals)),
-				}
+			}
 
-				err = c.putTokenInDb(tkn, &txnBatch)
+			//Find all relevant token and internal token transactions, if any
+			tokenTransfers, tokenApprovals, err := token.ParseTokenTransaction(tx, receipt)
+			if err != nil {
+				log.Error("ParseTokenTransaction", "err", err, "txn", tx.Hash())
+				return err
+			}
+
+			if tokenTransfers != nil && len(tokenTransfers) > 0 {
+				err = c.processAccountTokenTransfers(tokenTransfers, blockNum, &txnBatch)
 				if err != nil {
-					log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
+					log.Error("processAccountTokenTransfers", "err", err, "txn", tx.Hash().Hex())
+					return err
+				}
+				for _, transfer := range tokenTransfers {
+					accountsInvolved[strings.ToLower(transfer.ContractAddress.Hex())] = true
+					accountsInvolved[strings.ToLower(transfer.From.Hex())] = true
+					accountsInvolved[strings.ToLower(transfer.To.Hex())] = true
+				}
+			}
+
+			if tokenApprovals != nil && len(tokenApprovals) > 0 {
+				for _, approval := range tokenApprovals {
+					accountsInvolved[strings.ToLower(approval.ContractAddress.Hex())] = true
+					accountsInvolved[strings.ToLower(approval.TokenOwner.Hex())] = true
+					accountsInvolved[strings.ToLower(approval.Spender.Hex())] = true
+				}
+			}
+
+			if transaction.TransactionType == string(TOKEN_TRANSFER) { //only root level transaction (no internal transactions)
+				var accountTokenTransaction AccountTokenTransactionCompact
+				accountTokenTransaction.Hash = transaction.Hash
+				accountTokenTransaction.BlockNumber = blockNumber
+				accountTokenTransaction.CreatedAt = transaction.CreatedAt
+				accountTokenTransaction.From = transaction.From
+				accountTokenTransaction.To = transaction.To
+				accountTokenTransaction.Value = transaction.Value
+				accountTokenTransaction.TxnFee = transaction.TxnFee
+				accountTokenTransaction.Status = transaction.Status
+				accountTokenTransaction.TransactionType = transaction.TransactionType
+
+				tokenDetails, err := c.getTokenDetailsInternal(accountTokenTransaction.To) //token should already have been saved tp db, when it was created
+				if err != nil {
+					log.Error("getTokenDetailsInternal", "error", err)
+					return err
+				}
+				accountTokenTransaction.TokenName = tokenDetails.Name
+				accountTokenTransaction.TokenSymbol = tokenDetails.Symbol
+
+				//First transfer is root level by from address
+				if len(tokenTransfers) == 0 || strings.ToLower(tokenTransfers[0].From.Hex()) != transaction.From {
+					log.Error("processByCacheManager missing", "from", transaction.From, "to (contract)", transaction.To)
+					return errors.New("unexpected token transfer missing")
+				}
+				accountTokenTransaction.TokenBalance = hexutil.EncodeBig(tokenTransfers[0].Tokens)
+
+				err = c.processAccountTokenTransaction(&accountTokenTransaction, &txnBatch)
+				if err != nil {
+					log.Error("processByCacheManager processAccountTokenTransaction", "error", "hash", transaction.Hash)
 					return err
 				}
 			}
-		}
-
-		//Find all relevant token and internal token transactions, if any
-		tokenTransfers, tokenApprovals, err := token.ParseTokenTransaction(tx, receipt)
-		if err != nil {
-			log.Error("ParseTokenTransaction", "err", err, "txn", tx.Hash())
-			return err
-		}
-
-		if tokenTransfers != nil && len(tokenTransfers) > 0 {
-			err = c.processAccountTokenTransfers(tokenTransfers, blockNum, &txnBatch)
-			if err != nil {
-				log.Error("processAccountTokenTransfers", "err", err, "txn", tx.Hash())
-				return err
-			}
-		}
-
-		if tokenApprovals != nil && len(tokenApprovals) > 0 {
-			for _, approval := range tokenApprovals {
-				accountsInvolved[strings.ToLower(approval.ContractAddress.Hex())] = true
-				accountsInvolved[strings.ToLower(approval.TokenOwner.Hex())] = true
-				accountsInvolved[strings.ToLower(approval.Spender.Hex())] = true
-			}
-		}
-
-		if tx.To() == nil {
-			accountsInvolved[strings.ToLower(receipt.ContractAddress.Hex())] = true
 		}
 
 		//Loop through all accounts and update account cache
 		for account, _ := range accountsInvolved {
 			_, err = c.getAccount(common.HexToAddress(account), blockNum, &txnBatch)
 			if err != nil {
-				return err
-			}
-		}
-
-		if transaction.TransactionType == string(TOKEN_TRANSFER) { //only root level transaction (no internal transactions)
-			var accountTokenTransaction AccountTokenTransactionCompact
-			accountTokenTransaction.Hash = transaction.Hash
-			accountTokenTransaction.BlockNumber = blockNumber
-			accountTokenTransaction.CreatedAt = transaction.CreatedAt
-			accountTokenTransaction.From = transaction.From
-			accountTokenTransaction.To = transaction.To
-			accountTokenTransaction.Value = transaction.Value
-			accountTokenTransaction.TxnFee = transaction.TxnFee
-			accountTokenTransaction.Status = transaction.Status
-			accountTokenTransaction.TransactionType = transaction.TransactionType
-
-			tokenDetails, err := c.getTokenDetailsInternal(accountTokenTransaction.To) //token should already have been saved tp db, when it was created
-			if err != nil {
-				log.Error("GetTokenDetails", "error", err)
-				return err
-			}
-			accountTokenTransaction.TokenName = tokenDetails.Name
-			accountTokenTransaction.TokenSymbol = tokenDetails.Symbol
-
-			//First transfer is root level by from address
-			if len(tokenTransfers) == 0 || strings.ToLower(tokenTransfers[0].From.Hex()) != transaction.From {
-				log.Error("processByCacheManager missing", "from", transaction.From, "to (contract)", transaction.To)
-				return errors.New("unexpected token transfer missing")
-			}
-			accountTokenTransaction.Tokens = hexutil.EncodeBig(tokenTransfers[0].Tokens)
-
-			err = c.processAccountTokenTransaction(&accountTokenTransaction, &txnBatch)
-			if err != nil {
-				log.Error("processByCacheManager processAccountTokenTransaction", "error", "hash", transaction.Hash)
 				return err
 			}
 		}
@@ -952,7 +964,7 @@ func (c *CacheManager) GetBlockchainDetails() (GetBlockchainDetailsResponse, err
 		return getResponse, err
 	}
 
-	getResponse.BlockchainDetails = *details
+	getResponse.Result = *details
 
 	return getResponse, nil
 }
@@ -1144,6 +1156,11 @@ func (c *CacheManager) getTransactionType(txn *types.Transaction, receipt *types
 
 func (c *CacheManager) getTokenDetailsInternal(contractAddress string) (*TokenDetails, error) {
 	contractAddress = strings.ToLower(contractAddress)
+	tokenDetails, ok := c.tokenMap[contractAddress]
+	if ok {
+		return tokenDetails, nil
+	}
+
 	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
 
 	db := c.cacheDb
@@ -1152,17 +1169,20 @@ func (c *CacheManager) getTokenDetailsInternal(contractAddress string) (*TokenDe
 		return nil, err
 	}
 
-	var tokenDetails TokenDetails
-	err = json.Unmarshal(tokenBlob, &tokenDetails)
+	tokenDetails = &TokenDetails{}
+	err = json.Unmarshal(tokenBlob, tokenDetails)
 	if err != nil {
 		return nil, err
 	}
 
-	return &tokenDetails, nil
+	c.tokenMap[contractAddress] = tokenDetails
+
+	return tokenDetails, nil
 }
 
 func (c *CacheManager) GetTokenDetails(contractAddress string) (*GetTokenDetailsResponse, error) {
 	contractAddress = strings.ToLower(contractAddress)
+
 	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
 
 	db := c.cacheDb
@@ -1182,18 +1202,6 @@ func (c *CacheManager) GetTokenDetails(contractAddress string) (*GetTokenDetails
 	}, nil
 }
 
-func (c *CacheManager) putIfNotExistsTokenInDb(tokenDetails *TokenDetails, batch *ethdb.Batch) error {
-	_, err := c.GetTokenDetails(tokenDetails.ContractAddress)
-	if err != nil {
-		if err.Error() == LevelDbNoTFoundErrMsg {
-			return c.putTokenInDb(tokenDetails, batch)
-		} else {
-			return err
-		}
-	}
-	return nil
-}
-
 func (c *CacheManager) putTokenInDb(tokenDetails *TokenDetails, batch *ethdb.Batch) error {
 	txnBatch := *batch
 
@@ -1210,6 +1218,10 @@ func (c *CacheManager) putTokenInDb(tokenDetails *TokenDetails, batch *ethdb.Bat
 	if err != nil {
 		return err
 	}
+
+	c.tokenMap[contractAddress] = tokenDetails
+
+	log.Info("putTokenInDb", "contractAddress", contractAddress)
 
 	return nil
 }
@@ -1269,6 +1281,7 @@ func (c *CacheManager) getAccountFromCacheOrDb(address common.Address) (*Account
 		return nil, err
 	}
 
+	accountDetails = &AccountDetails{}
 	err = json.Unmarshal(accountBlob, accountDetails)
 	if err != nil {
 		return nil, err
@@ -1347,26 +1360,32 @@ func (c *CacheManager) flattenInternalTransactionDetails(details *ethclient.Inte
 	return txnList
 }
 
-type stack struct { //not thread safe
+type Stack struct { //not thread safe
 	internalTxnDetails []*InternalTransactionDetailWithLevel
+	count              int
 }
 
-func newStack() *stack {
-	s := stack{
+func newStack() *Stack {
+	s := Stack{
 		internalTxnDetails: make([]*InternalTransactionDetailWithLevel, 0),
 	}
 	return &s
 }
 
-func (s stack) IsEmpty() bool {
+func (s *Stack) Size() int {
+	return len(s.internalTxnDetails)
+}
+
+func (s *Stack) IsEmpty() bool {
 	return len(s.internalTxnDetails) == 0
 }
 
-func (s stack) Push(v *InternalTransactionDetailWithLevel) {
+func (s *Stack) Push(v *InternalTransactionDetailWithLevel) {
 	s.internalTxnDetails = append(s.internalTxnDetails, v)
+	s.count = len(s.internalTxnDetails)
 }
 
-func (s stack) Pop() *InternalTransactionDetailWithLevel {
+func (s *Stack) Pop() *InternalTransactionDetailWithLevel {
 	count := len(s.internalTxnDetails)
 	last := s.internalTxnDetails[count-1]
 	s.internalTxnDetails = s.internalTxnDetails[:count-1]
@@ -1435,6 +1454,7 @@ func (c *CacheManager) getAccountTokenPage(address string, pageNumber uint64) (*
 		accountTokenList := AccountTokenList{}
 		err = json.Unmarshal(accountTokenPageBlob, &accountTokenList)
 		if err != nil {
+			log.Error("getAccountTokenPage", "error", err, "address", address, "pageNumber", pageNumber, "accountTokenPageKey", accountTokenPageKey)
 			return nil, err
 		}
 
@@ -1510,40 +1530,29 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 		contractAddress := strings.ToLower(t.ContractAddress.Hex())
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
 		if err != nil {
-			if err.Error() == LevelDbNoTFoundErrMsg {
-				tokenDet, err := c.client.GetTokenDetails(t.ContractAddress, blockNum)
-				if err != nil {
-					if errors.Is(err, token.NotATokenError) {
-						continue
-					} else {
-						return err
-					}
-				}
-				//new token created via internal transaction
-				tokenDetails = &TokenDetails{
-					ContractAddress: contractAddress,
-					Name:            tokenDet.Name,
-					Symbol:          tokenDet.Symbol,
-				}
-			}
+			log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
 			return err
 		}
 
 		tokenBalance, err := c.client.GetAccountTokenBalance(t.ContractAddress, t.From)
 		if err != nil {
+			log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "from", t.From)
 			return err
 		}
 		err = c.processAccountTokenTransfer(t.From, tokenDetails, tokenBalance, batch)
 		if err != nil {
+			log.Error("processAccountTokenTransfers processAccountTokenTransfer from", "contractAddress", contractAddress, "error", err, "from", t.From)
 			return err
 		}
 
 		tokenBalance, err = c.client.GetAccountTokenBalance(t.ContractAddress, t.To)
 		if err != nil {
+			log.Error("processAccountTokenTransfers GetAccountTokenBalance to", "contractAddress", contractAddress, "error", err, "to", t.To)
 			return err
 		}
 		err = c.processAccountTokenTransfer(t.To, tokenDetails, tokenBalance, batch)
 		if err != nil {
+			log.Error("processAccountTokenTransfers processAccountTokenTransfer to", "contractAddress", contractAddress, "error", err, "to", t.To)
 			return err
 		}
 	}
@@ -1556,6 +1565,31 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	var err error
 
 	address := strings.ToLower(addr.Hex())
+	contractAddress := strings.ToLower(tokenDetails.ContractAddress)
+
+	accountTokenSummary := AccountTokenSummary{
+		AccountAddress:  address,
+		ContractAddress: contractAddress,
+		Name:            tokenDetails.Name,
+		Symbol:          tokenDetails.Decimals,
+		TokenBalance:    hexutil.EncodeBig(tokenBalance),
+	}
+
+	err = c.putAccountTokenInDb(&accountTokenSummary, &txnBatch)
+	if err != nil {
+		log.Error("putAccountTokenInDb", "address", address, "contractAddress", contractAddress)
+		return err
+	}
+
+	//Check if already inserted
+	tempMap, ok := c.accountTokenMap[address]
+	if ok == true {
+		cMap := *tempMap
+		_, ok = cMap[contractAddress]
+		if ok {
+			return nil
+		}
+	}
 
 	tokenCount, err = c.getAccountTokenCount(address)
 	if err != nil {
@@ -1585,7 +1619,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 		}
 		err = json.Unmarshal(accountTokenListBlob, &accountTokenList)
 		if err != nil {
-			log.Error("json.Unmarshal accountTransactionListBlob", "error", err)
+			log.Error("json.Unmarshal accountTransactionListBlob", "error", err, "address", address, "tokenPageKey", tokenPageKey)
 			return err
 		}
 
@@ -1601,14 +1635,13 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 			log.Error("unexpected token count from address", "actual", len(accountTokenList.Tokens), "expected", int(tokenCount%PageSize), "tokenCount", tokenCount)
 			return errors.New("unexpected transactions count")
 		}
-	}
 
-	accountTokenSummary := AccountTokenSummary{
-		AccountAddress:  address,
-		ContractAddress: strings.ToLower(tokenDetails.ContractAddress),
-		Name:            tokenDetails.Name,
-		Symbol:          tokenDetails.Decimals,
-		TokenBalance:    hexutil.EncodeBig(tokenBalance),
+		//todo: make this work for pages greater than 1
+		for _, t := range accountTokenList.Tokens {
+			if t.ContractAddress == contractAddress { //token already in list
+				return nil
+			}
+		}
 	}
 
 	accountTokenList.Tokens = append(accountTokenList.Tokens, accountTokenSummary)
@@ -1625,12 +1658,20 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 		log.Error("txnBatch.Put accountTokenListBlob", "error", err)
 		return err
 	}
-	log.Info("txnBatch.Put", "tokenPageCount", tokenPageCount)
 
 	err = c.putAccountTokenCount(address, newTokenCount, batch)
 	if err != nil {
 		return err
 	}
+
+	contractMap, ok := c.accountTokenMap[address]
+	if ok == false {
+		cMap := make(map[string]bool)
+		contractMap = &cMap
+	}
+	conMap := *contractMap
+	conMap[contractAddress] = true
+	c.accountTokenMap[address] = contractMap
 
 	log.Info("inserted account token list", "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount, "address", address)
 
@@ -1639,6 +1680,51 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 
 // Parses and stores list of token transactions with transaction summary
 func (c *CacheManager) processAccountTokenTransaction(txn *AccountTokenTransactionCompact, batch *ethdb.Batch) error {
+
+	return nil
+}
+
+func (c *CacheManager) getAccountTokenDetailsKey(accountAddress string, contractAddress string) []byte {
+	key := fmt.Sprintf(AccountTokenKey, strings.ToLower(accountAddress), strings.ToLower(contractAddress))
+	return []byte(key)
+}
+
+func (c *CacheManager) GetAccountTokenDetails(accountAddress string, contractAddress string) (*AccountTokenSummary, error) {
+	return c.getAccountTokenDetailsFromDb(accountAddress, contractAddress)
+}
+
+func (c *CacheManager) getAccountTokenDetailsFromDb(accountAddress string, contractAddress string) (*AccountTokenSummary, error) {
+	key := c.getAccountTokenDetailsKey(accountAddress, contractAddress)
+	db := c.cacheDb
+	blob, err := db.Get([]byte(key))
+	if err != nil {
+		return nil, err
+	}
+
+	var details AccountTokenSummary
+	err = json.Unmarshal(blob, &details)
+	if err != nil {
+		return nil, err
+	}
+
+	return &details, nil
+}
+
+func (c *CacheManager) putAccountTokenInDb(details *AccountTokenSummary, batch *ethdb.Batch) error {
+	txnBatch := *batch
+
+	blob, err := json.Marshal(details)
+	if err != nil {
+		return err
+	}
+
+	key := c.getAccountTokenDetailsKey(details.AccountAddress, details.ContractAddress)
+	keyBlob := []byte(key)
+
+	err = txnBatch.Put(keyBlob, blob)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

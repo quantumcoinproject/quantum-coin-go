@@ -163,6 +163,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
+  '/account/{address}/tokens/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List account tokens
+      operationId: ListAccountTokens
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: the string representing the account address
+          schema:
+            type: string
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAccountTokensResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
   '/account/{address}/tokens/{contractAddress}':
     get:
       tags:
@@ -195,6 +257,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AccountTokenDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+  '/account/{address}/tokens/transactions/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List token transactions by address
+      operationId: ListAccountTokenTransactions
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: The address of the account
+          schema:
+            type: string
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAccountTokenTransactionsResponse'
         '400':
           description: Bad Request
           content:
@@ -548,6 +672,17 @@ components:
           allOf:
             - $ref: '#/components/schemas/AccountTokenDetails'
       additionalProperties: false
+    ListAccountTokensResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountTokenDetails'
+      additionalProperties: false
     TransactionType:
       enum:
         - CoinTransfer
@@ -676,6 +811,59 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AccountTransactionCompact'
+      additionalProperties: false
+    AccountTokenTransactionCompact:
+      type: object
+      properties:
+        hash:
+          type: string
+          nullable: false
+        blockNumber:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        from:
+          type: string
+          nullable: true
+        to:
+          type: string
+          nullable: true
+        value:
+          type: string
+          nullable: true
+        txnFee:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        transactionType:
+          $ref: '#/components/schemas/TransactionType'
+        errorReason:
+          type: string
+          nullable: true
+        tokenBalance:
+          type: string
+          nullable: true
+        tokenSymbol:
+          type: string
+          nullable: true
+        tokenName:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ListAccountTokenTransactionsResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountTokenTransactionCompact'
       additionalProperties: false
     AccountPendingTransactionCompact:
       type: object
