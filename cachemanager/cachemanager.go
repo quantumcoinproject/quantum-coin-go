@@ -1604,7 +1604,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 		AccountAddress:  address,
 		ContractAddress: contractAddress,
 		Name:            tokenDetails.Name,
-		Symbol:          tokenDetails.Decimals,
+		Symbol:          tokenDetails.Symbol,
 		TokenBalance:    hexutil.EncodeBig(tokenBalance),
 	}
 
@@ -1856,127 +1856,6 @@ func (c *CacheManager) putAccountTokenTxnCount(address string, tokenTxnCount uin
 
 	return nil
 }
-
-/*
-// Parses and stores list of token transactions with transaction summary
-func (c *CacheManager) processAccountTokenTransaction(addr common.Address, txn *AccountTokenTransactionCompact, batch *ethdb.Batch) error {
-	txnBatch := *batch
-	var tokenCount uint64
-	var err error
-
-	address := strings.ToLower(addr.Hex())
-	contractAddress := strings.ToLower(tokenDetails.ContractAddress)
-
-	accountTokenSummary := AccountTokenSummary{
-		AccountAddress:  address,
-		ContractAddress: contractAddress,
-		Name:            tokenDetails.Name,
-		Symbol:          tokenDetails.Decimals,
-		TokenBalance:    hexutil.EncodeBig(tokenBalance),
-	}
-
-	err = c.putAccountTokenInDb(&accountTokenSummary, &txnBatch)
-	if err != nil {
-		log.Error("putAccountTokenInDb", "address", address, "contractAddress", contractAddress)
-		return err
-	}
-
-	//Check if already inserted
-	tempMap, ok := c.accountTokenMap[address]
-	if ok == true {
-		cMap := *tempMap
-		_, ok = cMap[contractAddress]
-		if ok {
-			return nil
-		}
-	}
-
-	tokenCount, err = c.getAccountTokenCount(address)
-	if err != nil {
-		return err
-	}
-	newTokenCount := tokenCount + 1
-
-	accountTokenList := AccountTokenList{}
-
-	log.Info("processAccountTokenTransfer", "address", address, "tokenCount", tokenCount, "newTokenCount", newTokenCount)
-
-	if newTokenCount%PageSize == 1 { //if it's the first transaction of the page, won't be in the cache
-		accountTokenList.Tokens = make([]AccountTokenSummary, 0)
-		accountTokenList.Address = address
-		log.Info("processAccountTokenTransfer", "address", address, "newTokenCount", newTokenCount)
-	} else {
-		//Load current state form the cache
-		tokenPageCount := getPageCount(newTokenCount)
-		_, tokenPageKey := getAccountTokenPageKey(address, newTokenCount)
-
-		log.Info("processAccountTokenTransfer loading from cache", "address", address, "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount)
-
-		accountTokenListBlob, err := c.cacheDb.Get(tokenPageKey)
-		if err != nil {
-			log.Error("cacheDb.Get accountTxnPageKey", "error", err)
-			return err
-		}
-		err = json.Unmarshal(accountTokenListBlob, &accountTokenList)
-		if err != nil {
-			log.Error("json.Unmarshal accountTokenListBlob", "error", err, "address", address, "tokenPageKey", tokenPageKey)
-			return err
-		}
-
-		if strings.ToLower(accountTokenList.Address) != address {
-			return errors.New("unexpected address")
-		}
-
-		if accountTokenList.Tokens == nil {
-			return errors.New("unexpected tokens is nul")
-		}
-
-		if len(accountTokenList.Tokens) != int(tokenCount%PageSize) {
-			log.Error("unexpected token count from address", "actual", len(accountTokenList.Tokens), "expected", int(tokenCount%PageSize), "tokenCount", tokenCount)
-			return errors.New("unexpected transactions count")
-		}
-
-		//todo: make this work for pages greater than 1
-		for _, t := range accountTokenList.Tokens {
-			if t.ContractAddress == contractAddress { //token already in list
-				return nil
-			}
-		}
-	}
-
-	accountTokenList.Tokens = append(accountTokenList.Tokens, accountTokenSummary)
-	accountTokenListBlob, err := json.Marshal(accountTokenList)
-	if err != nil {
-		log.Error("json.Marshal accountTokenListBlob", "error", err)
-		return err
-	}
-
-	tokenPageCount := getPageCount(newTokenCount)
-	key, tokenPageKeyBlob := getAccountTokenPageKey(address, tokenPageCount)
-	err = txnBatch.Put(tokenPageKeyBlob, accountTokenListBlob)
-	if err != nil {
-		log.Error("txnBatch.Put accountTokenListBlob", "error", err, "key", key)
-		return err
-	}
-
-	err = c.putAccountTokenCount(address, newTokenCount, batch)
-	if err != nil {
-		return err
-	}
-
-	contractMap, ok := c.accountTokenMap[address]
-	if ok == false {
-		cMap := make(map[string]bool)
-		contractMap = &cMap
-	}
-	conMap := *contractMap
-	conMap[contractAddress] = true
-	c.accountTokenMap[address] = contractMap
-
-	log.Info("inserted account token list", "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount, "address", address)
-
-	return nil
-}*/
 
 func (c *CacheManager) ListTokenTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTokenTransactionsResponse, error) {
 	return ListAccountTokenTransactionsResponse{}, nil
