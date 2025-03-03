@@ -509,7 +509,7 @@ func (c *ReadApiAPIController) QueryDetails(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	log.Error("api", "url", r.URL, "query", r.URL.Query(), "q", r.URL.Query().Get("q"))
+	log.Info("api", "url", r.URL, "q", r.URL.Query().Get("q"))
 	queryTerm := r.URL.Query().Get("q")
 
 	result, err := c.service.QueryDetails(r.Context(), queryTerm)
