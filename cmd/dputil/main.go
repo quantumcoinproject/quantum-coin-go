@@ -1523,10 +1523,6 @@ func CreateToken() error {
 
 	// Parse the string as an unsigned integer with base 10 and 8-bit size
 	totalDecimals := uint8(18)
-	tokenDecimalsBig := big.NewInt(int64(totalDecimals))
-
-	totalSupplyWeNeed := tokenTotalSupplyWei.Mul(tokenTotalSupplyWei, tokenDecimalsBig)
-	totalSupplyWeNeed = totalSupplyWeNeed.Mul(totalSupplyWeNeed, big.NewInt(10))
 
 	fromAccountKeyFile, err := findKeyFile(fromAddr)
 	if err != nil {
@@ -1549,7 +1545,7 @@ func CreateToken() error {
 
 	fmt.Println()
 
-	fromAccountPasswordConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to create a token for with symbol `%s` ,  name `%s`?", tokenName, tokenSymbol))
+	fromAccountPasswordConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to create a token for with symbol `%s` ,  name `%s`? This transaction requires gas fees.", tokenName, tokenSymbol))
 	if err != nil {
 		return err
 	}
@@ -1567,5 +1563,5 @@ func CreateToken() error {
 		return errors.New("from account key address check failed " + err.Error())
 	}
 
-	return createToken(tokenName, tokenSymbol, totalSupplyWeNeed, baseBurnPercentDivisor, totalDecimals, fromKey)
+	return createToken(tokenName, tokenSymbol, tokenTotalSupplyWei, baseBurnPercentDivisor, totalDecimals, fromKey)
 }

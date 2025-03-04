@@ -689,6 +689,7 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 		return nil, err
 	}
 
+	log.Debug("GetAccountTokenBalance", "contactAddress", contactAddress, "accountAddress", accountAddress, "balance", balance)
 	return balance, nil
 }
 

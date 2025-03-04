@@ -1569,7 +1569,8 @@ func createToken(tokenName string, tokenSymbol string, tokenTotalSupply *big.Int
 	txnOpts.Value = big.NewInt(0)
 
 	var tx *types.Transaction
-	contractAddress, tx, _, err := token.DeployToken(txnOpts, client, tokenName, tokenSymbol, tokenTotalSupply, burnPercentDivisor, tokenDecimals)
+	contractAddress, tx, _, err := token.DeployToken(txnOpts, client, tokenName, tokenSymbol,
+		tokenTotalSupply, burnPercentDivisor, tokenDecimals, fromAddress)
 	if err != nil {
 		return err
 	}

@@ -992,11 +992,11 @@ func (c *CacheManager) processAccountTransactions(address string, txnList *[]Acc
 	return nil
 }
 
-func getPageCount(txnCount uint64) uint64 {
-	if txnCount%PageSize == 0 {
-		return txnCount / PageSize
+func getPageCount(itemCount uint64) uint64 {
+	if itemCount%PageSize == 0 {
+		return itemCount / PageSize
 	} else {
-		return (txnCount / PageSize) + 1
+		return (itemCount / PageSize) + 1
 	}
 }
 
@@ -1507,6 +1507,7 @@ func (c *CacheManager) putAccountTokenCount(address string, tokenCount uint64, b
 }
 
 func getAccountTokenPageKey(address string, page uint64) (key string, blob []byte) {
+	log.Debug("getAccountTokenPageKey", "address", address, "page", page)
 	key = fmt.Sprintf(AccountTokenPageKey, address, page)
 	blob = []byte(key)
 	return key, blob
@@ -1569,24 +1570,30 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 
 		tokenBalance, err := c.client.GetAccountTokenBalance(t.ContractAddress, t.From)
 		if err != nil {
-			log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "from", t.From)
-			return err
-		}
-		err = c.processAccountTokenTransfer(t.From, tokenDetails, tokenBalance, batch)
-		if err != nil {
-			log.Error("processAccountTokenTransfers processAccountTokenTransfer from", "contractAddress", contractAddress, "error", err, "from", t.From)
-			return err
+			if errors.Is(err, token.NotATokenError) {
+				log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "from", t.From)
+				return err
+			}
+		} else {
+			err = c.processAccountTokenTransfer(t.From, tokenDetails, tokenBalance, batch)
+			if err != nil {
+				log.Error("processAccountTokenTransfers processAccountTokenTransfer from", "contractAddress", contractAddress, "error", err, "from", t.From)
+				return err
+			}
 		}
 
 		tokenBalance, err = c.client.GetAccountTokenBalance(t.ContractAddress, t.To)
 		if err != nil {
-			log.Error("processAccountTokenTransfers GetAccountTokenBalance to", "contractAddress", contractAddress, "error", err, "to", t.To)
-			return err
-		}
-		err = c.processAccountTokenTransfer(t.To, tokenDetails, tokenBalance, batch)
-		if err != nil {
-			log.Error("processAccountTokenTransfers processAccountTokenTransfer to", "contractAddress", contractAddress, "error", err, "to", t.To)
-			return err
+			if errors.Is(err, token.NotATokenError) {
+				log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "to", t.To)
+				return err
+			}
+		} else {
+			err = c.processAccountTokenTransfer(t.To, tokenDetails, tokenBalance, batch)
+			if err != nil {
+				log.Error("processAccountTokenTransfers processAccountTokenTransfer to", "contractAddress", contractAddress, "error", err, "to", t.To)
+				return err
+			}
 		}
 	}
 	return nil
@@ -1641,18 +1648,18 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	} else {
 		//Load current state form the cache
 		tokenPageCount := getPageCount(newTokenCount)
-		_, tokenPageKey := getAccountTokenPageKey(address, newTokenCount)
+		pageKey, tokenPageKey := getAccountTokenPageKey(address, tokenPageCount)
 
-		log.Info("processAccountTokenTransfer loading from cache", "address", address, "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount)
+		log.Debug("processAccountTokenTransfer loading from cache", "address", address, "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount, "pageKey", pageKey)
 
 		accountTokenListBlob, err := c.cacheDb.Get(tokenPageKey)
 		if err != nil {
-			log.Error("cacheDb.Get accountTxnPageKey", "error", err)
+			log.Error("cacheDb.Get tokenPageKey", "error", err)
 			return err
 		}
 		err = json.Unmarshal(accountTokenListBlob, &accountTokenList)
 		if err != nil {
-			log.Error("json.Unmarshal accountTokenListBlob", "error", err, "address", address, "tokenPageKey", tokenPageKey)
+			log.Error("json.Unmarshal accountTokenListBlob", "error", err, "address", address, "pageKey", pageKey)
 			return err
 		}
 
@@ -1685,6 +1692,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	}
 
 	tokenPageCount := getPageCount(newTokenCount)
+	log.Debug("tokenPageCount", tokenPageCount, "newTokenCount", newTokenCount)
 	key, tokenPageKeyBlob := getAccountTokenPageKey(address, tokenPageCount)
 	err = txnBatch.Put(tokenPageKeyBlob, accountTokenListBlob)
 	if err != nil {
@@ -1711,9 +1719,10 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	return nil
 }
 
-func (c *CacheManager) getAccountTokenDetailsKey(accountAddress string, contractAddress string) []byte {
+func (c *CacheManager) getAccountTokenDetailsKey(accountAddress string, contractAddress string) (string, []byte) {
 	key := fmt.Sprintf(AccountTokenKey, strings.ToLower(accountAddress), strings.ToLower(contractAddress))
-	return []byte(key)
+	keyBlob := []byte(key)
+	return key, keyBlob
 }
 
 func (c *CacheManager) GetAccountTokenDetails(accountAddress string, contractAddress string) (*AccountTokenSummary, error) {
@@ -1721,9 +1730,9 @@ func (c *CacheManager) GetAccountTokenDetails(accountAddress string, contractAdd
 }
 
 func (c *CacheManager) getAccountTokenDetailsFromDb(accountAddress string, contractAddress string) (*AccountTokenSummary, error) {
-	key := c.getAccountTokenDetailsKey(accountAddress, contractAddress)
+	key, keyBlob := c.getAccountTokenDetailsKey(accountAddress, contractAddress)
 	db := c.cacheDb
-	blob, err := db.Get([]byte(key))
+	blob, err := db.Get(keyBlob)
 	if err != nil {
 		return nil, err
 	}
@@ -1733,6 +1742,8 @@ func (c *CacheManager) getAccountTokenDetailsFromDb(accountAddress string, contr
 	if err != nil {
 		return nil, err
 	}
+
+	log.Debug("getAccountTokenDetailsFromDb", "accountAddress", accountAddress, "contractAddress", contractAddress, "key", key, "balance", details.TokenBalance)
 
 	return &details, nil
 }
@@ -1745,13 +1756,14 @@ func (c *CacheManager) putAccountTokenInDb(details *AccountTokenSummary, batch *
 		return err
 	}
 
-	key := c.getAccountTokenDetailsKey(details.AccountAddress, details.ContractAddress)
-	keyBlob := []byte(key)
+	key, keyBlob := c.getAccountTokenDetailsKey(details.AccountAddress, details.ContractAddress)
 
 	err = txnBatch.Put(keyBlob, blob)
 	if err != nil {
 		return err
 	}
+
+	log.Debug("putAccountTokenInDb", "key", key, "details TokenBalance", details.TokenBalance, "ContractAddress", details.ContractAddress)
 
 	return nil
 }
@@ -1809,6 +1821,15 @@ func (c *CacheManager) ListTokensByAccount(accountAddress common.Address, pageNu
 	if strings.ToLower(accountTokenList.Address) != address {
 		log.Error("unexpected address accountTokenList.Address", "address", address, "accountTokenList.Address", accountTokenList.Address)
 		return ListAccountTokensResponse{}, errors.New("unexpected address accountTokenList.Address")
+	}
+
+	for i, item := range accountTokenList.Tokens {
+		//get new info from db, since paginated cache doesn't store latest balance
+		accountTokenSummary, err := c.getAccountTokenDetailsFromDb(address, strings.ToLower(item.ContractAddress))
+		if err != nil {
+			return ListAccountTokensResponse{}, err
+		}
+		accountTokenList.Tokens[i] = *accountTokenSummary
 	}
 
 	listResponse.Items = accountTokenList.Tokens

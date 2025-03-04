@@ -62,7 +62,6 @@ contract TokenDetailed is IERC20 {
 
   address private _owner;
 
-
   event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
   constructor
@@ -71,13 +70,16 @@ contract TokenDetailed is IERC20 {
     string memory tokenSymbol,
     uint256 tokenTotalSupply,
     uint256 baseBurnPercentDivisor,
-    uint8 tokenDecimals
+    uint8 tokenDecimals,
+    address ownerAccount
   ) {
     _name = tokenName;
     _symbol = tokenSymbol;
     _totalSupply = tokenTotalSupply;
     _decimals = tokenDecimals;
     _baseBurnPercentDivisor = baseBurnPercentDivisor;
+
+    _mint(ownerAccount, totalSupply());
   }
 
   function name() public view returns(string memory) {
@@ -241,10 +243,11 @@ contract Y2Q is TokenDetailed {
   tokenSymbol,
   totalSupplyWeNeed,
   baseBurnPercentDivisor,
-  decimalsWeNeed
+  decimalsWeNeed,
+  msg.sender
   )
   {
-    _mint(msg.sender, totalSupply());
+
   }
 
 }
