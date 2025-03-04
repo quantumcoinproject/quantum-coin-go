@@ -578,10 +578,13 @@ func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (
 	byteCode, err := ec.CodeAt(context.Background(), address, blockNumber)
 	if err != nil {
 		log.Debug("GetAccountType", "address", address, "error", err)
-		if err == bind.ErrNoCode {
+		if errors.Is(err, bind.ErrNoCode) {
 			return ACCOUNT_TYPE_REGULAR, nil
 		}
 		return "", err
+	}
+	if len(byteCode) == 0 {
+		return ACCOUNT_TYPE_REGULAR, nil
 	}
 
 	//Verify token is a smart contract
@@ -599,7 +602,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 	byteCode, err := ec.CodeAt(context.Background(), contactAddress, blockNumber)
 	if err != nil {
 		log.Debug("GetTokenDetails", "contactAddress", contactAddress, "error", err)
-		if err == bind.ErrNoCode {
+		if errors.Is(err, bind.ErrNoCode) {
 			return nil, token.NotATokenError
 		}
 		return nil, err
@@ -615,7 +618,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 	contract, err := token.NewToken(contactAddress, ec)
 	if err != nil {
 		log.Debug("GetTokenDetails", "error", err)
-		if err == bind.ErrNoCode {
+		if errors.Is(err, bind.ErrNoCode) {
 			return nil, token.NotATokenError
 		}
 		return nil, err
@@ -626,7 +629,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 	tokenDetails.TotalSupply, err = contract.TotalSupply(nil)
 	if err != nil {
 		log.Debug("GetTokenDetails TotalSupply", "error", err, "contactAddress", contactAddress)
-		if err == vm.ErrExecutionReverted {
+		if errors.Is(err, vm.ErrExecutionReverted) {
 			return nil, token.NotATokenError
 		}
 		return nil, err
@@ -634,7 +637,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 
 	tokenDetails.Name, err = contract.Name(nil)
 	if err != nil {
-		if err != vm.ErrExecutionReverted {
+		if errors.Is(err, vm.ErrExecutionReverted) {
 			log.Debug("GetTokenDetails Name", "error", err, "contactAddress", contactAddress)
 			return nil, err
 		}
@@ -643,7 +646,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 
 	tokenDetails.Symbol, err = contract.Symbol(nil)
 	if err != nil {
-		if err != vm.ErrExecutionReverted {
+		if errors.Is(err, vm.ErrExecutionReverted) {
 			log.Debug("GetTokenDetails Symbol", "error", err, "contactAddress", contactAddress)
 			return nil, err
 		}
@@ -652,7 +655,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 
 	tokenDetails.Decimals, err = contract.Decimals(nil)
 	if err != nil {
-		if err != vm.ErrExecutionReverted {
+		if errors.Is(err, vm.ErrExecutionReverted) {
 			log.Debug("GetTokenDetails Decimals", "error", err, "contactAddress", contactAddress)
 			return nil, err
 		}
@@ -661,7 +664,7 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 
 	tokenDetails.Owner, err = contract.Owner(nil)
 	if err != nil {
-		if err != vm.ErrExecutionReverted {
+		if errors.Is(err, vm.ErrExecutionReverted) {
 			log.Debug("GetTokenDetails Owner", "error", err, "contactAddress", contactAddress)
 			return nil, err
 		}
@@ -682,7 +685,7 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 
 	balance, err := contract.BalanceOf(nil, accountAddress)
 	if err != nil {
-		if err == vm.ErrExecutionReverted {
+		if errors.Is(err, vm.ErrExecutionReverted) {
 			log.Debug("GetAccountTokenBalance", "error", err, "contactAddress", contactAddress)
 			return nil, token.NotATokenError
 		}
