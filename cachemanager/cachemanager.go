@@ -139,7 +139,7 @@ type TokenTransactionCompact struct {
 
 	ContractAddress string `json:"contractAddress,omitempty"`
 
-	TokenBalance string `json:"tokenBalance,omitempty"`
+	TokenCount string `json:"tokenCount,omitempty"`
 
 	TokenSymbol string `json:"tokenSymbol,omitempty"`
 
@@ -647,7 +647,7 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 						log.Error("getTokenDetailsInternal", "error", err)
 						return err
 					}
-					transaction.TokenTransaction.TokenBalance = hexutil.EncodeBig(tokenTransfers[0].Tokens)
+					transaction.TokenTransaction.TokenCount = hexutil.EncodeBig(tokenTransfers[0].Tokens)
 					transaction.TokenTransaction.TokenName = tokenDetails.Name
 					transaction.TokenTransaction.TokenSymbol = tokenDetails.Symbol
 				}

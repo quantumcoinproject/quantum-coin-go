@@ -736,7 +736,7 @@ components:
         contractAddress:
           type: string
           nullable: false
-        tokenBalance:
+        tokenCount:
           type: string
           nullable: false
         tokenSymbol:
