@@ -30,6 +30,8 @@ type ReadApiAPIRouter interface {
 	QueryDetails(http.ResponseWriter, *http.Request)
 	GetTokenDetails(http.ResponseWriter, *http.Request)
 	GetAccountTokenDetails(http.ResponseWriter, *http.Request)
+	ListAccountTokens(http.ResponseWriter, *http.Request)
+	ListAccountTokenTransactions(http.ResponseWriter, *http.Request)
 }
 
 
@@ -47,4 +49,6 @@ type ReadApiAPIServicer interface {
 	QueryDetails(context.Context, string) (ImplResponse, error)
 	GetTokenDetails(context.Context, string) (ImplResponse, error)
 	GetAccountTokenDetails(context.Context, string, string) (ImplResponse, error)
+	ListAccountTokens(context.Context, string, int64) (ImplResponse, error)
+	ListAccountTokenTransactions(context.Context, string, int64) (ImplResponse, error)
 }

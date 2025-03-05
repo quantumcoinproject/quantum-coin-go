@@ -100,6 +100,9 @@ func printHelp() {
 	fmt.Println("dputil transfertokens CONTRACT_ADDRESS FROM_ADDRESS TO_ADDRESS amount")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("dputil createtoken FROM_ADDRESS TOKEN_NAME TOKEN_SYMBOL TOTAL_SUPPLY")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -220,6 +223,11 @@ func main() {
 		}
 	} else if os.Args[1] == "transfertokens" {
 		err := TransferTokens()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "createtoken" {
+		err := CreateToken()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1481,4 +1489,79 @@ func TransferTokens() error {
 	}
 
 	return transferTokens(contractAddr, toAddr, tokenTransferAmount, fromKey)
+}
+
+func CreateToken() error {
+	if len(os.Args) < 6 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	if len(os.Getenv("DP_KEY_FILE_DIR")) == 0 {
+		return errors.New("set the keyfile directory environment variable DP_KEY_FILE_DIR")
+	}
+
+	fromAddr := os.Args[2]
+	tokenName := os.Args[3]
+	tokenSymbol := os.Args[4]
+	tokenTotalSupply := os.Args[5]
+
+	if len(tokenName) == 0 || len(tokenName) > 100 {
+		return errors.New("invalid tokenName " + tokenName)
+	}
+
+	if len(tokenSymbol) == 0 || len(tokenSymbol) > 10 {
+		return errors.New("invalid tokenSymbol " + tokenSymbol)
+	}
+
+	fltTotalSupply, err := ParseBigFloat(tokenTotalSupply)
+	if err != nil {
+		return err
+	}
+	tokenTotalSupplyWei := etherToWeiFloat(fltTotalSupply)
+	baseBurnPercentDivisor := big.NewInt(100000)
+
+	// Parse the string as an unsigned integer with base 10 and 8-bit size
+	totalDecimals := uint8(18)
+
+	fromAccountKeyFile, err := findKeyFile(fromAddr)
+	if err != nil {
+		return errors.New("error finding FROM_ADDRESS in DP_KEY_FILE_DIR " + err.Error())
+	}
+
+	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the depositor wallet password : "))
+	if err != nil {
+		return err
+	}
+	if len(fromAccountPwd) == 0 {
+		return errors.New("from account password is not set")
+	}
+
+	fromKey, err := GetKeyFromFile(fromAccountKeyFile, fromAccountPwd)
+	if err != nil {
+		return errors.New("error decrypting depositor key " + err.Error())
+	}
+
+	fmt.Println()
+
+	fromAccountPasswordConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to create a token for with symbol `%s` ,  name `%s`? This transaction requires gas fees.", tokenName, tokenSymbol))
+	if err != nil {
+		return err
+	}
+	if fromAccountPasswordConfirm != true {
+		return errors.New("confirmation not made")
+	}
+	fmt.Println()
+
+	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	if err != nil {
+		return errors.New("from account public key to address " + err.Error())
+	}
+
+	if !fromAddressFromKey.IsEqualTo(common.HexToAddress(fromAddr)) {
+		return errors.New("from account key address check failed " + err.Error())
+	}
+
+	return createToken(tokenName, tokenSymbol, tokenTotalSupplyWei, baseBurnPercentDivisor, totalDecimals, fromKey)
 }

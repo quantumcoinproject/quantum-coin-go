@@ -14,7 +14,7 @@ package qcreadapi
 
 
 type AccountTokenDetails struct {
-	Balance *string `json:"balance,omitempty"`
+	TokenBalance *string `json:"tokenBalance,omitempty"`
 
 	ContractAddress *string `json:"contractAddress,omitempty"`
 }
