@@ -357,27 +357,35 @@ func (c *CacheManager) initialize() error {
 	}
 	c.cacheDb = catchManager
 
-	client, err := ethclient.Dial(c.nodeUrl)
-	if err != nil {
-		return err
-	}
+	for {
+		client, err := ethclient.Dial(c.nodeUrl)
+		if err != nil {
+			log.Error("initialize client Dial", "error", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
 
-	pendingTxClient, err := ethclient.Dial(c.nodeUrl)
-	if err != nil {
-		return err
-	}
+		pendingTxClient, err := ethclient.Dial(c.nodeUrl)
+		if err != nil {
+			log.Error("initialize pendingTxClient Dial", "error", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
 
-	chainID, err = client.NetworkID(context.Background())
-	if err != nil {
-		log.Error("initialize NetworkID", "error", err)
-		return err
-	}
+		chainID, err = client.NetworkID(context.Background())
+		if err != nil {
+			log.Error("initialize NetworkID", "error", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
 
-	c.client = client
-	c.pendingTxClient = pendingTxClient
-	c.addressMap = make(map[string]*AccountDetails)
-	c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
-	c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+		c.client = client
+		c.pendingTxClient = pendingTxClient
+		c.addressMap = make(map[string]*AccountDetails)
+		c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+		c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+		break
+	}
 
 	return nil
 }
