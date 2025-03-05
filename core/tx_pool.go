@@ -24,6 +24,7 @@ import (
 	"github.com/QuantumCoinProject/qc/systemcontracts/staking"
 	"math"
 	"math/big"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -609,7 +610,13 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		if err == nil && isGasExempt == true {
 			log.Trace("Is a GasExempt Txn", "from", from, "tx", tx.Hash())
 		} else {
-			return ErrInsufficientFunds
+			txPoolIgnoreGas := os.Getenv("TXPOOL_IGNORE_GAS")
+			if len(txPoolIgnoreGas) > 0 && txPoolIgnoreGas == "1" {
+				log.Warn("TXPOOL_IGNORE_GAS is set, skipping gas check")
+			} else {
+				log.Debug("ErrInsufficientFunds", "from", from, "tx", tx.Hash())
+				return ErrInsufficientFunds
+			}
 		}
 	}
 
