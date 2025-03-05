@@ -683,10 +683,12 @@ func ValidateBlockProposalTime(blockNumber uint64, proposedTime uint64) bool {
 
 		tm := time.Unix(int64(proposedTime), 0)
 		if tm.Second() != 0 || tm.Nanosecond() != 0 { //No granularity at anything other than minute level allowed, to reduce ability to manipulate blockHash
+			log.Warn("ValidateBlockProposalTime granularity issue", "second", tm.Second(), "nanosecond", tm.Nanosecond())
 			return false
 		}
 	} else {
 		if proposedTime != 0 {
+			log.Warn("ValidateBlockProposalTime granularity issue", "proposedTime", proposedTime)
 			return false
 		}
 	}

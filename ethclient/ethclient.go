@@ -711,7 +711,7 @@ func (ec *Client) GetInternalTransactions(ctx context.Context, txnHash common.Ha
 	traceConfig := tracers.TraceConfig{
 		Tracer: &tracer,
 	}
-	err := ec.c.CallContext(ctx, &tracedTransactions, "debug_traceTransaction", txnHash, traceConfig)
+	err := ec.c.CallContext(ctx, &tracedTransactions, "tracer_traceTransaction", txnHash, traceConfig)
 	if err != nil {
 		log.Debug("TraceTransaction error", "err", err)
 		return nil, err
