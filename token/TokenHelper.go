@@ -44,11 +44,21 @@ type LogApproval struct {
 	Tokens          *big.Int
 }
 
-func ParseTokenTransaction(txn *types.Transaction, receipt *types.Receipt) ([]*LogTransfer, []*LogApproval, error) {
-	if txn == nil || receipt == nil {
-		return nil, nil, errors.New("txn or receipt is nil")
+// Is main transaction a transfer?
+func IsMainTransactionTokenTransfer(txn *types.Transaction, receipt *types.Receipt) (bool, error) {
+	txHash := txn.Hash()
+	if txHash.IsEqualTo(receipt.TxHash) == false {
+		return false, errors.New("hash mismatch between txn and receipt")
 	}
 
+	if len(receipt.Logs) == 0 || len(receipt.Logs[0].Topics) == 0 {
+		return false, nil
+	}
+
+	return strings.ToLower(receipt.Logs[0].Topics[0].Hex()) == logTransferSigHash, nil
+}
+
+func ParseTokenTransaction(txn *types.Transaction, receipt *types.Receipt) ([]*LogTransfer, []*LogApproval, error) {
 	txHash := txn.Hash()
 	if txHash.IsEqualTo(receipt.TxHash) == false {
 		return nil, nil, errors.New("hash mismatch between txn and receipt")
@@ -58,6 +68,10 @@ func ParseTokenTransaction(txn *types.Transaction, receipt *types.Receipt) ([]*L
 	approvals := make([]*LogApproval, 0)
 
 	for _, rLog := range receipt.Logs {
+
+		if len(rLog.Topics) == 0 {
+			continue
+		}
 
 		switch strings.ToLower(rLog.Topics[0].Hex()) {
 
