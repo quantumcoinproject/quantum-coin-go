@@ -42,6 +42,7 @@ func main() {
 	js.Global().Set("TxnHash", js.FuncOf(TxnHash))
 	js.Global().Set("TxnData", js.FuncOf(TxnData))
 	js.Global().Set("ContractData", js.FuncOf(ContractData))
+	js.Global().Set("TokenTransfer", js.FuncOf(TokenTransfer))
 	js.Global().Set("KeyPairToWalletJson", js.FuncOf(KeyPairToWalletJson))
 	js.Global().Set("JsonToWalletKeyPair", js.FuncOf(JsonToWalletKeyPair))
 	js.Global().Set("ParseBigFloat", js.FuncOf(ParseBigFloat))
@@ -181,6 +182,35 @@ func ContractData(this js.Value, args []js.Value) interface{} {
 	for _, i := range args[2:] {
 		arguments = append(arguments, i.String())
 	}
+
+	data, err := abiData.Pack(method, arguments...)
+	if err != nil {
+		return nil
+	}
+
+	var d strings.Builder
+	for i := 0; i < len(data); i++ {
+		sh := data[i]
+		d.WriteString(string(sh))
+	}
+
+	return d.String()
+}
+
+func TokenTransfer(this js.Value, args []js.Value) interface{} {
+	method := args[0].String()
+
+	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
+	if err != nil {
+		return nil
+	}
+
+	quantity := new(big.Int)
+    	fmt.Sscan(args[3].String(), quantity)
+		
+	arguments := make([]interface{}, 0, 2)
+	arguments = append(arguments, common.HexToAddress(args[2].String()))
+	arguments = append(arguments, quantity)
 
 	data, err := abiData.Pack(method, arguments...)
 	if err != nil {
