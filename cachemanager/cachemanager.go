@@ -649,41 +649,45 @@ func (c *CacheManager) processByCacheManager(block *types.Block, runningSummary 
 			//Find all internal transactions
 			internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
 			if err != nil {
-				log.Error("GetInternalTransactions", "err", err, "txn", tx.Hash())
-				return err
-			}
+				log.Warn("GetInternalTransactions", "err", err, "txn", tx.Hash())
+				if errors.Is(err, ethclient.TracingGasError) {
 
-			internalTxnList := c.flattenInternalTransactionDetails(internalTransactions)
+				} else {
+					return err
+				}
+			} else {
+				internalTxnList := c.flattenInternalTransactionDetails(internalTransactions)
 
-			for _, iTxn := range internalTxnList {
-				accountsInvolved[strings.ToLower(iTxn.From)] = true
-				accountsInvolved[strings.ToLower(iTxn.To)] = true
+				for _, iTxn := range internalTxnList {
+					accountsInvolved[strings.ToLower(iTxn.From)] = true
+					accountsInvolved[strings.ToLower(iTxn.To)] = true
 
-				if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
-					tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
-					if err != nil {
-						if errors.Is(err, token.NotATokenError) {
-							continue
-						} else {
+					if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
+						tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
+						if err != nil {
+							if errors.Is(err, token.NotATokenError) {
+								continue
+							} else {
+								return err
+							}
+						}
+						//new token created via internal transaction
+						tkn := &TokenDetails{
+							ContractAddress:        strings.ToLower(iTxn.To),
+							CreatorAddress:         strings.ToLower(iTxn.From),
+							CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
+							CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
+							Name:                   tokenDetails.Name,
+							Symbol:                 tokenDetails.Symbol,
+							TotalSupply:            hexutil.EncodeBig(tokenDetails.TotalSupply),
+							Decimals:               hexutil.EncodeUint64(uint64(tokenDetails.Decimals)),
+						}
+
+						err = c.putTokenInDb(tkn, &txnBatch)
+						if err != nil {
+							log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
 							return err
 						}
-					}
-					//new token created via internal transaction
-					tkn := &TokenDetails{
-						ContractAddress:        strings.ToLower(iTxn.To),
-						CreatorAddress:         strings.ToLower(iTxn.From),
-						CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
-						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
-						Name:                   tokenDetails.Name,
-						Symbol:                 tokenDetails.Symbol,
-						TotalSupply:            hexutil.EncodeBig(tokenDetails.TotalSupply),
-						Decimals:               hexutil.EncodeUint64(uint64(tokenDetails.Decimals)),
-					}
-
-					err = c.putTokenInDb(tkn, &txnBatch)
-					if err != nil {
-						log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
-						return err
 					}
 				}
 			}
