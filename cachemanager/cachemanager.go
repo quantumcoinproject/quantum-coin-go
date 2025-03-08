@@ -365,6 +365,14 @@ func (c *CacheManager) initialize() error {
 	}
 	c.cacheDb = catchManager
 
+	c.addressMap = make(map[string]*AccountDetails)
+	c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+	c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+
+	return nil
+}
+
+func (c *CacheManager) clientInitialize() {
 	for {
 		client, err := ethclient.Dial(c.nodeUrl)
 		if err != nil {
@@ -397,13 +405,9 @@ func (c *CacheManager) initialize() error {
 		c.client = client
 		c.blockClient = blockClient
 		c.pendingTxClient = pendingTxClient
-		c.addressMap = make(map[string]*AccountDetails)
-		c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
-		c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+
 		break
 	}
-
-	return nil
 }
 
 func (c *CacheManager) start() error {
@@ -450,10 +454,11 @@ func (c *CacheManager) start() error {
 
 	blockChan := make(chan *InternalBlockData, 25)
 
-	c.downloadBlocks(int64(blockNumber+1), blockChan)
-	c.processPendingTransactions()
-
 	go func() {
+		c.clientInitialize()
+		c.downloadBlocks(int64(blockNumber+1), blockChan)
+		c.processPendingTransactions()
+
 		for {
 			select {
 			case internalBlockData := <-blockChan:

@@ -1583,3 +1583,28 @@ func createToken(tokenName string, tokenSymbol string, tokenTotalSupply *big.Int
 
 	return nil
 }
+
+func getTokenBalance(accountAddress common.Address, contractAddress common.Address) (*big.Int, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	instance, err := token.NewToken(contractAddress, client)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenBalance, err := instance.BalanceOf(nil, accountAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("tokenBalance", "accountAddress", accountAddress, "contractAddress", contractAddress, "coins", weiToEther(tokenBalance).String(), "wei", tokenBalance)
+
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return tokenBalance, nil
+}
