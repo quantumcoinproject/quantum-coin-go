@@ -29,19 +29,20 @@ jobs:
     - name: Build IOS library
       run: |
         chmod +x ${{ github.workspace }}/clangwrap.sh
-        export CGO_ENABLED=1
-        export GOOS=darwin
-        export GOARCH=amd64        
-        export SDK=iphonesimulator
-        export CC=${{ github.workspace }}/clangwrap.sh
-        go build -buildmode=c-archive -trimpath -tags ios -o ${{ github.workspace }}/build/ios_amd64/amd64.a ${{ github.workspace }}/wasm/mobile/main.go
+        export GOOS=ios
         export GOARCH=arm64
-        export SDK=iphoneos  
-        export CC=${{ github.workspace }}/clangwrap.sh
+        export CGO_ENABLED=1
+        export SDK=iphonesimulator
         export CGO_CFLAGS="-fembed-bitcode"
-        go build -buildmode=c-archive -trimpath -tags ios -o ${{ github.workspace }}/build/ios_arm64/arm64.a ${{ github.workspace }}/wasm/mobile/main.go
-        lipo ${{ github.workspace }}/build/ios_amd64/amd64.a ${{ github.workspace }}/build/ios_arm64/arm64.a -create -output  ${{ github.workspace }}/build/ios_lib/libquantumcoin.a
-        cp ${{ github.workspace }}/build/ios_arm64/arm64.h ${{ github.workspace }}/build/ios_lib/libquantumcoin.h
+        export MIN_VERSION=15
+        export SDK_PATH=$(xcrun --sdk "$SDK" --show-sdk-path)
+        export CARCH="arm64"
+        export TARGET="$CARCH-apple-ios$MIN_VERSION-simulator"
+        export CGO_LDFLAGS="-target ${TARGET} -syslibroot \"${SDK_PATH}\""
+        export CC=${{ github.workspace }}/clangwrap.sh
+        go build -buildmode=c-archive -o ${{ github.workspace }}/build/ios_arm64/arm64.a ${{ github.workspace }}/wasm/mobile/main.go
+        cp ${{ github.workspace }}/build/ios_arm64/arm64.a ${{ github.workspace }}/build/ios_lib/arm64.a
+        cp ${{ github.workspace }}/build/ios_arm64/arm64.h ${{ github.workspace }}/build/ios_lib/arm64.h
     - name: Check Files
       run:  ls  ${{ github.workspace }}/build/ios_lib
     - name: Create Release
