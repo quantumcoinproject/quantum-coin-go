@@ -10,7 +10,6 @@ import (
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/token"
 	abi "github.com/QuantumCoinProject/qc/wasm/accounts/abi"
 	ks "github.com/QuantumCoinProject/qc/wasm/accounts/keystore"
 	wasm "github.com/QuantumCoinProject/qc/wasm/core/types"
@@ -199,15 +198,15 @@ func ContractData(this js.Value, args []js.Value) interface{} {
 }
 
 func TokenTransfer(this js.Value, args []js.Value) interface{} {
-	method := "transfer"
+	method := args[0].String()
 
-	abiData, err := abi.JSON(strings.NewReader((token.TokenABI)))
+	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
 	if err != nil {
 		return nil
 	}
 
 	quantity := new(big.Int)
-	fmt.Sscan(args[1].String(), quantity)
+	fmt.Sscan(args[3].String(), quantity)
 
 	arguments := make([]interface{}, 0, 2)
 	arguments = append(arguments, common.HexToAddress(args[2].String()))
