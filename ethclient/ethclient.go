@@ -27,6 +27,7 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
+	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/core/asm"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/core/vm"
@@ -35,7 +36,10 @@ import (
 	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/QuantumCoinProject/qc/token"
 	"math/big"
+	"strings"
 )
+
+var TracingGasError = errors.New("tracing gas err")
 
 // Client defines typed wrappers for the Ethereum RPC API.
 type Client struct {
@@ -714,6 +718,9 @@ func (ec *Client) GetInternalTransactions(ctx context.Context, txnHash common.Ha
 	err := ec.c.CallContext(ctx, &tracedTransactions, "tracer_traceTransaction", txnHash, traceConfig)
 	if err != nil {
 		log.Debug("TraceTransaction error", "err", err)
+		if strings.Contains(err.Error(), core.ErrInsufficientFunds.Error()) { //ErrInsufficientFunds for no gas conversion contract txn
+			return nil, TracingGasError
+		}
 		return nil, err
 	}
 

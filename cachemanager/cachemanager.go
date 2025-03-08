@@ -35,6 +35,7 @@ type CacheManager struct {
 	cacheDb                  ethdb.Database
 	client                   *ethclient.Client
 	pendingTxClient          *ethclient.Client
+	blockClient              *ethclient.Client
 	enableExtendedApis       bool
 	genesisCirculatingSupply string
 	maxSupply                string
@@ -365,6 +366,13 @@ func (c *CacheManager) initialize() error {
 			continue
 		}
 
+		blockClient, err := ethclient.Dial(c.nodeUrl)
+		if err != nil {
+			log.Error("initialize blockClient Dial", "error", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
 		pendingTxClient, err := ethclient.Dial(c.nodeUrl)
 		if err != nil {
 			log.Error("initialize pendingTxClient Dial", "error", err)
@@ -380,6 +388,7 @@ func (c *CacheManager) initialize() error {
 		}
 
 		c.client = client
+		c.blockClient = blockClient
 		c.pendingTxClient = pendingTxClient
 		c.addressMap = make(map[string]*AccountDetails)
 		c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
@@ -432,34 +441,31 @@ func (c *CacheManager) start() error {
 		}
 	}
 
-	delayNumber := int64(100 * time.Millisecond)
-	cacheTimer := time.NewTimer(time.Duration(delayNumber))
+	blockChan := make(chan *types.Block, 25)
+
+	c.downloadBlocks(int64(blockNumber+1), blockChan)
+	c.processPendingTransactions()
 
 	go func() {
 		for {
 			select {
-			case <-cacheTimer.C:
-				go c.processPendingTransactions()
-
-				blockNumberToGet := blockNumber + 1
-				log.Info("Batch Start ", "Block Number ", blockNumberToGet)
-				err := c.processByCacheManager(blockNumberToGet, runningSummary)
-				if err == nil {
-					blockNumber = blockNumberToGet
-					log.Info("Batch Complete", "Block number", blockNumberToGet)
-					delayNumber = 0
-				} else {
-					if err.Error() == NotFoundErrMsg {
-						log.Info("Waiting for Block...", "Block number", blockNumberToGet)
+			case block := <-blockChan:
+				for {
+					err := c.processByCacheManager(block, runningSummary)
+					if err == nil {
+						log.Info("Batch Complete", "Block number", block.Number())
+						break
 					} else {
-						log.Error("Batch Error", "error", err.Error(), "Block number", blockNumberToGet)
+						if err.Error() == NotFoundErrMsg {
+							log.Info("Waiting for Block...", "Block number", block.Number())
+						} else {
+							log.Error("Batch Error", "error", err.Error(), "Block number", block.Number())
+						}
+						time.Sleep(5 * time.Second)
 					}
-					delayNumber = int64(5 * time.Second)
 				}
 
-				cacheTimer.Reset(time.Duration(delayNumber))
 			case <-cancel:
-				cacheTimer.Stop()
 				err = c.close()
 				if err != nil {
 					log.Error("c.close()", "error", err)
@@ -478,32 +484,102 @@ func (c *CacheManager) processPendingTransactions() {
 	c.pendingTxLock.Lock()
 	defer c.pendingTxLock.Unlock()
 
-	err, txnList := c.pendingTxClient.TxPoolContent(context.Background())
-	if err != nil {
-		log.Error("processPendingTransactions", "err", err)
-		return
-	}
+	delayNumber := int64(3000 * time.Millisecond)
+	pendingTxnTimer := time.NewTimer(time.Duration(delayNumber))
+	cancel := make(chan os.Signal)
+	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
 
-	if txnList == nil {
-		log.Warn("processPendingTransactions txnList is nil")
-		return
-	}
+	go func() {
+		for {
+			select {
+			case <-pendingTxnTimer.C:
+				err, txnList := c.pendingTxClient.TxPoolContent(context.Background())
+				if err != nil {
+					log.Error("processPendingTransactions", "err", err)
+				} else {
+					if txnList == nil {
+						log.Warn("processPendingTransactions txnList is nil")
+					} else {
+						c.pendingTxMapLock.Lock()
+						c.pendingTransactions = txnList
+						c.pendingTxMapLock.Unlock()
+					}
+				}
 
-	c.pendingTxMapLock.Lock()
-	defer c.pendingTxMapLock.Unlock()
-
-	c.pendingTransactions = txnList
+				pendingTxnTimer.Reset(time.Duration(delayNumber))
+			case <-cancel:
+				pendingTxnTimer.Stop()
+				log.Info("processPendingTransactions Quit signal received")
+				return
+			}
+		}
+	}()
 }
 
-func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary *BlockchainDetails) error {
-	blockNum := new(big.Int).SetUint64(blockNumber)
-	block, err := c.client.BlockByNumber(context.Background(), blockNum)
-	if err != nil {
-		if err.Error() != NotFoundErrMsg {
-			log.Error("BlockByNumber", "error", err)
+func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- *types.Block) {
+	delayNumber := int64(100 * time.Millisecond)
+	blockTimer := time.NewTimer(time.Duration(delayNumber))
+	cancel := make(chan os.Signal)
+	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
+
+	blockNumberToGet := startBlockNumber
+	isLagging := true
+
+	go func() {
+		for {
+			select {
+			case <-blockTimer.C:
+				if blockNumberToGet == startBlockNumber || blockNumberToGet%int64(50) == 0 {
+					var latestBlockNumberHex *hexutil.Uint64
+					err := c.blockClient.GetRpcClient().CallContext(context.Background(), &latestBlockNumberHex, "eth_blockNumber")
+					if err != nil {
+						log.Error("downloadBlocks eth_blockNumber", "error", err)
+					} else {
+						latestBlockNumber, err := hexutil.DecodeBig(latestBlockNumberHex.String())
+						if err != nil {
+							log.Error("downloadBlocks DecodeBig", "error", err)
+						} else {
+							if uint64(blockNumberToGet) < latestBlockNumber.Uint64() && latestBlockNumber.Uint64()-uint64(blockNumberToGet) > 50 {
+								isLagging = true
+							} else {
+								isLagging = false
+							}
+						}
+					}
+				}
+
+				log.Info("downloadBlock BlockByNumber", "Block Number ", blockNumberToGet)
+				block, err := c.blockClient.BlockByNumber(context.Background(), big.NewInt(blockNumberToGet))
+				if err != nil {
+					if err.Error() != NotFoundErrMsg {
+						log.Error("BlockByNumber", "error", err, "blockNumberToGet", blockNumberToGet)
+					}
+					delayNumber = int64(3000 * time.Millisecond)
+				} else {
+					resultChan <- block
+					blockNumberToGet = blockNumberToGet + 1
+					if isLagging {
+						delayNumber = 0
+					} else {
+						delayNumber = int64(100 * time.Millisecond)
+					}
+				}
+				blockTimer.Reset(time.Duration(delayNumber))
+			case <-cancel:
+				blockTimer.Stop()
+				log.Info("downloadBlocks Quit signal received")
+				return
+			}
 		}
-		return err
-	}
+	}()
+}
+
+func (c *CacheManager) processByCacheManager(block *types.Block, runningSummary *BlockchainDetails) error {
+	blockNum := block.Header().Number
+	blockNumber := blockNum.Uint64()
+	var err error
+
+	log.Info("processByCacheManager", "blockNumber", blockNumber)
 
 	txnBatch := c.cacheDb.NewBatch()
 	blockKey := []byte(LastBlockKey)
@@ -573,41 +649,45 @@ func (c *CacheManager) processByCacheManager(blockNumber uint64, runningSummary 
 			//Find all internal transactions
 			internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
 			if err != nil {
-				log.Error("GetInternalTransactions", "err", err, "txn", tx.Hash())
-				return err
-			}
+				log.Warn("GetInternalTransactions", "err", err, "txn", tx.Hash())
+				if errors.Is(err, ethclient.TracingGasError) {
 
-			internalTxnList := c.flattenInternalTransactionDetails(internalTransactions)
+				} else {
+					return err
+				}
+			} else {
+				internalTxnList := c.flattenInternalTransactionDetails(internalTransactions)
 
-			for _, iTxn := range internalTxnList {
-				accountsInvolved[strings.ToLower(iTxn.From)] = true
-				accountsInvolved[strings.ToLower(iTxn.To)] = true
+				for _, iTxn := range internalTxnList {
+					accountsInvolved[strings.ToLower(iTxn.From)] = true
+					accountsInvolved[strings.ToLower(iTxn.To)] = true
 
-				if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
-					tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
-					if err != nil {
-						if errors.Is(err, token.NotATokenError) {
-							continue
-						} else {
+					if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
+						tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
+						if err != nil {
+							if errors.Is(err, token.NotATokenError) {
+								continue
+							} else {
+								return err
+							}
+						}
+						//new token created via internal transaction
+						tkn := &TokenDetails{
+							ContractAddress:        strings.ToLower(iTxn.To),
+							CreatorAddress:         strings.ToLower(iTxn.From),
+							CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
+							CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
+							Name:                   tokenDetails.Name,
+							Symbol:                 tokenDetails.Symbol,
+							TotalSupply:            hexutil.EncodeBig(tokenDetails.TotalSupply),
+							Decimals:               hexutil.EncodeUint64(uint64(tokenDetails.Decimals)),
+						}
+
+						err = c.putTokenInDb(tkn, &txnBatch)
+						if err != nil {
+							log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
 							return err
 						}
-					}
-					//new token created via internal transaction
-					tkn := &TokenDetails{
-						ContractAddress:        strings.ToLower(iTxn.To),
-						CreatorAddress:         strings.ToLower(iTxn.From),
-						CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
-						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
-						Name:                   tokenDetails.Name,
-						Symbol:                 tokenDetails.Symbol,
-						TotalSupply:            hexutil.EncodeBig(tokenDetails.TotalSupply),
-						Decimals:               hexutil.EncodeUint64(uint64(tokenDetails.Decimals)),
-					}
-
-					err = c.putTokenInDb(tkn, &txnBatch)
-					if err != nil {
-						log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
-						return err
 					}
 				}
 			}
@@ -911,6 +991,7 @@ func (c *CacheManager) close() error {
 	}
 
 	c.client.Close()
+	c.blockClient.Close()
 	return nil
 }
 
