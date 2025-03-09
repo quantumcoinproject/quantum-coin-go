@@ -1632,7 +1632,7 @@ func getTokenBalance(accountAddress common.Address, contractAddress common.Addre
 		log.Fatal(err)
 	}
 
-	fmt.Println("tokenBalance", "accountAddress", accountAddress, "contractAddress", contractAddress, "coins", weiToEther(tokenBalance).String(), "wei", tokenBalance)
+	fmt.Println("tokenBalance", "accountAddress", accountAddress, "contractAddress", contractAddress, "tokens", weiToEther(tokenBalance).String(), "wei", tokenBalance)
 
 	fmt.Println()
 
