@@ -1242,6 +1242,10 @@ func (c *CacheManager) ListPendingTransactionsByAccount(accountAddress common.Ad
 		Items: make([]AccountPendingTransactionCompact, 0),
 	}
 
+	if c.pendingTransactions == nil {
+		return ListAccountPendingTransactionsResponse{}, nil
+	}
+
 	txnMap := *c.pendingTransactions
 	pendingTxnMap := txnMap["pending"]
 	queuedTxnMap := txnMap["queued"]
