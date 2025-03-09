@@ -1738,10 +1738,14 @@ func multiTransferTokensInner(contractAddr common.Address, toAddressList []commo
 
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
-	txnOpts.GasLimit = uint64(210000 * len(toAddressList))
+	minTokenGas := uint64(200000)
+	txnOpts.GasLimit = uint64(35000 * len(toAddressList))
+	if txnOpts.GasLimit < minTokenGas {
+		txnOpts.GasLimit = minTokenGas
+	}
 	txnOpts.Value = big.NewInt(0)
 
-	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("%s. Do you confirm above transfers with approximate transaction gas fee of %v coins?", progress, txnOpts.GasLimit*1000))
+	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("%s. Do you confirm above transfers with approximate transaction gas limit of %v?", progress, txnOpts.GasLimit))
 	if err != nil {
 		return err
 	}

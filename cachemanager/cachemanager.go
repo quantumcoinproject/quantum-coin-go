@@ -46,6 +46,7 @@ type CacheManager struct {
 	addressMap               map[string]*AccountDetails
 	tokenMap                 map[string]*TokenDetails
 	accountTokenMap          map[string]*map[string]bool //map[accountAddress]map[contractAddress]bool
+	blockChan                chan *InternalBlockData
 }
 
 var SummaryKey = "summary"
@@ -452,16 +453,16 @@ func (c *CacheManager) start() error {
 		}
 	}
 
-	blockChan := make(chan *InternalBlockData, 25)
+	c.blockChan = make(chan *InternalBlockData, 25)
 
 	go func() {
 		c.clientInitialize()
-		c.downloadBlocks(int64(blockNumber+1), blockChan)
+		c.downloadBlocks(int64(blockNumber+1), c.blockChan)
 		c.processPendingTransactions()
 
 		for {
 			select {
-			case internalBlockData := <-blockChan:
+			case internalBlockData := <-c.blockChan:
 				for {
 					blockNumberVal := internalBlockData.Block.Number().Uint64()
 					err := c.processByCacheManager(internalBlockData, runningSummary)
@@ -479,13 +480,7 @@ func (c *CacheManager) start() error {
 				}
 
 			case <-cancel:
-				close(blockChan)
-				err = c.close()
-				if err != nil {
-					log.Error("c.close()", "error", err)
-				}
 				log.Info("Quit signal received")
-				os.Exit(1)
 				return
 			}
 		}
@@ -522,8 +517,10 @@ func (c *CacheManager) processPendingTransactions() {
 
 				pendingTxnTimer.Reset(time.Duration(delayNumber))
 			case <-cancel:
-				pendingTxnTimer.Stop()
 				log.Info("processPendingTransactions Quit signal received")
+				pendingTxnTimer.Stop()
+				c.close()
+				os.Exit(1)
 				return
 			}
 		}
@@ -555,6 +552,7 @@ func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- 
 						} else {
 							if uint64(blockNumberToGet) < latestBlockNumber.Uint64() && latestBlockNumber.Uint64()-uint64(blockNumberToGet) > 50 {
 								isLagging = true
+								log.Info("downloadBlocks Lagging behind latest blocks", "latestBlockNumber", latestBlockNumber.Uint64(), "blockNumberToGet", blockNumberToGet)
 							} else {
 								isLagging = false
 							}
@@ -586,7 +584,9 @@ func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- 
 								ConsensusData:      consensusData,
 								ZeroAddressBalance: zeroAddressBalance,
 							}
+							log.Info("before resultChan")
 							resultChan <- internalBlockData
+							log.Info("after resultChan")
 							blockNumberToGet = blockNumberToGet + 1
 						}
 					}
@@ -1008,6 +1008,7 @@ func (c *CacheManager) putSummary(summary *BlockchainDetails, batch *ethdb.Batch
 }
 
 func (c *CacheManager) close() error {
+	close(c.blockChan)
 	c.pendingTxLock.Lock()
 	defer c.pendingTxLock.Unlock()
 	c.pendingTxClient.Close()
