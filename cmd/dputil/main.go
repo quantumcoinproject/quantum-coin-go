@@ -14,7 +14,9 @@ import (
 	"github.com/QuantumCoinProject/qc/log"
 	"io/ioutil"
 	"math/big"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -253,6 +255,11 @@ func main() {
 		}
 	} else if os.Args[1] == "multitransfertokens" {
 		err := MultiTransferTokens()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "accountlist" {
+		err := AccountList()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1691,4 +1698,69 @@ func MultiTransferTokens() error {
 	}
 
 	return multiTransferTokens(contractAddr, csvFile, fromKey)
+}
+
+type Transaction struct {
+	FromAddress string `json:"fromAddress,omitempty"`
+	ToAddress   string `json:"toAddress,omitempty"`
+}
+
+type TransactionList struct {
+	PageCount int           `json:"pageCount,omitempty"`
+	Result    []Transaction `json:"result,omitempty"`
+}
+
+func getTxnPage(pageNumber int, dpApiUrl string) (*TransactionList, error) {
+	url := dpApiUrl + "/api/dogep/transactions/page/" + strconv.Itoa(pageNumber)
+	fmt.Println("getting url " + url)
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Println("http.Get error", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	txnList := TransactionList{}
+
+	err = json.Unmarshal(body, &txnList)
+	if err != nil {
+		fmt.Println("Unmarshal error", err)
+		return nil, err
+	}
+
+	return &txnList, nil
+}
+
+func AccountList() error {
+	dpApiUrl := os.Getenv("DP_API_URL")
+	if len(dpApiUrl) == 0 {
+		fmt.Println("set DP_API_URL")
+		return errors.New("DP_API_URL not set")
+	}
+
+	accountList := make(map[string]bool)
+	pageNumber := 1
+	for {
+		txnList, err := getTxnPage(pageNumber, dpApiUrl)
+		if err != nil {
+			return err
+		}
+		if txnList.Result != nil && len(txnList.Result) > 0 {
+			for _, txn := range txnList.Result {
+				accountList[strings.ToLower(txn.ToAddress)] = true
+				accountList[strings.ToLower(txn.FromAddress)] = true
+			}
+		} else {
+			break
+		}
+		if pageNumber < txnList.PageCount {
+			pageNumber = pageNumber + 1
+		} else {
+			break
+		}
+	}
+	for addr, _ := range accountList {
+		fmt.Println(addr)
+	}
+	return nil
 }
