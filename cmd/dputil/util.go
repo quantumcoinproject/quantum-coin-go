@@ -1658,17 +1658,6 @@ func readCsvFile(filePath string) ([][]string, error) {
 }
 
 func multiTransferTokens(contractAddr string, csvFile string, key *signaturealgorithm.PrivateKey) error {
-	client, err := ethclient.Dial(rawURL)
-	if err != nil {
-		return err
-	}
-
-	fromAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
-
-	if err != nil {
-		return err
-	}
-
 	csv, err := readCsvFile(csvFile)
 	if err != nil {
 		return err
@@ -1682,6 +1671,7 @@ func multiTransferTokens(contractAddr string, csvFile string, key *signaturealgo
 		return errors.New("max rows 1000")
 	}
 
+	contractAddress := common.HexToAddress(contractAddr)
 	toAddressList := make([]common.Address, 0)
 	toAddressQuantity := make([]*big.Int, 0)
 
@@ -1707,6 +1697,32 @@ func multiTransferTokens(contractAddr string, csvFile string, key *signaturealgo
 		toAddressQuantity = append(toAddressQuantity, amount)
 
 		fmt.Println("address", toAddress, "amount", row[1])
+
+		if len(toAddressList) == 50 || i == len(csv)-1 {
+			progress := "Sending transactions in parts. count: " + strconv.Itoa(len(toAddressList)) + ", overall count: " + strconv.Itoa(len(csv))
+			err = multiTransferTokensInner(contractAddress, toAddressList, toAddressQuantity, key, progress)
+			if err != nil {
+				return err
+			}
+			toAddressList = make([]common.Address, 0)
+			toAddressQuantity = make([]*big.Int, 0)
+		}
+	}
+
+	return nil
+}
+
+func multiTransferTokensInner(contractAddr common.Address, toAddressList []common.Address, toAddressQuantity []*big.Int, key *signaturealgorithm.PrivateKey, progress string) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	fromAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+
+	if err != nil {
+		return err
 	}
 
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
@@ -1714,7 +1730,6 @@ func multiTransferTokens(contractAddr string, csvFile string, key *signaturealgo
 		return err
 	}
 
-	contractAddress := common.HexToAddress(contractAddr)
 	txnOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(123123))
 
 	if err != nil {
@@ -1726,7 +1741,7 @@ func multiTransferTokens(contractAddr string, csvFile string, key *signaturealgo
 	txnOpts.GasLimit = uint64(210000 * len(toAddressList))
 	txnOpts.Value = big.NewInt(0)
 
-	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you confirm above transfers with approximate transaction gas fee of %v coins?", txnOpts.GasLimit*1000))
+	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("%s. Do you confirm above transfers with approximate transaction gas fee of %v coins?", progress, txnOpts.GasLimit*1000))
 	if err != nil {
 		return err
 	}
@@ -1736,7 +1751,7 @@ func multiTransferTokens(contractAddr string, csvFile string, key *signaturealgo
 	fmt.Println()
 
 	var tx *types.Transaction
-	contract, err := token.NewToken(contractAddress, client)
+	contract, err := token.NewToken(contractAddr, client)
 	if err != nil {
 		return err
 	}

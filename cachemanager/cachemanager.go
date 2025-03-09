@@ -663,6 +663,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 
 		gasUsed := big.NewInt(1).SetUint64(receipt.GasUsed)
 		txnFee := common.SafeMulBigInt(gasUsed, tx.GasPrice())
+		log.Debug("transaction", "gasUsed", gasUsed, "txnFee", txnFee, "hash", tx.Hash().Hex())
 		transaction.TxnFee = common.BigIntToHexString(txnFee)
 
 		if receipt.Status == 1 {
