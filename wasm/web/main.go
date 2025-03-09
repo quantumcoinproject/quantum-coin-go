@@ -205,12 +205,17 @@ func TokenTransfer(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	quantity := new(big.Int)
-    	fmt.Sscan(args[3].String(), quantity)
-		
+	var ethVal *big.Float
+	var weiVal *big.Int
+	ethVal, err = ParseBigFloatInner(args[3].String())
+	if err != nil {
+		return nil
+	}
+	weiVal = etherToWeiFloat(ethVal)
+
 	arguments := make([]interface{}, 0, 2)
 	arguments = append(arguments, common.HexToAddress(args[2].String()))
-	arguments = append(arguments, quantity)
+	arguments = append(arguments, weiVal)
 
 	data, err := abiData.Pack(method, arguments...)
 	if err != nil {

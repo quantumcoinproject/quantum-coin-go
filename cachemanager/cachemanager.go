@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/core/rawdb"
 	"github.com/QuantumCoinProject/qc/core/types"
@@ -289,6 +290,12 @@ type ListAccountTokenTransactionsResponse struct {
 	Items     []AccountTransactionCompact `json:"items"`
 }
 
+type InternalBlockData struct {
+	Block              *types.Block
+	ConsensusData      *proofofstake.ConsensusData
+	ZeroAddressBalance *big.Int
+}
+
 func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
 	cManager := &CacheManager{
 		nodeUrl:            nodeUrl,
@@ -358,6 +365,14 @@ func (c *CacheManager) initialize() error {
 	}
 	c.cacheDb = catchManager
 
+	c.addressMap = make(map[string]*AccountDetails)
+	c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+	c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+
+	return nil
+}
+
+func (c *CacheManager) clientInitialize() {
 	for {
 		client, err := ethclient.Dial(c.nodeUrl)
 		if err != nil {
@@ -390,13 +405,9 @@ func (c *CacheManager) initialize() error {
 		c.client = client
 		c.blockClient = blockClient
 		c.pendingTxClient = pendingTxClient
-		c.addressMap = make(map[string]*AccountDetails)
-		c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
-		c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+
 		break
 	}
-
-	return nil
 }
 
 func (c *CacheManager) start() error {
@@ -441,31 +452,34 @@ func (c *CacheManager) start() error {
 		}
 	}
 
-	blockChan := make(chan *types.Block, 25)
-
-	c.downloadBlocks(int64(blockNumber+1), blockChan)
-	c.processPendingTransactions()
+	blockChan := make(chan *InternalBlockData, 25)
 
 	go func() {
+		c.clientInitialize()
+		c.downloadBlocks(int64(blockNumber+1), blockChan)
+		c.processPendingTransactions()
+
 		for {
 			select {
-			case block := <-blockChan:
+			case internalBlockData := <-blockChan:
 				for {
-					err := c.processByCacheManager(block, runningSummary)
+					blockNumberVal := internalBlockData.Block.Number().Uint64()
+					err := c.processByCacheManager(internalBlockData, runningSummary)
 					if err == nil {
-						log.Info("Batch Complete", "Block number", block.Number())
+						log.Info("Batch Complete", "Block number", blockNumberVal)
 						break
 					} else {
 						if err.Error() == NotFoundErrMsg {
-							log.Info("Waiting for Block...", "Block number", block.Number())
+							log.Info("Waiting for Block...", "Block number", blockNumberVal)
 						} else {
-							log.Error("Batch Error", "error", err.Error(), "Block number", block.Number())
+							log.Error("Batch Error", "error", err.Error(), "Block number", blockNumberVal)
 						}
 						time.Sleep(5 * time.Second)
 					}
 				}
 
 			case <-cancel:
+				close(blockChan)
 				err = c.close()
 				if err != nil {
 					log.Error("c.close()", "error", err)
@@ -516,7 +530,7 @@ func (c *CacheManager) processPendingTransactions() {
 	}()
 }
 
-func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- *types.Block) {
+func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- *InternalBlockData) {
 	delayNumber := int64(100 * time.Millisecond)
 	blockTimer := time.NewTimer(time.Duration(delayNumber))
 	cancel := make(chan os.Signal)
@@ -549,15 +563,33 @@ func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- 
 				}
 
 				log.Info("downloadBlock BlockByNumber", "Block Number ", blockNumberToGet)
-				block, err := c.blockClient.BlockByNumber(context.Background(), big.NewInt(blockNumberToGet))
+				blockNumBig := big.NewInt(blockNumberToGet)
+				block, err := c.blockClient.BlockByNumber(context.Background(), blockNumBig)
 				if err != nil {
 					if err.Error() != NotFoundErrMsg {
-						log.Error("BlockByNumber", "error", err, "blockNumberToGet", blockNumberToGet)
+						log.Error("downloadBlock BlockByNumber", "error", err, "blockNumberToGet", blockNumberToGet)
 					}
 					delayNumber = int64(3000 * time.Millisecond)
 				} else {
-					resultChan <- block
-					blockNumberToGet = blockNumberToGet + 1
+					consensusData, err := c.client.GetBlockConsensusData(context.Background(), blockNumBig)
+					if err != nil {
+						log.Error("downloadBlock GetBlockConsensusData", "error", err, "blockNumberToGet", blockNumberToGet)
+						delayNumber = int64(3000 * time.Millisecond)
+					} else {
+						zeroAddressBalance, err := c.client.BalanceAt(context.Background(), common.ZERO_ADDRESS, blockNumBig)
+						if err != nil {
+							log.Error("downloadBlock BalanceAt zeroAddressBalance", "error", err)
+							delayNumber = int64(3000 * time.Millisecond)
+						} else {
+							internalBlockData := &InternalBlockData{
+								Block:              block,
+								ConsensusData:      consensusData,
+								ZeroAddressBalance: zeroAddressBalance,
+							}
+							resultChan <- internalBlockData
+							blockNumberToGet = blockNumberToGet + 1
+						}
+					}
 					if isLagging {
 						delayNumber = 0
 					} else {
@@ -574,7 +606,8 @@ func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- 
 	}()
 }
 
-func (c *CacheManager) processByCacheManager(block *types.Block, runningSummary *BlockchainDetails) error {
+func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockData, runningSummary *BlockchainDetails) error {
+	block := internalBlockData.Block
 	blockNum := block.Header().Number
 	blockNumber := blockNum.Uint64()
 	var err error
@@ -630,6 +663,7 @@ func (c *CacheManager) processByCacheManager(block *types.Block, runningSummary 
 
 		gasUsed := big.NewInt(1).SetUint64(receipt.GasUsed)
 		txnFee := common.SafeMulBigInt(gasUsed, tx.GasPrice())
+		log.Debug("transaction", "gasUsed", gasUsed, "txnFee", txnFee, "hash", tx.Hash().Hex())
 		transaction.TxnFee = common.BigIntToHexString(txnFee)
 
 		if receipt.Status == 1 {
@@ -780,7 +814,7 @@ func (c *CacheManager) processByCacheManager(block *types.Block, runningSummary 
 	}
 
 	if c.enableExtendedApis {
-		err = c.updateSummary(blockNum, runningSummary, &txnBatch)
+		err = c.updateSummary(internalBlockData, runningSummary, &txnBatch)
 		if err != nil {
 			log.Error("updateSummary", "error", err)
 			return err
@@ -796,8 +830,9 @@ func (c *CacheManager) processByCacheManager(block *types.Block, runningSummary 
 	return nil
 }
 
-func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
+func (c *CacheManager) updateSummary(internalBlockData *InternalBlockData, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
 
+	blockNumber := internalBlockData.Block.Number()
 	leftBlock := blockNumber.Uint64()
 	rightBlock := runningSummary.BlockNumber + 1
 	if leftBlock != rightBlock {
@@ -805,10 +840,7 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 		return errors.New("updateSummary unexpected blockNumber")
 	}
 
-	consensusData, err := c.client.GetBlockConsensusData(context.Background(), blockNumber)
-	if err != nil {
-		return err
-	}
+	consensusData := internalBlockData.ConsensusData
 
 	txnBatch := *batch
 	blockRewardsInfo := consensusData.BlockRewardsInfo
@@ -818,6 +850,7 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 	var txnFeeRewards *big.Int
 	var burntTxnFee *big.Int
 	var slashAmount *big.Int
+	var err error
 
 	//Update running summary
 	runningSummary.BlockNumber = blockNumber.Uint64()
@@ -893,11 +926,7 @@ func (c *CacheManager) updateSummary(blockNumber *big.Int, runningSummary *Block
 	}
 
 	//Get latest burnt coins info
-	burntCoinsWei, err := c.client.BalanceAt(context.Background(), common.ZERO_ADDRESS, blockNumber)
-	if err != nil {
-		log.Error("updateSummary BalanceAt", "error", err)
-		return err
-	}
+	burntCoinsWei := internalBlockData.ZeroAddressBalance
 
 	runningSummary.BurntCoins = hexutil.EncodeBig(burntCoinsWei)
 	genesisCirculatingSupplyBig, _ := hexutil.DecodeBig(c.genesisCirculatingSupply)

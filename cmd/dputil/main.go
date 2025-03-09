@@ -14,7 +14,9 @@ import (
 	"github.com/QuantumCoinProject/qc/log"
 	"io/ioutil"
 	"math/big"
+	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -97,12 +99,27 @@ func printHelp() {
 	fmt.Println("dputil resumevalidation DEPOSITOR_ADDRESS")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil transfercoins FROM_ADDRESS TO_ADDRESS AMOUNT")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
 	fmt.Println("dputil transfertokens CONTRACT_ADDRESS FROM_ADDRESS TO_ADDRESS amount")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
 	fmt.Println("dputil createtoken FROM_ADDRESS TOKEN_NAME TOKEN_SYMBOL TOTAL_SUPPLY")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("dputil tokenbalance CONTRACT_ADDRESS ACCOUNT_ADDRESS")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil multitransfertokens CONTRACT_ADDRESS FROM_ADDRESS CSV_FILE")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("      CSV file format example (with no column header):")
+	fmt.Println("           toAddress1, amount1")
+	fmt.Println("           toAddress2, amount2")
+	fmt.Println("dputil txn TXN_HASH")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -128,7 +145,7 @@ func main() {
 	*/
 	if os.Args[1] == "balance" {
 		balance()
-	} else if os.Args[1] == "send" {
+	} else if os.Args[1] == "transfercoins" {
 		sendTxn()
 	} else if os.Args[1] == "txn" {
 		getTxn()
@@ -228,6 +245,21 @@ func main() {
 		}
 	} else if os.Args[1] == "createtoken" {
 		err := CreateToken()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "tokenbalance" {
+		err := TokenBalance()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "multitransfertokens" {
+		err := MultiTransferTokens()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "accountlist" {
+		err := AccountList()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -437,9 +469,20 @@ func sendTxn() {
 	}
 
 	wei := etherToWeiFloat(flt)
-	ether := weiToEther(wei)
+	coins := weiToEther(wei)
 
-	fmt.Println("Send", "from", from, "to", to, "quantity", quantity, "ether", ether)
+	fmt.Println("Send", "from", from, "to", to, "quantity", quantity, "coins", coins)
+
+	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to send %v coins from address %s to address %s?", coins, from, to))
+	if err != nil {
+		log.Error("error", err)
+		return
+	}
+	if ethConfirm != true {
+		log.Error("confirmation not made")
+		return
+	}
+	fmt.Println()
 
 	txHash, err := send(from, to, quantity)
 	if err != nil {
@@ -457,17 +500,33 @@ func getTxn() {
 
 	hash := os.Args[2]
 
-	txnJson, err := GetTransaction(hash)
+	txnJson, receipt, err := GetTransaction(hash)
 	if err != nil {
 		fmt.Println("GetTransaction Error", err)
 		return
 	}
-	json, err := Prettify(txnJson)
+	jsonVal, err := Prettify(txnJson)
 	if err != nil {
-		fmt.Println(txnJson)
 		fmt.Println(err)
+		return
 	}
-	fmt.Println(json)
+	fmt.Println(jsonVal)
+	if receipt != nil {
+		receiptJson, err := json.Marshal(receipt)
+		if err != nil {
+			fmt.Printf("%+v\n", receipt)
+			return
+		}
+		fmt.Println("======================Receipt======================")
+		prettyReceipt, err := Prettify(string(receiptJson))
+		if err != nil {
+			fmt.Printf("%+v\n", receipt)
+			return
+		}
+		fmt.Printf(prettyReceipt)
+	} else {
+		fmt.Println("receipt is nil")
+	}
 }
 
 func Prettify(str string) (string, error) {
@@ -709,7 +768,7 @@ func Deposit() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	validatorKeyFile, err := findKeyFile(validatorAddr)
@@ -747,7 +806,7 @@ func Deposit() error {
 	}
 
 	if !valAddressFromKey.IsEqualTo(common.HexToAddress(validatorAddr)) {
-		return errors.New("validator key address check failed " + err.Error())
+		return errors.New("validator key address check failed")
 	}
 
 	if len(rawURL) == 0 {
@@ -810,7 +869,7 @@ func InitiateWithdrawal() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	return initiateWithdrawal(depKey)
@@ -868,7 +927,7 @@ func CompleteWithdrawal() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	return completeWithdrawal(depKey)
@@ -966,7 +1025,7 @@ func InitiateWithdrawalRewards() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	depositorReward, err := getDepositorBlockRewards(depositorAddr)
@@ -1061,7 +1120,7 @@ func InitiatePartialWithdrawal() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	return initiatePartialWithdrawal(depKey, amount)
@@ -1119,7 +1178,7 @@ func CompletePartialWithdrawal() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	return completePartialWithdrawal(depKey)
@@ -1178,7 +1237,7 @@ func IncreaseDeposit() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	return increaseDeposit(depKey, depositAmount)
@@ -1259,7 +1318,7 @@ func ChangeValidator() error {
 	}
 
 	if !valAddressFromKey.IsEqualTo(common.HexToAddress(newValidatorAddr)) {
-		return errors.New("validator key address check failed " + err.Error())
+		return errors.New("validator key address check failed")
 	}
 
 	fmt.Println()
@@ -1279,7 +1338,7 @@ func ChangeValidator() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	return changeValidator(depKey, common.HexToAddress(newValidatorAddr))
@@ -1351,7 +1410,7 @@ func PauseValidation() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	return pauseValidation(depKey)
@@ -1409,7 +1468,7 @@ func ResumeValidation() error {
 	}
 
 	if !depAddressFromKey.IsEqualTo(common.HexToAddress(depositorAddr)) {
-		return errors.New("depositor key address check failed " + err.Error())
+		return errors.New("depositor key address check failed")
 	}
 
 	return resumeValidation(depKey)
@@ -1454,7 +1513,7 @@ func TransferTokens() error {
 	}
 
 	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
-	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the depositor wallet password : "))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the wallet password : "))
 	if err != nil {
 		return err
 	}
@@ -1485,7 +1544,7 @@ func TransferTokens() error {
 	}
 
 	if !fromAddressFromKey.IsEqualTo(common.HexToAddress(fromAddr)) {
-		return errors.New("from account key address check failed " + err.Error())
+		return errors.New("from account key address check failed " + fromAddressFromKey.Hex() + " " + fromAddr)
 	}
 
 	return transferTokens(contractAddr, toAddr, tokenTransferAmount, fromKey)
@@ -1530,7 +1589,7 @@ func CreateToken() error {
 	}
 
 	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
-	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the depositor wallet password : "))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the wallet password : "))
 	if err != nil {
 		return err
 	}
@@ -1560,8 +1619,148 @@ func CreateToken() error {
 	}
 
 	if !fromAddressFromKey.IsEqualTo(common.HexToAddress(fromAddr)) {
-		return errors.New("from account key address check failed " + err.Error())
+		return errors.New("from account key address check failed " + fromAddressFromKey.Hex() + " " + fromAddr)
 	}
 
 	return createToken(tokenName, tokenSymbol, tokenTotalSupplyWei, baseBurnPercentDivisor, totalDecimals, fromKey)
+}
+
+func TokenBalance() error {
+	if len(os.Args) < 4 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	contractAddr := os.Args[2]
+	if common.IsHexAddress(contractAddr) == false {
+		return errors.New("invalid contract address " + contractAddr)
+	}
+
+	accountAddr := os.Args[3]
+	if common.IsHexAddress(accountAddr) == false {
+		return errors.New("invalid account address " + accountAddr)
+	}
+
+	_, err := getTokenBalance(common.HexToAddress(accountAddr), common.HexToAddress(contractAddr))
+	return err
+}
+
+func MultiTransferTokens() error {
+	if len(os.Args) < 5 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	if len(os.Getenv("DP_KEY_FILE_DIR")) == 0 {
+		return errors.New("set the keyfile directory environment variable DP_KEY_FILE_DIR")
+	}
+
+	contractAddr := os.Args[2]
+	fromAddr := os.Args[3]
+	csvFile := os.Args[4]
+
+	if common.IsHexAddress(contractAddr) == false {
+		return errors.New("invalid contract address " + contractAddr)
+	}
+
+	if common.IsHexAddress(fromAddr) == false {
+		return errors.New("invalid from address " + fromAddr)
+	}
+
+	fromAccountKeyFile, err := findKeyFile(fromAddr)
+	if err != nil {
+		return errors.New("error finding FROM_ADDRESS in DP_KEY_FILE_DIR " + err.Error())
+	}
+
+	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the wallet password : "))
+	if err != nil {
+		return err
+	}
+	if len(fromAccountPwd) == 0 {
+		return errors.New("from account password is not set")
+	}
+
+	fromKey, err := GetKeyFromFile(fromAccountKeyFile, fromAccountPwd)
+	if err != nil {
+		return errors.New("error decrypting depositor key " + err.Error())
+	}
+
+	fmt.Println()
+
+	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	if err != nil {
+		return errors.New("from account public key to address " + err.Error())
+	}
+
+	if !fromAddressFromKey.IsEqualTo(common.HexToAddress(fromAddr)) {
+		return errors.New("from account key address check failed " + fromAddressFromKey.Hex() + " " + fromAddr)
+	}
+
+	return multiTransferTokens(contractAddr, csvFile, fromKey)
+}
+
+type Transaction struct {
+	FromAddress string `json:"fromAddress,omitempty"`
+	ToAddress   string `json:"toAddress,omitempty"`
+}
+
+type TransactionList struct {
+	PageCount int           `json:"pageCount,omitempty"`
+	Result    []Transaction `json:"result,omitempty"`
+}
+
+func getTxnPage(pageNumber int, dpApiUrl string) (*TransactionList, error) {
+	url := dpApiUrl + "/api/dogep/transactions/page/" + strconv.Itoa(pageNumber)
+	fmt.Println("getting url " + url)
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Println("http.Get error", err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	txnList := TransactionList{}
+
+	err = json.Unmarshal(body, &txnList)
+	if err != nil {
+		fmt.Println("Unmarshal error", err)
+		return nil, err
+	}
+
+	return &txnList, nil
+}
+
+func AccountList() error {
+	dpApiUrl := os.Getenv("DP_API_URL")
+	if len(dpApiUrl) == 0 {
+		fmt.Println("set DP_API_URL")
+		return errors.New("DP_API_URL not set")
+	}
+
+	accountList := make(map[string]bool)
+	pageNumber := 1
+	for {
+		txnList, err := getTxnPage(pageNumber, dpApiUrl)
+		if err != nil {
+			return err
+		}
+		if txnList.Result != nil && len(txnList.Result) > 0 {
+			for _, txn := range txnList.Result {
+				accountList[strings.ToLower(txn.ToAddress)] = true
+				accountList[strings.ToLower(txn.FromAddress)] = true
+			}
+		} else {
+			break
+		}
+		if pageNumber < txnList.PageCount {
+			pageNumber = pageNumber + 1
+		} else {
+			break
+		}
+	}
+	for addr, _ := range accountList {
+		fmt.Println(addr)
+	}
+	return nil
 }
