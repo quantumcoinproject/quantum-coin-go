@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
+	"github.com/QuantumCoinProject/qc/console/prompt"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
@@ -286,6 +288,15 @@ func send(from string, to string, quantity string) (string, error) {
 		return "", err
 	}
 	password := os.Getenv("DP_ACC_PWD")
+	if len(password) == 0 {
+		password, err = prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the wallet password : "))
+		if err != nil {
+			return "", err
+		}
+		if len(password) == 0 {
+			return "", errors.New("password is not correct")
+		}
+	}
 	key, err := keystore.DecryptKey(secretKey, password)
 	if err != nil {
 		return "", err
@@ -298,6 +309,20 @@ func send(from string, to string, quantity string) (string, error) {
 
 	fromAddress := common.HexToAddress(from)
 	toAddress := common.HexToAddress(to)
+
+	fromKey, err := GetKeyFromFile(keyFile, password)
+	if err != nil {
+		return "", errors.New("error decrypting depositor key " + err.Error())
+	}
+
+	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	if err != nil {
+		return "", errors.New("from account public key to address " + err.Error())
+	}
+
+	if !fromAddressFromKey.IsEqualTo(fromAddress) {
+		return "", errors.New("from account key address check failed")
+	}
 
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
@@ -348,14 +373,21 @@ func send(from string, to string, quantity string) (string, error) {
 	return signedTx.Hash().Hex(), nil
 }
 
-func GetTransaction(txnHash string) (string, error) {
+func GetTransaction(txnHash string) (string, *types.Receipt, error) {
 	client, err := ethclient.Dial(rawURL)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	hash := common.HexToHash(txnHash)
 	fmt.Println("hash", hash)
-	return client.RawTransactionByHash(context.Background(), hash)
+
+	txString, err := client.RawTransactionByHash(context.Background(), hash)
+	if err != nil {
+		return "", nil, err
+	}
+
+	receipt, err := client.TransactionReceipt(context.Background(), hash)
+	return txString, receipt, nil
 }
 
 // ParseBigFloat parse string value to big.Float
@@ -1607,4 +1639,118 @@ func getTokenBalance(accountAddress common.Address, contractAddress common.Addre
 	time.Sleep(1000 * time.Millisecond)
 
 	return tokenBalance, nil
+}
+
+func readCsvFile(filePath string) ([][]string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	csvReader := csv.NewReader(f)
+	records, err := csvReader.ReadAll()
+	if err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
+
+func multiTransferTokens(contractAddr string, csvFile string, key *signaturealgorithm.PrivateKey) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+
+	fromAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+
+	if err != nil {
+		return err
+	}
+
+	csv, err := readCsvFile(csvFile)
+	if err != nil {
+		return err
+	}
+
+	if csv == nil || len(csv) == 0 {
+		return errors.New("invalid csv")
+	}
+
+	if len(csv) > 1000 {
+		return errors.New("max rows 1000")
+	}
+
+	toAddressList := make([]common.Address, 0)
+	toAddressQuantity := make([]*big.Int, 0)
+
+	for i, row := range csv {
+		fmt.Println("Parsing line", "number", i+1)
+		if len(row) < 2 {
+			fmt.Println("skipping line", "number", i+1)
+		}
+		if common.IsHexAddressDeep(row[0]) == false {
+			return errors.New("invalid address " + row[0])
+		}
+
+		toAddress := common.HexToAddress(row[0])
+
+		v, err := ParseBigFloat(row[1])
+		if err != nil {
+			return err
+		}
+
+		amount := etherToWeiFloat(v)
+
+		toAddressList = append(toAddressList, toAddress)
+		toAddressQuantity = append(toAddressQuantity, amount)
+
+		fmt.Println("address", toAddress, "amount", row[1])
+	}
+
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	contractAddress := common.HexToAddress(contractAddr)
+	txnOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(123123))
+
+	if err != nil {
+		return err
+	}
+
+	txnOpts.From = fromAddress
+	txnOpts.Nonce = big.NewInt(int64(nonce))
+	txnOpts.GasLimit = uint64(210000 * len(toAddressList))
+	txnOpts.Value = big.NewInt(0)
+
+	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you confirm above transfers with approximate transaction gas fee of %v coins?", txnOpts.GasLimit*1000))
+	if err != nil {
+		return err
+	}
+	if ethConfirm != true {
+		return errors.New("confirmation not made")
+	}
+	fmt.Println()
+
+	var tx *types.Transaction
+	contract, err := token.NewToken(contractAddress, client)
+	if err != nil {
+		return err
+	}
+
+	tx, err = contract.MultiTransfer(txnOpts, toAddressList, toAddressQuantity)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Your request to transfer tokens has been added to the queue for processing. Please check your account balance after 10 minutes.")
+	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash())
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return nil
 }
