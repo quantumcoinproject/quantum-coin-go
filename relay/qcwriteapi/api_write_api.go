@@ -157,7 +157,7 @@ func (c *WriteApiAPIController) SendTransaction(w http.ResponseWriter, r *http.R
 			result = Response(http.StatusBadRequest, result.Body)
 		}
 		c.errorHandler(w, r, err, &result)
-		log.Error("SendTransaction", "requestId", requestId, "error", "Unauthorized", "error", err)
+		log.Error("SendTransaction", "requestId", requestId,  "error", err)
 		return
 	}
 	// If no error, encode the body and the result code
