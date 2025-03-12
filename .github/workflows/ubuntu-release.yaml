@@ -56,7 +56,7 @@ jobs:
          rm ${{ github.workspace }}/build/dp-release/connectvalidator.sh
          cp ${{ github.workspace }}/resources/compact/*.sh ${{ github.workspace }}/build/dp-release/
          cd ${{ github.workspace }}/build/dp-release && tar -czf ${{ github.workspace }}/build/qc-release-ubuntu-compact-${{  github.ref_name }}.tar.gz .
-         sha256sum ${{ github.workspace }}/build/qc-release-ubuntu-compact-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-ubuntu-compact-{{  github.ref_name }}.txt        
+         sha256sum ${{ github.workspace }}/build/qc-release-ubuntu-compact-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-ubuntu-compact-${{  github.ref_name }}.txt
          
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v4
