@@ -62,6 +62,11 @@ jobs:
          del ${{ github.workspace }}\build\dp\connectvalidator.sh
          powershell Compress-Archive ${{ github.workspace }}\build\dp ${{ github.workspace }}\build\qc-release-windows-${{  github.ref_name }}.zip
          powershell Get-FileHash ${{ github.workspace }}\build\qc-release-windows-${{  github.ref_name }}.zip > ${{ github.workspace }}\build\releasehash-windows-${{  github.ref_name }}.txt
+         del ${{ github.workspace }}\build\dp\connect.cmd
+         del ${{ github.workspace }}\build\dp\connectvalidator.cmd        
+         copy ${{ github.workspace }}\resources\compact\*.cmd ${{ github.workspace }}\build\dp\
+         powershell Compress-Archive ${{ github.workspace }}\build\dp ${{ github.workspace }}\build\qc-release-windows-compact-${{  github.ref_name }}.zip
+         powershell Get-FileHash ${{ github.workspace }}\build\qc-release-windows-compact-${{  github.ref_name }}.zip > ${{ github.workspace }}\build\releasehash-windows-compact-${{  github.ref_name }}.txt        
          
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v4
