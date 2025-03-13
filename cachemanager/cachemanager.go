@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/core/rawdb"
 	"github.com/QuantumCoinProject/qc/core/types"
@@ -89,6 +90,11 @@ type AccountDetails struct {
 	AccType ethclient.AccountType `json:"accountType,omitempty"`
 }
 
+type InternalTransactionDetailWithLevel struct {
+	txn   *ethclient.InternalTransactionDetails
+	level byte
+}
+
 type TokenTransfers struct {
 	ContractAddress common.Address
 	From            common.Address
@@ -101,6 +107,14 @@ type TokenApprovals struct {
 	TokenOwner      common.Address
 	Spender         common.Address
 	Tokens          *big.Int
+}
+
+type InternalTransactionDetail struct {
+	From  string `json:"from,omitempty"`
+	To    string `json:"to,omitempty"`
+	Value string `json:"value,omitempty"`
+	Type  string `json:"type,omitempty"`
+	Level byte   `json:"level,omitempty"`
 }
 
 type TransactionReceipt struct {
@@ -275,6 +289,12 @@ type AccountTokenTransactionList struct {
 type ListAccountTokenTransactionsResponse struct {
 	PageCount uint64                      `json:"pageCount"`
 	Items     []AccountTransactionCompact `json:"items"`
+}
+
+type InternalBlockData struct {
+	Block              *types.Block
+	ConsensusData      *proofofstake.ConsensusData
+	ZeroAddressBalance *big.Int
 }
 
 func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
@@ -1434,7 +1454,7 @@ func (c *CacheManager) getAccount(address common.Address, blockNumber *big.Int, 
 
 // gets account from blockchain node and saves to cache
 func (c *CacheManager) newAccount(address common.Address, blockNumber *big.Int, batch *ethdb.Batch) (*AccountDetails, error) {
-	result, _, err := c.client.GetAccountType(address, blockNumber)
+	result, err := c.client.GetAccountType(address, blockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -1516,15 +1536,11 @@ func (c *CacheManager) flattenInternalTransactionDetails(details *ethclient.Inte
 		txnWithLevel := txnStack.Pop()
 		txn := txnWithLevel.txn
 		txnDetail := InternalTransactionDetail{
-			From:    txn.From,
-			To:      txn.To,
-			Value:   txn.Value,
-			Type:    txn.Type,
-			Gas:     txn.Gas,
-			GasUsed: txn.GasUsed,
-			Input:   txn.Input,
-			Output:  txn.Output,
-			Level:   txnWithLevel.level,
+			From:  txn.From,
+			To:    txn.To,
+			Value: txn.Value,
+			Type:  txn.Type,
+			Level: txnWithLevel.level,
 		}
 		txnList = append(txnList, &txnDetail)
 		if txn.Calls != nil {
@@ -1538,6 +1554,39 @@ func (c *CacheManager) flattenInternalTransactionDetails(details *ethclient.Inte
 		}
 	}
 	return txnList
+}
+
+type Stack struct { //not thread safe
+	internalTxnDetails []*InternalTransactionDetailWithLevel
+	count              int
+}
+
+func newStack() *Stack {
+	s := Stack{
+		internalTxnDetails: make([]*InternalTransactionDetailWithLevel, 0),
+	}
+	return &s
+}
+
+func (s *Stack) Size() int {
+	return len(s.internalTxnDetails)
+}
+
+func (s *Stack) IsEmpty() bool {
+	return len(s.internalTxnDetails) == 0
+}
+
+func (s *Stack) Push(v *InternalTransactionDetailWithLevel) {
+	s.internalTxnDetails = append(s.internalTxnDetails, v)
+	s.count = len(s.internalTxnDetails)
+}
+
+func (s *Stack) Pop() *InternalTransactionDetailWithLevel {
+	count := len(s.internalTxnDetails)
+	last := s.internalTxnDetails[count-1]
+	s.internalTxnDetails = s.internalTxnDetails[:count-1]
+
+	return last
 }
 
 func getAccountTokenCountKey(address string) (key string, blob []byte) {
