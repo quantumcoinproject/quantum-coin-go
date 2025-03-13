@@ -577,28 +577,28 @@ const (
 	ACCOUNT_TYPE_TOKEN    AccountType = "TOKEN"
 )
 
-func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (AccountType, error) {
+func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (AccountType, []byte, error) {
 	log.Debug("GetAccountType", "address", address, "blockNumber", blockNumber)
 	byteCode, err := ec.CodeAt(context.Background(), address, blockNumber)
 	if err != nil {
 		log.Debug("GetAccountType", "address", address, "error", err)
 		if errors.Is(err, bind.ErrNoCode) {
-			return ACCOUNT_TYPE_REGULAR, nil
+			return ACCOUNT_TYPE_REGULAR, nil, nil
 		}
-		return "", err
+		return "", nil, err
 	}
 	if len(byteCode) == 0 {
-		return ACCOUNT_TYPE_REGULAR, nil
+		return ACCOUNT_TYPE_REGULAR, nil, nil
 	}
 
 	//Verify token is a smart contract
 	byteCodeHex := hexutil.Encode(byteCode)
 	if asm.IsErc20(byteCodeHex) {
 		log.Debug("GetAccountType IsErc20 fail", "contactAddress", address)
-		return ACCOUNT_TYPE_TOKEN, nil
+		return ACCOUNT_TYPE_TOKEN, byteCode, nil
 	}
 
-	return ACCOUNT_TYPE_CONTRACT, err
+	return ACCOUNT_TYPE_CONTRACT, byteCode, err
 }
 
 func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*token.TokenDetails, error) {
@@ -701,11 +701,15 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 }
 
 type InternalTransactionDetails struct {
-	From  string                       `json:"from,omitempty"`
-	To    string                       `json:"to,omitempty"`
-	Value string                       `json:"value,omitempty"`
-	Type  string                       `json:"type,omitempty"`
-	Calls []InternalTransactionDetails `json:"calls,omitempty"`
+	From    string                       `json:"from,omitempty"`
+	To      string                       `json:"to,omitempty"`
+	Value   string                       `json:"value,omitempty"`
+	Type    string                       `json:"type,omitempty"`
+	Gas     string                       `json:"gas,omitempty"`
+	GasUsed string                       `json:"gasUsed,omitempty"`
+	Input   string                       `json:"input,omitempty"`
+	Output  string                       `json:"output,omitempty"`
+	Calls   []InternalTransactionDetails `json:"calls,omitempty"`
 }
 
 func (ec *Client) GetInternalTransactions(ctx context.Context, txnHash common.Hash) (*InternalTransactionDetails, error) {
