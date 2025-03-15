@@ -14,8 +14,6 @@ import (
 	"github.com/QuantumCoinProject/qc/ethdb"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/systemcontracts/conversion"
-	"github.com/QuantumCoinProject/qc/systemcontracts/staking"
 	"github.com/QuantumCoinProject/qc/token"
 	"io/ioutil"
 	"math/big"
@@ -42,10 +40,12 @@ type CacheManager struct {
 	pendingTxLock            sync.Mutex
 	pendingTxMapLock         sync.RWMutex
 	pendingTransactions      *map[string]map[string]map[string]*ethclient.TxPoolTransaction
-	addressMap               map[string]*AccountDetails
+	//addressMap               map[string]*AccountDetails
 	tokenMap                 map[string]*TokenDetails
 	accountTokenMap          map[string]*map[string]bool //map[accountAddress]map[contractAddress]bool
 	blockChan                chan *InternalBlockData
+	primodialCacheCancelChan chan bool
+	primordialCache          *PrimordialCache
 }
 
 var SummaryKey = "summary"
@@ -282,9 +282,9 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, g
 		nodeUrl:            nodeUrl,
 		cacheDir:           cacheDir,
 		enableExtendedApis: enableExtendedApis,
-		addressMap:         make(map[string]*AccountDetails),
-		tokenMap:           make(map[string]*TokenDetails),
-		accountTokenMap:    make(map[string]*map[string]bool),
+		//addressMap:         make(map[string]*AccountDetails),
+		tokenMap:        make(map[string]*TokenDetails),
+		accountTokenMap: make(map[string]*map[string]bool),
 	}
 
 	var err error
@@ -340,15 +340,21 @@ func (c *CacheManager) initialize() error {
 	log.Info("Quantum Coin initialize cache manager", "cacheDir", c.cacheDir, "nodeUrl", c.nodeUrl)
 
 	catchManagerFilePath := filepath.Join(c.cacheDir, "cacheManager.db")
-	catchManager, err := rawdb.NewLevelDBDatabase(catchManagerFilePath, 64, 0, "", false)
+	cacheManagerDb, err := rawdb.NewLevelDBDatabase(catchManagerFilePath, 64, 0, "", false)
 	if err != nil {
 		return err
 	}
-	c.cacheDb = catchManager
+	c.cacheDb = cacheManagerDb
 
-	c.addressMap = make(map[string]*AccountDetails)
-	c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
-	c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+	//c.addressMap = make(map[string]*AccountDetails)
+	//c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+	//c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+
+	c.primodialCacheCancelChan = make(chan bool)
+	c.primordialCache, err = NewPrimordialCache(c.cacheDir, c.nodeUrl, &c.primodialCacheCancelChan)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -432,165 +438,64 @@ func (c *CacheManager) start() error {
 			}
 		}
 	}
+	log.Info("runningSummary", runningSummary)
 
 	c.blockChan = make(chan *InternalBlockData, 25)
+	blockNumber = blockNumber + 1
 
 	go func() {
 		c.clientInitialize()
-		c.downloadBlocks(int64(blockNumber+1), c.blockChan)
 		c.processPendingTransactions()
+		delayNumber := int64(100 * time.Millisecond)
+		blockTimer := time.NewTimer(time.Duration(delayNumber))
 
 		for {
+			log.Info("start block loop")
 			select {
-			case internalBlockData := <-c.blockChan:
-				for {
-					blockNumberVal := internalBlockData.Block.Number().Uint64()
-					err := c.processByCacheManager(internalBlockData, runningSummary)
-					if err == nil {
-						log.Info("Batch Complete", "Block number", blockNumberVal)
-						break
+			case <-blockTimer.C:
+				internalBlockData, err := c.primordialCache.GetBlock(blockNumber)
+				if err != nil {
+					if err.Error() == NotFoundErrMsg {
+						log.Info("Waiting for Block...", "Block number", blockNumber)
 					} else {
-						if err.Error() == NotFoundErrMsg {
-							log.Info("Waiting for Block...", "Block number", blockNumberVal)
-						} else {
-							log.Error("Batch Error", "error", err.Error(), "Block number", blockNumberVal)
-						}
-						time.Sleep(5 * time.Second)
+						log.Error("GetBlock Error", "error", err.Error(), "Block number", blockNumber)
 					}
+					delayNumber = int64(3 * time.Second)
+					blockTimer.Reset(time.Duration(delayNumber))
+					continue
 				}
+				err = c.processByCacheManager(internalBlockData, runningSummary)
+				if err == nil {
+					blockNumber = blockNumber + 1
+					log.Info("=================Batch Complete", "Block number", blockNumber)
+					delayNumber = 0
+				} else {
+					log.Error("Batch Error", "error", err.Error(), "Block number", blockNumber)
+					delayNumber = int64(3 * time.Second)
+					continue
+				}
+				blockTimer.Reset(time.Duration(delayNumber))
 
 			case <-cancel:
-				log.Info("Quit signal received")
+				log.Info("start() Quit signal received")
 				return
 			}
 		}
 	}()
+
+	log.Info("start done")
 
 	return nil
 }
 
-func (c *CacheManager) processPendingTransactions() {
-	c.pendingTxLock.Lock()
-	defer c.pendingTxLock.Unlock()
-
-	delayNumber := int64(3000 * time.Millisecond)
-	pendingTxnTimer := time.NewTimer(time.Duration(delayNumber))
-	cancel := make(chan os.Signal)
-	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		for {
-			select {
-			case <-pendingTxnTimer.C:
-				err, txnList := c.pendingTxClient.TxPoolContent(context.Background())
-				if err != nil {
-					log.Error("processPendingTransactions", "err", err)
-				} else {
-					if txnList == nil {
-						log.Warn("processPendingTransactions txnList is nil")
-					} else {
-						c.pendingTxMapLock.Lock()
-						c.pendingTransactions = txnList
-						c.pendingTxMapLock.Unlock()
-					}
-				}
-
-				pendingTxnTimer.Reset(time.Duration(delayNumber))
-			case <-cancel:
-				log.Info("processPendingTransactions Quit signal received")
-				pendingTxnTimer.Stop()
-				c.close()
-				os.Exit(1)
-				return
-			}
-		}
-	}()
-}
-
-func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- *InternalBlockData) {
-	delayNumber := int64(100 * time.Millisecond)
-	blockTimer := time.NewTimer(time.Duration(delayNumber))
-	cancel := make(chan os.Signal)
-	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
-
-	blockNumberToGet := startBlockNumber
-	isLagging := true
-
-	go func() {
-		for {
-			select {
-			case <-blockTimer.C:
-				if blockNumberToGet == startBlockNumber || blockNumberToGet%int64(50) == 0 {
-					var latestBlockNumberHex *hexutil.Uint64
-					err := c.blockClient.GetRpcClient().CallContext(context.Background(), &latestBlockNumberHex, "eth_blockNumber")
-					if err != nil {
-						log.Error("downloadBlocks eth_blockNumber", "error", err)
-					} else {
-						latestBlockNumber, err := hexutil.DecodeBig(latestBlockNumberHex.String())
-						if err != nil {
-							log.Error("downloadBlocks DecodeBig", "error", err)
-						} else {
-							if uint64(blockNumberToGet) < latestBlockNumber.Uint64() && latestBlockNumber.Uint64()-uint64(blockNumberToGet) > 50 {
-								isLagging = true
-								log.Info("downloadBlocks Lagging behind latest blocks", "latestBlockNumber", latestBlockNumber.Uint64(), "blockNumberToGet", blockNumberToGet)
-							} else {
-								isLagging = false
-							}
-						}
-					}
-				}
-
-				log.Info("downloadBlock BlockByNumber", "Block Number ", blockNumberToGet)
-				blockNumBig := big.NewInt(blockNumberToGet)
-				block, err := c.blockClient.BlockByNumber(context.Background(), blockNumBig)
-				if err != nil {
-					if err.Error() != NotFoundErrMsg {
-						log.Error("downloadBlock BlockByNumber", "error", err, "blockNumberToGet", blockNumberToGet)
-					}
-					delayNumber = int64(3000 * time.Millisecond)
-				} else {
-					consensusData, err := c.client.GetBlockConsensusData(context.Background(), blockNumBig)
-					if err != nil {
-						log.Error("downloadBlock GetBlockConsensusData", "error", err, "blockNumberToGet", blockNumberToGet)
-						delayNumber = int64(3000 * time.Millisecond)
-					} else {
-						zeroAddressBalance, err := c.client.BalanceAt(context.Background(), common.ZERO_ADDRESS, blockNumBig)
-						if err != nil {
-							log.Error("downloadBlock BalanceAt zeroAddressBalance", "error", err)
-							delayNumber = int64(3000 * time.Millisecond)
-						} else {
-							internalBlockData := &InternalBlockData{
-								Block:              block,
-								ConsensusData:      consensusData,
-								ZeroAddressBalance: zeroAddressBalance,
-							}
-							log.Info("before resultChan")
-							resultChan <- internalBlockData
-							log.Info("after resultChan")
-							blockNumberToGet = blockNumberToGet + 1
-						}
-					}
-					if isLagging {
-						delayNumber = 0
-					} else {
-						delayNumber = int64(100 * time.Millisecond)
-					}
-				}
-				blockTimer.Reset(time.Duration(delayNumber))
-			case <-cancel:
-				blockTimer.Stop()
-				log.Info("downloadBlocks Quit signal received")
-				return
-			}
-		}
-	}()
-}
-
 func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockData, runningSummary *BlockchainDetails) error {
-	block := internalBlockData.Block
+	var err error
+	block, err := types.DecodeBlockFromRLP(internalBlockData.BlockRLP)
+	if err != nil {
+		return err
+	}
 	blockNum := block.Header().Number
 	blockNumber := blockNum.Uint64()
-	var err error
 
 	log.Info("processByCacheManager", "blockNumber", blockNumber)
 
@@ -604,16 +509,25 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 
 	liveAccountTxnMap := make(map[string][]AccountTransactionCompact) //address to transactions in block mapping
 
+	txnMap := make(map[string]*TransactionDetailsExpanded)
+	if internalBlockData.TransactionList != nil {
+		for _, txn := range internalBlockData.TransactionList {
+			txnMap[strings.ToLower(txn.Receipt.TxHash.Hex())] = txn
+		}
+	}
 	var receipts types.Receipts
 	receipts = make(types.Receipts, len(block.Transactions()))
+
 	for i, tx := range block.Transactions() {
 		accountsInvolved := make(map[string]bool)
 
-		receipt, err := c.client.TransactionReceipt(context.Background(), tx.Hash())
-		if err != nil {
-			log.Error("processByCacheManager TransactionReceipt", "error", err)
-			return err
+		txHash := strings.ToLower(tx.Hash().Hex())
+		txnFromMap, ok := txnMap[txHash]
+		if ok == false {
+			log.Error("processByCacheManager txn not found in map", "hash", txHash)
+			return errors.New("unexpected transaction not found")
 		}
+		receipt := txnFromMap.Receipt
 		receipts[i] = receipt
 
 		msg, err := tx.AsMessage(types.NewLondonSigner(chainID))
@@ -660,48 +574,37 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 		transaction.TransactionType = string(txType)
 
 		if receipt.Status == 1 {
-			//Find all internal transactions
-			internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
-			if err != nil {
-				log.Warn("GetInternalTransactions", "err", err, "txn", tx.Hash())
-				if errors.Is(err, ethclient.TracingGasError) {
+			internalTxnList := txnFromMap.InternalTransactions
 
-				} else {
-					return err
-				}
-			} else {
-				internalTxnList := c.flattenInternalTransactionDetails(internalTransactions)
+			for _, iTxn := range internalTxnList {
+				accountsInvolved[strings.ToLower(iTxn.From)] = true
+				accountsInvolved[strings.ToLower(iTxn.To)] = true
 
-				for _, iTxn := range internalTxnList {
-					accountsInvolved[strings.ToLower(iTxn.From)] = true
-					accountsInvolved[strings.ToLower(iTxn.To)] = true
-
-					if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
-						tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
-						if err != nil {
-							if errors.Is(err, token.NotATokenError) {
-								continue
-							} else {
-								return err
-							}
-						}
-						//new token created via internal transaction
-						tkn := &TokenDetails{
-							ContractAddress:        strings.ToLower(iTxn.To),
-							CreatorAddress:         strings.ToLower(iTxn.From),
-							CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
-							CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
-							Name:                   tokenDetails.Name,
-							Symbol:                 tokenDetails.Symbol,
-							TotalSupply:            hexutil.EncodeBig(tokenDetails.TotalSupply),
-							Decimals:               hexutil.EncodeUint64(uint64(tokenDetails.Decimals)),
-						}
-
-						err = c.putTokenInDb(tkn, &txnBatch)
-						if err != nil {
-							log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
+				if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
+					tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
+					if err != nil {
+						if errors.Is(err, token.NotATokenError) {
+							continue
+						} else {
 							return err
 						}
+					}
+					//new token created via internal transaction
+					tkn := &TokenDetails{
+						ContractAddress:        strings.ToLower(iTxn.To),
+						CreatorAddress:         strings.ToLower(iTxn.From),
+						CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
+						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
+						Name:                   tokenDetails.Name,
+						Symbol:                 tokenDetails.Symbol,
+						TotalSupply:            hexutil.EncodeBig(tokenDetails.TotalSupply),
+						Decimals:               hexutil.EncodeUint64(uint64(tokenDetails.Decimals)),
+					}
+
+					err = c.putTokenInDb(tkn, &txnBatch)
+					if err != nil {
+						log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
+						return err
 					}
 				}
 			}
@@ -756,7 +659,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 			}
 		}
 
-		_, ok := liveAccountTxnMap[fromAddress]
+		_, ok = liveAccountTxnMap[fromAddress]
 		if ok == false {
 			liveAccountTxnMap[fromAddress] = make([]AccountTransactionCompact, 0)
 		}
@@ -778,7 +681,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 
 		//Loop through all accounts and update account cache
 		for account, _ := range accountsInvolved {
-			_, err = c.getAccount(common.HexToAddress(account), blockNum, &txnBatch)
+			_, err = c.primordialCache.getAccountFromCacheOrDb(common.HexToAddress(account))
 			if err != nil {
 				return err
 			}
@@ -812,8 +715,8 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 
 func (c *CacheManager) updateSummary(internalBlockData *InternalBlockData, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
 
-	blockNumber := internalBlockData.Block.Number()
-	leftBlock := blockNumber.Uint64()
+	blockNumber := internalBlockData.BlockNumber
+	leftBlock := blockNumber
 	rightBlock := runningSummary.BlockNumber + 1
 	if leftBlock != rightBlock {
 		log.Error("updateSummary", "leftBlock", leftBlock, "rightBlock", rightBlock)
@@ -833,7 +736,7 @@ func (c *CacheManager) updateSummary(internalBlockData *InternalBlockData, runni
 	var err error
 
 	//Update running summary
-	runningSummary.BlockNumber = blockNumber.Uint64()
+	runningSummary.BlockNumber = blockNumber
 
 	if len(blockRewardsInfo.BaseBlockProposerRewards) > 0 {
 		baseBlockProposerRewards, err = hexutil.DecodeBig(blockRewardsInfo.BaseBlockProposerRewards)
@@ -999,9 +902,11 @@ func (c *CacheManager) close() error {
 		log.Debug("cache manager account transaction db close error", "err", err)
 		return err
 	}
-
 	c.client.Close()
 	c.blockClient.Close()
+	c.primordialCache.Close()
+	log.Info("CacheManager closed")
+	os.Exit(1)
 	return nil
 }
 
@@ -1307,7 +1212,7 @@ func (c *CacheManager) getTransactionType(txn *types.Transaction, receipt *types
 			return COIN_TRANSFER, nil //todo: fix
 		}
 
-		acc, err := c.getAccount(*txn.To(), blockNumber, batch)
+		acc, err := c.primordialCache.getAccountFromCacheOrDb(*txn.To())
 		if err != nil {
 			return "", err
 		}
@@ -1326,7 +1231,7 @@ func (c *CacheManager) getTransactionType(txn *types.Transaction, receipt *types
 		}
 	} else {
 		if receipt.Status == 1 {
-			acc, err := c.getAccount(receipt.ContractAddress, blockNumber, batch)
+			acc, err := c.primordialCache.getAccountFromCacheOrDb(*txn.To())
 			if err != nil {
 				return "", err
 			}
@@ -1415,7 +1320,7 @@ func (c *CacheManager) putTokenInDb(tokenDetails *TokenDetails, batch *ethdb.Bat
 	return nil
 }
 
-func (c *CacheManager) getAccount(address common.Address, blockNumber *big.Int, batch *ethdb.Batch) (*AccountDetails, error) {
+/*func (c *CacheManager) getAccount(address common.Address, blockNumber *big.Int, batch *ethdb.Batch) (*AccountDetails, error) {
 	accountDetails, err := c.getAccountFromCacheOrDb(address)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
@@ -1500,7 +1405,7 @@ func (c *CacheManager) putAccountInCacheAndDb(accountDetails *AccountDetails, ba
 	c.addressMap[accountDetails.Address] = accountDetails
 
 	return nil
-}
+}*/
 
 func (c *CacheManager) flattenInternalTransactionDetails(details *ethclient.InternalTransactionDetails) []*InternalTransactionDetail {
 	txnStack := newStack()
@@ -1954,4 +1859,40 @@ func (c *CacheManager) putAccountTokenTxnCount(address string, tokenTxnCount uin
 
 func (c *CacheManager) ListTokenTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTokenTransactionsResponse, error) {
 	return ListAccountTokenTransactionsResponse{}, nil
+}
+
+func (c *CacheManager) processPendingTransactions() {
+	c.pendingTxLock.Lock()
+	defer c.pendingTxLock.Unlock()
+
+	delayNumber := int64(3000 * time.Millisecond)
+	pendingTxnTimer := time.NewTimer(time.Duration(delayNumber))
+	cancel := make(chan os.Signal)
+	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		for {
+			select {
+			case <-pendingTxnTimer.C:
+				err, txnList := c.pendingTxClient.TxPoolContent(context.Background())
+				if err != nil {
+					log.Error("processPendingTransactions", "err", err)
+				} else {
+					if txnList == nil {
+						log.Warn("processPendingTransactions txnList is nil")
+					} else {
+						c.pendingTxMapLock.Lock()
+						c.pendingTransactions = txnList
+						c.pendingTxMapLock.Unlock()
+					}
+				}
+
+				pendingTxnTimer.Reset(time.Duration(delayNumber))
+			case <-cancel:
+				pendingTxnTimer.Stop()
+				c.close()
+				return
+			}
+		}
+	}()
 }

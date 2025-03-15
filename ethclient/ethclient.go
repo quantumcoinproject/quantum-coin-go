@@ -177,6 +177,15 @@ func (ec *Client) GetBlockConsensusData(ctx context.Context, number *big.Int) (*
 	return consensusData, err
 }
 
+func (ec *Client) ListValidators(ctx context.Context, number *big.Int) ([]*proofofstake.ValidatorDetails, error) {
+	var validatorList []*proofofstake.ValidatorDetails
+	err := ec.c.CallContext(ctx, &validatorList, "proofofstake_listValidators", hexutil.EncodeBig(number))
+	if err == nil && validatorList == nil {
+		err = ethereum.NotFound
+	}
+	return validatorList, err
+}
+
 type rpcTransaction struct {
 	tx *types.Transaction
 	TxExtraInfo
@@ -709,6 +718,7 @@ type InternalTransactionDetails struct {
 	GasUsed string                       `json:"gasUsed,omitempty"`
 	Input   string                       `json:"input,omitempty"`
 	Output  string                       `json:"output,omitempty"`
+	Error   string                       `json:"error,omitempty"`
 	Calls   []InternalTransactionDetails `json:"calls,omitempty"`
 }
 

@@ -1,10 +1,13 @@
 package cachemanager
 
 import (
+	"bytes"
+	"compress/flate"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/QuantumCoinProject/qc/accounts/abi"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
@@ -15,6 +18,7 @@ import (
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/systemcontracts/conversion"
 	"github.com/QuantumCoinProject/qc/systemcontracts/staking"
+	"io"
 	"math/big"
 	"os"
 	"os/signal"
@@ -29,6 +33,11 @@ const LastInternalBlockKey = "internal-last-block"
 const InternalBlockDetailsKey = "internal-block-%d"
 const PrimordialAccountSummaryKey = "paccount-%s"
 
+var (
+	errorSignature = []byte{0x08, 0xc3, 0x79, 0xa0} // Keccak256("Error(string)")[:4]
+	abiString, _   = abi.NewType("string", "", nil)
+)
+
 type PrimordialAccountDetails struct {
 	Address string                `json:"address,omitempty"`
 	AccType ethclient.AccountType `json:"accountType,omitempty"`
@@ -42,27 +51,36 @@ type PrimordialCache struct {
 	cacheDb    ethdb.Database
 	client     *ethclient.Client
 	addressMap map[string]*PrimordialAccountDetails
+	cancelChan *chan bool
 }
 
 type TransactionDetailsExpanded struct {
 	InternalTransactions []*InternalTransactionDetail `json:"internalTransactions,omitempty"`
 	Receipt              *types.Receipt               `json:"receipt,omitempty"`
+	RevertReason         string
 }
 
 type InternalBlockData struct {
-	Block                     *types.Block                  `json:"block,omitempty"`
-	ConsensusData             *proofofstake.ConsensusData   `json:"consensusData,omitempty"`
-	ZeroAddressBalance        *big.Int                      `json:"zeroAddressBalance,omitempty"`
-	StakingContractBalance    *big.Int                      `json:"stakingContractBalance,omitempty"`
-	ConversionContractBalance *big.Int                      `json:"conversionContractBalance,omitempty"`
-	TransactionList           []*TransactionDetailsExpanded `json:"transactionList,omitempty"`
+	BlockRLP                  []byte                           `json:"blockRlp,omitempty"`
+	BlockNumber               uint64                           `json:"blockNumber,omitempty"`
+	ConsensusData             *proofofstake.ConsensusData      `json:"consensusData,omitempty"`
+	ZeroAddressBalance        *big.Int                         `json:"zeroAddressBalance,omitempty"`
+	StakingContractBalance    *big.Int                         `json:"stakingContractBalance,omitempty"`
+	ConversionContractBalance *big.Int                         `json:"conversionContractBalance,omitempty"`
+	TransactionList           []*TransactionDetailsExpanded    `json:"transactionList,omitempty"`
+	ValidatorList             []*proofofstake.ValidatorDetails `json:"validatorList,omitempty"`
 }
 
-func NewPrimordialCache(cacheDir string, nodeUrl string) (*PrimordialCache, error) {
+func (b *InternalBlockData) GetBlock() (*types.Block, error) {
+	return types.DecodeBlockFromRLP(b.BlockRLP)
+}
+
+func NewPrimordialCache(cacheDir string, nodeUrl string, cancelChan *chan bool) (*PrimordialCache, error) {
 	pCache := &PrimordialCache{
 		nodeUrl:    nodeUrl,
 		cacheDir:   cacheDir,
 		addressMap: make(map[string]*PrimordialAccountDetails),
+		cancelChan: cancelChan,
 	}
 
 	var err error
@@ -98,13 +116,6 @@ func (c *PrimordialCache) initialize() error {
 
 func (c *PrimordialCache) clientInitialize() {
 	for {
-		client, err := ethclient.Dial(c.nodeUrl)
-		if err != nil {
-			log.Error("PrimordialCache initialize client Dial", "error", err)
-			time.Sleep(10 * time.Second)
-			continue
-		}
-
 		blockClient, err := ethclient.Dial(c.nodeUrl)
 		if err != nil {
 			log.Error("PrimordialCache initialize blockClient Dial", "error", err)
@@ -112,7 +123,7 @@ func (c *PrimordialCache) clientInitialize() {
 			continue
 		}
 
-		chainID, err = client.NetworkID(context.Background())
+		chainID, err = blockClient.NetworkID(context.Background())
 		if err != nil {
 			log.Error("PrimordialCache initialize NetworkID", "error", err)
 			time.Sleep(10 * time.Second)
@@ -152,8 +163,6 @@ func (c *PrimordialCache) start() error {
 func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 	delayNumber := int64(100 * time.Millisecond)
 	blockTimer := time.NewTimer(time.Duration(delayNumber))
-	cancel := make(chan os.Signal)
-	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
 
 	blockNumberToGet := startBlockNumber
 	isLagging := true
@@ -161,6 +170,11 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 	go func() {
 		for {
 			select {
+			case <-*c.cancelChan:
+				blockTimer.Stop()
+				log.Info("PrimordialCache downloadBlocks Quit signal received")
+				return
+
 			case <-blockTimer.C:
 				log.Info("PrimordialCache downloadBlock BlockByNumber", "Block Number ", blockNumberToGet)
 
@@ -203,6 +217,14 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					continue
 				}
 
+				validatorList, err := c.client.ListValidators(context.Background(), blockNumBig)
+				if err != nil {
+					log.Error("PrimordialCache downloadBlock ListValidators", "error", err, "blockNumberToGet", blockNumberToGet)
+					delayNumber = int64(3000 * time.Millisecond)
+					blockTimer.Reset(time.Duration(delayNumber))
+					continue
+				}
+
 				zeroAddressBalance, err := c.client.BalanceAt(context.Background(), common.ZERO_ADDRESS, blockNumBig)
 				if err != nil {
 					log.Error("PrimordialCache downloadBlock BalanceAt zeroAddressBalance", "error", err)
@@ -227,13 +249,23 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					continue
 				}
 
+				blockRlp, err := block.ToBytesRLP()
+				if err != nil {
+					log.Error("PrimordialCache ToBytesRLP", "error", err)
+					delayNumber = int64(3000 * time.Millisecond)
+					blockTimer.Reset(time.Duration(delayNumber))
+					continue
+				}
+
 				internalBlockData := &InternalBlockData{
-					Block:                     block,
+					BlockRLP:                  blockRlp,
 					ConsensusData:             consensusData,
 					ZeroAddressBalance:        zeroAddressBalance,
 					StakingContractBalance:    stakingContractBalance,
 					ConversionContractBalance: conversionContractBalance,
 					TransactionList:           make([]*TransactionDetailsExpanded, len(block.Transactions())),
+					ValidatorList:             validatorList,
+					BlockNumber:               blockNumBig.Uint64(),
 				}
 
 				accountsInvolved := make(map[string]bool)
@@ -264,23 +296,23 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 						continue
 					}
 
+					internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
+					if err != nil {
+						log.Warn("PrimordialCache GetInternalTransactions", "err", err, "txn", tx.Hash())
+						if errors.Is(err, ethclient.TracingGasError) {
+
+						} else {
+							delayNumber = int64(3000 * time.Millisecond)
+							blockTimer.Reset(time.Duration(delayNumber))
+							continue
+						}
+					}
+
 					if receipt.Status == 1 {
 						if tx.To() == nil {
 							accountsInvolved[strings.ToLower(receipt.ContractAddress.Hex())] = true
 						} else {
 							accountsInvolved[toAddress] = true
-						}
-
-						internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
-						if err != nil {
-							log.Warn("PrimordialCache GetInternalTransactions", "err", err, "txn", tx.Hash())
-							if errors.Is(err, ethclient.TracingGasError) {
-
-							} else {
-								delayNumber = int64(3000 * time.Millisecond)
-								blockTimer.Reset(time.Duration(delayNumber))
-								continue
-							}
 						}
 
 						if internalTransactions != nil {
@@ -295,12 +327,33 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 						}
 
 						txnDetailsExpanded.Receipt = receipt
+					} else {
+						if internalTransactions != nil {
+							if len(internalTransactions.Output) > 0 {
+								txnDetailsExpanded.RevertReason, err = unpackError(internalTransactions.Output)
+								if err != nil {
+									log.Warn("unpackError", "error", err)
+									//don't skip processing
+								}
+							} else {
+								txnDetailsExpanded.RevertReason = internalTransactions.Error
+							}
+						}
 					}
 
 					internalBlockData.TransactionList[i] = &txnDetailsExpanded
 				}
 
 				txnBatch := c.cacheDb.NewBatch()
+				blockKey := []byte(LastInternalBlockKey)
+				err = txnBatch.Put(blockKey, common.Uint64ToBytes(blockNumBig.Uint64()))
+				if err != nil {
+					log.Error("PrimordialCache txnBatch.Put LastInternalBlockKey", "error", err)
+					delayNumber = int64(3000 * time.Millisecond)
+					blockTimer.Reset(time.Duration(delayNumber))
+					continue
+				}
+
 				for addr, _ := range accountsInvolved {
 					_, err := c.UpsertAccount(common.HexToAddress(addr), blockNumBig, &txnBatch)
 					if err != nil {
@@ -326,6 +379,30 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					blockTimer.Reset(time.Duration(delayNumber))
 					continue
 				}
+
+				retBlockData, err := c.getBlockFromDb(blockNumBig.Uint64())
+				if err != nil {
+					log.Error("PrimordialCache getBlockFromDb", "error", err)
+					delayNumber = int64(3000 * time.Millisecond)
+					blockTimer.Reset(time.Duration(delayNumber))
+					continue
+				}
+
+				retBlock, err := retBlockData.GetBlock()
+				if err != nil {
+					log.Error("PrimordialCache retBlockData.GetBlock", "error", err)
+					delayNumber = int64(3000 * time.Millisecond)
+					blockTimer.Reset(time.Duration(delayNumber))
+					continue
+				}
+
+				if retBlock.Number().Cmp(blockNumBig) != 0 {
+					log.Error("PrimordialCache block compare failed")
+					delayNumber = int64(3000 * time.Millisecond)
+					blockTimer.Reset(time.Duration(delayNumber))
+					continue
+				}
+
 				blockNumberToGet = blockNumberToGet + 1
 
 				if isLagging {
@@ -334,11 +411,6 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					delayNumber = int64(100 * time.Millisecond)
 				}
 				blockTimer.Reset(time.Duration(delayNumber))
-
-			case <-cancel:
-				blockTimer.Stop()
-				log.Info("PrimordialCache downloadBlocks Quit signal received")
-				return
 			}
 		}
 	}()
@@ -364,8 +436,8 @@ func (c *PrimordialCache) getBlockKey(blockNumber uint64) (key string, blob []by
 
 func (c *PrimordialCache) putBlockInDb(blockDetails *InternalBlockData, batch *ethdb.Batch) error {
 	txnBatch := *batch
-	blockNumber := blockDetails.Block.Number().Uint64()
-	log.Info("PrimordialCache putBlockInDb", "blockNumber", blockNumber)
+	blockNumber := blockDetails.BlockNumber
+	log.Debug("PrimordialCache putBlockInDb", "blockNumber", blockNumber)
 
 	blob, err := json.Marshal(blockDetails)
 	if err != nil {
@@ -373,21 +445,33 @@ func (c *PrimordialCache) putBlockInDb(blockDetails *InternalBlockData, batch *e
 	}
 	blockKey, blockKeyBlob := c.getBlockKey(blockNumber)
 
-	err = txnBatch.Put(blockKeyBlob, blob)
+	compressed, err := compress(blob)
+	err = txnBatch.Put(blockKeyBlob, compressed)
 	if err != nil {
 		log.Error("PrimordialCache putBlockInDb", "error", err, "blockKey", blockKey)
 		return err
 	}
+	log.Info("compression stat", "compressed size", len(compressed), "uncompressed size", len(blob), "blockKey", blockKey)
 
 	return nil
 }
 
 func (c *PrimordialCache) getBlockFromDb(blockNumber uint64) (*InternalBlockData, error) {
 	blockKey, blockKeyBlob := c.getBlockKey(blockNumber)
-	log.Info("PrimordialCache getBlockFromDb", "blockNumber", blockNumber, "blockKey", blockKey)
+	log.Debug("PrimordialCache getBlockFromDb", "blockNumber", blockNumber, "blockKey", blockKey)
+
+	db := c.cacheDb
+	compressed, err := db.Get([]byte(blockKeyBlob))
+	if err != nil {
+		return nil, err
+	}
+	uncompressed, err := decompress(compressed)
+	if err != nil {
+		return nil, err
+	}
 
 	var internalBlockData InternalBlockData
-	err := json.Unmarshal(blockKeyBlob, &internalBlockData)
+	err = json.Unmarshal(uncompressed, &internalBlockData)
 	if err != nil {
 		return nil, err
 	}
@@ -474,4 +558,70 @@ func (c *PrimordialCache) putAccountInCacheAndDb(accountDetails *PrimordialAccou
 	c.addressMap[accountDetails.Address] = accountDetails
 
 	return nil
+}
+
+func (c *PrimordialCache) Close() error {
+	*c.cancelChan <- true
+	c.client.Close()
+
+	cacheDb := c.cacheDb
+	err := cacheDb.Close()
+	if err != nil {
+		log.Debug("PrimordialCache cache manager account transaction db close error", "err", err)
+		return err
+	}
+	log.Info("PrimordialCache closed")
+	return nil
+}
+
+func unpackError(output string) (string, error) {
+	output = strings.Replace(output, "0x", "", 1)
+	result := common.Hex2Bytes(output)
+	if len(result) < 5 {
+		return "", errors.New("invalid error signature")
+	}
+	if !bytes.Equal(result[:4], errorSignature) {
+		return "", errors.New("incorrect error signature")
+	}
+	unpacked, err := abi.Arguments{{Type: abiString}}.UnpackValues(result[4:])
+	if err != nil {
+		return "", errors.New("UnpackValues failed")
+	}
+	if len(unpacked) == 0 {
+		return "", errors.New("unexpected unpacked length")
+	}
+	return unpacked[0].(string), nil
+}
+
+func compress(uncompressed []byte) ([]byte, error) {
+	compressedData := new(bytes.Buffer)
+	compressor, err := flate.NewWriter(compressedData, 9)
+	if err != nil {
+		return nil, err
+	}
+	_, err = compressor.Write(uncompressed)
+	if err != nil {
+		return nil, err
+	}
+	err = compressor.Close()
+	if err != nil {
+		return nil, err
+	}
+	return compressedData.Bytes(), nil
+}
+
+func decompress(compressed []byte) ([]byte, error) {
+	compressedData := new(bytes.Buffer)
+	compressedData.Write(compressed)
+	decompressedData := new(bytes.Buffer)
+	decompressor := flate.NewReader(compressedData)
+	_, err := io.Copy(decompressedData, decompressor)
+	if err != nil {
+		return nil, err
+	}
+	err = decompressor.Close()
+	if err != nil {
+		return nil, err
+	}
+	return decompressedData.Bytes(), nil
 }
