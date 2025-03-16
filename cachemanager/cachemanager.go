@@ -453,7 +453,7 @@ func (c *CacheManager) start() error {
 			case <-blockTimer.C:
 				internalBlockData, err := c.primordialCache.GetBlock(blockNumber)
 				if err != nil {
-					if err.Error() == NotFoundErrMsg {
+					if err.Error() == LevelDbNoTFoundErrMsg {
 						log.Info("Waiting for Block...", "Block number", blockNumber)
 					} else {
 						log.Error("GetBlock Error", "error", err.Error(), "Block number", blockNumber)
