@@ -610,13 +610,23 @@ func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (
 	return ACCOUNT_TYPE_CONTRACT, byteCode, err
 }
 
-func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*token.TokenDetails, error) {
+var NotATokenError = errors.New("invalid erc20 token")
+
+type TokenMetadataDetails struct {
+	Name        string
+	Symbol      string
+	Owner       common.Address
+	TotalSupply *big.Int
+	Decimals    uint8
+}
+
+func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*TokenMetadataDetails, error) {
 	log.Debug("GetTokenDetails", "contactAddress", contactAddress, "blockNumber", blockNumber)
 	byteCode, err := ec.CodeAt(context.Background(), contactAddress, blockNumber)
 	if err != nil {
 		log.Debug("GetTokenDetails", "contactAddress", contactAddress, "error", err)
 		if errors.Is(err, bind.ErrNoCode) {
-			return nil, token.NotATokenError
+			return nil, NotATokenError
 		}
 		return nil, err
 	}
@@ -625,25 +635,25 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 	byteCodeHex := hexutil.Encode(byteCode)
 	if !asm.IsErc20(byteCodeHex) {
 		log.Debug("GetTokenDetails IsErc20 fail", "contactAddress", contactAddress)
-		return nil, token.NotATokenError
+		return nil, NotATokenError
 	}
 
 	contract, err := token.NewToken(contactAddress, ec)
 	if err != nil {
 		log.Debug("GetTokenDetails", "error", err)
 		if errors.Is(err, bind.ErrNoCode) {
-			return nil, token.NotATokenError
+			return nil, NotATokenError
 		}
 		return nil, err
 	}
 
-	tokenDetails := token.TokenDetails{}
+	tokenDetails := TokenMetadataDetails{}
 
 	tokenDetails.TotalSupply, err = contract.TotalSupply(nil)
 	if err != nil {
 		log.Debug("GetTokenDetails TotalSupply", "error", err, "contactAddress", contactAddress)
 		if errors.Is(err, vm.ErrExecutionReverted) {
-			return nil, token.NotATokenError
+			return nil, NotATokenError
 		}
 		return nil, err
 	}
@@ -700,7 +710,7 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 	if err != nil {
 		if errors.Is(err, vm.ErrExecutionReverted) {
 			log.Debug("GetAccountTokenBalance", "error", err, "contactAddress", contactAddress)
-			return nil, token.NotATokenError
+			return nil, NotATokenError
 		}
 		return nil, err
 	}

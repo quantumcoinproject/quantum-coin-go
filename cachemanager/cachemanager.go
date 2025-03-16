@@ -9,12 +9,10 @@ import (
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/ethclient"
 	"github.com/QuantumCoinProject/qc/ethdb"
 	"github.com/QuantumCoinProject/qc/log"
 	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/token"
 	"io/ioutil"
 	"math/big"
 	"os"
@@ -449,8 +447,8 @@ func (c *CacheManager) start() error {
 		delayNumber := int64(100 * time.Millisecond)
 		blockTimer := time.NewTimer(time.Duration(delayNumber))
 
+		log.Info("start block loop")
 		for {
-			log.Info("start block loop")
 			select {
 			case <-blockTimer.C:
 				internalBlockData, err := c.primordialCache.GetBlock(blockNumber)
@@ -490,11 +488,8 @@ func (c *CacheManager) start() error {
 
 func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockData, runningSummary *BlockchainDetails) error {
 	var err error
-	block, err := types.DecodeBlockFromRLP(internalBlockData.BlockRLP)
-	if err != nil {
-		return err
-	}
-	blockNum := block.Header().Number
+	block := internalBlockData.Block
+	blockNum := block.Number
 	blockNumber := blockNum.Uint64()
 
 	log.Info("processByCacheManager", "blockNumber", blockNumber)
@@ -515,13 +510,13 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 			txnMap[strings.ToLower(txn.Receipt.TxHash.Hex())] = txn
 		}
 	}
-	var receipts types.Receipts
-	receipts = make(types.Receipts, len(block.Transactions()))
 
-	for i, tx := range block.Transactions() {
+	receipts := make([]*PrimordialReceipt, len(internalBlockData.TransactionList))
+
+	for i, tx := range internalBlockData.TransactionList {
 		accountsInvolved := make(map[string]bool)
 
-		txHash := strings.ToLower(tx.Hash().Hex())
+		txHash := strings.ToLower(tx.Transaction.Hash.Hex())
 		txnFromMap, ok := txnMap[txHash]
 		if ok == false {
 			log.Error("processByCacheManager txn not found in map", "hash", txHash)
@@ -530,34 +525,24 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 		receipt := txnFromMap.Receipt
 		receipts[i] = receipt
 
-		msg, err := tx.AsMessage(types.NewLondonSigner(chainID))
-		if err != nil {
-			log.Error("processByCacheManager AsMessage", "error", err)
-			return err
-		}
-
-		fromAddress := strings.ToLower(msg.From().Hex())
-		var toAddress string
-		if tx.To() != nil {
-			toAddress = strings.ToLower(tx.To().Hex())
-		}
-
 		var transaction AccountTransactionCompact
 
-		transaction.Hash = tx.Hash().Hex()
+		transaction.Hash = strings.ToLower(tx.Transaction.Hash.Hex())
 		transaction.BlockNumber = blockNumber
 
 		//Timestamp
-		tm := time.Unix(int64(block.Time()), 0)
+		tm := time.Unix(int64(block.Time), 0)
 		transaction.CreatedAt = tm.UTC().Format(TimeLayout)
 
-		transaction.From = fromAddress
-		transaction.To = toAddress
-		transaction.Value = common.BigIntToHexString(tx.Value())
+		transaction.From = tx.Transaction.From
+		if tx.Transaction.To != nil {
+			transaction.To = *tx.Transaction.To
+		}
+		transaction.Value = common.BigIntToHexString(tx.Transaction.Value)
 
 		gasUsed := big.NewInt(1).SetUint64(receipt.GasUsed)
-		txnFee := common.SafeMulBigInt(gasUsed, tx.GasPrice())
-		log.Debug("transaction", "gasUsed", gasUsed, "txnFee", txnFee, "hash", tx.Hash().Hex())
+		txnFee := common.SafeMulBigInt(gasUsed, tx.Transaction.GasPrice)
+		log.Debug("transaction", "gasUsed", gasUsed, "txnFee", txnFee, "hash", txHash)
 		transaction.TxnFee = common.BigIntToHexString(txnFee)
 
 		if receipt.Status == 1 {
@@ -566,9 +551,9 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 			transaction.Status = "0x0"
 		}
 
-		txType, err := c.getTransactionType(tx, receipt, blockNum, &txnBatch)
+		txType, err := c.getTransactionType(tx.Transaction, receipt, blockNum, &txnBatch)
 		if err != nil {
-			log.Error("getTransactionType", "error", err, "tx", tx.Hash())
+			log.Error("getTransactionType", "error", err, "tx", tx.Transaction.Hash)
 			return err
 		}
 		transaction.TransactionType = string(txType)
@@ -583,7 +568,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 				if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
 					tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
 					if err != nil {
-						if errors.Is(err, token.NotATokenError) {
+						if errors.Is(err, ethclient.NotATokenError) {
 							continue
 						} else {
 							return err
@@ -593,7 +578,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 					tkn := &TokenDetails{
 						ContractAddress:        strings.ToLower(iTxn.To),
 						CreatorAddress:         strings.ToLower(iTxn.From),
-						CreatedTransactionHash: strings.ToLower(tx.Hash().Hex()),
+						CreatedTransactionHash: strings.ToLower(tx.Transaction.Hash.Hex()),
 						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
 						Name:                   tokenDetails.Name,
 						Symbol:                 tokenDetails.Symbol,
@@ -610,16 +595,16 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 			}
 
 			//Find all relevant token and internal token transactions, if any
-			tokenTransfers, tokenApprovals, err := token.ParseTokenTransaction(tx, receipt)
+			tokenTransfers, tokenApprovals, err := ParseTokenTransaction(tx.Transaction, receipt)
 			if err != nil {
-				log.Error("ParseTokenTransaction", "err", err, "txn", tx.Hash())
+				log.Error("ParseTokenTransaction", "err", err, "txn", tx.Transaction.Hash)
 				return err
 			}
 
 			if tokenTransfers != nil && len(tokenTransfers) > 0 {
 				err = c.processAccountTokenTransfers(tokenTransfers, blockNum, &txnBatch)
 				if err != nil {
-					log.Error("processAccountTokenTransfers", "err", err, "txn", tx.Hash().Hex())
+					log.Error("processAccountTokenTransfers", "err", err, "txn", tx.Transaction.Hash)
 					return err
 				}
 				for _, transfer := range tokenTransfers {
@@ -659,29 +644,29 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 			}
 		}
 
-		_, ok = liveAccountTxnMap[fromAddress]
+		_, ok = liveAccountTxnMap[tx.Transaction.From]
 		if ok == false {
-			liveAccountTxnMap[fromAddress] = make([]AccountTransactionCompact, 0)
+			liveAccountTxnMap[tx.Transaction.From] = make([]AccountTransactionCompact, 0)
 		}
-		liveAccountTxnMap[fromAddress] = append(liveAccountTxnMap[fromAddress], transaction)
+		liveAccountTxnMap[tx.Transaction.From] = append(liveAccountTxnMap[tx.Transaction.From], transaction)
 
-		if tx.To() != nil {
-			if fromAddress != toAddress {
-				_, ok = liveAccountTxnMap[toAddress]
+		if tx.Transaction.To != nil {
+			if tx.Transaction.From != *tx.Transaction.To {
+				_, ok = liveAccountTxnMap[*tx.Transaction.To]
 				if ok == false {
-					liveAccountTxnMap[toAddress] = make([]AccountTransactionCompact, 0)
+					liveAccountTxnMap[*tx.Transaction.To] = make([]AccountTransactionCompact, 0)
 				}
-				liveAccountTxnMap[toAddress] = append(liveAccountTxnMap[toAddress], transaction)
+				liveAccountTxnMap[*tx.Transaction.To] = append(liveAccountTxnMap[*tx.Transaction.To], transaction)
 			}
-			accountsInvolved[strings.ToLower(tx.To().Hex())] = true
+			accountsInvolved[*tx.Transaction.To] = true
 		} else {
 			accountsInvolved[strings.ToLower(receipt.ContractAddress.Hex())] = true
 		}
-		accountsInvolved[fromAddress] = true
+		accountsInvolved[tx.Transaction.From] = true
 
 		//Loop through all accounts and update account cache
 		for account, _ := range accountsInvolved {
-			_, err = c.primordialCache.getAccountFromCacheOrDb(common.HexToAddress(account))
+			_, err = c.primordialCache.getAccountFromCacheOrDb(account)
 			if err != nil {
 				return err
 			}
@@ -715,7 +700,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 
 func (c *CacheManager) updateSummary(internalBlockData *InternalBlockData, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
 
-	blockNumber := internalBlockData.BlockNumber
+	blockNumber := internalBlockData.Block.Number.Uint64()
 	leftBlock := blockNumber
 	rightBlock := runningSummary.BlockNumber + 1
 	if leftBlock != rightBlock {
@@ -1201,25 +1186,25 @@ func getAccountTransactionPageKey(address string, pageCount uint64) []byte {
 	return []byte(pageKey)
 }
 
-func (c *CacheManager) getTransactionType(txn *types.Transaction, receipt *types.Receipt, blockNumber *big.Int, batch *ethdb.Batch) (TransactionType, error) {
-	txHash := txn.Hash()
+func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *PrimordialReceipt, blockNumber *big.Int, batch *ethdb.Batch) (TransactionType, error) {
+	txHash := txn.Hash
 	if txHash.IsEqualTo(receipt.TxHash) == false {
 		return "", errors.New("hash mismatch between txn and receipt")
 	}
 
-	if txn.To() != nil {
+	if txn.To != nil {
 		if receipt.Status == 0 {
 			return COIN_TRANSFER, nil //todo: fix
 		}
 
-		acc, err := c.primordialCache.getAccountFromCacheOrDb(*txn.To())
+		acc, err := c.primordialCache.getAccountFromCacheOrDb(*txn.To)
 		if err != nil {
 			return "", err
 		}
 		if acc.AccType == ethclient.ACCOUNT_TYPE_REGULAR {
 			return COIN_TRANSFER, nil
 		} else {
-			isTokenTransfer, err := token.IsMainTransactionTokenTransfer(txn, receipt)
+			isTokenTransfer, err := IsMainTransactionTokenTransfer(txn, receipt)
 			if err != nil {
 				return "", err
 			}
@@ -1231,7 +1216,7 @@ func (c *CacheManager) getTransactionType(txn *types.Transaction, receipt *types
 		}
 	} else {
 		if receipt.Status == 1 {
-			acc, err := c.primordialCache.getAccountFromCacheOrDb(*txn.To())
+			acc, err := c.primordialCache.getAccountFromCacheOrDb(*txn.To)
 			if err != nil {
 				return "", err
 			}
@@ -1538,7 +1523,7 @@ func (c *CacheManager) putAccountTokenPage(address string, accountTokenList *Acc
 }
 
 // Parses and stores list of tokens and balance for each token
-func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogTransfer, blockNum *big.Int, batch *ethdb.Batch) error {
+func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*LogTransfer, blockNum *big.Int, batch *ethdb.Batch) error {
 	for _, t := range tokenTransfers {
 		contractAddress := strings.ToLower(t.ContractAddress.Hex())
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
@@ -1549,7 +1534,7 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 
 		tokenBalance, err := c.client.GetAccountTokenBalance(t.ContractAddress, t.From)
 		if err != nil {
-			if errors.Is(err, token.NotATokenError) {
+			if errors.Is(err, ethclient.NotATokenError) {
 				log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "from", t.From)
 				return err
 			}
@@ -1563,7 +1548,7 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 
 		tokenBalance, err = c.client.GetAccountTokenBalance(t.ContractAddress, t.To)
 		if err != nil {
-			if errors.Is(err, token.NotATokenError) {
+			if errors.Is(err, ethclient.NotATokenError) {
 				log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "to", t.To)
 				return err
 			}

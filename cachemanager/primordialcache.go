@@ -10,7 +10,6 @@ import (
 	"github.com/QuantumCoinProject/qc/accounts/abi"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
 	"github.com/QuantumCoinProject/qc/core/rawdb"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/ethclient"
@@ -38,12 +37,6 @@ var (
 	abiString, _   = abi.NewType("string", "", nil)
 )
 
-type PrimordialAccountDetails struct {
-	Address string                `json:"address,omitempty"`
-	AccType ethclient.AccountType `json:"accountType,omitempty"`
-	Code    []byte                `json:"code,omitempty"` //for contracts only
-}
-
 type PrimordialCache struct {
 	cacheDir   string
 	nodeUrl    string
@@ -52,27 +45,6 @@ type PrimordialCache struct {
 	client     *ethclient.Client
 	addressMap map[string]*PrimordialAccountDetails
 	cancelChan *chan bool
-}
-
-type TransactionDetailsExpanded struct {
-	InternalTransactions []*InternalTransactionDetail `json:"internalTransactions,omitempty"`
-	Receipt              *types.Receipt               `json:"receipt,omitempty"`
-	RevertReason         string
-}
-
-type InternalBlockData struct {
-	BlockRLP                  []byte                           `json:"blockRlp,omitempty"`
-	BlockNumber               uint64                           `json:"blockNumber,omitempty"`
-	ConsensusData             *proofofstake.ConsensusData      `json:"consensusData,omitempty"`
-	ZeroAddressBalance        *big.Int                         `json:"zeroAddressBalance,omitempty"`
-	StakingContractBalance    *big.Int                         `json:"stakingContractBalance,omitempty"`
-	ConversionContractBalance *big.Int                         `json:"conversionContractBalance,omitempty"`
-	TransactionList           []*TransactionDetailsExpanded    `json:"transactionList,omitempty"`
-	ValidatorList             []*proofofstake.ValidatorDetails `json:"validatorList,omitempty"`
-}
-
-func (b *InternalBlockData) GetBlock() (*types.Block, error) {
-	return types.DecodeBlockFromRLP(b.BlockRLP)
 }
 
 func NewPrimordialCache(cacheDir string, nodeUrl string, cancelChan *chan bool) (*PrimordialCache, error) {
@@ -249,28 +221,20 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					continue
 				}
 
-				blockRlp, err := block.ToBytesRLP()
-				if err != nil {
-					log.Error("PrimordialCache ToBytesRLP", "error", err)
-					delayNumber = int64(3000 * time.Millisecond)
-					blockTimer.Reset(time.Duration(delayNumber))
-					continue
-				}
-
 				internalBlockData := &InternalBlockData{
-					BlockRLP:                  blockRlp,
+					Block:                     fromNativeBlock(block),
 					ConsensusData:             consensusData,
 					ZeroAddressBalance:        zeroAddressBalance,
 					StakingContractBalance:    stakingContractBalance,
 					ConversionContractBalance: conversionContractBalance,
 					TransactionList:           make([]*TransactionDetailsExpanded, len(block.Transactions())),
 					ValidatorList:             validatorList,
-					BlockNumber:               blockNumBig.Uint64(),
 				}
 
 				accountsInvolved := make(map[string]bool)
 				for i, tx := range block.Transactions() {
 					var txnDetailsExpanded TransactionDetailsExpanded
+					txnDetailsExpanded.Transaction = fromNativeTransaction(tx)
 
 					msg, err := tx.AsMessage(types.NewLondonSigner(chainID))
 					if err != nil {
@@ -295,6 +259,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 						blockTimer.Reset(time.Duration(delayNumber))
 						continue
 					}
+					txnDetailsExpanded.Receipt = fromNativeReceipt(receipt)
 
 					internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
 					if err != nil {
@@ -307,6 +272,11 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 							continue
 						}
 					}
+					var internalTxnList []*InternalTransactionDetail
+					if internalTransactions != nil {
+						internalTxnList = flattenInternalTransactionDetails(internalTransactions)
+						txnDetailsExpanded.InternalTransactions = internalTxnList
+					}
 
 					if receipt.Status == 1 {
 						if tx.To() == nil {
@@ -316,17 +286,11 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 						}
 
 						if internalTransactions != nil {
-							internalTxnList := flattenInternalTransactionDetails(internalTransactions)
-
 							for _, iTxn := range internalTxnList {
 								accountsInvolved[strings.ToLower(iTxn.From)] = true
 								accountsInvolved[strings.ToLower(iTxn.To)] = true
 							}
-
-							txnDetailsExpanded.InternalTransactions = internalTxnList
 						}
-
-						txnDetailsExpanded.Receipt = receipt
 					} else {
 						if internalTransactions != nil {
 							if len(internalTransactions.Output) > 0 {
@@ -355,7 +319,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 				}
 
 				for addr, _ := range accountsInvolved {
-					_, err := c.UpsertAccount(common.HexToAddress(addr), blockNumBig, &txnBatch)
+					_, err := c.UpsertAccount(addr, blockNumBig, &txnBatch)
 					if err != nil {
 						log.Error("PrimordialCache getAccountFromCacheOrDb", "error", err, "address", addr)
 						delayNumber = int64(3000 * time.Millisecond)
@@ -388,15 +352,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					continue
 				}
 
-				retBlock, err := retBlockData.GetBlock()
-				if err != nil {
-					log.Error("PrimordialCache retBlockData.GetBlock", "error", err)
-					delayNumber = int64(3000 * time.Millisecond)
-					blockTimer.Reset(time.Duration(delayNumber))
-					continue
-				}
-
-				if retBlock.Number().Cmp(blockNumBig) != 0 {
+				if retBlockData.Block.Number.Cmp(block.Number()) != 0 {
 					log.Error("PrimordialCache block compare failed")
 					delayNumber = int64(3000 * time.Millisecond)
 					blockTimer.Reset(time.Duration(delayNumber))
@@ -436,7 +392,7 @@ func (c *PrimordialCache) getBlockKey(blockNumber uint64) (key string, blob []by
 
 func (c *PrimordialCache) putBlockInDb(blockDetails *InternalBlockData, batch *ethdb.Batch) error {
 	txnBatch := *batch
-	blockNumber := blockDetails.BlockNumber
+	blockNumber := blockDetails.Block.Number.Uint64()
 	log.Debug("PrimordialCache putBlockInDb", "blockNumber", blockNumber)
 
 	blob, err := json.Marshal(blockDetails)
@@ -451,7 +407,7 @@ func (c *PrimordialCache) putBlockInDb(blockDetails *InternalBlockData, batch *e
 		log.Error("PrimordialCache putBlockInDb", "error", err, "blockKey", blockKey)
 		return err
 	}
-	log.Info("compression stat", "compressed size", len(compressed), "uncompressed size", len(blob), "blockKey", blockKey)
+	log.Debug("compression stat", "compressed size", len(compressed), "uncompressed size", len(blob), "blockKey", blockKey)
 
 	return nil
 }
@@ -483,16 +439,16 @@ func (c *PrimordialCache) GetBlock(blockNumber uint64) (*InternalBlockData, erro
 	return c.getBlockFromDb(blockNumber)
 }
 
-func (c *PrimordialCache) UpsertAccount(address common.Address, blockNumber *big.Int, batch *ethdb.Batch) (*PrimordialAccountDetails, error) {
+func (c *PrimordialCache) UpsertAccount(address string, blockNumber *big.Int, batch *ethdb.Batch) (*PrimordialAccountDetails, error) {
 	accountDetails, err := c.getAccountFromCacheOrDb(address)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
-			accType, byteCode, err := c.client.GetAccountType(address, blockNumber)
+			accType, byteCode, err := c.client.GetAccountType(common.HexToAddress(address), blockNumber)
 			if err != nil {
 				return nil, err
 			}
 			acc := &PrimordialAccountDetails{
-				Address: strings.ToLower(address.Hex()),
+				Address: address,
 				AccType: accType,
 				Code:    byteCode,
 			}
@@ -510,13 +466,12 @@ func (c *PrimordialCache) UpsertAccount(address common.Address, blockNumber *big
 }
 
 // gets account from in-memory cache or persistent cache
-func (c *PrimordialCache) getAccountFromCacheOrDb(address common.Address) (*PrimordialAccountDetails, error) {
+func (c *PrimordialCache) getAccountFromCacheOrDb(addr string) (*PrimordialAccountDetails, error) {
 	var accountDetails *PrimordialAccountDetails
-	addr := strings.ToLower(address.Hex())
 
 	accountDetails, ok := c.addressMap[addr]
 	if ok == true {
-		log.Trace("getAccountFromCacheOrDb return from in memory cache", "address", address)
+		log.Trace("getAccountFromCacheOrDb return from in memory cache", "address", addr)
 		return accountDetails, nil
 	}
 

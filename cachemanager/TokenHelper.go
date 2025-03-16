@@ -1,30 +1,21 @@
-package token
+package cachemanager
 
 import (
 	"errors"
 	"github.com/QuantumCoinProject/qc/accounts/abi"
 	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/log"
+	"github.com/QuantumCoinProject/qc/token"
 	"math/big"
 	"strings"
 )
 
-var NotATokenError = errors.New("invalid erc20 token")
-var contractAbi, _ = abi.JSON(strings.NewReader(string(TokenMetaData.ABI)))
+var contractAbi, _ = abi.JSON(strings.NewReader(string(token.TokenMetaData.ABI)))
 var logTransferSig = []byte("Transfer(address,address,uint256)")
 var LogApprovalSig = []byte("Approval(address,address,uint256)")
 var logTransferSigHash = strings.ToLower(crypto.Keccak256Hash(logTransferSig).Hex())
 var logApprovalSigHash = strings.ToLower(crypto.Keccak256Hash(LogApprovalSig).Hex())
-
-type TokenDetails struct {
-	Name        string
-	Symbol      string
-	Owner       common.Address
-	TotalSupply *big.Int
-	Decimals    uint8
-}
 
 type LogTransferValue struct {
 	Value *big.Int
@@ -45,8 +36,8 @@ type LogApproval struct {
 }
 
 // Is main transaction a transfer?
-func IsMainTransactionTokenTransfer(txn *types.Transaction, receipt *types.Receipt) (bool, error) {
-	txHash := txn.Hash()
+func IsMainTransactionTokenTransfer(txn *PrimordialTransaction, receipt *PrimordialReceipt) (bool, error) {
+	txHash := txn.Hash
 	if txHash.IsEqualTo(receipt.TxHash) == false {
 		return false, errors.New("hash mismatch between txn and receipt")
 	}
@@ -58,8 +49,8 @@ func IsMainTransactionTokenTransfer(txn *types.Transaction, receipt *types.Recei
 	return strings.ToLower(receipt.Logs[0].Topics[0].Hex()) == logTransferSigHash, nil
 }
 
-func ParseTokenTransaction(txn *types.Transaction, receipt *types.Receipt) ([]*LogTransfer, []*LogApproval, error) {
-	txHash := txn.Hash()
+func ParseTokenTransaction(txn *PrimordialTransaction, receipt *PrimordialReceipt) ([]*LogTransfer, []*LogApproval, error) {
+	txHash := txn.Hash
 	if txHash.IsEqualTo(receipt.TxHash) == false {
 		return nil, nil, errors.New("hash mismatch between txn and receipt")
 	}
