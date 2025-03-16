@@ -38,7 +38,7 @@ type LogApproval struct {
 // Is main transaction a transfer?
 func IsMainTransactionTokenTransfer(txn *PrimordialTransaction, receipt *PrimordialReceipt) (bool, error) {
 	txHash := txn.Hash
-	if txHash.IsEqualTo(receipt.TxHash) == false {
+	if (txHash == receipt.TxHash) == false {
 		return false, errors.New("hash mismatch between txn and receipt")
 	}
 
@@ -51,7 +51,7 @@ func IsMainTransactionTokenTransfer(txn *PrimordialTransaction, receipt *Primord
 
 func ParseTokenTransaction(txn *PrimordialTransaction, receipt *PrimordialReceipt) ([]*LogTransfer, []*LogApproval, error) {
 	txHash := txn.Hash
-	if txHash.IsEqualTo(receipt.TxHash) == false {
+	if (txHash == receipt.TxHash) == false {
 		return nil, nil, errors.New("hash mismatch between txn and receipt")
 	}
 

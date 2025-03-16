@@ -1,6 +1,9 @@
 package cachemanager
 
-import "github.com/QuantumCoinProject/qc/ethclient"
+import (
+	"github.com/QuantumCoinProject/qc/ethclient"
+	"strings"
+)
 
 type InternalTransactionDetailWithLevel struct {
 	txn   *ethclient.InternalTransactionDetails
@@ -66,8 +69,8 @@ func flattenInternalTransactionDetails(details *ethclient.InternalTransactionDet
 		txnWithLevel := txnStack.Pop()
 		txn := txnWithLevel.txn
 		txnDetail := InternalTransactionDetail{
-			From:    txn.From,
-			To:      txn.To,
+			From:    strings.ToLower(txn.From),
+			To:      strings.ToLower(txn.To),
 			Value:   txn.Value,
 			Type:    txn.Type,
 			Gas:     txn.Gas,

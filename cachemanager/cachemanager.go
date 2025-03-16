@@ -71,209 +71,7 @@ const PageSize uint64 = 20
 
 type TransactionType string
 
-// List of TransactionType
-const (
-	COIN_TRANSFER      TransactionType = "CoinTransfer"
-	NEW_TOKEN          TransactionType = "NewToken"
-	TOKEN_TRANSFER     TransactionType = "TokenTransfer"
-	NEW_SMART_CONTRACT TransactionType = "NewSmartContract"
-	SMART_CONTRACT     TransactionType = "SmartContract"
-)
-
 type ContractType string
-
-type AccountDetails struct {
-	Address string                `json:"address,omitempty"`
-	AccType ethclient.AccountType `json:"accountType,omitempty"`
-}
-
-type TokenTransfers struct {
-	ContractAddress common.Address
-	From            common.Address
-	To              common.Address
-	Tokens          *big.Int
-}
-
-type TokenApprovals struct {
-	ContractAddress common.Address
-	TokenOwner      common.Address
-	Spender         common.Address
-	Tokens          *big.Int
-}
-
-type TransactionReceipt struct {
-	BlockHash string `json:"blockHash,omitempty"`
-
-	CumulativeGasUsed string `json:"cumulativeGasUsed,omitempty"`
-
-	EffectiveGasPrice string `json:"effectiveGasPrice,omitempty"`
-
-	GasUsed string `json:"gasUsed,omitempty"`
-
-	Status string `json:"status,omitempty"`
-
-	Hash string `json:"hash,omitempty"`
-
-	Type string `json:"type,omitempty"`
-
-	ContractAddress string `json:"contractAddress,omitempty"`
-}
-
-type TokenTransactionCompact struct {
-	TokenFromAddress string `json:"tokenFromAddress,omitempty"`
-
-	TokenToAddress string `json:"tokenToAddress,omitempty"`
-
-	ContractAddress string `json:"contractAddress,omitempty"`
-
-	TokenCount string `json:"tokenCount,omitempty"`
-
-	TokenSymbol string `json:"tokenSymbol,omitempty"`
-
-	TokenName string `json:"tokenName,omitempty"`
-}
-
-type TransactionDetails struct {
-	BlockHash string `json:"blockHash,omitempty"`
-
-	BlockNumber uint64 `json:"blockNumber,omitempty"`
-
-	From string `json:"from,omitempty"`
-
-	Gas string `json:"gas,omitempty"`
-
-	GasPrice string `json:"gasPrice,omitempty"`
-
-	Hash string `json:"hash,omitempty"`
-
-	Input string `json:"input,omitempty"`
-
-	Nonce uint64 `json:"nonce,omitempty"`
-
-	To string `json:"to,omitempty"`
-
-	Value string `json:"value,omitempty"`
-
-	Receipt TransactionReceipt `json:"receipt,omitempty"`
-
-	CreatedAt string `json:"createdAt,omitempty"`
-
-	TxnFee string `json:"txnFee,omitempty"`
-
-	TransactionType string `json:"transactionType,omitempty"`
-
-	TokenTransaction TokenTransactionCompact `json:"tokenTransaction,omitempty"`
-}
-
-type AccountTransactionCompact struct {
-	Hash string `json:"hash,omitempty"`
-
-	BlockNumber uint64 `json:"blockNumber,omitempty"`
-
-	CreatedAt string `json:"createdAt,omitempty"`
-
-	From string `json:"from,omitempty"`
-
-	To string `json:"to,omitempty"`
-
-	Value string `json:"value,omitempty"`
-
-	TxnFee string `json:"txnFee,omitempty"`
-
-	Status string `json:"status,omitempty"`
-
-	TransactionType string `json:"transactionType,omitempty"`
-
-	TokenTransaction TokenTransactionCompact `json:"tokenTransaction,omitempty"`
-}
-
-type AccountTransactionList struct {
-	Address      string                      `json:"address"`
-	Transactions []AccountTransactionCompact `json:"transactions"`
-}
-
-type ListAccountTransactionsResponse struct {
-	PageCount uint64                      `json:"pageCount"`
-	Items     []AccountTransactionCompact `json:"items"`
-}
-
-type AccountPendingTransactionCompact struct {
-	Hash string `json:"hash,omitempty"`
-
-	From string `json:"from,omitempty"`
-
-	To string `json:"to,omitempty"`
-
-	Value string `json:"value,omitempty"`
-
-	Nonce uint64 `json:"nonce,omitempty"`
-}
-
-type ListAccountPendingTransactionsResponse struct {
-	Items     []AccountPendingTransactionCompact `json:"items"`
-	PageCount uint64                             `json:"pageCount"`
-}
-
-type BlockchainDetails struct {
-	BlockNumber           uint64 `json:"blockNumber" gencodec:"required"`
-	MaxSupply             string `json:"maxSupply" gencodec:"required"`
-	TotalSupply           string `json:"totalSupply" gencodec:"required"`
-	CirculatingSupply     string `json:"circulatingSupply" gencodec:"required"`
-	BurntCoins            string `json:"burntCoins" gencodec:"required"`
-	BlockRewardsCoins     string `json:"blockRewardsCoins" gencodec:"required"` //baseBlockRewardsCoins + TxnFeeRewardsCoins
-	BaseBlockRewardsCoins string `json:"baseBlockRewardsCoins" gencodec:"required"`
-	TxnFeeRewardsCoins    string `json:"txnFeeRewardsCoins" gencodec:"required"`
-	TxnFeeBurntCoins      string `json:"txnFeeBurntCoins" gencodec:"required"`
-	SlashedCoins          string `json:"slashedCoins" gencodec:"required"`
-}
-
-type GetBlockchainDetailsResponse struct {
-	Result BlockchainDetails `json:"result" gencodec:"required"`
-}
-
-type TokenDetails struct {
-	ContractAddress        string `json:"contractAddress,omitempty"`
-	CreatorAddress         string `json:"creatorAddress,omitempty"`
-	CreatedBlockNumber     uint64 `json:"createdBlockNumber,omitempty"`
-	CreatedTransactionHash string `json:"createdTransactionHash,omitempty"`
-	Name                   string `json:"name,omitempty"`
-	Symbol                 string `json:"symbol,omitempty"`
-	TotalSupply            string `json:"totalSupply,omitempty"`
-	Decimals               string `json:"decimals,omitempty"`
-}
-
-type GetTokenDetailsResponse struct {
-	Result TokenDetails `json:"result,omitempty"`
-}
-
-type AccountTokenSummary struct {
-	AccountAddress  string `json:"accountAddress,omitempty"`
-	ContractAddress string `json:"contractAddress,omitempty"`
-	Name            string `json:"name,omitempty"`
-	Symbol          string `json:"symbol,omitempty"`
-	TokenBalance    string `json:"tokenBalance,omitempty"`
-}
-
-type AccountTokenList struct {
-	Address string                `json:"address"`
-	Tokens  []AccountTokenSummary `json:"tokens"`
-}
-
-type ListAccountTokensResponse struct {
-	PageCount      uint64                `json:"pageCount"`
-	AccountAddress string                `json:"accountAddress"`
-	Items          []AccountTokenSummary `json:"items"`
-}
-
-type AccountTokenTransactionList struct {
-	Address      string                      `json:"address"`
-	Transactions []AccountTransactionCompact `json:"transactions"`
-}
-
-type ListAccountTokenTransactionsResponse struct {
-	PageCount uint64                      `json:"pageCount"`
-	Items     []AccountTransactionCompact `json:"items"`
-}
 
 func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
 	cManager := &CacheManager{
@@ -502,21 +300,22 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 		return err
 	}
 
-	liveAccountTxnMap := make(map[string][]AccountTransactionCompact) //address to transactions in block mapping
+	liveAccountTxnMap := make(map[string][]*TransactionDetails) //address to transactions in block mapping
 
 	txnMap := make(map[string]*TransactionDetailsExpanded)
 	if internalBlockData.TransactionList != nil {
 		for _, txn := range internalBlockData.TransactionList {
-			txnMap[strings.ToLower(txn.Receipt.TxHash.Hex())] = txn
+			txnMap[txn.Receipt.TxHash] = txn
 		}
 	}
 
 	receipts := make([]*PrimordialReceipt, len(internalBlockData.TransactionList))
 
 	for i, tx := range internalBlockData.TransactionList {
+		log.Trace("processByCacheManager", "transaction", tx.Transaction.Hash)
 		accountsInvolved := make(map[string]bool)
 
-		txHash := strings.ToLower(tx.Transaction.Hash.Hex())
+		txHash := tx.Transaction.Hash
 		txnFromMap, ok := txnMap[txHash]
 		if ok == false {
 			log.Error("processByCacheManager txn not found in map", "hash", txHash)
@@ -525,31 +324,46 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 		receipt := txnFromMap.Receipt
 		receipts[i] = receipt
 
-		var transaction AccountTransactionCompact
+		var transaction TransactionDetails
 
-		transaction.Hash = strings.ToLower(tx.Transaction.Hash.Hex())
+		transaction.Hash = tx.Transaction.Hash
+		transaction.BlockHash = block.Hash
 		transaction.BlockNumber = blockNumber
-
-		//Timestamp
-		tm := time.Unix(int64(block.Time), 0)
-		transaction.CreatedAt = tm.UTC().Format(TimeLayout)
-
+		transaction.Origin = tx.Transaction.From
 		transaction.From = tx.Transaction.From
 		if tx.Transaction.To != nil {
 			transaction.To = *tx.Transaction.To
 		}
+		transaction.Gas = common.BigIntToHexString(big.NewInt(0).SetUint64(tx.Transaction.Gas))
+		transaction.GasPrice = common.BigIntToHexString(tx.Transaction.GasPrice)
+		if tx.Transaction.Data != nil {
+			transaction.Data = make([]byte, len(tx.Transaction.Data))
+			copy(transaction.Data, tx.Transaction.Data)
+		}
+		transaction.Nonce = tx.Transaction.Nonce
 		transaction.Value = common.BigIntToHexString(tx.Transaction.Value)
-
-		gasUsed := big.NewInt(1).SetUint64(receipt.GasUsed)
+		transaction.Receipt = TransactionReceipt{
+			CumulativeGasUsed: common.BigIntToHexString(big.NewInt(0).SetUint64(receipt.CumulativeGasUsed)),
+			EffectiveGasPrice: transaction.GasPrice,
+			GasUsed:           common.BigIntToHexString(big.NewInt(0).SetUint64(receipt.GasUsed)),
+			ContractAddress:   receipt.ContractAddress,
+			Hash:              tx.Transaction.Hash,
+			Type:              common.BigIntToHexString(big.NewInt(0).SetUint64(uint64(receipt.Type))),
+		}
+		if receipt.Status == 0 {
+			transaction.Receipt.Status = "0x0"
+		} else if receipt.Status == 1 {
+			transaction.Receipt.Status = "0x1"
+		} else {
+			return errors.New("unexpected transaction receipt value")
+		}
+		//Timestamp
+		tm := time.Unix(int64(block.Time), 0)
+		transaction.CreatedAt = tm.UTC().Format(TimeLayout)
+		gasUsed := big.NewInt(0).SetUint64(receipt.GasUsed)
 		txnFee := common.SafeMulBigInt(gasUsed, tx.Transaction.GasPrice)
 		log.Debug("transaction", "gasUsed", gasUsed, "txnFee", txnFee, "hash", txHash)
 		transaction.TxnFee = common.BigIntToHexString(txnFee)
-
-		if receipt.Status == 1 {
-			transaction.Status = "0x1"
-		} else {
-			transaction.Status = "0x0"
-		}
 
 		txType, err := c.getTransactionType(tx.Transaction, receipt, blockNum, &txnBatch)
 		if err != nil {
@@ -578,7 +392,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 					tkn := &TokenDetails{
 						ContractAddress:        strings.ToLower(iTxn.To),
 						CreatorAddress:         strings.ToLower(iTxn.From),
-						CreatedTransactionHash: strings.ToLower(tx.Transaction.Hash.Hex()),
+						CreatedTransactionHash: tx.Transaction.Hash,
 						CreatedBlockNumber:     receipt.BlockNumber.Uint64(),
 						Name:                   tokenDetails.Name,
 						Symbol:                 tokenDetails.Symbol,
@@ -646,21 +460,21 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 
 		_, ok = liveAccountTxnMap[tx.Transaction.From]
 		if ok == false {
-			liveAccountTxnMap[tx.Transaction.From] = make([]AccountTransactionCompact, 0)
+			liveAccountTxnMap[tx.Transaction.From] = make([]*TransactionDetails, 0)
 		}
-		liveAccountTxnMap[tx.Transaction.From] = append(liveAccountTxnMap[tx.Transaction.From], transaction)
+		liveAccountTxnMap[tx.Transaction.From] = append(liveAccountTxnMap[tx.Transaction.From], &transaction)
 
 		if tx.Transaction.To != nil {
 			if tx.Transaction.From != *tx.Transaction.To {
 				_, ok = liveAccountTxnMap[*tx.Transaction.To]
 				if ok == false {
-					liveAccountTxnMap[*tx.Transaction.To] = make([]AccountTransactionCompact, 0)
+					liveAccountTxnMap[*tx.Transaction.To] = make([]*TransactionDetails, 0)
 				}
-				liveAccountTxnMap[*tx.Transaction.To] = append(liveAccountTxnMap[*tx.Transaction.To], transaction)
+				liveAccountTxnMap[*tx.Transaction.To] = append(liveAccountTxnMap[*tx.Transaction.To], &transaction)
 			}
 			accountsInvolved[*tx.Transaction.To] = true
 		} else {
-			accountsInvolved[strings.ToLower(receipt.ContractAddress.Hex())] = true
+			accountsInvolved[strings.ToLower(receipt.ContractAddress)] = true
 		}
 		accountsInvolved[tx.Transaction.From] = true
 
@@ -895,7 +709,7 @@ func (c *CacheManager) close() error {
 	return nil
 }
 
-func (c *CacheManager) processAccountTransactions(address string, txnList *[]AccountTransactionCompact, batch *ethdb.Batch) error {
+func (c *CacheManager) processAccountTransactions(address string, txnList *[]*TransactionDetails, batch *ethdb.Batch) error {
 	txnBatch := *batch
 	var txnCount uint64
 	var err error
@@ -948,7 +762,8 @@ func (c *CacheManager) processAccountTransactions(address string, txnList *[]Acc
 	}
 
 	for i, txn := range *txnList {
-		accountTransactionList.Transactions = append([]AccountTransactionCompact{txn}, accountTransactionList.Transactions...) //prepend for backward compat
+		atxn := accountTransactionCompactFromTransaction(txn)
+		accountTransactionList.Transactions = append([]AccountTransactionCompact{atxn}, accountTransactionList.Transactions...) //prepend for backward compat
 
 		if len(accountTransactionList.Transactions) == int(PageSize) || i == len(*txnList)-1 {
 			accountTransactionListBlob, err := json.Marshal(accountTransactionList)
@@ -1188,7 +1003,7 @@ func getAccountTransactionPageKey(address string, pageCount uint64) []byte {
 
 func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *PrimordialReceipt, blockNumber *big.Int, batch *ethdb.Batch) (TransactionType, error) {
 	txHash := txn.Hash
-	if txHash.IsEqualTo(receipt.TxHash) == false {
+	if (txHash == receipt.TxHash) == false {
 		return "", errors.New("hash mismatch between txn and receipt")
 	}
 
@@ -1391,7 +1206,7 @@ func (c *CacheManager) putAccountInCacheAndDb(accountDetails *AccountDetails, ba
 
 	return nil
 }*/
-
+/*
 func (c *CacheManager) flattenInternalTransactionDetails(details *ethclient.InternalTransactionDetails) []*InternalTransactionDetail {
 	txnStack := newStack()
 	txnList := make([]*InternalTransactionDetail, 0)
@@ -1428,7 +1243,7 @@ func (c *CacheManager) flattenInternalTransactionDetails(details *ethclient.Inte
 		}
 	}
 	return txnList
-}
+}*/
 
 func getAccountTokenCountKey(address string) (key string, blob []byte) {
 	key = fmt.Sprintf(AccountTokenCountKey, address)

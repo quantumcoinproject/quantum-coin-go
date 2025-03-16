@@ -17,8 +17,8 @@ type PrimordialAccountDetails struct {
 }
 
 type AccessTuple struct {
-	Address     common.Address `json:"address"        gencodec:"required"`
-	StorageKeys []common.Hash  `json:"storageKeys"    gencodec:"required"`
+	Address     string   `json:"address"        gencodec:"required"`
+	StorageKeys []string `json:"storageKeys"    gencodec:"required"`
 }
 
 func fromNativeAccessTuple(accessTuple *types.AccessTuple) *AccessTuple {
@@ -26,11 +26,11 @@ func fromNativeAccessTuple(accessTuple *types.AccessTuple) *AccessTuple {
 		return nil
 	}
 	at := &AccessTuple{}
-	at.Address.CopyFrom(accessTuple.Address)
+	at.Address = strings.ToLower(accessTuple.Address.Hex())
 	if accessTuple.StorageKeys != nil {
-		at.StorageKeys = make([]common.Hash, len(accessTuple.StorageKeys))
+		at.StorageKeys = make([]string, len(accessTuple.StorageKeys))
 		for i, item := range accessTuple.StorageKeys {
-			at.StorageKeys[i].CopyFrom(item)
+			at.StorageKeys[i] = strings.ToLower(item.Hex())
 		}
 	}
 
@@ -46,9 +46,9 @@ type PrimordialTransaction struct {
 	Value      *big.Int       `json:"value"`
 	Nonce      uint64         `json:"nonce"`
 	From       string
-	To         *string     `json:"to"`
-	Remarks    []byte      `json:"remarks"`
-	Hash       common.Hash `json:"hash"`
+	To         *string `json:"to"`
+	Remarks    []byte  `json:"remarks"`
+	Hash       string  `json:"hash"`
 }
 
 func fromNativeTransaction(txn *types.Transaction) *PrimordialTransaction {
@@ -75,7 +75,7 @@ func fromNativeTransaction(txn *types.Transaction) *PrimordialTransaction {
 		t.Remarks = make([]byte, len(txn.Remarks()))
 		copy(t.Remarks, txn.Remarks())
 	}
-	t.Hash.CopyFrom(txn.Hash())
+	t.Hash = strings.ToLower(txn.Hash().Hex())
 
 	msg, err := txn.AsMessage(types.NewLondonSigner(chainID))
 	if err != nil {
@@ -100,15 +100,16 @@ type TransactionDetailsExpanded struct {
 }
 
 type Block struct {
-	ParentHash       common.Hash `json:"parentHash"       genco_tedec:"required"`
-	StateRoot        common.Hash `json:"stateRoot"        gencodec:"required"`
-	TransactionsRoot common.Hash `json:"transactionsRoot" gencodec:"required"`
-	ReceiptsRoot     common.Hash `json:"receiptsRoot"     gencodec:"required"`
-	Number           *big.Int    `json:"number"           gencodec:"required"`
-	GasLimit         uint64      `json:"gasLimit"         gencodec:"required"`
-	GasUsed          uint64      `json:"gasUsed"          gencodec:"required"`
-	Time             uint64      `json:"timestamp"        gencodec:"required"`
-	MixDigest        common.Hash `json:"mixHash"`
+	Hash             string   `json:"hash"             genco_tedec:"required"`
+	ParentHash       string   `json:"parentHash"       genco_tedec:"required"`
+	StateRoot        string   `json:"stateRoot"        gencodec:"required"`
+	TransactionsRoot string   `json:"transactionsRoot" gencodec:"required"`
+	ReceiptsRoot     string   `json:"receiptsRoot"     gencodec:"required"`
+	Number           *big.Int `json:"number"           gencodec:"required"`
+	GasLimit         uint64   `json:"gasLimit"         gencodec:"required"`
+	GasUsed          uint64   `json:"gasUsed"          gencodec:"required"`
+	Time             uint64   `json:"timestamp"        gencodec:"required"`
+	MixDigest        string   `json:"mixHash"`
 }
 
 type InternalBlockData struct {
@@ -128,11 +129,13 @@ func fromNativeBlock(block *types.Block) *Block {
 		GasUsed:  block.GasUsed(),
 		Time:     block.Time(),
 	}
-	b.ParentHash.CopyFrom(block.ParentHash())
-	b.StateRoot.CopyFrom(block.Root())
-	b.TransactionsRoot.CopyFrom(block.TxHash())
-	b.ReceiptsRoot.CopyFrom(block.ReceiptHash())
-	b.MixDigest.CopyFrom(block.MixDigest())
+	b.Hash = strings.ToLower(block.Header().Hash().Hex())
+	b.Hash = strings.ToLower(block.Header().Hash().Hex())
+	b.ParentHash = strings.ToLower(block.ParentHash().Hex())
+	b.StateRoot = strings.ToLower(block.Root().Hex())
+	b.TransactionsRoot = strings.ToLower(block.TxHash().Hex())
+	b.ReceiptsRoot = strings.ToLower(block.ReceiptHash().Hex())
+	b.MixDigest = strings.ToLower(block.MixDigest().Hex())
 
 	return b
 }
@@ -206,15 +209,15 @@ type PrimordialReceipt struct {
 
 	// Implementation fields: These fields are added by geth when processing a transaction.
 	// They are stored in the chain database.
-	TxHash          common.Hash    `json:"transactionHash" gencodec:"required"`
-	ContractAddress common.Address `json:"contractAddress"`
-	GasUsed         uint64         `json:"gasUsed" gencodec:"required"`
+	TxHash          string `json:"transactionHash" gencodec:"required"`
+	ContractAddress string `json:"contractAddress"`
+	GasUsed         uint64 `json:"gasUsed" gencodec:"required"`
 
 	// Inclusion information: These fields provide information about the inclusion of the
 	// transaction corresponding to this receipt.
-	BlockHash        common.Hash `json:"blockHash,omitempty"`
-	BlockNumber      *big.Int    `json:"blockNumber,omitempty"`
-	TransactionIndex uint        `json:"transactionIndex"`
+	BlockHash        string   `json:"blockHash,omitempty"`
+	BlockNumber      *big.Int `json:"blockNumber,omitempty"`
+	TransactionIndex uint     `json:"transactionIndex"`
 }
 
 func fromNativeReceipt(receipt *types.Receipt) *PrimordialReceipt {
@@ -242,9 +245,9 @@ func fromNativeReceipt(receipt *types.Receipt) *PrimordialReceipt {
 		}
 	}
 
-	r.TxHash.CopyFrom(receipt.TxHash)
-	r.ContractAddress.CopyFrom(receipt.ContractAddress)
-	r.BlockHash.CopyFrom(receipt.BlockHash)
+	r.TxHash = strings.ToLower(receipt.TxHash.Hex())
+	r.ContractAddress = strings.ToLower(receipt.ContractAddress.Hex())
+	r.BlockHash = strings.ToLower(receipt.BlockHash.Hex())
 
 	return r
 }
