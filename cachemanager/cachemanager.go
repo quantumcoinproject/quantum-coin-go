@@ -224,6 +224,7 @@ func (c *CacheManager) start() error {
 	go func() {
 		c.clientInitialize()
 		c.processPendingTransactions()
+		c.closeLoop()
 		delayNumber := int64(100 * time.Millisecond)
 		blockTimer := time.NewTimer(time.Duration(delayNumber))
 
@@ -255,7 +256,8 @@ func (c *CacheManager) start() error {
 				blockTimer.Reset(time.Duration(delayNumber))
 
 			case <-cancel:
-				log.Info("start() Quit signal received")
+				log.Warn("start() Quit signal received")
+				blockTimer.Stop()
 				return
 			}
 		}
@@ -264,6 +266,28 @@ func (c *CacheManager) start() error {
 	log.Info("start done")
 
 	return nil
+}
+
+func (c *CacheManager) closeLoop() {
+	cancel := make(chan os.Signal)
+	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
+	delayNumber := int64(100 * time.Millisecond)
+	closeTimer := time.NewTimer(time.Duration(delayNumber))
+
+	go func() {
+		for {
+			select {
+			case <-closeTimer.C:
+				closeTimer.Reset(time.Duration(delayNumber))
+
+			case <-cancel:
+				log.Warn("closeLoop quit signal received")
+				closeTimer.Stop()
+				c.close()
+				return
+			}
+		}
+	}()
 }
 
 func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockData, runningSummary *BlockchainDetails) error {

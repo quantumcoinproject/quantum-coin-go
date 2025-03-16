@@ -118,8 +118,8 @@ func (c *CacheManager) processPendingTransactions() {
 
 				pendingTxnTimer.Reset(time.Duration(delayNumber))
 			case <-cancel:
+				log.Warn("processPendingTransactions Quit signal received")
 				pendingTxnTimer.Stop()
-				c.close()
 				return
 			}
 		}
