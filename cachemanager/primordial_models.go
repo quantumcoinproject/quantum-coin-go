@@ -99,21 +99,22 @@ type TransactionDetailsExpanded struct {
 	Transaction          *PrimordialTransaction       `json:"transaction"`
 }
 
-type Block struct {
-	Hash             string   `json:"hash"             genco_tedec:"required"`
-	ParentHash       string   `json:"parentHash"       genco_tedec:"required"`
-	StateRoot        string   `json:"stateRoot"        gencodec:"required"`
-	TransactionsRoot string   `json:"transactionsRoot" gencodec:"required"`
-	ReceiptsRoot     string   `json:"receiptsRoot"     gencodec:"required"`
-	Number           *big.Int `json:"number"           gencodec:"required"`
-	GasLimit         uint64   `json:"gasLimit"         gencodec:"required"`
-	GasUsed          uint64   `json:"gasUsed"          gencodec:"required"`
-	Time             uint64   `json:"timestamp"        gencodec:"required"`
-	MixDigest        string   `json:"mixHash"`
+type PrimordialBlock struct {
+	Hash              string   `json:"hash"             genco_tedec:"required"`
+	ParentHash        string   `json:"parentHash"       genco_tedec:"required"`
+	StateRoot         string   `json:"stateRoot"        gencodec:"required"`
+	TransactionsRoot  string   `json:"transactionsRoot" gencodec:"required"`
+	ReceiptsRoot      string   `json:"receiptsRoot"     gencodec:"required"`
+	Number            *big.Int `json:"number"           gencodec:"required"`
+	GasLimit          uint64   `json:"gasLimit"         gencodec:"required"`
+	GasUsed           uint64   `json:"gasUsed"          gencodec:"required"`
+	Time              uint64   `json:"timestamp"        gencodec:"required"`
+	MixDigest         string   `json:"mixHash"          gencodec:"required"`
+	TransactionsCount uint     `json:"transactionsCount"          gencodec:"required"`
 }
 
-type InternalBlockData struct {
-	Block                     *Block                           `json:"block,omitempty"`
+type PrimordialBlockData struct {
+	Block                     *PrimordialBlock                 `json:"block,omitempty"`
 	ConsensusData             *proofofstake.ConsensusData      `json:"consensusData,omitempty"`
 	ZeroAddressBalance        *big.Int                         `json:"zeroAddressBalance,omitempty"`
 	StakingContractBalance    *big.Int                         `json:"stakingContractBalance,omitempty"`
@@ -122,20 +123,21 @@ type InternalBlockData struct {
 	ValidatorList             []*proofofstake.ValidatorDetails `json:"validatorList,omitempty"`
 }
 
-func fromNativeBlock(block *types.Block) *Block {
-	b := &Block{
+func fromNativeBlock(block *types.Block) *PrimordialBlock {
+	b := &PrimordialBlock{
 		Number:   block.Number(),
 		GasLimit: block.GasLimit(),
 		GasUsed:  block.GasUsed(),
 		Time:     block.Time(),
 	}
-	b.Hash = strings.ToLower(block.Header().Hash().Hex())
-	b.Hash = strings.ToLower(block.Header().Hash().Hex())
-	b.ParentHash = strings.ToLower(block.ParentHash().Hex())
-	b.StateRoot = strings.ToLower(block.Root().Hex())
-	b.TransactionsRoot = strings.ToLower(block.TxHash().Hex())
-	b.ReceiptsRoot = strings.ToLower(block.ReceiptHash().Hex())
-	b.MixDigest = strings.ToLower(block.MixDigest().Hex())
+	b.Hash = block.Header().Hash().HexLower()
+	b.Hash = block.Header().Hash().HexLower()
+	b.ParentHash = block.ParentHash().HexLower()
+	b.StateRoot = block.Root().HexLower()
+	b.TransactionsRoot = block.TxHash().HexLower()
+	b.ReceiptsRoot = block.ReceiptHash().HexLower()
+	b.MixDigest = block.MixDigest().HexLower()
+	b.TransactionsCount = uint(len(block.Transactions()))
 
 	return b
 }
@@ -245,9 +247,9 @@ func fromNativeReceipt(receipt *types.Receipt) *PrimordialReceipt {
 		}
 	}
 
-	r.TxHash = strings.ToLower(receipt.TxHash.Hex())
-	r.ContractAddress = strings.ToLower(receipt.ContractAddress.Hex())
-	r.BlockHash = strings.ToLower(receipt.BlockHash.Hex())
+	r.TxHash = receipt.TxHash.HexLower()
+	r.ContractAddress = receipt.ContractAddress.HexLower()
+	r.BlockHash = receipt.BlockHash.HexLower()
 
 	return r
 }

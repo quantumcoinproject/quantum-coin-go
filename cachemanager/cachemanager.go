@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/core"
@@ -41,25 +40,12 @@ type CacheManager struct {
 	//addressMap               map[string]*AccountDetails
 	tokenMap                 map[string]*TokenDetails
 	accountTokenMap          map[string]*map[string]bool //map[accountAddress]map[contractAddress]bool
-	blockChan                chan *InternalBlockData
+	blockChan                chan *PrimordialBlockData
 	primodialCacheCancelChan chan bool
 	primordialCache          *PrimordialCache
 }
 
-var SummaryKey = "summary"
-var LastBlockKey = "last-block"
 var AccountSummaryKey = "account-%s"
-var AccountTxnCountKey = "account-txn-count-%s"                  //%s is account address
-var AccountTransactionPageKey = "account-transaction-list-%s-%d" //%s is account address, %d is page number
-var TokenDetailsKey = "erc20-%s"
-
-var AccountTokenKey = "account-token-count-%s-%s" //%s is account address, %s is contract address
-
-var AccountTokenCountKey = "account-token-count-%s"  //%s is account address
-var AccountTokenPageKey = "account-token-list-%s-%d" //%s is account address, %d is page number
-
-var AccountTokenTxnCountKey = "account-token-txn-count-%s"          //%s is account address
-var AccountTokenTransactionPageKey = "account-token-txn-list-%s-%d" //%s is account address,%d is page number
 
 var chainID *big.Int
 var LevelDbNoTFoundErrMsg = "leveldb: not found"
@@ -68,10 +54,6 @@ var NotFoundErrMsg = "not found"
 const TimeLayout = "2006-01-02T15:04:05Z"
 
 const PageSize uint64 = 20
-
-type TransactionType string
-
-type ContractType string
 
 func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, genesisFilePath string, maxSupply string) (*CacheManager, error) {
 	cManager := &CacheManager{
@@ -143,7 +125,7 @@ func (c *CacheManager) initialize() error {
 	c.cacheDb = cacheManagerDb
 
 	//c.addressMap = make(map[string]*AccountDetails)
-	//c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
+	//c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT.HexLower(), AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
 	//c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
 
 	c.primodialCacheCancelChan = make(chan bool)
@@ -202,7 +184,7 @@ func (c *CacheManager) start() error {
 
 	var runningSummary *BlockchainDetails
 
-	blockNumber, err := c.getLastBlockNumberByDb(LastBlockKey)
+	blockNumber, err := c.getLastBlockNumberFromDb()
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
 			log.Warn("First time start")
@@ -236,7 +218,7 @@ func (c *CacheManager) start() error {
 	}
 	log.Info("runningSummary", runningSummary)
 
-	c.blockChan = make(chan *InternalBlockData, 25)
+	c.blockChan = make(chan *PrimordialBlockData, 25)
 	blockNumber = blockNumber + 1
 
 	go func() {
@@ -252,9 +234,9 @@ func (c *CacheManager) start() error {
 				internalBlockData, err := c.primordialCache.GetBlock(blockNumber)
 				if err != nil {
 					if err.Error() == LevelDbNoTFoundErrMsg {
-						log.Info("Waiting for Block...", "Block number", blockNumber)
+						log.Info("Waiting for PrimordialBlock...", "PrimordialBlock number", blockNumber)
 					} else {
-						log.Error("GetBlock Error", "error", err.Error(), "Block number", blockNumber)
+						log.Error("GetBlock Error", "error", err.Error(), "PrimordialBlock number", blockNumber)
 					}
 					delayNumber = int64(3 * time.Second)
 					blockTimer.Reset(time.Duration(delayNumber))
@@ -263,10 +245,10 @@ func (c *CacheManager) start() error {
 				err = c.processByCacheManager(internalBlockData, runningSummary)
 				if err == nil {
 					blockNumber = blockNumber + 1
-					log.Info("=================Batch Complete", "Block number", blockNumber)
+					log.Info("Batch Complete", "PrimordialBlock number", blockNumber)
 					delayNumber = 0
 				} else {
-					log.Error("Batch Error", "error", err.Error(), "Block number", blockNumber)
+					log.Error("Batch Error", "error", err.Error(), "PrimordialBlock number", blockNumber)
 					delayNumber = int64(3 * time.Second)
 					continue
 				}
@@ -284,7 +266,7 @@ func (c *CacheManager) start() error {
 	return nil
 }
 
-func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockData, runningSummary *BlockchainDetails) error {
+func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockData, runningSummary *BlockchainDetails) error {
 	var err error
 	block := internalBlockData.Block
 	blockNum := block.Number
@@ -293,10 +275,16 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 	log.Info("processByCacheManager", "blockNumber", blockNumber)
 
 	txnBatch := c.cacheDb.NewBatch()
-	blockKey := []byte(LastBlockKey)
-	err = txnBatch.Put(blockKey, common.Uint64ToBytes(blockNumber))
+	err = c.putLastBlockNumberInDb(blockNumber, &txnBatch)
 	if err != nil {
-		log.Error("processByCacheManager txnBatch.Put", "error", err)
+		log.Error("processByCacheManagerputLastBlockNumberInDb", "error", err)
+		return err
+	}
+
+	blockInfo := fromPrimordialBlockData(internalBlockData)
+	err = c.putBlockInDb(blockInfo, &txnBatch)
+	if err != nil {
+		log.Error("putBlockInDb", "error", err)
 		return err
 	}
 
@@ -422,29 +410,29 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 					return err
 				}
 				for _, transfer := range tokenTransfers {
-					accountsInvolved[strings.ToLower(transfer.ContractAddress.Hex())] = true
-					accountsInvolved[strings.ToLower(transfer.From.Hex())] = true
-					accountsInvolved[strings.ToLower(transfer.To.Hex())] = true
+					accountsInvolved[transfer.ContractAddress.HexLower()] = true
+					accountsInvolved[transfer.From.HexLower()] = true
+					accountsInvolved[transfer.To.HexLower()] = true
 				}
 			}
 
 			if tokenApprovals != nil && len(tokenApprovals) > 0 {
 				for _, approval := range tokenApprovals {
-					accountsInvolved[strings.ToLower(approval.ContractAddress.Hex())] = true
-					accountsInvolved[strings.ToLower(approval.TokenOwner.Hex())] = true
-					accountsInvolved[strings.ToLower(approval.Spender.Hex())] = true
+					accountsInvolved[approval.ContractAddress.HexLower()] = true
+					accountsInvolved[approval.TokenOwner.HexLower()] = true
+					accountsInvolved[approval.Spender.HexLower()] = true
 				}
 			}
 
 			if transaction.TransactionType == string(TOKEN_TRANSFER) { //only root level transaction (no internal transactions)
 				//First transfer is root level by from address
-				if tokenTransfers == nil || len(tokenTransfers) == 0 || strings.ToLower(tokenTransfers[0].From.Hex()) != transaction.From {
+				if tokenTransfers == nil || len(tokenTransfers) == 0 || tokenTransfers[0].From.HexLower() != transaction.From {
 					log.Error("processByCacheManager missing", "from", transaction.From, "to (contract)", transaction.To)
 					transaction.TransactionType = string(SMART_CONTRACT)
 				} else {
-					transaction.TokenTransaction.ContractAddress = strings.ToLower(tokenTransfers[0].ContractAddress.Hex())
-					transaction.TokenTransaction.TokenFromAddress = strings.ToLower(tokenTransfers[0].From.Hex())
-					transaction.TokenTransaction.TokenToAddress = strings.ToLower(tokenTransfers[0].To.Hex())
+					transaction.TokenTransaction.ContractAddress = tokenTransfers[0].ContractAddress.HexLower()
+					transaction.TokenTransaction.TokenFromAddress = tokenTransfers[0].From.HexLower()
+					transaction.TokenTransaction.TokenToAddress = tokenTransfers[0].To.HexLower()
 
 					tokenDetails, err := c.getTokenDetailsInternal(transaction.TokenTransaction.ContractAddress) //token should already have been saved to db, when it was created
 					if err != nil {
@@ -512,7 +500,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 	return nil
 }
 
-func (c *CacheManager) updateSummary(internalBlockData *InternalBlockData, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
+func (c *CacheManager) updateSummary(internalBlockData *PrimordialBlockData, runningSummary *BlockchainDetails, batch *ethdb.Batch) error {
 
 	blockNumber := internalBlockData.Block.Number.Uint64()
 	leftBlock := blockNumber
@@ -644,51 +632,6 @@ func (c *CacheManager) latestBlockByNode() (uint64, error) {
 
 }
 
-func (c *CacheManager) getLastBlockNumberByDb(blockKey string) (uint64, error) {
-	db := c.cacheDb
-	mySlice, err := db.Get([]byte(blockKey))
-	if err != nil {
-		return uint64(0), err
-	}
-
-	blockNumber := common.BytesToUint64(mySlice)
-
-	return blockNumber, nil
-}
-
-func (c *CacheManager) getSummaryFromDb() (*BlockchainDetails, error) {
-	db := c.cacheDb
-	summaryBlob, err := db.Get([]byte(SummaryKey))
-	if err != nil {
-		return nil, err
-	}
-
-	var summary BlockchainDetails
-	err = json.Unmarshal(summaryBlob, &summary)
-	if err != nil {
-		return nil, err
-	}
-
-	return &summary, nil
-}
-
-func (c *CacheManager) putSummary(summary *BlockchainDetails, batch *ethdb.Batch) error {
-	txnBatch := *batch
-
-	blob, err := json.Marshal(summary)
-	if err != nil {
-		return err
-	}
-	keyBlob := []byte(SummaryKey)
-
-	err = txnBatch.Put(keyBlob, blob)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (c *CacheManager) close() error {
 	close(c.blockChan)
 	c.pendingTxLock.Lock()
@@ -804,203 +747,6 @@ func getPageCount(itemCount uint64) uint64 {
 	}
 }
 
-func getAccountTxnCountKey(address string) (key string, blob []byte) {
-	key = fmt.Sprintf(AccountTxnCountKey, address)
-	blob = []byte(key)
-	return key, blob
-}
-
-func (c *CacheManager) getAccountTxnCount(address string) (uint64, error) {
-	accountTxnCountKey, keyBlob := getAccountTxnCountKey(address)
-	accountTxnCountBlob, err := c.cacheDb.Get(keyBlob)
-	if err != nil {
-		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Info("getAccountTxnCount not found", "address", address, "accountTxnCountKey", accountTxnCountKey)
-			return 0, nil
-		} else {
-			log.Error("getAccountTxnCount cacheDb.Get address", "address", address, "accountTxnCountKey", accountTxnCountKey, "error", err)
-			return 0, err
-		}
-	} else {
-		txnCount := common.BytesToUint64(accountTxnCountBlob)
-		log.Info("getAccountTxnCount", "address", address, "accountTxnCountKey", accountTxnCountKey, "txnCount", txnCount)
-		return txnCount, nil
-	}
-}
-
-func (c *CacheManager) putAccountTxnCount(address string, txnCount uint64, batch *ethdb.Batch) error {
-	txnBatch := *batch
-	address = strings.ToLower(address)
-	accountTxnCountKey, keyBlob := getAccountTxnCountKey(address)
-	log.Info("putAccountTxnCount", "address", address, "accountTxnCountKey", accountTxnCountKey, "txnCount", txnCount)
-
-	blob := common.Uint64ToBytes(txnCount)
-	err := txnBatch.Put(keyBlob, blob)
-	if err != nil {
-		log.Error("putAccountTxnCount address", "error", err, "address", address, "txnCount", txnCount)
-		return err
-	}
-
-	return nil
-}
-
-func (c *CacheManager) GetBlockchainDetails() (GetBlockchainDetailsResponse, error) {
-	if c.enableExtendedApis == false {
-		return GetBlockchainDetailsResponse{}, errors.New("enableExtendedApis is false")
-	}
-	getResponse := GetBlockchainDetailsResponse{}
-	details, err := c.getSummaryFromDb()
-	if err != nil {
-		return getResponse, err
-	}
-
-	getResponse.Result = *details
-
-	return getResponse, nil
-}
-
-func (c *CacheManager) ListTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTransactionsResponse, error) {
-	listResponse := ListAccountTransactionsResponse{}
-	address := strings.ToLower(accountAddress.Hex())
-
-	var pageCount uint64
-	accountTxnCount, err := c.getAccountTxnCount(address)
-	if err != nil {
-		return ListAccountTransactionsResponse{}, err
-	}
-	if accountTxnCount%PageSize == 0 {
-		pageCount = accountTxnCount / PageSize
-	} else {
-		pageCount = (accountTxnCount / PageSize) + 1
-	}
-
-	if pageCount == 0 {
-		return ListAccountTransactionsResponse{PageCount: 0}, nil
-	}
-
-	var pageNumber uint64
-	if pageNumberInput < 1 {
-		pageNumber = pageCount
-	} else {
-		pageNumber = uint64(pageNumberInput)
-	}
-	log.Info("ListTransactionByAccount", "address", address, "pageNumberInput", pageNumberInput, "pageNumber", pageNumber, "pageCount", pageCount, "accountTxnCount", accountTxnCount)
-	if pageNumber > pageCount {
-		return ListAccountTransactionsResponse{PageCount: pageCount}, nil
-	}
-
-	pageKey := fmt.Sprintf(AccountTransactionPageKey, address, pageNumber)
-	accountTxnPageKey := []byte(pageKey)
-	log.Info("cache get", "key", pageKey)
-
-	accountTransactionListBlob, err := c.cacheDb.Get(accountTxnPageKey)
-	if err != nil {
-		log.Error("ListTransactionByAccount cacheDb.Get fromAccountTxnPageKey", "error", err)
-		return ListAccountTransactionsResponse{}, err
-	}
-	var accountTransactionList AccountTransactionList
-	err = json.Unmarshal(accountTransactionListBlob, &accountTransactionList)
-	if err != nil {
-		log.Error("ListTransactionByAccount json.Unmarshal accountTransactionListBlob", "error", err)
-		return ListAccountTransactionsResponse{}, err
-	}
-
-	if strings.ToLower(accountTransactionList.Address) != address {
-		log.Error("unexpected address accountTransactionList.Address", "address", address, "accountTransactionList.Address", accountTransactionList.Address)
-		return ListAccountTransactionsResponse{}, errors.New("unexpected address accountTransactionList.Address")
-	}
-
-	listResponse.Items = accountTransactionList.Transactions
-	listResponse.PageCount = pageCount
-
-	return listResponse, nil
-}
-
-func (c *CacheManager) ListPendingTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountPendingTransactionsResponse, error) {
-	c.pendingTxMapLock.RLock()
-	defer c.pendingTxMapLock.RUnlock()
-
-	log.Info("ListPendingTransactionsByAccount", "account", accountAddress)
-
-	address := accountAddress.Hex()
-
-	response := ListAccountPendingTransactionsResponse{
-		Items: make([]AccountPendingTransactionCompact, 0),
-	}
-
-	if c.pendingTransactions == nil {
-		return ListAccountPendingTransactionsResponse{}, nil
-	}
-
-	txnMap := *c.pendingTransactions
-	pendingTxnMap := txnMap["pending"]
-	queuedTxnMap := txnMap["queued"]
-
-	log.Debug("ListPendingTransactionsByAccount", "txn count", len(txnMap))
-	for k, v := range txnMap {
-		log.Debug("level0", "k", k, "v=%v", v)
-		for k1, v1 := range v {
-			log.Debug("     level1", "k", k1, "v=%v", v1)
-			for k2, v2 := range v1 {
-				log.Debug("          level2", "k", k2, "v=%v", v2)
-			}
-		}
-	}
-
-	if queuedTxnMap != nil {
-		queuedAccountTxnMap := queuedTxnMap[address]
-		if queuedAccountTxnMap != nil {
-			for _, tx := range queuedAccountTxnMap {
-				txn := AccountPendingTransactionCompact{
-					From:  strings.ToLower(tx.From.Hex()),
-					Value: tx.Value.String(),
-				}
-				if tx.To != nil {
-					txn.To = strings.ToLower(tx.To.Hex())
-				}
-				txn.Hash = tx.Hash.Hex()
-				txn.Nonce = uint64(tx.Nonce)
-				response.Items = append(response.Items, txn)
-				if len(response.Items) == int(PageSize) {
-					break
-				}
-			}
-		}
-	}
-
-	if pendingTxnMap != nil && len(response.Items) < int(PageSize) {
-		pendingAccountTxnMap := pendingTxnMap[address]
-		if pendingAccountTxnMap != nil {
-			for _, tx := range pendingAccountTxnMap {
-				txn := AccountPendingTransactionCompact{
-					From:  strings.ToLower(tx.From.Hex()),
-					Value: tx.Value.String(),
-				}
-				if tx.To != nil {
-					txn.To = strings.ToLower(tx.To.Hex())
-				}
-				txn.Hash = tx.Hash.Hex()
-				txn.Nonce = uint64(tx.Nonce)
-				response.Items = append(response.Items, txn)
-				if len(response.Items) == int(PageSize) {
-					break
-				}
-			}
-		}
-	}
-
-	if len(response.Items) > 0 {
-		response.PageCount = 1
-	}
-
-	return response, nil
-}
-
-func getAccountTransactionPageKey(address string, pageCount uint64) []byte {
-	pageKey := fmt.Sprintf(AccountTransactionPageKey, strings.ToLower(address), pageCount)
-	return []byte(pageKey)
-}
-
 func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *PrimordialReceipt, blockNumber *big.Int, batch *ethdb.Batch) (TransactionType, error) {
 	txHash := txn.Hash
 	if (txHash == receipt.TxHash) == false {
@@ -1046,78 +792,6 @@ func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *P
 			return NEW_SMART_CONTRACT, nil
 		}
 	}
-}
-
-func (c *CacheManager) getTokenDetailsInternal(contractAddress string) (*TokenDetails, error) {
-	contractAddress = strings.ToLower(contractAddress)
-	tokenDetails, ok := c.tokenMap[contractAddress]
-	if ok {
-		return tokenDetails, nil
-	}
-
-	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
-
-	db := c.cacheDb
-	tokenBlob, err := db.Get([]byte(key))
-	if err != nil {
-		return nil, err
-	}
-
-	tokenDetails = &TokenDetails{}
-	err = json.Unmarshal(tokenBlob, tokenDetails)
-	if err != nil {
-		return nil, err
-	}
-
-	c.tokenMap[contractAddress] = tokenDetails
-
-	return tokenDetails, nil
-}
-
-func (c *CacheManager) GetTokenDetails(contractAddress string) (*GetTokenDetailsResponse, error) {
-	contractAddress = strings.ToLower(contractAddress)
-
-	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
-
-	db := c.cacheDb
-	tokenBlob, err := db.Get([]byte(key))
-	if err != nil {
-		return nil, err
-	}
-
-	var tokenDetails TokenDetails
-	err = json.Unmarshal(tokenBlob, &tokenDetails)
-	if err != nil {
-		return nil, err
-	}
-
-	return &GetTokenDetailsResponse{
-		Result: tokenDetails,
-	}, nil
-}
-
-func (c *CacheManager) putTokenInDb(tokenDetails *TokenDetails, batch *ethdb.Batch) error {
-	txnBatch := *batch
-
-	blob, err := json.Marshal(tokenDetails)
-	if err != nil {
-		return err
-	}
-
-	contractAddress := strings.ToLower(tokenDetails.ContractAddress)
-	key := fmt.Sprintf(TokenDetailsKey, contractAddress)
-	keyBlob := []byte(key)
-
-	err = txnBatch.Put(keyBlob, blob)
-	if err != nil {
-		return err
-	}
-
-	c.tokenMap[contractAddress] = tokenDetails
-
-	log.Info("putTokenInDb", "contractAddress", contractAddress)
-
-	return nil
 }
 
 /*func (c *CacheManager) getAccount(address common.Address, blockNumber *big.Int, batch *ethdb.Batch) (*AccountDetails, error) {
@@ -1245,102 +919,10 @@ func (c *CacheManager) flattenInternalTransactionDetails(details *ethclient.Inte
 	return txnList
 }*/
 
-func getAccountTokenCountKey(address string) (key string, blob []byte) {
-	key = fmt.Sprintf(AccountTokenCountKey, address)
-	blob = []byte(key)
-	return key, blob
-}
-
-func (c *CacheManager) getAccountTokenCount(address string) (uint64, error) {
-	accountTokenCountKey, keyBlob := getAccountTokenCountKey(address)
-	accountTokenCountBlob, err := c.cacheDb.Get(keyBlob)
-	if err != nil {
-		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Info("getAccountTokenCount not found", "address", address, "accountTokenCountKey", accountTokenCountKey)
-			return 0, nil
-		} else {
-			log.Error("getAccountTokenCount cacheDb.Get address", "address", address, "accountTokenCountKey", accountTokenCountKey, "error", err)
-			return 0, err
-		}
-	} else {
-		tokenCount := common.BytesToUint64(accountTokenCountBlob)
-		log.Info("getAccountTxnCount", "address", address, "accountTokenCountKey", accountTokenCountKey, "tokenCount", tokenCount)
-		return tokenCount, nil
-	}
-}
-
-func (c *CacheManager) putAccountTokenCount(address string, tokenCount uint64, batch *ethdb.Batch) error {
-	txnBatch := *batch
-	address = strings.ToLower(address)
-	accountTokenCountKey, keyBlob := getAccountTokenCountKey(address)
-	log.Info("putAccountTokenCount", "address", address, "accountTokenCountKey", accountTokenCountKey, "tokenCount", tokenCount)
-
-	blob := common.Uint64ToBytes(tokenCount)
-	err := txnBatch.Put(keyBlob, blob)
-	if err != nil {
-		log.Error("putAccountTokenCount address", "error", err, "address", address, "tokenCount", tokenCount)
-		return err
-	}
-
-	return nil
-}
-
-func getAccountTokenPageKey(address string, page uint64) (key string, blob []byte) {
-	log.Debug("getAccountTokenPageKey", "address", address, "page", page)
-	key = fmt.Sprintf(AccountTokenPageKey, address, page)
-	blob = []byte(key)
-	return key, blob
-}
-
-func (c *CacheManager) getAccountTokenPage(address string, pageNumber uint64) (*AccountTokenList, error) {
-	accountTokenPageKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
-	accountTokenPageBlob, err := c.cacheDb.Get(keyBlob)
-	if err != nil {
-		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Info("getAccountTokenPage not found", "address", address, "accountTokenPageKey", accountTokenPageKey)
-			return nil, nil
-		} else {
-			log.Error("getAccountTokenCount cacheDb.Get address", "address", address, "accountTokenPageKey", accountTokenPageKey, "error", err)
-			return nil, err
-		}
-	} else {
-		accountTokenList := AccountTokenList{}
-		err = json.Unmarshal(accountTokenPageBlob, &accountTokenList)
-		if err != nil {
-			log.Error("getAccountTokenPage", "error", err, "address", address, "pageNumber", pageNumber, "accountTokenPageKey", accountTokenPageKey)
-			return nil, err
-		}
-
-		log.Info("getAccountTokenPage", "address", address, "accountTokenPageKey", accountTokenPageKey, "accountTokenList", accountTokenList)
-
-		return &accountTokenList, nil
-	}
-}
-
-func (c *CacheManager) putAccountTokenPage(address string, accountTokenList *AccountTokenList, pageNumber uint64, batch *ethdb.Batch) error {
-	txnBatch := *batch
-	address = strings.ToLower(address)
-	accountTokenPageKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
-	log.Info("putAccountTokenCount", "address", address, "accountTokenPageKey", accountTokenPageKey, "pageNumber", pageNumber)
-
-	blob, err := json.Marshal(accountTokenList)
-	if err != nil {
-		return err
-	}
-
-	err = txnBatch.Put(keyBlob, blob)
-	if err != nil {
-		log.Error("putAccountTokenCount address", "error", err, "address", address, "pageNumber", pageNumber)
-		return err
-	}
-
-	return nil
-}
-
 // Parses and stores list of tokens and balance for each token
 func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*LogTransfer, blockNum *big.Int, batch *ethdb.Batch) error {
 	for _, t := range tokenTransfers {
-		contractAddress := strings.ToLower(t.ContractAddress.Hex())
+		contractAddress := t.ContractAddress.HexLower()
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
 		if err != nil {
 			log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
@@ -1383,7 +965,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	var tokenCount uint64
 	var err error
 
-	address := strings.ToLower(addr.Hex())
+	address := addr.HexLower()
 	contractAddress := strings.ToLower(tokenDetails.ContractAddress)
 
 	accountTokenSummary := AccountTokenSummary{
@@ -1496,203 +1078,4 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	log.Info("inserted account token list", "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount, "address", address)
 
 	return nil
-}
-
-func (c *CacheManager) getAccountTokenDetailsKey(accountAddress string, contractAddress string) (string, []byte) {
-	key := fmt.Sprintf(AccountTokenKey, strings.ToLower(accountAddress), strings.ToLower(contractAddress))
-	keyBlob := []byte(key)
-	return key, keyBlob
-}
-
-func (c *CacheManager) GetAccountTokenDetails(accountAddress string, contractAddress string) (*AccountTokenSummary, error) {
-	return c.getAccountTokenDetailsFromDb(accountAddress, contractAddress)
-}
-
-func (c *CacheManager) getAccountTokenDetailsFromDb(accountAddress string, contractAddress string) (*AccountTokenSummary, error) {
-	key, keyBlob := c.getAccountTokenDetailsKey(accountAddress, contractAddress)
-	db := c.cacheDb
-	blob, err := db.Get(keyBlob)
-	if err != nil {
-		return nil, err
-	}
-
-	var details AccountTokenSummary
-	err = json.Unmarshal(blob, &details)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Debug("getAccountTokenDetailsFromDb", "accountAddress", accountAddress, "contractAddress", contractAddress, "key", key, "balance", details.TokenBalance)
-
-	return &details, nil
-}
-
-func (c *CacheManager) putAccountTokenInDb(details *AccountTokenSummary, batch *ethdb.Batch) error {
-	txnBatch := *batch
-
-	blob, err := json.Marshal(details)
-	if err != nil {
-		return err
-	}
-
-	key, keyBlob := c.getAccountTokenDetailsKey(details.AccountAddress, details.ContractAddress)
-
-	err = txnBatch.Put(keyBlob, blob)
-	if err != nil {
-		return err
-	}
-
-	log.Debug("putAccountTokenInDb", "key", key, "details TokenBalance", details.TokenBalance, "ContractAddress", details.ContractAddress)
-
-	return nil
-}
-
-func (c *CacheManager) ListTokensByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTokensResponse, error) {
-	listResponse := ListAccountTokensResponse{}
-	address := strings.ToLower(accountAddress.Hex())
-
-	var pageCount uint64
-	accountTokenCount, err := c.getAccountTokenCount(address)
-	if err != nil {
-		log.Error("ListTokensByAccount getAccountTokenCount", "error", err)
-		if err.Error() == LevelDbNoTFoundErrMsg {
-			return ListAccountTokensResponse{PageCount: 0}, nil
-		}
-		return ListAccountTokensResponse{}, err
-	}
-	if accountTokenCount%PageSize == 0 {
-		pageCount = accountTokenCount / PageSize
-	} else {
-		pageCount = (accountTokenCount / PageSize) + 1
-	}
-
-	if pageCount == 0 {
-		return ListAccountTokensResponse{PageCount: 0}, nil
-	}
-
-	var pageNumber uint64
-	if pageNumberInput < 1 {
-		pageNumber = pageCount
-	} else {
-		pageNumber = uint64(pageNumberInput)
-	}
-	log.Info("ListTokensByAccount", "address", address, "pageNumberInput", pageNumberInput, "pageNumber", pageNumber, "pageCount", pageCount, "accountTokenCount", accountTokenCount)
-	if pageNumber > pageCount {
-		log.Error("ListTokensByAccount getAccountTokenCount", "pageNumber", pageNumber, "pageCount", pageCount)
-		return ListAccountTokensResponse{PageCount: pageCount}, nil
-	}
-
-	pageKey, keyBlob := getAccountTokenPageKey(address, pageNumber)
-	log.Debug("cache get", "key", pageKey)
-
-	accountTTokenListBlob, err := c.cacheDb.Get(keyBlob)
-	if err != nil {
-		log.Error("ListTokensByAccount cacheDb.Get", "error", err)
-		return ListAccountTokensResponse{}, err
-	}
-	var accountTokenList AccountTokenList
-	err = json.Unmarshal(accountTTokenListBlob, &accountTokenList)
-	if err != nil {
-		log.Error("ListTokensByAccount json.Unmarshal accountTokenList", "error", err)
-		return ListAccountTokensResponse{}, err
-	}
-
-	if strings.ToLower(accountTokenList.Address) != address {
-		log.Error("unexpected address accountTokenList.Address", "address", address, "accountTokenList.Address", accountTokenList.Address)
-		return ListAccountTokensResponse{}, errors.New("unexpected address accountTokenList.Address")
-	}
-
-	for i, item := range accountTokenList.Tokens {
-		//get new info from db, since paginated cache doesn't store latest balance
-		accountTokenSummary, err := c.getAccountTokenDetailsFromDb(address, strings.ToLower(item.ContractAddress))
-		if err != nil {
-			return ListAccountTokensResponse{}, err
-		}
-		accountTokenList.Tokens[i] = *accountTokenSummary
-	}
-
-	listResponse.Items = accountTokenList.Tokens
-	listResponse.PageCount = pageCount
-
-	return listResponse, nil
-}
-
-func getAccountTokenTxnCountKey(address string) (key string, blob []byte) {
-	key = fmt.Sprintf(AccountTokenTxnCountKey, address)
-	blob = []byte(key)
-	return key, blob
-}
-
-func (c *CacheManager) getAccountTokenTxnCount(address string) (uint64, error) {
-	accountTokenTxnCountKey, keyBlob := getAccountTokenTxnCountKey(address)
-	accountTokenTxnCountBlob, err := c.cacheDb.Get(keyBlob)
-	if err != nil {
-		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Info("getAccountTokenTxnCount not found", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey)
-			return 0, nil
-		} else {
-			log.Error("getAccountTokenTxnCount cacheDb.Get address", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "error", err)
-			return 0, err
-		}
-	} else {
-		tokenTxnCount := common.BytesToUint64(accountTokenTxnCountBlob)
-		log.Info("getAccountTokenTxnCount", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "tokenTxnCount", tokenTxnCount)
-		return tokenTxnCount, nil
-	}
-}
-
-func (c *CacheManager) putAccountTokenTxnCount(address string, tokenTxnCount uint64, batch *ethdb.Batch) error {
-	txnBatch := *batch
-	address = strings.ToLower(address)
-	accountTokenTxnCountKey, keyBlob := getAccountTokenTxnCountKey(address)
-	log.Info("putAccountTokenTxnCount", "address", address, "accountTokenTxnCountKey", accountTokenTxnCountKey, "tokenTxnCount", tokenTxnCount)
-
-	blob := common.Uint64ToBytes(tokenTxnCount)
-	err := txnBatch.Put(keyBlob, blob)
-	if err != nil {
-		log.Error("putAccountTokenTxnCount address", "error", err, "address", address, "tokenTxnCount", tokenTxnCount)
-		return err
-	}
-
-	return nil
-}
-
-func (c *CacheManager) ListTokenTransactionsByAccount(accountAddress common.Address, pageNumberInput int64) (ListAccountTokenTransactionsResponse, error) {
-	return ListAccountTokenTransactionsResponse{}, nil
-}
-
-func (c *CacheManager) processPendingTransactions() {
-	c.pendingTxLock.Lock()
-	defer c.pendingTxLock.Unlock()
-
-	delayNumber := int64(3000 * time.Millisecond)
-	pendingTxnTimer := time.NewTimer(time.Duration(delayNumber))
-	cancel := make(chan os.Signal)
-	signal.Notify(cancel, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		for {
-			select {
-			case <-pendingTxnTimer.C:
-				err, txnList := c.pendingTxClient.TxPoolContent(context.Background())
-				if err != nil {
-					log.Error("processPendingTransactions", "err", err)
-				} else {
-					if txnList == nil {
-						log.Warn("processPendingTransactions txnList is nil")
-					} else {
-						c.pendingTxMapLock.Lock()
-						c.pendingTransactions = txnList
-						c.pendingTxMapLock.Unlock()
-					}
-				}
-
-				pendingTxnTimer.Reset(time.Duration(delayNumber))
-			case <-cancel:
-				pendingTxnTimer.Stop()
-				c.close()
-				return
-			}
-		}
-	}()
 }

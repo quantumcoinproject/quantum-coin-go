@@ -148,7 +148,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 				return
 
 			case <-blockTimer.C:
-				log.Info("PrimordialCache downloadBlock BlockByNumber", "Block Number ", blockNumberToGet)
+				log.Info("PrimordialCache downloadBlock BlockByNumber", "PrimordialBlock Number ", blockNumberToGet)
 
 				if blockNumberToGet == startBlockNumber || blockNumberToGet%int64(50) == 0 {
 					var latestBlockNumberHex *hexutil.Uint64
@@ -221,7 +221,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					continue
 				}
 
-				internalBlockData := &InternalBlockData{
+				internalBlockData := &PrimordialBlockData{
 					Block:                     fromNativeBlock(block),
 					ConsensusData:             consensusData,
 					ZeroAddressBalance:        zeroAddressBalance,
@@ -244,12 +244,12 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 						continue
 					}
 
-					fromAddress := strings.ToLower(msg.From().Hex())
+					fromAddress := msg.From().HexLower()
 					accountsInvolved[fromAddress] = true
 
 					var toAddress string
 					if tx.To() != nil {
-						toAddress = strings.ToLower(tx.To().Hex())
+						toAddress = tx.To().HexLower()
 					}
 
 					receipt, err := c.client.TransactionReceipt(context.Background(), tx.Hash())
@@ -280,7 +280,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 
 					if receipt.Status == 1 {
 						if tx.To() == nil {
-							accountsInvolved[strings.ToLower(receipt.ContractAddress.Hex())] = true
+							accountsInvolved[receipt.ContractAddress.HexLower()] = true
 						} else {
 							accountsInvolved[toAddress] = true
 						}
@@ -390,7 +390,7 @@ func (c *PrimordialCache) getBlockKey(blockNumber uint64) (key string, blob []by
 	return key, blob
 }
 
-func (c *PrimordialCache) putBlockInDb(blockDetails *InternalBlockData, batch *ethdb.Batch) error {
+func (c *PrimordialCache) putBlockInDb(blockDetails *PrimordialBlockData, batch *ethdb.Batch) error {
 	txnBatch := *batch
 	blockNumber := blockDetails.Block.Number.Uint64()
 	log.Debug("PrimordialCache putBlockInDb", "blockNumber", blockNumber)
@@ -412,7 +412,7 @@ func (c *PrimordialCache) putBlockInDb(blockDetails *InternalBlockData, batch *e
 	return nil
 }
 
-func (c *PrimordialCache) getBlockFromDb(blockNumber uint64) (*InternalBlockData, error) {
+func (c *PrimordialCache) getBlockFromDb(blockNumber uint64) (*PrimordialBlockData, error) {
 	blockKey, blockKeyBlob := c.getBlockKey(blockNumber)
 	log.Debug("PrimordialCache getBlockFromDb", "blockNumber", blockNumber, "blockKey", blockKey)
 
@@ -426,7 +426,7 @@ func (c *PrimordialCache) getBlockFromDb(blockNumber uint64) (*InternalBlockData
 		return nil, err
 	}
 
-	var internalBlockData InternalBlockData
+	var internalBlockData PrimordialBlockData
 	err = json.Unmarshal(uncompressed, &internalBlockData)
 	if err != nil {
 		return nil, err
@@ -435,7 +435,7 @@ func (c *PrimordialCache) getBlockFromDb(blockNumber uint64) (*InternalBlockData
 	return &internalBlockData, nil
 }
 
-func (c *PrimordialCache) GetBlock(blockNumber uint64) (*InternalBlockData, error) {
+func (c *PrimordialCache) GetBlock(blockNumber uint64) (*PrimordialBlockData, error) {
 	return c.getBlockFromDb(blockNumber)
 }
 
