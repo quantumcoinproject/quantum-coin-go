@@ -8,6 +8,9 @@ import (
 	"strings"
 )
 
+const AccountTokenTxnCountKey = "account-token-txn-count-%s"          //%s is account address
+const AccountTokenTransactionPageKey = "account-token-txn-list-%s-%d" //%s is account address,%d is page number
+
 func getAccountTokenTxnCountKey(address string) (key string, blob []byte) {
 	key = fmt.Sprintf(AccountTokenTxnCountKey, address)
 	blob = []byte(key)

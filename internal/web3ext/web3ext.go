@@ -75,6 +75,11 @@ web3._extend({
 			call: 'proofofstake_getBlockConsensusContext',
 			params: 1
 		}),
+		new web3._extend.Method({
+			name: 'listConversionDetails',
+			call: 'proofofstake_listConversionDetails',
+			params: 0
+		}),
 	]
 });
 `

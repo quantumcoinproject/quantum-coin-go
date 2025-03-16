@@ -10,12 +10,9 @@ import (
 	"strings"
 )
 
-var AccountTokenKey = "account-token-count-%s-%s"    //%s is account address, %s is contract address
-var AccountTokenCountKey = "account-token-count-%s"  //%s is account address
-var AccountTokenPageKey = "account-token-list-%s-%d" //%s is account address, %d is page number
-
-var AccountTokenTxnCountKey = "account-token-txn-count-%s"          //%s is account address
-var AccountTokenTransactionPageKey = "account-token-txn-list-%s-%d" //%s is account address,%d is page number
+const AccountTokenKey = "account-token-count-%s-%s"    //%s is account address, %s is contract address
+const AccountTokenCountKey = "account-token-count-%s"  //%s is account address
+const AccountTokenPageKey = "account-token-list-%s-%d" //%s is account address, %d is page number
 
 func getAccountTokenCountKey(address string) (key string, blob []byte) {
 	key = fmt.Sprintf(AccountTokenCountKey, address)

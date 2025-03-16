@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-var TokenDetailsKey = "erc20-%s"
+const TokenDetailsKey = "erc20-%s"
 
 func (c *CacheManager) getTokenDetailsInternal(contractAddress string) (*TokenDetails, error) {
 	contractAddress = strings.ToLower(contractAddress)

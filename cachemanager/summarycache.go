@@ -6,7 +6,7 @@ import (
 	"github.com/QuantumCoinProject/qc/ethdb"
 )
 
-var SummaryKey = "summary"
+const SummaryKey = "summary"
 
 func (c *CacheManager) getSummaryFromDb() (*BlockchainDetails, error) {
 	db := c.cacheDb

@@ -10,8 +10,8 @@ import (
 	"strings"
 )
 
-var AccountTxnCountKey = "account-txn-count-%s"                  //%s is account address
-var AccountTransactionPageKey = "account-transaction-list-%s-%d" //%s is account address, %d is page number
+const AccountTxnCountKey = "account-txn-count-%s"                  //%s is account address
+const AccountTransactionPageKey = "account-transaction-list-%s-%d" //%s is account address, %d is page number
 
 func getAccountTransactionPageKey(address string, pageCount uint64) []byte {
 	pageKey := fmt.Sprintf(AccountTransactionPageKey, strings.ToLower(address), pageCount)
