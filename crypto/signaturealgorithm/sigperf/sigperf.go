@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/crypto/hybrideds"
+	"github.com/QuantumCoinProject/qc/crypto/hybridedsfull"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"os"
 	"runtime/pprof"
@@ -15,6 +16,7 @@ import (
 func main() {
 	sig1 := hybrideds.CreateHybridedsSig(true)
 	sig2 := hybrideds.CreateHybridedsSig(false)
+	sig3 := hybridedsfull.CreateHybridedsfullSig()
 
 	if len(os.Args) > 2 {
 		var wg sync.WaitGroup
@@ -37,6 +39,7 @@ func main() {
 
 	SigPerf("hybrideds native verify", sig1, nil)
 	SigPerf("hybrideds non native verify", sig2, nil)
+	SigPerf("hybrideds full", sig3, nil)
 }
 
 func SigPerf(name string, sig signaturealgorithm.SignatureAlgorithm, wg *sync.WaitGroup) {
