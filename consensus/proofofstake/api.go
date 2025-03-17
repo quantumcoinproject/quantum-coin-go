@@ -700,6 +700,8 @@ type ConversionSummary struct {
 	Total             int                  `json:"total,omitempty"`
 	TotalConverted    int                  `json:"totalConverted,omitempty"`
 	TotalNotConverted int                  `json:"totalNotConverted,omitempty"`
+	ConvertedCoins    string               `json:"convertedCoins,omitempty"`
+	TotalCoins        string               `json:"totalCoins,omitempty"`
 }
 
 // ListConversionDetails lists the summary of conversion
@@ -712,6 +714,8 @@ func (api *API) ListConversionDetails() (*ConversionSummary, error) {
 	var summary ConversionSummary
 	summary.ConversionList = make([]*ConversionDetails, len(conversionutil.SnapshotMap))
 	i := 0
+	totalCoins := big.NewInt(0)
+	convertedCoins := big.NewInt(0)
 	for item, _ := range conversionutil.SnapshotMap {
 		ethAddress := common.HexToAddress(item)
 		isConverted, err := api.getConversionStatus(ethAddress, header.Hash())
@@ -731,9 +735,11 @@ func (api *API) ListConversionDetails() (*ConversionSummary, error) {
 				return nil, err
 			}
 			summary.TotalConverted++
+			convertedCoins = convertedCoins.Add(convertedCoins, coins)
 		} else {
 			quantumAddress = ZERO_ADDRESS
 		}
+		totalCoins = totalCoins.Add(totalCoins, coins)
 
 		conversionDetails := &ConversionDetails{
 			EthAddress:     ethAddress,
@@ -746,6 +752,8 @@ func (api *API) ListConversionDetails() (*ConversionSummary, error) {
 	}
 	summary.Total = len(summary.ConversionList)
 	summary.TotalNotConverted = summary.Total - summary.TotalConverted
+	summary.ConvertedCoins = common.BigIntToHexString(convertedCoins)
+	summary.TotalCoins = common.BigIntToHexString(totalCoins)
 
 	return &summary, nil
 }
