@@ -250,7 +250,7 @@ func (api *SignerAPI) determineSignatureFormat(ctx context.Context, contentType 
 	useEthereumV = false
 	req = &SignDataRequest{ContentType: mediaType, Rawdata: cliqueRlp, Messages: messages, Hash: sighash}*/
 	default: // also case TextPlain.Mime:
-		// Calculates an Ethereum ECDSA signature for:
+		// Calculates an Ethereum signature for:
 		// hash = keccak256("\x19${byteVersion}Ethereum Signed Message:\n${message length}${message}")
 		// We expect it to be a string
 		if stringData, ok := data.(string); !ok {

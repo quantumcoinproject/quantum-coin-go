@@ -335,7 +335,7 @@ func fetchKeystore(am *accounts.Manager) (*keystore.KeyStore, error) {
 	return nil, errors.New("local keystore not used")
 }
 
-// ImportRawKey stores the given hex encoded ECDSA key into the key directory,
+// ImportRawKey stores the given hex encoded key into the key directory,
 // encrypting it with the passphrase.
 func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
 	key, err := cryptobase.SigAlg.HexToPrivateKey(privkey)
@@ -1633,7 +1633,7 @@ func (s *PublicTransactionPoolAPI) SendRawTransaction(ctx context.Context, input
 	return SubmitTransaction(ctx, s.b, tx)
 }
 
-// Sign calculates an ECDSA signature for:
+// Sign calculates an signature for:
 // keccack256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
 // The account associated with addr must be unlocked.
