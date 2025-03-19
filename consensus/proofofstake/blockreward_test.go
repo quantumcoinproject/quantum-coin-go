@@ -44,10 +44,141 @@ func TestRewardGenerateYearly(t *testing.T) {
 		endBlockNumber := big.NewInt(blockNumber - 1)
 		endReward := new(big.Int).Set(GetReward(endBlockNumber))
 
-		fmt.Println("Year : ", i,
+		startRewardEth := params.WeiToEther(startReward)
+
+		fmt.Println("In Wei", "Year : ", i,
 			" Block Range : ", startBlockNumber, " - ", endBlockNumber,
-			" Block reward range : ", startReward, " - ", endReward)
+			" Block reward range (wei) : ", startReward, " - ", endReward,
+			" Block reward range (q) : ", startRewardEth, " - ", params.WeiToEther(endReward))
+
+		if i == 1 && startRewardEth.Cmp(big.NewInt(951293)) != 0 {
+			t.Fatalf("failed a")
+		}
+		if i == 5 && startRewardEth.Cmp(big.NewInt(475646)) != 0 {
+			t.Fatalf("failed b")
+		}
+		if i == 9 && startRewardEth.Cmp(big.NewInt(237823)) != 0 {
+			t.Fatalf("failed c")
+		}
+		if i == 13 && startRewardEth.Cmp(big.NewInt(118911)) != 0 {
+			t.Fatalf("failed d")
+		}
+		if i == 17 && startRewardEth.Cmp(big.NewInt(59455)) != 0 {
+			t.Fatalf("failed e")
+		}
+		if i == 21 && startRewardEth.Cmp(big.NewInt(29727)) != 0 {
+			t.Fatalf("failed f")
+		}
+		if i == 25 && startRewardEth.Cmp(big.NewInt(14863)) != 0 {
+			t.Fatalf("failed g")
+		}
+		if i == 29 && startRewardEth.Cmp(big.NewInt(7431)) != 0 {
+			t.Fatalf("failed h")
+		}
+		if i == 33 && startRewardEth.Cmp(big.NewInt(3715)) != 0 {
+			t.Fatalf("failed i")
+		}
+		if i == 37 && startRewardEth.Cmp(big.NewInt(1857)) != 0 {
+			t.Fatalf("failed i")
+		}
+		if i == 41 && startRewardEth.Cmp(big.NewInt(928)) != 0 {
+			t.Fatalf("failed i")
+		}
+		if i == 45 && startRewardEth.Cmp(big.NewInt(464)) != 0 {
+			t.Fatalf("failed i")
+		}
+		if i == 49 && startRewardEth.Cmp(big.NewInt(232)) != 0 {
+			t.Fatalf("failed i")
+		}
+		if i == 53 && startRewardEth.Cmp(big.NewInt(116)) != 0 {
+			t.Fatalf("failed i")
+		}
+		if i == 57 && startRewardEth.Cmp(big.NewInt(58)) != 0 {
+			t.Fatalf("failed i")
+		}
 	}
+	/*
+		In Wei Year :  1  Block Range :  277204  -  5533203  Block reward range (wei) :  951293759512937627732754  -  951293759512937627732754  Block reward range (q) :  951293  -  951293
+		In Wei Year :  2  Block Range :  5533204  -  10789203  Block reward range (wei) :  951293759512937627732754  -  951293759512937627732754  Block reward range (q) :  951293  -  951293
+		In Wei Year :  3  Block Range :  10789204  -  16045203  Block reward range (wei) :  951293759512937627732754  -  951293759512937627732754  Block reward range (q) :  951293  -  951293
+		In Wei Year :  4  Block Range :  16045204  -  21301203  Block reward range (wei) :  951293759512937627732754  -  951293759512937627732754  Block reward range (q) :  951293  -  951293
+		In Wei Year :  5  Block Range :  21301204  -  26557203  Block reward range (wei) :  475646879756468813866377  -  475646879756468813866377  Block reward range (q) :  475646  -  475646
+		In Wei Year :  6  Block Range :  26557204  -  31813203  Block reward range (wei) :  475646879756468813866377  -  475646879756468813866377  Block reward range (q) :  475646  -  475646
+		In Wei Year :  7  Block Range :  31813204  -  37069203  Block reward range (wei) :  475646879756468813866377  -  475646879756468813866377  Block reward range (q) :  475646  -  475646
+		In Wei Year :  8  Block Range :  37069204  -  42325203  Block reward range (wei) :  475646879756468813866377  -  475646879756468813866377  Block reward range (q) :  475646  -  475646
+		In Wei Year :  9  Block Range :  42325204  -  47581203  Block reward range (wei) :  237823439878234406933188  -  237823439878234406933188  Block reward range (q) :  237823  -  237823
+		In Wei Year :  10  Block Range :  47581204  -  52837203  Block reward range (wei) :  237823439878234406933188  -  237823439878234406933188  Block reward range (q) :  237823  -  237823
+		In Wei Year :  11  Block Range :  52837204  -  58093203  Block reward range (wei) :  237823439878234406933188  -  237823439878234406933188  Block reward range (q) :  237823  -  237823
+		In Wei Year :  12  Block Range :  58093204  -  63349203  Block reward range (wei) :  237823439878234406933188  -  237823439878234406933188  Block reward range (q) :  237823  -  237823
+		In Wei Year :  13  Block Range :  63349204  -  68605203  Block reward range (wei) :  118911719939117203466594  -  118911719939117203466594  Block reward range (q) :  118911  -  118911
+		In Wei Year :  14  Block Range :  68605204  -  73861203  Block reward range (wei) :  118911719939117203466594  -  118911719939117203466594  Block reward range (q) :  118911  -  118911
+		In Wei Year :  15  Block Range :  73861204  -  79117203  Block reward range (wei) :  118911719939117203466594  -  118911719939117203466594  Block reward range (q) :  118911  -  118911
+		In Wei Year :  16  Block Range :  79117204  -  84373203  Block reward range (wei) :  118911719939117203466594  -  118911719939117203466594  Block reward range (q) :  118911  -  118911
+		In Wei Year :  17  Block Range :  84373204  -  89629203  Block reward range (wei) :  59455859969558601733297  -  59455859969558601733297  Block reward range (q) :  59455  -  59455
+		In Wei Year :  18  Block Range :  89629204  -  94885203  Block reward range (wei) :  59455859969558601733297  -  59455859969558601733297  Block reward range (q) :  59455  -  59455
+		In Wei Year :  19  Block Range :  94885204  -  100141203  Block reward range (wei) :  59455859969558601733297  -  59455859969558601733297  Block reward range (q) :  59455  -  59455
+		In Wei Year :  20  Block Range :  100141204  -  105397203  Block reward range (wei) :  59455859969558601733297  -  59455859969558601733297  Block reward range (q) :  59455  -  59455
+		In Wei Year :  21  Block Range :  105397204  -  110653203  Block reward range (wei) :  29727929984779300866649  -  29727929984779300866649  Block reward range (q) :  29727  -  29727
+		In Wei Year :  22  Block Range :  110653204  -  115909203  Block reward range (wei) :  29727929984779300866649  -  29727929984779300866649  Block reward range (q) :  29727  -  29727
+		In Wei Year :  23  Block Range :  115909204  -  121165203  Block reward range (wei) :  29727929984779300866649  -  29727929984779300866649  Block reward range (q) :  29727  -  29727
+		In Wei Year :  24  Block Range :  121165204  -  126421203  Block reward range (wei) :  29727929984779300866649  -  29727929984779300866649  Block reward range (q) :  29727  -  29727
+		In Wei Year :  25  Block Range :  126421204  -  131677203  Block reward range (wei) :  14863964992389650433324  -  14863964992389650433324  Block reward range (q) :  14863  -  14863
+		In Wei Year :  26  Block Range :  131677204  -  136933203  Block reward range (wei) :  14863964992389650433324  -  14863964992389650433324  Block reward range (q) :  14863  -  14863
+		In Wei Year :  27  Block Range :  136933204  -  142189203  Block reward range (wei) :  14863964992389650433324  -  14863964992389650433324  Block reward range (q) :  14863  -  14863
+		In Wei Year :  28  Block Range :  142189204  -  147445203  Block reward range (wei) :  14863964992389650433324  -  14863964992389650433324  Block reward range (q) :  14863  -  14863
+		In Wei Year :  29  Block Range :  147445204  -  152701203  Block reward range (wei) :  7431982496194825216662  -  7431982496194825216662  Block reward range (q) :  7431  -  7431
+		In Wei Year :  30  Block Range :  152701204  -  157957203  Block reward range (wei) :  7431982496194825216662  -  7431982496194825216662  Block reward range (q) :  7431  -  7431
+		In Wei Year :  31  Block Range :  157957204  -  163213203  Block reward range (wei) :  7431982496194825216662  -  7431982496194825216662  Block reward range (q) :  7431  -  7431
+		In Wei Year :  32  Block Range :  163213204  -  168469203  Block reward range (wei) :  7431982496194825216662  -  7431982496194825216662  Block reward range (q) :  7431  -  7431
+		In Wei Year :  33  Block Range :  168469204  -  173725203  Block reward range (wei) :  3715991248097412608331  -  3715991248097412608331  Block reward range (q) :  3715  -  3715
+		In Wei Year :  34  Block Range :  173725204  -  178981203  Block reward range (wei) :  3715991248097412608331  -  3715991248097412608331  Block reward range (q) :  3715  -  3715
+		In Wei Year :  35  Block Range :  178981204  -  184237203  Block reward range (wei) :  3715991248097412608331  -  3715991248097412608331  Block reward range (q) :  3715  -  3715
+		In Wei Year :  36  Block Range :  184237204  -  189493203  Block reward range (wei) :  3715991248097412608331  -  3715991248097412608331  Block reward range (q) :  3715  -  3715
+		In Wei Year :  37  Block Range :  189493204  -  194749203  Block reward range (wei) :  1857995624048706304166  -  1857995624048706304166  Block reward range (q) :  1857  -  1857
+		In Wei Year :  38  Block Range :  194749204  -  200005203  Block reward range (wei) :  1857995624048706304166  -  1857995624048706304166  Block reward range (q) :  1857  -  1857
+		In Wei Year :  39  Block Range :  200005204  -  205261203  Block reward range (wei) :  1857995624048706304166  -  1857995624048706304166  Block reward range (q) :  1857  -  1857
+		In Wei Year :  40  Block Range :  205261204  -  210517203  Block reward range (wei) :  1857995624048706304166  -  1857995624048706304166  Block reward range (q) :  1857  -  1857
+		In Wei Year :  41  Block Range :  210517204  -  215773203  Block reward range (wei) :  928997812024353152083  -  928997812024353152083  Block reward range (q) :  928  -  928
+		In Wei Year :  42  Block Range :  215773204  -  221029203  Block reward range (wei) :  928997812024353152083  -  928997812024353152083  Block reward range (q) :  928  -  928
+		In Wei Year :  43  Block Range :  221029204  -  226285203  Block reward range (wei) :  928997812024353152083  -  928997812024353152083  Block reward range (q) :  928  -  928
+		In Wei Year :  44  Block Range :  226285204  -  231541203  Block reward range (wei) :  928997812024353152083  -  928997812024353152083  Block reward range (q) :  928  -  928
+		In Wei Year :  45  Block Range :  231541204  -  236797203  Block reward range (wei) :  464498906012176576041  -  464498906012176576041  Block reward range (q) :  464  -  464
+		In Wei Year :  46  Block Range :  236797204  -  242053203  Block reward range (wei) :  464498906012176576041  -  464498906012176576041  Block reward range (q) :  464  -  464
+		In Wei Year :  47  Block Range :  242053204  -  247309203  Block reward range (wei) :  464498906012176576041  -  464498906012176576041  Block reward range (q) :  464  -  464
+		In Wei Year :  48  Block Range :  247309204  -  252565203  Block reward range (wei) :  464498906012176576041  -  464498906012176576041  Block reward range (q) :  464  -  464
+		In Wei Year :  49  Block Range :  252565204  -  257821203  Block reward range (wei) :  232249453006088288021  -  232249453006088288021  Block reward range (q) :  232  -  232
+		In Wei Year :  50  Block Range :  257821204  -  263077203  Block reward range (wei) :  232249453006088288021  -  232249453006088288021  Block reward range (q) :  232  -  232
+		In Wei Year :  51  Block Range :  263077204  -  268333203  Block reward range (wei) :  232249453006088288021  -  232249453006088288021  Block reward range (q) :  232  -  232
+		In Wei Year :  52  Block Range :  268333204  -  273589203  Block reward range (wei) :  232249453006088288021  -  232249453006088288021  Block reward range (q) :  232  -  232
+		In Wei Year :  53  Block Range :  273589204  -  278845203  Block reward range (wei) :  116124726503044144010  -  116124726503044144010  Block reward range (q) :  116  -  116
+		In Wei Year :  54  Block Range :  278845204  -  284101203  Block reward range (wei) :  116124726503044144010  -  116124726503044144010  Block reward range (q) :  116  -  116
+		In Wei Year :  55  Block Range :  284101204  -  289357203  Block reward range (wei) :  116124726503044144010  -  116124726503044144010  Block reward range (q) :  116  -  116
+		In Wei Year :  56  Block Range :  289357204  -  294613203  Block reward range (wei) :  116124726503044144010  -  116124726503044144010  Block reward range (q) :  116  -  116
+		In Wei Year :  57  Block Range :  294613204  -  299869203  Block reward range (wei) :  58062363251522072005  -  58062363251522072005  Block reward range (q) :  58  -  58
+		In Wei Year :  58  Block Range :  299869204  -  305125203  Block reward range (wei) :  58062363251522072005  -  58062363251522072005  Block reward range (q) :  58  -  58
+		In Wei Year :  59  Block Range :  305125204  -  310381203  Block reward range (wei) :  58062363251522072005  -  58062363251522072005  Block reward range (q) :  58  -  58
+		In Wei Year :  60  Block Range :  310381204  -  315637203  Block reward range (wei) :  58062363251522072005  -  58062363251522072005  Block reward range (q) :  58  -  58
+		In Wei Year :  61  Block Range :  315637204  -  320893203  Block reward range (wei) :  29031181625761036003  -  29031181625761036003  Block reward range (q) :  29  -  29
+		In Wei Year :  62  Block Range :  320893204  -  326149203  Block reward range (wei) :  29031181625761036003  -  29031181625761036003  Block reward range (q) :  29  -  29
+		In Wei Year :  63  Block Range :  326149204  -  331405203  Block reward range (wei) :  29031181625761036003  -  29031181625761036003  Block reward range (q) :  29  -  29
+		In Wei Year :  64  Block Range :  331405204  -  336661203  Block reward range (wei) :  29031181625761036003  -  29031181625761036003  Block reward range (q) :  29  -  29
+		In Wei Year :  65  Block Range :  336661204  -  341917203  Block reward range (wei) :  14515590812880518001  -  14515590812880518001  Block reward range (q) :  14  -  14
+		In Wei Year :  66  Block Range :  341917204  -  347173203  Block reward range (wei) :  14515590812880518001  -  14515590812880518001  Block reward range (q) :  14  -  14
+		In Wei Year :  67  Block Range :  347173204  -  352429203  Block reward range (wei) :  14515590812880518001  -  14515590812880518001  Block reward range (q) :  14  -  14
+		In Wei Year :  68  Block Range :  352429204  -  357685203  Block reward range (wei) :  14515590812880518001  -  14515590812880518001  Block reward range (q) :  14  -  14
+		In Wei Year :  69  Block Range :  357685204  -  362941203  Block reward range (wei) :  7257795406440259001  -  7257795406440259001  Block reward range (q) :  7  -  7
+		In Wei Year :  70  Block Range :  362941204  -  368197203  Block reward range (wei) :  7257795406440259001  -  7257795406440259001  Block reward range (q) :  7  -  7
+		In Wei Year :  71  Block Range :  368197204  -  373453203  Block reward range (wei) :  7257795406440259001  -  7257795406440259001  Block reward range (q) :  7  -  7
+		In Wei Year :  72  Block Range :  373453204  -  378709203  Block reward range (wei) :  7257795406440259001  -  7257795406440259001  Block reward range (q) :  7  -  7
+		In Wei Year :  73  Block Range :  378709204  -  383965203  Block reward range (wei) :  3628897703220129500  -  3628897703220129500  Block reward range (q) :  3  -  3
+		In Wei Year :  74  Block Range :  383965204  -  389221203  Block reward range (wei) :  3628897703220129500  -  3628897703220129500  Block reward range (q) :  3  -  3
+		In Wei Year :  75  Block Range :  389221204  -  394477203  Block reward range (wei) :  3628897703220129500  -  3628897703220129500  Block reward range (q) :  3  -  3
+		In Wei Year :  76  Block Range :  394477204  -  399733203  Block reward range (wei) :  3628897703220129500  -  3628897703220129500  Block reward range (q) :  3  -  3
+		In Wei Year :  77  Block Range :  399733204  -  404989203  Block reward range (wei) :  1814448851610064750  -  1814448851610064750  Block reward range (q) :  1  -  1
+		In Wei Year :  78  Block Range :  404989204  -  410245203  Block reward range (wei) :  1814448851610064750  -  1814448851610064750  Block reward range (q) :  1  -  1
+		In Wei Year :  79  Block Range :  410245204  -  415501203  Block reward range (wei) :  1814448851610064750  -  1814448851610064750  Block reward range (q) :  1  -  1
+		In Wei Year :  80  Block Range :  415501204  -  420757203  Block reward range (wei) :  1814448851610064750  -  1814448851610064750  Block reward range (q) :  1  -  1
+	*/
 }
 
 func TestRewardGenerateBlocks1(t *testing.T) {
