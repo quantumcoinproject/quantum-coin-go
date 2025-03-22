@@ -799,7 +799,7 @@ func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *P
 		}
 	} else {
 		if receipt.Status == 1 {
-			acc, err := c.primordialCache.getAccountFromCacheOrDb(*txn.To)
+			acc, err := c.primordialCache.getAccountFromCacheOrDb(receipt.ContractAddress)
 			if err != nil {
 				return "", err
 			}
