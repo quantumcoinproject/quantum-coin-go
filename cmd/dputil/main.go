@@ -12,6 +12,7 @@ import (
 	"github.com/QuantumCoinProject/qc/crypto/crosssign"
 	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
 	"github.com/QuantumCoinProject/qc/log"
+	"io"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -120,6 +121,12 @@ func printHelp() {
 	fmt.Println("dputil txn TXN_HASH")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil createtokenconversioncontract FROM_ADDRESS")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("dputil submittokenburnproof CONTRACT_ADDRESS FROM_ADDRESS BURN_PROOF_FILE")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -260,6 +267,16 @@ func main() {
 		}
 	} else if os.Args[1] == "accountlist" {
 		err := AccountList()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "createtokenconversioncontract" {
+		err := CreateTokenConversionContract()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "submittokenburnproof" {
+		err := SubmitTokenBurnProof()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1763,4 +1780,139 @@ func AccountList() error {
 		fmt.Println(addr)
 	}
 	return nil
+}
+
+func CreateTokenConversionContract() error {
+	if len(os.Args) < 3 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	if len(os.Getenv("DP_KEY_FILE_DIR")) == 0 {
+		return errors.New("set the keyfile directory environment variable DP_KEY_FILE_DIR")
+	}
+
+	fromAddr := os.Args[2]
+
+	fromAccountKeyFile, err := findKeyFile(fromAddr)
+	if err != nil {
+		return errors.New("error finding FROM_ADDRESS in DP_KEY_FILE_DIR " + err.Error())
+	}
+
+	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the wallet password : "))
+	if err != nil {
+		return err
+	}
+	if len(fromAccountPwd) == 0 {
+		return errors.New("from account password is not set")
+	}
+
+	fromKey, err := GetKeyFromFile(fromAccountKeyFile, fromAccountPwd)
+	if err != nil {
+		return errors.New("error decrypting depositor key " + err.Error())
+	}
+
+	fmt.Println()
+
+	fromAccountPasswordConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to create a token conversion contract? This transaction requires gas fees."))
+	if err != nil {
+		return err
+	}
+	if fromAccountPasswordConfirm != true {
+		return errors.New("confirmation not made")
+	}
+	fmt.Println()
+
+	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	if err != nil {
+		return errors.New("from account public key to address " + err.Error())
+	}
+
+	if !fromAddressFromKey.IsEqualTo(common.HexToAddress(fromAddr)) {
+		return errors.New("from account key address check failed " + fromAddressFromKey.Hex() + " " + fromAddr)
+	}
+
+	return createTokenTransferContract(fromKey)
+}
+
+func SubmitTokenBurnProof() error {
+	if len(os.Args) < 5 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	if len(os.Getenv("DP_KEY_FILE_DIR")) == 0 {
+		return errors.New("set the keyfile directory environment variable DP_KEY_FILE_DIR")
+	}
+
+	contractAddr := os.Args[2]
+	fromAddr := os.Args[3]
+	burnProofFile := os.Args[4]
+
+	if common.IsHexAddress(contractAddr) == false {
+		return errors.New("invalid contract address " + contractAddr)
+	}
+
+	if common.IsHexAddress(fromAddr) == false {
+		return errors.New("invalid from address " + fromAddr)
+	}
+
+	fromAccountKeyFile, err := findKeyFile(fromAddr)
+	if err != nil {
+		return errors.New("error finding FROM_ADDRESS in DP_KEY_FILE_DIR " + err.Error())
+	}
+
+	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the wallet password : "))
+	if err != nil {
+		return err
+	}
+	if len(fromAccountPwd) == 0 {
+		return errors.New("from account password is not set")
+	}
+
+	fromKey, err := GetKeyFromFile(fromAccountKeyFile, fromAccountPwd)
+	if err != nil {
+		return errors.New("error decrypting depositor key " + err.Error())
+	}
+
+	fmt.Println()
+
+	fromAccountPasswordConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to burn proof tokens to contract %s from %s? A lot of coins will be required for gas fee.",
+		contractAddr, fromAddr))
+	if err != nil {
+		return err
+	}
+	if fromAccountPasswordConfirm != true {
+		return errors.New("confirmation not made")
+	}
+	fmt.Println()
+
+	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	if err != nil {
+		return errors.New("from account public key to address " + err.Error())
+	}
+
+	if !fromAddressFromKey.IsEqualTo(common.HexToAddress(fromAddr)) {
+		return errors.New("from account key address check failed " + fromAddressFromKey.Hex() + " " + fromAddr)
+	}
+
+	file, err := os.Open(burnProofFile)
+	if err != nil {
+		fmt.Println("error opening file", err, burnProofFile)
+	}
+	defer func() {
+		if err = file.Close(); err != nil {
+			fmt.Println("error closing file", err, burnProofFile)
+		}
+	}()
+
+	fileBytes, err := io.ReadAll(file)
+	if len(fileBytes) > 1024*2 {
+		fmt.Println("too long burn proof")
+		return nil
+	}
+
+	return submitBurnProof(contractAddr, string(fileBytes), fromKey)
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv1"
 	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv2"
 	"github.com/QuantumCoinProject/qc/token"
+	"github.com/QuantumCoinProject/qc/token/tokenconversion"
 	"io/ioutil"
 	"log"
 	"math/big"
@@ -1766,6 +1767,98 @@ func multiTransferTokensInner(contractAddr common.Address, toAddressList []commo
 	}
 
 	fmt.Println("Your request to transfer tokens has been added to the queue for processing. Please check your account balance after 10 minutes.")
+	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash())
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return nil
+}
+
+func createTokenTransferContract(key *signaturealgorithm.PrivateKey) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+
+	fromAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+
+	if err != nil {
+		return err
+	}
+
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	txnOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(123123))
+
+	if err != nil {
+		return err
+	}
+
+	txnOpts.From = fromAddress
+	txnOpts.Nonce = big.NewInt(int64(nonce))
+	txnOpts.GasLimit = uint64(2500000)
+	txnOpts.Value = big.NewInt(0)
+
+	var tx *types.Transaction
+	contractAddress, tx, _, err := tokenconversion.DeployTokenconversion(txnOpts, client)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Your request to create a token conversion contract has been added to the queue for processing. Please check your account after 10 minutes.")
+	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash(), "contractAddress", contractAddress)
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return nil
+}
+
+func submitBurnProof(contractAddr string, burnproof string, key *signaturealgorithm.PrivateKey) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+
+	fromAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+
+	if err != nil {
+		return err
+	}
+
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	contractAddress := common.HexToAddress(contractAddr)
+	txnOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(123123))
+
+	if err != nil {
+		return err
+	}
+
+	txnOpts.From = fromAddress
+	txnOpts.Nonce = big.NewInt(int64(nonce))
+	txnOpts.GasLimit = uint64(2500000)
+	txnOpts.Value = big.NewInt(0)
+
+	var tx *types.Transaction
+	contract, err := tokenconversion.NewTokenconversion(contractAddress, client)
+	if err != nil {
+		return err
+	}
+
+	tx, err = contract.SubmitBurnProof(txnOpts, burnproof)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Your request to submit burn proofs  has been added to the queue for processing. Please check your account balance after 10 minutes.")
 	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash())
 	fmt.Println()
 
