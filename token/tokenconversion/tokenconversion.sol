@@ -12,6 +12,7 @@ interface ITokenConversionContract {
 
     event OnSubmitBurnProof(
         address indexed submitterAddress,
+        string indexed burnProof,
         uint256 index
     );
 }
@@ -19,6 +20,7 @@ interface ITokenConversionContract {
 contract TokenConversionContract is ITokenConversionContract {
 
     struct ConversionRequest {
+        address quantumAddress;
         string ethAddress;
         string ethSignature;
     }
@@ -27,14 +29,14 @@ contract TokenConversionContract is ITokenConversionContract {
     string[] public BurnProofs;
 
     function requestConversion(string calldata ethAddress, string calldata ethSignature) external returns (uint8) {
-        ConversionRequests.push(ConversionRequest(ethAddress, ethSignature)); //just a request, anyone can request
+        ConversionRequests.push(ConversionRequest(msg.sender, ethAddress, ethSignature)); //just a request, anyone can request
         emit OnRequestConversion(msg.sender, ethAddress, ethSignature, ConversionRequests.length - 1);
         return 0;
     }
 
     function submitBurnProof(string calldata burnProof) external returns (uint8) {
         BurnProofs.push(burnProof); //anyone can submit a burn proof
-        emit OnSubmitBurnProof(msg.sender, BurnProofs.length - 1);
+        emit OnSubmitBurnProof(msg.sender, burnProof, BurnProofs.length - 1);
         return 0;
     }
 }
