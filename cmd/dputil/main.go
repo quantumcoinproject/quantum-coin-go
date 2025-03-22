@@ -17,6 +17,7 @@ import (
 	"math/big"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -127,6 +128,9 @@ func printHelp() {
 	fmt.Println("dputil submittokenburnproof CONTRACT_ADDRESS FROM_ADDRESS BURN_PROOF_FILE")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("dputil listtokenconversions CONTRACT_ADDRESS OUTPUT_FOLDER")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -277,6 +281,11 @@ func main() {
 		}
 	} else if os.Args[1] == "submittokenburnproof" {
 		err := SubmitTokenBurnProof()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "listtokenconversions" {
+		err := ListTokenConversions()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1915,4 +1924,62 @@ func SubmitTokenBurnProof() error {
 	}
 
 	return submitBurnProof(contractAddr, string(fileBytes), fromKey)
+}
+
+func ListTokenConversions() error {
+	if len(os.Args) < 4 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	contractAddr := os.Args[2]
+	if common.IsHexAddress(contractAddr) == false {
+		return errors.New("invalid contract address " + contractAddr)
+	}
+	addr := common.HexToAddress(contractAddr)
+
+	outputFolder := os.Args[3]
+	_, err := os.Stat(outputFolder)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("folder doesn't exist")
+		} else {
+			fmt.Println(err)
+		}
+		return err
+	}
+
+	requests, err := listTokenConversionRequests(addr)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	outputR := "QuantumAddress,EthAddress,EthSignature\n"
+	for _, r := range *requests {
+		outputR = outputR + r.QuantumAddress.Hex() + "," + r.EthAddress + "," + r.EthSignature //todo: handle commas in data
+	}
+	err = os.WriteFile(path.Join(outputFolder, "requests.csv"), []byte(outputR), 0644)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	burnProofs, err := listTokenBurnProofs(addr)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	for i, b := range *burnProofs {
+		err = os.WriteFile(path.Join(outputFolder, "burnproof-"+strconv.Itoa(i)+".csv"), []byte(b), 0644)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+
+	fmt.Println("finished writing", "output folder", outputFolder, "request count", len(*requests), "burnproofs count", len(*burnProofs))
+
+	return err
 }

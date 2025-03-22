@@ -34,9 +34,32 @@ contract TokenConversionContract is ITokenConversionContract {
         return 0;
     }
 
+    function getConversionRequestsCount() external view returns (uint256) {
+        return ConversionRequests.length;
+    }
+
+    function getConversionRequest(uint256 index) external view returns (ConversionRequest memory) {
+        if(index > ConversionRequests.length) {
+            revert("invalid index");
+        }
+        return ConversionRequests[index];
+    }
+
     function submitBurnProof(string calldata burnProof) external returns (uint8) {
         BurnProofs.push(burnProof); //anyone can submit a burn proof
         emit OnSubmitBurnProof(msg.sender, burnProof, BurnProofs.length - 1);
         return 0;
     }
+
+    function getBurnProofsCount() external view returns (uint256) {
+        return BurnProofs.length;
+    }
+
+    function getBurnProof(uint256 index) external view returns (string memory) {
+        if(index > BurnProofs.length) {
+            revert("invalid index");
+        }
+        return BurnProofs[index];
+    }
+
 }

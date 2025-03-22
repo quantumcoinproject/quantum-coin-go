@@ -1866,3 +1866,61 @@ func submitBurnProof(contractAddr string, burnproof string, key *signaturealgori
 
 	return nil
 }
+
+func listTokenConversionRequests(contractAddress common.Address) (*[]tokenconversion.TokenConversionContractConversionRequest, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	instance, err := tokenconversion.NewTokenconversion(contractAddress, client)
+	if err != nil {
+		return nil, err
+	}
+
+	countBig, err := instance.GetConversionRequestsCount(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	count := countBig.Uint64()
+	requests := make([]tokenconversion.TokenConversionContractConversionRequest, count)
+	for i := uint64(0); i < count; i++ {
+		requests[i], err = instance.GetConversionRequest(nil, big.NewInt(int64(i)))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &requests, nil
+}
+
+func listTokenBurnProofs(contractAddress common.Address) (*[]string, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	instance, err := tokenconversion.NewTokenconversion(contractAddress, client)
+	if err != nil {
+		return nil, err
+	}
+
+	countBig, err := instance.GetBurnProofsCount(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	count := countBig.Uint64()
+	burnProofs := make([]string, count)
+	for i := uint64(0); i < count; i++ {
+		burnProofs[i], err = instance.GetBurnProof(nil, big.NewInt(int64(i)))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &burnProofs, nil
+}
