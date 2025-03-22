@@ -1955,9 +1955,17 @@ func ListTokenConversions() error {
 		return err
 	}
 
-	outputR := "QuantumAddress,EthAddress,EthSignature\n"
+	outputR := "QuantumAddress,EthAddress,EthSignature,CrossSignVerified\n"
 	for _, r := range *requests {
-		outputR = outputR + r.QuantumAddress.Hex() + "," + r.EthAddress + "," + r.EthSignature //todo: handle commas in data
+		crossSignDetails := &crosssign.ConversionSignDetails{
+			EthAddress:        strings.ToLower(r.EthAddress),
+			EthereumSignature: r.EthSignature,
+			QuantumAddress:    r.QuantumAddress.HexLower(),
+		}
+		_, err = crosssign.VerifyConversionToken(crossSignDetails, addr.HexLower())
+		verified := err == nil
+
+		outputR = outputR + fmt.Sprintf("%s,%s,%s,%v", r.QuantumAddress, r.EthAddress, r.EthSignature, verified)
 	}
 	err = os.WriteFile(path.Join(outputFolder, "requests.csv"), []byte(outputR), 0644)
 	if err != nil {
@@ -1980,6 +1988,7 @@ func ListTokenConversions() error {
 	}
 
 	fmt.Println("finished writing", "output folder", outputFolder, "request count", len(*requests), "burnproofs count", len(*burnProofs))
+	fmt.Println("Warning: none of the burn proofs are verified!")
 
 	return err
 }

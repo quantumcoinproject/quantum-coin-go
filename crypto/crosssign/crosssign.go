@@ -20,9 +20,10 @@ import (
 )
 
 const (
-	ERC20AddressLength        = 20
-	GenesisMessageTemplate    = "I AGREE TO BECOME A GENESIS VALIDATOR FOR MAINNET. MY ETH ADDRESS IS [ETH_ADDRESS]. MY CORRESPONDING DEPOSITOR QUANTUM ADDRESS IS [DEPOSITOR_ADDRESS] AND VALIDATOR QUANTUM ADDRESS IS [VALIDATOR_ADDRESS]. VALIDATOR AMOUNT IS [AMOUNT] DOGEP."
-	ConversionMessageTemplate = "MY ETH ADDRESS IS [ETH_ADDRESS]. I AGREE THAT MY CORRESPONDING QUANTUM ADDRESS FOR GETTING COINS FOR MY DOGEP TOKENS IS [QUANTUM_ADDRESS]."
+	ERC20AddressLength             = 20
+	GenesisMessageTemplate         = "I AGREE TO BECOME A GENESIS VALIDATOR FOR MAINNET. MY ETH ADDRESS IS [ETH_ADDRESS]. MY CORRESPONDING DEPOSITOR QUANTUM ADDRESS IS [DEPOSITOR_ADDRESS] AND VALIDATOR QUANTUM ADDRESS IS [VALIDATOR_ADDRESS]. VALIDATOR AMOUNT IS [AMOUNT] DOGEP."
+	ConversionMessageTemplate      = "MY ETH ADDRESS IS [ETH_ADDRESS]. I AGREE THAT MY CORRESPONDING QUANTUM ADDRESS FOR GETTING COINS FOR MY DOGEP TOKENS IS [QUANTUM_ADDRESS]."
+	TokenConversionMessageTemplate = "MY ETH ADDRESS IS [ETH_ADDRESS]. I AGREE THAT MY CORRESPONDING QUANTUM ADDRESS FOR GETTING TOKENS for contract [CONTRACT_ADDRESS] FOR MY DOGEP TOKENS IS [QUANTUM_ADDRESS]."
 )
 
 type SignDetails struct {
@@ -192,6 +193,39 @@ func VerifyConversion(details *ConversionSignDetails) ([]byte, error) {
 
 	message := strings.Replace(ConversionMessageTemplate, "[ETH_ADDRESS]", details.EthAddress, 1)
 	message = strings.Replace(message, "[QUANTUM_ADDRESS]", details.QuantumAddress, 1)
+
+	messageDigest, _ := accounts.TextAndHash([]byte(message))
+
+	err = VerifyEthereumAddressAndMessage(details.EthAddress, messageDigest, ethSig)
+	if err != nil {
+		fmt.Println("VerifyEthereumAddressAndMessage failed", err)
+		return nil, err
+	}
+
+	return messageDigest, nil
+}
+
+func VerifyConversionToken(details *ConversionSignDetails, contractAddress string) ([]byte, error) {
+	if len(details.EthAddress) == 0 || len(details.QuantumAddress) == 0 || len(details.EthereumSignature) == 0 {
+		return nil, errors.New("malformed json")
+	}
+
+	if common.IsLegacyEthereumHexAddress(details.EthAddress) == false {
+		return nil, errors.New("invalid EthAddress")
+	}
+
+	if common.IsHexAddress(details.QuantumAddress) == false {
+		return nil, errors.New("invalid DepositorAddress")
+	}
+
+	ethSig, err := hexutil.MustDecodeWithError(details.EthereumSignature)
+	if err != nil {
+		return nil, err
+	}
+
+	message := strings.Replace(TokenConversionMessageTemplate, "[ETH_ADDRESS]", details.EthAddress, 1)
+	message = strings.Replace(message, "[QUANTUM_ADDRESS]", details.QuantumAddress, 1)
+	message = strings.Replace(message, "[CONTRACT_ADDRESS]", contractAddress, 1)
 
 	messageDigest, _ := accounts.TextAndHash([]byte(message))
 
