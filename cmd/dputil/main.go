@@ -107,6 +107,9 @@ func printHelp() {
 	fmt.Println("dputil transfertokens CONTRACT_ADDRESS FROM_ADDRESS TO_ADDRESS amount")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("dputil renouncetokenownership CONTRACT_ADDRESS FROM_ADDRESS")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
 	fmt.Println("dputil createtoken FROM_ADDRESS TOKEN_NAME TOKEN_SYMBOL TOTAL_SUPPLY")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
@@ -125,10 +128,10 @@ func printHelp() {
 	fmt.Println("dputil createtokenconversioncontract FROM_ADDRESS")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
-	fmt.Println("dputil submittokenburnproof CONTRACT_ADDRESS FROM_ADDRESS BURN_PROOF_FILE")
+	fmt.Println("dputil submittokenburnproof BURN_PROOF_CONTRACT_ADDRESS FROM_ADDRESS BURN_PROOF_FILE")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
-	fmt.Println("dputil listtokenconversions CONTRACT_ADDRESS OUTPUT_FOLDER")
+	fmt.Println("dputil listtokenconversions BURN_PROOF_CONTRACT_ADDRESS OUTPUT_FOLDER")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("===========")
@@ -251,6 +254,11 @@ func main() {
 		}
 	} else if os.Args[1] == "transfertokens" {
 		err := TransferTokens()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "renouncetokenownership" {
+		err := RenounceTokenOwnerShip()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1842,7 +1850,7 @@ func CreateTokenConversionContract() error {
 		return errors.New("from account key address check failed " + fromAddressFromKey.Hex() + " " + fromAddr)
 	}
 
-	return createTokenTransferContract(fromKey)
+	return createtokenconversioncontract(fromKey)
 }
 
 func SubmitTokenBurnProof() error {
@@ -1991,4 +1999,68 @@ func ListTokenConversions() error {
 	fmt.Println("Warning: none of the burn proofs are verified!")
 
 	return err
+}
+
+func RenounceTokenOwnerShip() error {
+	if len(os.Args) < 4 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	if len(os.Getenv("DP_KEY_FILE_DIR")) == 0 {
+		return errors.New("set the keyfile directory environment variable DP_KEY_FILE_DIR")
+	}
+
+	contractAddr := os.Args[2]
+	fromAddr := os.Args[3]
+
+	if common.IsHexAddress(contractAddr) == false {
+		return errors.New("invalid contract address " + contractAddr)
+	}
+
+	if common.IsHexAddress(fromAddr) == false {
+		return errors.New("invalid from address " + fromAddr)
+	}
+
+	fromAccountKeyFile, err := findKeyFile(fromAddr)
+	if err != nil {
+		return errors.New("error finding FROM_ADDRESS in DP_KEY_FILE_DIR " + err.Error())
+	}
+
+	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the wallet password : "))
+	if err != nil {
+		return err
+	}
+	if len(fromAccountPwd) == 0 {
+		return errors.New("from account password is not set")
+	}
+
+	fromKey, err := GetKeyFromFile(fromAccountKeyFile, fromAccountPwd)
+	if err != nil {
+		return errors.New("error decrypting depositor key " + err.Error())
+	}
+
+	fmt.Println()
+
+	fromAccountPasswordConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to renounce ownership of contract %s from %s?",
+		contractAddr, fromAddr))
+	if err != nil {
+		return err
+	}
+	if fromAccountPasswordConfirm != true {
+		return errors.New("confirmation not made")
+	}
+	fmt.Println()
+
+	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	if err != nil {
+		return errors.New("from account public key to address " + err.Error())
+	}
+
+	if !fromAddressFromKey.IsEqualTo(common.HexToAddress(fromAddr)) {
+		return errors.New("from account key address check failed " + fromAddressFromKey.Hex() + " " + fromAddr)
+	}
+
+	return renounceTokenOwnership(contractAddr, fromKey)
 }
