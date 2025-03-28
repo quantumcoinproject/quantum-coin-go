@@ -134,6 +134,9 @@ func printHelp() {
 	fmt.Println("dputil listtokenconversions BURN_PROOF_CONTRACT_ADDRESS OUTPUT_FOLDER")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil listaddresstokenconversions QUANTUM_WALLET_ADDRESS BURN_PROOF_CONTRACT_ADDRESS QUANTUM_CONTRACT_ADDRESS ETHEREUM_CONTRACT_ADDRESS OUTPUT_FOLDER")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -294,6 +297,11 @@ func main() {
 		}
 	} else if os.Args[1] == "listtokenconversions" {
 		err := ListTokenConversions()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "listaddresstokenconversions" {
+		err := ListAddressTokenConversions()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1940,11 +1948,11 @@ func ListTokenConversions() error {
 		return errors.New("incorrect usage")
 	}
 
-	contractAddr := os.Args[2]
-	if common.IsHexAddress(contractAddr) == false {
-		return errors.New("invalid contract address " + contractAddr)
+	burnProofContractAddr := os.Args[2]
+	if common.IsHexAddress(burnProofContractAddr) == false {
+		return errors.New("invalid burn proof contract address " + burnProofContractAddr)
 	}
-	addr := common.HexToAddress(contractAddr)
+	burnProofContractAddress := common.HexToAddress(burnProofContractAddr)
 
 	outputFolder := os.Args[3]
 	_, err := os.Stat(outputFolder)
@@ -1957,31 +1965,23 @@ func ListTokenConversions() error {
 		return err
 	}
 
-	requests, err := listTokenConversionRequests(addr)
+	requests, err := listTokenConversionRequests(burnProofContractAddress)
 	if err != nil {
 		fmt.Println(err)
 		return err
 	}
 
-	outputR := "QuantumAddress,EthAddress,EthSignature,CrossSignVerified\n"
+	outputR := "QuantumAddress,EthAddress,EthSignature\n"
 	for _, r := range *requests {
-		crossSignDetails := &crosssign.ConversionSignDetails{
-			EthAddress:        strings.ToLower(r.EthAddress),
-			EthereumSignature: r.EthSignature,
-			QuantumAddress:    r.QuantumAddress.HexLower(),
-		}
-		_, err = crosssign.VerifyConversionToken(crossSignDetails, addr.HexLower())
-		verified := err == nil
-
-		outputR = outputR + fmt.Sprintf("%s,%s,%s,%v", r.QuantumAddress, r.EthAddress, r.EthSignature, verified)
+		outputR = outputR + fmt.Sprintf("%s,%s,%s", r.QuantumAddress, r.EthAddress, r.EthSignature)
 	}
-	err = os.WriteFile(path.Join(outputFolder, "requests.csv"), []byte(outputR), 0644)
+	err = os.WriteFile(path.Join(outputFolder, "token-conversion-requests.csv"), []byte(outputR), 0644)
 	if err != nil {
 		fmt.Println(err)
 		return err
 	}
 
-	burnProofs, err := listTokenBurnProofs(addr)
+	burnProofs, err := listTokenBurnProofs(burnProofContractAddress)
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -1996,7 +1996,104 @@ func ListTokenConversions() error {
 	}
 
 	fmt.Println("finished writing", "output folder", outputFolder, "request count", len(*requests), "burnproofs count", len(*burnProofs))
-	fmt.Println("Warning: none of the burn proofs are verified!")
+	fmt.Println("!!!!!!!!!!!!!!!!!!!Warning: none of the burn proofs or conversion are verified by this tool!!!!!!!!!!!!!!!!!!!")
+
+	return err
+}
+
+func ListAddressTokenConversions() error {
+	if len(os.Args) < 7 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	quantumWalletAddress := os.Args[2]
+	if common.IsHexAddress(quantumWalletAddress) == false {
+		return errors.New("invalid quantum wallet address " + quantumWalletAddress)
+	}
+	quantumWalletAddr := common.HexToAddress(quantumWalletAddress)
+
+	burnProofContractAddress := os.Args[3]
+	if common.IsHexAddress(burnProofContractAddress) == false {
+		return errors.New("invalid burn proof contract address " + burnProofContractAddress)
+	}
+	burnProofContractAddr := common.HexToAddress(burnProofContractAddress)
+
+	quantumContractAddress := os.Args[4]
+	if common.IsHexAddress(quantumContractAddress) == false {
+		return errors.New("invalid token quantum contract address " + quantumContractAddress)
+	}
+	quantumContractAddr := common.HexToAddress(quantumContractAddress)
+
+	eContractAddr := os.Args[5]
+
+	outputFolder := os.Args[6]
+
+	fmt.Println("quantum wallet address", quantumWalletAddr)
+	fmt.Println("burn proof contract address", burnProofContractAddress)
+	fmt.Println("quantum token contract address", quantumContractAddress)
+	fmt.Println("ethereum token contract address", eContractAddr)
+	fmt.Println("output folder", outputFolder)
+
+	_, err := os.Stat(outputFolder)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("folder doesn't exist")
+		} else {
+			fmt.Println(err)
+		}
+		return err
+	}
+
+	requests, err := listTokenConversionRequests(burnProofContractAddr)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	outputR := "QuantumAddress,EthAddress,EthSignature,CrossSignVerified\n"
+	for _, r := range *requests {
+		if r.QuantumAddress.HexLower() == quantumWalletAddr.HexLower() {
+			crossSignDetails := &crosssign.TokenConversionSignDetails{
+				EthAddress:              strings.ToLower(r.EthAddress),
+				EthereumSignature:       r.EthSignature,
+				QuantumAddress:          r.QuantumAddress.HexLower(),
+				QuantumContractAddress:  quantumContractAddr.HexLower(),
+				EthereumContractAddress: eContractAddr,
+			}
+			_, err = crosssign.VerifyConversionToken(crossSignDetails)
+			if err != nil {
+				fmt.Println("Failed verify", "ethereum address",
+					"quantum wallet address", r.QuantumAddress, "quantum token contract address", quantumContractAddr,
+					"ethereum contract address", eContractAddr, r.EthAddress, "ethereum signature")
+			}
+			verified := err == nil
+
+			outputR = outputR + fmt.Sprintf("%s,%s,%s,%v", r.QuantumAddress, r.EthAddress, r.EthSignature, verified)
+		}
+	}
+	err = os.WriteFile(path.Join(outputFolder, "token-conversion-requests.csv"), []byte(outputR), 0644)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	burnProofs, err := listTokenBurnProofs(burnProofContractAddr)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	for i, b := range *burnProofs {
+		err = os.WriteFile(path.Join(outputFolder, "burnproof-"+strconv.Itoa(i)+".csv"), []byte(b), 0644)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+
+	fmt.Println("finished writing", "output folder", outputFolder, "conversion request count", len(*requests), "burnproofs count", len(*burnProofs))
+	fmt.Println("!!!!!!!!!!!!!!!!!!!Warning: none of the burn proofs or conversions are verified by this tool!!!!!!!!!!!!!!!!!!!")
 
 	return err
 }
