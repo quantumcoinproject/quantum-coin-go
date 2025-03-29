@@ -37,7 +37,6 @@ type CacheManager struct {
 	pendingTxLock            sync.Mutex
 	pendingTxMapLock         sync.RWMutex
 	pendingTransactions      *map[string]map[string]map[string]*ethclient.TxPoolTransaction
-	//addressMap               map[string]*AccountDetails
 	tokenMap                 map[string]*TokenDetails
 	accountTokenMap          map[string]*map[string]bool //map[accountAddress]map[contractAddress]bool
 	blockChan                chan *PrimordialBlockData
@@ -121,10 +120,6 @@ func (c *CacheManager) initialize() error {
 		return err
 	}
 	c.cacheDb = cacheManagerDb
-
-	//c.addressMap = make(map[string]*AccountDetails)
-	//c.addressMap[staking.STAKING_CONTRACT] = &AccountDetails{Address: staking.STAKING_CONTRACT.HexLower(), AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
-	//c.addressMap[conversion.CONVERSION_CONTRACT] = &AccountDetails{Address: conversion.CONVERSION_CONTRACT, AccType: ethclient.ACCOUNT_TYPE_CONTRACT}
 
 	c.primodialCacheCancelChan = make(chan bool)
 	c.primordialCache, err = NewPrimordialCache(c.cacheDir, c.nodeUrl, &c.primodialCacheCancelChan)
@@ -374,7 +369,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		log.Trace("CacheManager processByCacheManager transaction", "gasUsed", gasUsed, "txnFee", txnFee, "hash", txHash)
 		transaction.TxnFee = common.BigIntToHexString(txnFee)
 
-		txType, err := c.getTransactionType(tx.Transaction, receipt, blockNum, &txnBatch)
+		txType, err := c.getTransactionType(tx.Transaction, receipt)
 		if err != nil {
 			log.Error("CacheManager getTransactionType", "error", err, "tx", tx.Transaction.Hash)
 			return err
@@ -465,6 +460,19 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 					transaction.TokenTransaction.TokenSymbol = tokenDetails.Symbol
 				}
 			}
+
+			if tx.Transaction.To != nil {
+				if tx.Transaction.From != *tx.Transaction.To {
+					_, ok = liveAccountTxnMap[*tx.Transaction.To]
+					if ok == false {
+						liveAccountTxnMap[*tx.Transaction.To] = make([]*TransactionDetails, 0)
+					}
+					liveAccountTxnMap[*tx.Transaction.To] = append(liveAccountTxnMap[*tx.Transaction.To], &transaction)
+				}
+				accountsInvolved[*tx.Transaction.To] = true
+			} else {
+				accountsInvolved[strings.ToLower(receipt.ContractAddress)] = true
+			}
 		}
 
 		_, ok = liveAccountTxnMap[tx.Transaction.From]
@@ -473,24 +481,13 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		}
 		liveAccountTxnMap[tx.Transaction.From] = append(liveAccountTxnMap[tx.Transaction.From], &transaction)
 
-		if tx.Transaction.To != nil {
-			if tx.Transaction.From != *tx.Transaction.To {
-				_, ok = liveAccountTxnMap[*tx.Transaction.To]
-				if ok == false {
-					liveAccountTxnMap[*tx.Transaction.To] = make([]*TransactionDetails, 0)
-				}
-				liveAccountTxnMap[*tx.Transaction.To] = append(liveAccountTxnMap[*tx.Transaction.To], &transaction)
-			}
-			accountsInvolved[*tx.Transaction.To] = true
-		} else {
-			accountsInvolved[strings.ToLower(receipt.ContractAddress)] = true
-		}
 		accountsInvolved[tx.Transaction.From] = true
 
 		//Loop through all accounts and update account cache
 		for account, _ := range accountsInvolved {
 			_, err = c.primordialCache.getAccountFromCacheOrDb(account)
 			if err != nil {
+				log.Error("CacheManager getAccountFromCacheOrDb", "account", account)
 				return err
 			}
 		}
@@ -674,7 +671,7 @@ func (c *CacheManager) close() error {
 }
 
 func (c *CacheManager) processAccountTransactions(address string, txnList *[]*TransactionDetails, batch *ethdb.Batch) error {
-	log.Error("CacheManager processAccountTransactions", "address", address)
+	log.Debug("CacheManager processAccountTransactions", "address", address)
 	txnBatch := *batch
 	var txnCount uint64
 	var err error
@@ -772,19 +769,22 @@ func getPageCount(itemCount uint64) uint64 {
 	}
 }
 
-func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *PrimordialReceipt, blockNumber *big.Int, batch *ethdb.Batch) (TransactionType, error) {
+func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *PrimordialReceipt) (txnType TransactionType, err error) {
 	txHash := txn.Hash
 	if (txHash == receipt.TxHash) == false {
 		return "", errors.New("hash mismatch between txn and receipt")
 	}
 
 	if txn.To != nil {
-		if receipt.Status == 0 {
-			return COIN_TRANSFER, nil //todo: fix
-		}
-
 		acc, err := c.primordialCache.getAccountFromCacheOrDb(*txn.To)
 		if err != nil {
+			if err.Error() == LevelDbNoTFoundErrMsg && receipt.Status == 0 {
+				if len(txn.Data) == 0 {
+					return COIN_TRANSFER, nil
+				} else {
+					return SMART_CONTRACT, nil //todo: fix
+				}
+			}
 			return "", err
 		}
 		if acc.AccType == ethclient.ACCOUNT_TYPE_REGULAR {
@@ -801,20 +801,19 @@ func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *P
 			}
 		}
 	} else {
-		if receipt.Status == 1 {
-			acc, err := c.primordialCache.getAccountFromCacheOrDb(receipt.ContractAddress)
-			if err != nil {
-				return "", err
-			}
-			if acc.AccType == ethclient.ACCOUNT_TYPE_TOKEN {
-				return NEW_TOKEN, nil
-			} else if acc.AccType == ethclient.ACCOUNT_TYPE_CONTRACT {
-				return NEW_SMART_CONTRACT, nil
-			} else {
-				return "", errors.New("unexpected account type")
-			}
-		} else {
+		if receipt.Status == 0 {
 			return NEW_SMART_CONTRACT, nil
+		}
+		acc, err := c.primordialCache.getAccountFromCacheOrDb(receipt.ContractAddress)
+		if err != nil {
+			return "", err
+		}
+		if acc.AccType == ethclient.ACCOUNT_TYPE_TOKEN {
+			return NEW_TOKEN, nil
+		} else if acc.AccType == ethclient.ACCOUNT_TYPE_CONTRACT {
+			return NEW_SMART_CONTRACT, nil
+		} else {
+			return "", errors.New("unexpected account type")
 		}
 	}
 }
