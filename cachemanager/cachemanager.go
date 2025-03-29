@@ -78,14 +78,14 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, g
 
 		genesisBytes, err := ioutil.ReadFile(genesisFilePath)
 		if err != nil {
-			log.Error("ReadFile", "error", err)
+			log.Error("CacheManager ReadFile", "error", err)
 			return nil, err
 		}
 
 		genesis := core.Genesis{}
 		err = json.Unmarshal(genesisBytes, &genesis)
 		if err != nil {
-			log.Error("Unmarshal", "error", err)
+			log.Error("CacheManager Unmarshal", "error", err)
 			return nil, err
 		}
 
@@ -96,7 +96,7 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, g
 			}
 		}
 		cManager.genesisCirculatingSupply = hexutil.EncodeBig(genesisCirculatingSupply)
-		log.Error("genesis genesisCirculatingSupply", "genesisCirculatingSupply", params.WeiToEther(genesisCirculatingSupply), "maxSupply", params.WeiToEther(maxSupplyBig))
+		log.Error("CacheManager genesis genesisCirculatingSupply", "genesisCirculatingSupply", params.WeiToEther(genesisCirculatingSupply), "maxSupply", params.WeiToEther(maxSupplyBig))
 	}
 
 	err = cManager.initialize()
@@ -113,7 +113,7 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, g
 }
 
 func (c *CacheManager) initialize() error {
-	log.Info("Quantum Coin initialize cache manager", "cacheDir", c.cacheDir, "nodeUrl", c.nodeUrl)
+	log.Info("CacheManager Quantum Coin initialize cache manager", "cacheDir", c.cacheDir, "nodeUrl", c.nodeUrl)
 
 	catchManagerFilePath := filepath.Join(c.cacheDir, "cacheManager.db")
 	cacheManagerDb, err := rawdb.NewLevelDBDatabase(catchManagerFilePath, 64, 0, "", false)
@@ -139,28 +139,28 @@ func (c *CacheManager) clientInitialize() {
 	for {
 		client, err := ethclient.Dial(c.nodeUrl)
 		if err != nil {
-			log.Error("initialize client Dial", "error", err)
+			log.Error("CacheManager initialize client Dial", "error", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
 
 		blockClient, err := ethclient.Dial(c.nodeUrl)
 		if err != nil {
-			log.Error("initialize blockClient Dial", "error", err)
+			log.Error("CacheManager initialize blockClient Dial", "error", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
 
 		pendingTxClient, err := ethclient.Dial(c.nodeUrl)
 		if err != nil {
-			log.Error("initialize pendingTxClient Dial", "error", err)
+			log.Error("CacheManager initialize pendingTxClient Dial", "error", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
 
 		chainID, err = client.NetworkID(context.Background())
 		if err != nil {
-			log.Error("initialize NetworkID", "error", err)
+			log.Error("CacheManager initialize NetworkID", "error", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
@@ -185,7 +185,7 @@ func (c *CacheManager) start() error {
 	blockNumber, err := c.getLastBlockNumberFromDb()
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Warn("First time start")
+			log.Warn("CacheManager First time start")
 			blockNumber = 0
 			if c.enableExtendedApis {
 				runningSummary = &BlockchainDetails{
@@ -202,19 +202,19 @@ func (c *CacheManager) start() error {
 				}
 			}
 		} else {
-			log.Error("GetLastBlockByDb", "err", err.Error())
+			log.Error("CacheManager GetLastBlockByDb", "err", err.Error())
 			return err
 		}
 	} else {
 		if c.enableExtendedApis {
 			runningSummary, err = c.getSummaryFromDb()
 			if err != nil {
-				log.Error("getSummaryFromDb", "err", err.Error())
+				log.Error("CacheManager getSummaryFromDb", "err", err.Error())
 				return err
 			}
 		}
 	}
-	log.Info("runningSummary", runningSummary)
+	log.Info("CacheManager runningSummary", runningSummary)
 
 	c.blockChan = make(chan *PrimordialBlockData, 25)
 	blockNumber = blockNumber + 1
@@ -226,42 +226,41 @@ func (c *CacheManager) start() error {
 		delayNumber := int64(100 * time.Millisecond)
 		blockTimer := time.NewTimer(time.Duration(delayNumber))
 
-		log.Info("start block loop")
+		log.Info("CacheManager start block loop")
 		for {
 			select {
 			case <-blockTimer.C:
+				log.Debug("CacheManager blockTimer")
 				internalBlockData, err := c.primordialCache.GetBlock(blockNumber)
 				if err != nil {
 					if err.Error() == LevelDbNoTFoundErrMsg {
-						log.Info("Waiting for PrimordialBlock...", "PrimordialBlock number", blockNumber)
+						log.Info("CacheManager Waiting for PrimordialBlock...", "PrimordialBlock number", blockNumber)
 					} else {
-						log.Error("GetBlock Error", "error", err.Error(), "PrimordialBlock number", blockNumber)
+						log.Error("CacheManager GetBlock Error", "error", err.Error(), "PrimordialBlock number", blockNumber)
 					}
 					delayNumber = int64(3 * time.Second)
-					blockTimer.Reset(time.Duration(delayNumber))
-					continue
-				}
-				err = c.processByCacheManager(internalBlockData, runningSummary)
-				if err == nil {
-					blockNumber = blockNumber + 1
-					log.Info("Batch Complete", "PrimordialBlock number", blockNumber)
-					delayNumber = 0
 				} else {
-					log.Error("Batch Error", "error", err.Error(), "PrimordialBlock number", blockNumber)
-					delayNumber = int64(3 * time.Second)
-					continue
+					err = c.processByCacheManager(internalBlockData, runningSummary)
+					if err == nil {
+						blockNumber = blockNumber + 1
+						log.Info("CacheManager Batch Complete", "PrimordialBlock number", blockNumber)
+						delayNumber = 0
+					} else {
+						log.Error("CacheManager Batch Error", "error", err.Error(), "PrimordialBlock number", blockNumber)
+						delayNumber = int64(3 * time.Second)
+					}
 				}
 				blockTimer.Reset(time.Duration(delayNumber))
 
 			case <-cancel:
-				log.Warn("start() Quit signal received")
+				log.Warn("CacheManager start() Quit signal received")
 				blockTimer.Stop()
 				return
 			}
 		}
 	}()
 
-	log.Info("start done")
+	log.Info("CacheManager start done")
 
 	return nil
 }
@@ -279,7 +278,7 @@ func (c *CacheManager) closeLoop() {
 				closeTimer.Reset(time.Duration(delayNumber))
 
 			case <-cancel:
-				log.Warn("closeLoop quit signal received")
+				log.Warn("CacheManager closeLoop quit signal received")
 				closeTimer.Stop()
 				c.close()
 				return
@@ -294,19 +293,19 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 	blockNum := block.Number
 	blockNumber := blockNum.Uint64()
 
-	log.Info("processByCacheManager", "blockNumber", blockNumber)
+	log.Debug("CacheManager processByCacheManager", "blockNumber", blockNumber)
 
 	txnBatch := c.cacheDb.NewBatch()
 	err = c.putLastBlockNumberInDb(blockNumber, &txnBatch)
 	if err != nil {
-		log.Error("processByCacheManagerputLastBlockNumberInDb", "error", err)
+		log.Error("CacheManager processByCacheManagerputLastBlockNumberInDb", "error", err)
 		return err
 	}
 
 	blockInfo := fromPrimordialBlockData(internalBlockData)
 	err = c.putBlockInDb(blockInfo, &txnBatch)
 	if err != nil {
-		log.Error("putBlockInDb", "error", err)
+		log.Error("CacheManager putBlockInDb", "error", err)
 		return err
 	}
 
@@ -322,13 +321,13 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 	receipts := make([]*PrimordialReceipt, len(internalBlockData.TransactionList))
 
 	for i, tx := range internalBlockData.TransactionList {
-		log.Trace("processByCacheManager", "transaction", tx.Transaction.Hash)
+		log.Trace("CacheManager processByCacheManager", "transaction", tx.Transaction.Hash)
 		accountsInvolved := make(map[string]bool)
 
 		txHash := tx.Transaction.Hash
 		txnFromMap, ok := txnMap[txHash]
 		if ok == false {
-			log.Error("processByCacheManager txn not found in map", "hash", txHash)
+			log.Error("CacheManager processByCacheManager txn not found in map", "hash", txHash)
 			return errors.New("unexpected transaction not found")
 		}
 		receipt := txnFromMap.Receipt
@@ -372,12 +371,12 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		transaction.CreatedAt = tm.UTC().Format(TimeLayout)
 		gasUsed := big.NewInt(0).SetUint64(receipt.GasUsed)
 		txnFee := common.SafeMulBigInt(gasUsed, tx.Transaction.GasPrice)
-		log.Debug("transaction", "gasUsed", gasUsed, "txnFee", txnFee, "hash", txHash)
+		log.Trace("CacheManager processByCacheManager transaction", "gasUsed", gasUsed, "txnFee", txnFee, "hash", txHash)
 		transaction.TxnFee = common.BigIntToHexString(txnFee)
 
 		txType, err := c.getTransactionType(tx.Transaction, receipt, blockNum, &txnBatch)
 		if err != nil {
-			log.Error("getTransactionType", "error", err, "tx", tx.Transaction.Hash)
+			log.Error("CacheManager getTransactionType", "error", err, "tx", tx.Transaction.Hash)
 			return err
 		}
 		transaction.TransactionType = string(txType)
@@ -412,7 +411,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 
 					err = c.putTokenInDb(tkn, &txnBatch)
 					if err != nil {
-						log.Error("putTokenInDb", "error", err, "contractAddress", iTxn.To)
+						log.Error("CacheManager putTokenInDb", "error", err, "contractAddress", iTxn.To)
 						return err
 					}
 				}
@@ -421,14 +420,14 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 			//Find all relevant token and internal token transactions, if any
 			tokenTransfers, tokenApprovals, err := ParseTokenTransaction(tx.Transaction, receipt)
 			if err != nil {
-				log.Error("ParseTokenTransaction", "err", err, "txn", tx.Transaction.Hash)
+				log.Error("CacheManager ParseTokenTransaction", "err", err, "txn", tx.Transaction.Hash)
 				return err
 			}
 
 			if tokenTransfers != nil && len(tokenTransfers) > 0 {
 				err = c.processAccountTokenTransfers(tokenTransfers, blockNum, &txnBatch)
 				if err != nil {
-					log.Error("processAccountTokenTransfers", "err", err, "txn", tx.Transaction.Hash)
+					log.Error("CacheManager processAccountTokenTransfers", "err", err, "txn", tx.Transaction.Hash)
 					return err
 				}
 				for _, transfer := range tokenTransfers {
@@ -449,7 +448,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 			if transaction.TransactionType == string(TOKEN_TRANSFER) { //only root level transaction (no internal transactions)
 				//First transfer is root level by from address
 				if tokenTransfers == nil || len(tokenTransfers) == 0 || tokenTransfers[0].From.HexLower() != transaction.From {
-					log.Error("processByCacheManager missing", "from", transaction.From, "to (contract)", transaction.To)
+					log.Error("CacheManager processByCacheManager missing", "from", transaction.From, "to (contract)", transaction.To)
 					transaction.TransactionType = string(SMART_CONTRACT)
 				} else {
 					transaction.TokenTransaction.ContractAddress = tokenTransfers[0].ContractAddress.HexLower()
@@ -458,7 +457,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 
 					tokenDetails, err := c.getTokenDetailsInternal(transaction.TokenTransaction.ContractAddress) //token should already have been saved to db, when it was created
 					if err != nil {
-						log.Error("getTokenDetailsInternal", "error", err)
+						log.Error("CacheManager getTokenDetailsInternal", "error", err)
 						return err
 					}
 					transaction.TokenTransaction.TokenCount = hexutil.EncodeBig(tokenTransfers[0].Tokens)
@@ -500,7 +499,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 	for k, v := range liveAccountTxnMap {
 		err = c.processAccountTransactions(k, &v, &txnBatch)
 		if err != nil {
-			log.Error("processAccountTransaction", "error", err, "address", k)
+			log.Error("CacheManager processAccountTransaction", "error", err, "address", k)
 			return err
 		}
 	}
@@ -508,14 +507,14 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 	if c.enableExtendedApis {
 		err = c.updateSummary(internalBlockData, runningSummary, &txnBatch)
 		if err != nil {
-			log.Error("updateSummary", "error", err)
+			log.Error("CacheManager updateSummary", "error", err)
 			return err
 		}
 	}
 
 	err = txnBatch.Write()
 	if err != nil {
-		log.Error("processByCacheManager txnBatch Write", "error", err)
+		log.Error("CacheManager processByCacheManager txnBatch Write", "error", err)
 		return err
 	}
 
@@ -528,7 +527,7 @@ func (c *CacheManager) updateSummary(internalBlockData *PrimordialBlockData, run
 	leftBlock := blockNumber
 	rightBlock := runningSummary.BlockNumber + 1
 	if leftBlock != rightBlock {
-		log.Error("updateSummary", "leftBlock", leftBlock, "rightBlock", rightBlock)
+		log.Error("CacheManager updateSummary", "leftBlock", leftBlock, "rightBlock", rightBlock)
 		return errors.New("updateSummary unexpected blockNumber")
 	}
 
@@ -550,12 +549,12 @@ func (c *CacheManager) updateSummary(internalBlockData *PrimordialBlockData, run
 	if len(blockRewardsInfo.BaseBlockProposerRewards) > 0 {
 		baseBlockProposerRewards, err = hexutil.DecodeBig(blockRewardsInfo.BaseBlockProposerRewards)
 		if err != nil {
-			log.Error("updateSummary DecodeBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig", "error", err)
 			return err
 		}
 		baseBlockRewardsCoinsBig, err := hexutil.DecodeBig(runningSummary.BaseBlockRewardsCoins)
 		if err != nil {
-			log.Error("updateSummary DecodeBig runningSummary baseBlockRewardsCoinsBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig runningSummary baseBlockRewardsCoinsBig", "error", err)
 			return err
 		}
 		runningSummary.BaseBlockRewardsCoins = hexutil.EncodeBig(common.SafeAddBigInt(baseBlockRewardsCoinsBig, baseBlockProposerRewards))
@@ -564,12 +563,12 @@ func (c *CacheManager) updateSummary(internalBlockData *PrimordialBlockData, run
 	if len(blockRewardsInfo.BlockProposerRewards) > 0 {
 		blockProposerRewards, err = hexutil.DecodeBig(blockRewardsInfo.BlockProposerRewards)
 		if err != nil {
-			log.Error("updateSummary DecodeBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig", "error", err)
 			return err
 		}
 		blockRewardsCoinsBig, err := hexutil.DecodeBig(runningSummary.BlockRewardsCoins)
 		if err != nil {
-			log.Error("updateSummary DecodeBig runningSummary blockRewardsCoinsBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig runningSummary blockRewardsCoinsBig", "error", err)
 			return err
 		}
 		runningSummary.BlockRewardsCoins = hexutil.EncodeBig(common.SafeAddBigInt(blockRewardsCoinsBig, blockProposerRewards))
@@ -578,12 +577,12 @@ func (c *CacheManager) updateSummary(internalBlockData *PrimordialBlockData, run
 	if len(blockRewardsInfo.TxnFeeRewards) > 0 {
 		txnFeeRewards, err = hexutil.DecodeBig(blockRewardsInfo.TxnFeeRewards)
 		if err != nil {
-			log.Error("updateSummary DecodeBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig", "error", err)
 			return err
 		}
 		txnFeeRewardsCoinsBig, err := hexutil.DecodeBig(runningSummary.TxnFeeRewardsCoins)
 		if err != nil {
-			log.Error("updateSummary DecodeBig runningSummary txnFeeRewardsCoinsBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig runningSummary txnFeeRewardsCoinsBig", "error", err)
 			return err
 		}
 		runningSummary.TxnFeeRewardsCoins = hexutil.EncodeBig(common.SafeAddBigInt(txnFeeRewardsCoinsBig, txnFeeRewards))
@@ -592,12 +591,12 @@ func (c *CacheManager) updateSummary(internalBlockData *PrimordialBlockData, run
 	if len(blockRewardsInfo.BurntTxnFee) > 0 {
 		burntTxnFee, err = hexutil.DecodeBig(blockRewardsInfo.BurntTxnFee)
 		if err != nil {
-			log.Error("updateSummary DecodeBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig", "error", err)
 			return err
 		}
 		txnFeeBurntCoinsBig, err := hexutil.DecodeBig(runningSummary.TxnFeeBurntCoins)
 		if err != nil {
-			log.Error("updateSummary DecodeBig runningSummary txnFeeBurntCoinsBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig runningSummary txnFeeBurntCoinsBig", "error", err)
 			return err
 		}
 		runningSummary.TxnFeeBurntCoins = hexutil.EncodeBig(common.SafeAddBigInt(txnFeeBurntCoinsBig, burntTxnFee))
@@ -606,12 +605,12 @@ func (c *CacheManager) updateSummary(internalBlockData *PrimordialBlockData, run
 	if len(blockRewardsInfo.SlashAmount) > 0 {
 		slashAmount, err = hexutil.DecodeBig(blockRewardsInfo.SlashAmount)
 		if err != nil {
-			log.Error("updateSummary DecodeBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig", "error", err)
 			return err
 		}
 		slashedCoinsBig, err := hexutil.DecodeBig(runningSummary.SlashedCoins)
 		if err != nil {
-			log.Error("updateSummary DecodeBig runningSummary slashedCoinsBig", "error", err)
+			log.Error("CacheManager updateSummary DecodeBig runningSummary slashedCoinsBig", "error", err)
 			return err
 		}
 		runningSummary.SlashedCoins = hexutil.EncodeBig(common.SafeAddBigInt(slashedCoinsBig, slashAmount))
@@ -629,7 +628,7 @@ func (c *CacheManager) updateSummary(internalBlockData *PrimordialBlockData, run
 
 	err = c.putSummary(runningSummary, &txnBatch)
 	if err != nil {
-		log.Error("updateSummary putSummary", "error", err)
+		log.Error("CacheManager updateSummary putSummary", "error", err)
 		return err
 	}
 
@@ -648,7 +647,7 @@ func (c *CacheManager) latestBlockByNode() (uint64, error) {
 		return 0, err
 	}
 
-	log.Info("latestBlockByNode", "number", latestBlock)
+	log.Debug("CacheManager latestBlockByNode", "number", latestBlock)
 
 	return latestBlock, nil
 
@@ -663,18 +662,19 @@ func (c *CacheManager) close() error {
 	cacheDb := c.cacheDb
 	err := cacheDb.Close()
 	if err != nil {
-		log.Debug("cache manager account transaction db close error", "err", err)
+		log.Debug("CacheManager account transaction db close error", "err", err)
 		return err
 	}
 	c.client.Close()
 	c.blockClient.Close()
 	c.primordialCache.Close()
-	log.Info("CacheManager closed")
+	log.Info("CacheManager CacheManager closed")
 	os.Exit(1)
 	return nil
 }
 
 func (c *CacheManager) processAccountTransactions(address string, txnList *[]*TransactionDetails, batch *ethdb.Batch) error {
+	log.Error("CacheManager processAccountTransactions", "address", address)
 	txnBatch := *batch
 	var txnCount uint64
 	var err error
@@ -688,27 +688,27 @@ func (c *CacheManager) processAccountTransactions(address string, txnList *[]*Tr
 	newTxnCount := txnCount + 1
 	var accountTransactionList AccountTransactionList
 
-	log.Info("processAccountTransactions", "address", address, "txnCount", txnCount, "transaction count in block", len(*txnList))
+	log.Debug("CacheManager processAccountTransactions", "address", address, "txnCount", txnCount, "transaction count in block", len(*txnList))
 
 	if newTxnCount%PageSize == 1 { //if it's the first transaction of the page, won't be in the cache
 		accountTransactionList.Transactions = make([]AccountTransactionCompact, 0)
 		accountTransactionList.Address = address
-		log.Info("processAccountTransactions", "address", address, "newTxnCount", newTxnCount)
+		log.Debug("CacheManager processAccountTransactions", "address", address, "newTxnCount", newTxnCount)
 	} else {
 		//Load current state form the cache
 		txnPageCount := getPageCount(newTxnCount)
 		txnPageKey := getAccountTransactionPageKey(address, txnPageCount)
 
-		log.Info("processAccountTransactions loading from cache", "address", address, "newTxnCount", newTxnCount, "txnPageCount", txnPageCount)
+		log.Debug("CacheManager processAccountTransactions loading from cache", "address", address, "newTxnCount", newTxnCount, "txnPageCount", txnPageCount)
 
 		accountTransactionListBlob, err := c.cacheDb.Get(txnPageKey)
 		if err != nil {
-			log.Error("cacheDb.Get accountTxnPageKey", "error", err)
+			log.Error("CacheManager cacheDb.Get accountTxnPageKey", "error", err)
 			return err
 		}
 		err = json.Unmarshal(accountTransactionListBlob, &accountTransactionList)
 		if err != nil {
-			log.Error("json.Unmarshal accountTransactionListBlob", "error", err)
+			log.Error("CacheManager json.Unmarshal accountTransactionListBlob", "error", err)
 			return err
 		}
 
@@ -721,42 +721,45 @@ func (c *CacheManager) processAccountTransactions(address string, txnList *[]*Tr
 		}
 
 		if len(accountTransactionList.Transactions) != int(txnCount%PageSize) {
-			log.Error("unexpected transactions count from address", "actual", len(accountTransactionList.Transactions), "expected", int(txnCount%PageSize), "txnCount", txnCount)
+			log.Error("CacheManager unexpected transactions count from address", "actual", len(accountTransactionList.Transactions), "expected", int(txnCount%PageSize), "txnCount", txnCount)
 			return errors.New("unexpected transactions count")
 		}
 	}
 
 	for i, txn := range *txnList {
+		log.Trace("CacheManager processAccountTransactions", "address", address, "txn", txn.Hash)
 		atxn := accountTransactionCompactFromTransaction(txn)
 		accountTransactionList.Transactions = append([]AccountTransactionCompact{atxn}, accountTransactionList.Transactions...) //prepend for backward compat
 
 		if len(accountTransactionList.Transactions) == int(PageSize) || i == len(*txnList)-1 {
 			accountTransactionListBlob, err := json.Marshal(accountTransactionList)
 			if err != nil {
-				log.Error("json.Marshal accountTransactionListBlob", "error", err)
+				log.Error("CacheManager json.Marshal accountTransactionListBlob", "error", err)
 				return err
 			}
 
 			runningTxnCount := txnCount + uint64(i) + 1
 			txnPageCount := getPageCount(runningTxnCount)
 			txnPageKey := getAccountTransactionPageKey(address, txnPageCount)
+
 			err = txnBatch.Put(txnPageKey, accountTransactionListBlob)
 			if err != nil {
-				log.Error("txnBatch.Put accountTransactionListBlob", "error", err)
+				log.Error("CacheManager txnBatch.Put accountTransactionListBlob", "error", err)
 				return err
 			}
-			log.Info("txnBatch.Put", "runningTxnCount", runningTxnCount, "txnPageCount", txnPageCount)
+			log.Info("CacheManager txnBatch.Put", "runningTxnCount", runningTxnCount, "txnPageCount", txnPageCount)
 			accountTransactionList.Transactions = make([]AccountTransactionCompact, 0) //reset
 		}
 	}
 
+	log.Trace("CacheManager putAccountTxnCount txnCount", "txnCount", txnCount)
 	txnCount = txnCount + uint64(len(*txnList))
 	err = c.putAccountTxnCount(address, txnCount, batch)
 	if err != nil {
 		return err
 	}
 
-	log.Info("inserted account txn list", "txnCount", txnCount, "txnPageCount", getPageCount(txnCount), "txnCountInBlock", len(*txnList), "address", address)
+	log.Info("CacheManager inserted account txn list", "txnCount", txnCount, "txnPageCount", getPageCount(txnCount), "txnCountInBlock", len(*txnList), "address", address)
 
 	return nil
 }
@@ -822,20 +825,20 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*LogTransfe
 		contractAddress := t.ContractAddress.HexLower()
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
 		if err != nil {
-			log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
+			log.Error("CacheManager processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
 			return err
 		}
 
 		tokenBalance, err := c.client.GetAccountTokenBalance(t.ContractAddress, t.From)
 		if err != nil {
 			if errors.Is(err, ethclient.NotATokenError) {
-				log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "from", t.From)
+				log.Error("CacheManager processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "from", t.From)
 				return err
 			}
 		} else {
 			err = c.processAccountTokenTransfer(t.From, tokenDetails, tokenBalance, batch)
 			if err != nil {
-				log.Error("processAccountTokenTransfers processAccountTokenTransfer from", "contractAddress", contractAddress, "error", err, "from", t.From)
+				log.Error("CacheManager processAccountTokenTransfers processAccountTokenTransfer from", "contractAddress", contractAddress, "error", err, "from", t.From)
 				return err
 			}
 		}
@@ -843,13 +846,13 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*LogTransfe
 		tokenBalance, err = c.client.GetAccountTokenBalance(t.ContractAddress, t.To)
 		if err != nil {
 			if errors.Is(err, ethclient.NotATokenError) {
-				log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "to", t.To)
+				log.Error("CacheManager processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "to", t.To)
 				return err
 			}
 		} else {
 			err = c.processAccountTokenTransfer(t.To, tokenDetails, tokenBalance, batch)
 			if err != nil {
-				log.Error("processAccountTokenTransfers processAccountTokenTransfer to", "contractAddress", contractAddress, "error", err, "to", t.To)
+				log.Error("CacheManager processAccountTokenTransfers processAccountTokenTransfer to", "contractAddress", contractAddress, "error", err, "to", t.To)
 				return err
 			}
 		}
@@ -875,7 +878,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 
 	err = c.putAccountTokenInDb(&accountTokenSummary, &txnBatch)
 	if err != nil {
-		log.Error("putAccountTokenInDb", "address", address, "contractAddress", contractAddress)
+		log.Error("CacheManager putAccountTokenInDb", "address", address, "contractAddress", contractAddress)
 		return err
 	}
 
@@ -897,12 +900,12 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 
 	accountTokenList := AccountTokenList{}
 
-	log.Info("processAccountTokenTransfer", "address", address, "tokenCount", tokenCount, "newTokenCount", newTokenCount)
+	log.Debug("CacheManager processAccountTokenTransfer", "address", address, "tokenCount", tokenCount, "newTokenCount", newTokenCount)
 
 	if newTokenCount%PageSize == 1 { //if it's the first transaction of the page, won't be in the cache
 		accountTokenList.Tokens = make([]AccountTokenSummary, 0)
 		accountTokenList.Address = address
-		log.Info("processAccountTokenTransfer", "address", address, "newTokenCount", newTokenCount)
+		log.Debug("CacheManager processAccountTokenTransfer", "address", address, "newTokenCount", newTokenCount)
 	} else {
 		//Load current state form the cache
 		tokenPageCount := getPageCount(newTokenCount)
@@ -912,12 +915,12 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 
 		accountTokenListBlob, err := c.cacheDb.Get(tokenPageKey)
 		if err != nil {
-			log.Error("cacheDb.Get tokenPageKey", "error", err)
+			log.Error("CacheManager cacheDb.Get tokenPageKey", "error", err)
 			return err
 		}
 		err = json.Unmarshal(accountTokenListBlob, &accountTokenList)
 		if err != nil {
-			log.Error("json.Unmarshal accountTokenListBlob", "error", err, "address", address, "pageKey", pageKey)
+			log.Error("CacheManager json.Unmarshal accountTokenListBlob", "error", err, "address", address, "pageKey", pageKey)
 			return err
 		}
 
@@ -930,7 +933,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 		}
 
 		if len(accountTokenList.Tokens) != int(tokenCount%PageSize) {
-			log.Error("unexpected token count from address", "actual", len(accountTokenList.Tokens), "expected", int(tokenCount%PageSize), "tokenCount", tokenCount)
+			log.Error("CacheManager unexpected token count from address", "actual", len(accountTokenList.Tokens), "expected", int(tokenCount%PageSize), "tokenCount", tokenCount)
 			return errors.New("unexpected transactions count")
 		}
 
@@ -945,7 +948,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	accountTokenList.Tokens = append(accountTokenList.Tokens, accountTokenSummary)
 	accountTokenListBlob, err := json.Marshal(accountTokenList)
 	if err != nil {
-		log.Error("json.Marshal accountTokenListBlob", "error", err)
+		log.Error("CacheManager json.Marshal accountTokenListBlob", "error", err)
 		return err
 	}
 
@@ -954,7 +957,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	key, tokenPageKeyBlob := getAccountTokenPageKey(address, tokenPageCount)
 	err = txnBatch.Put(tokenPageKeyBlob, accountTokenListBlob)
 	if err != nil {
-		log.Error("txnBatch.Put accountTokenListBlob", "error", err, "key", key)
+		log.Error("CacheManager txnBatch.Put accountTokenListBlob", "error", err, "key", key)
 		return err
 	}
 
@@ -972,7 +975,7 @@ func (c *CacheManager) processAccountTokenTransfer(addr common.Address, tokenDet
 	conMap[contractAddress] = true
 	c.accountTokenMap[address] = contractMap
 
-	log.Info("inserted account token list", "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount, "address", address)
+	log.Debug("CacheManager inserted account token list", "newTokenCount", newTokenCount, "tokenPageCount", tokenPageCount, "address", address)
 
 	return nil
 }
