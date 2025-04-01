@@ -177,6 +177,15 @@ func (ec *Client) GetBlockConsensusData(ctx context.Context, number *big.Int) (*
 	return consensusData, err
 }
 
+func (ec *Client) ListValidators(ctx context.Context, number *big.Int) ([]*proofofstake.ValidatorDetails, error) {
+	var validatorList []*proofofstake.ValidatorDetails
+	err := ec.c.CallContext(ctx, &validatorList, "proofofstake_listValidators", hexutil.EncodeBig(number))
+	if err == nil && validatorList == nil {
+		err = ethereum.NotFound
+	}
+	return validatorList, err
+}
+
 type rpcTransaction struct {
 	tx *types.Transaction
 	TxExtraInfo
@@ -577,37 +586,47 @@ const (
 	ACCOUNT_TYPE_TOKEN    AccountType = "TOKEN"
 )
 
-func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (AccountType, error) {
+func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (AccountType, []byte, error) {
 	log.Debug("GetAccountType", "address", address, "blockNumber", blockNumber)
 	byteCode, err := ec.CodeAt(context.Background(), address, blockNumber)
 	if err != nil {
 		log.Debug("GetAccountType", "address", address, "error", err)
 		if errors.Is(err, bind.ErrNoCode) {
-			return ACCOUNT_TYPE_REGULAR, nil
+			return ACCOUNT_TYPE_REGULAR, nil, nil
 		}
-		return "", err
+		return "", nil, err
 	}
 	if len(byteCode) == 0 {
-		return ACCOUNT_TYPE_REGULAR, nil
+		return ACCOUNT_TYPE_REGULAR, nil, nil
 	}
 
 	//Verify token is a smart contract
 	byteCodeHex := hexutil.Encode(byteCode)
 	if asm.IsErc20(byteCodeHex) {
 		log.Debug("GetAccountType IsErc20 fail", "contactAddress", address)
-		return ACCOUNT_TYPE_TOKEN, nil
+		return ACCOUNT_TYPE_TOKEN, byteCode, nil
 	}
 
-	return ACCOUNT_TYPE_CONTRACT, err
+	return ACCOUNT_TYPE_CONTRACT, byteCode, err
 }
 
-func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*token.TokenDetails, error) {
+var NotATokenError = errors.New("invalid erc20 token")
+
+type TokenMetadataDetails struct {
+	Name        string
+	Symbol      string
+	Owner       common.Address
+	TotalSupply *big.Int
+	Decimals    uint8
+}
+
+func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *big.Int) (*TokenMetadataDetails, error) {
 	log.Debug("GetTokenDetails", "contactAddress", contactAddress, "blockNumber", blockNumber)
 	byteCode, err := ec.CodeAt(context.Background(), contactAddress, blockNumber)
 	if err != nil {
 		log.Debug("GetTokenDetails", "contactAddress", contactAddress, "error", err)
 		if errors.Is(err, bind.ErrNoCode) {
-			return nil, token.NotATokenError
+			return nil, NotATokenError
 		}
 		return nil, err
 	}
@@ -616,25 +635,25 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 	byteCodeHex := hexutil.Encode(byteCode)
 	if !asm.IsErc20(byteCodeHex) {
 		log.Debug("GetTokenDetails IsErc20 fail", "contactAddress", contactAddress)
-		return nil, token.NotATokenError
+		return nil, NotATokenError
 	}
 
 	contract, err := token.NewToken(contactAddress, ec)
 	if err != nil {
 		log.Debug("GetTokenDetails", "error", err)
 		if errors.Is(err, bind.ErrNoCode) {
-			return nil, token.NotATokenError
+			return nil, NotATokenError
 		}
 		return nil, err
 	}
 
-	tokenDetails := token.TokenDetails{}
+	tokenDetails := TokenMetadataDetails{}
 
 	tokenDetails.TotalSupply, err = contract.TotalSupply(nil)
 	if err != nil {
 		log.Debug("GetTokenDetails TotalSupply", "error", err, "contactAddress", contactAddress)
 		if errors.Is(err, vm.ErrExecutionReverted) {
-			return nil, token.NotATokenError
+			return nil, NotATokenError
 		}
 		return nil, err
 	}
@@ -691,7 +710,7 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 	if err != nil {
 		if errors.Is(err, vm.ErrExecutionReverted) {
 			log.Debug("GetAccountTokenBalance", "error", err, "contactAddress", contactAddress)
-			return nil, token.NotATokenError
+			return nil, NotATokenError
 		}
 		return nil, err
 	}
@@ -701,11 +720,16 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 }
 
 type InternalTransactionDetails struct {
-	From  string                       `json:"from,omitempty"`
-	To    string                       `json:"to,omitempty"`
-	Value string                       `json:"value,omitempty"`
-	Type  string                       `json:"type,omitempty"`
-	Calls []InternalTransactionDetails `json:"calls,omitempty"`
+	From    string                       `json:"from,omitempty"`
+	To      string                       `json:"to,omitempty"`
+	Value   string                       `json:"value,omitempty"`
+	Type    string                       `json:"type,omitempty"`
+	Gas     string                       `json:"gas,omitempty"`
+	GasUsed string                       `json:"gasUsed,omitempty"`
+	Input   string                       `json:"input,omitempty"`
+	Output  string                       `json:"output,omitempty"`
+	Error   string                       `json:"error,omitempty"`
+	Calls   []InternalTransactionDetails `json:"calls,omitempty"`
 }
 
 func (ec *Client) GetInternalTransactions(ctx context.Context, txnHash common.Hash) (*InternalTransactionDetails, error) {

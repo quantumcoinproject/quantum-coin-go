@@ -23,6 +23,7 @@ import (
 	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/consensus"
+	"github.com/QuantumCoinProject/qc/conversionutil"
 	"github.com/QuantumCoinProject/qc/core"
 	"github.com/QuantumCoinProject/qc/core/types"
 	"github.com/QuantumCoinProject/qc/crypto"
@@ -692,4 +693,67 @@ func (api *API) GetBlockConsensusContext(blockNumber uint64) ([32]byte, error) {
 		return context, err
 	}
 	return api.proofofstake.GetConsensusContext(key, currentheader.Hash())
+}
+
+type ConversionSummary struct {
+	ConversionList    []*ConversionDetails `json:"conversionList,omitempty"`
+	Total             int                  `json:"total,omitempty"`
+	TotalConverted    int                  `json:"totalConverted,omitempty"`
+	TotalNotConverted int                  `json:"totalNotConverted,omitempty"`
+	ConvertedCoins    string               `json:"convertedCoins,omitempty"`
+	TotalCoins        string               `json:"totalCoins,omitempty"`
+}
+
+// ListConversionDetails lists the summary of conversion
+func (api *API) ListConversionDetails() (*ConversionSummary, error) {
+	var header = api.chain.CurrentHeader()
+	if header == nil {
+		return nil, errUnknownBlock
+	}
+
+	var summary ConversionSummary
+	summary.ConversionList = make([]*ConversionDetails, len(conversionutil.SnapshotMap))
+	i := 0
+	totalCoins := big.NewInt(0)
+	convertedCoins := big.NewInt(0)
+	for item, _ := range conversionutil.SnapshotMap {
+		ethAddress := common.HexToAddress(item)
+		isConverted, err := api.getConversionStatus(ethAddress, header.Hash())
+		if err != nil {
+			return nil, err
+		}
+
+		coins, err := api.GetCoinsForEthereumAddress(ethAddress, header.Hash())
+		if err != nil {
+			return nil, err
+		}
+
+		var quantumAddress common.Address
+		if isConverted {
+			quantumAddress, err = api.getConversionQuantumAddress(ethAddress, header.Hash())
+			if err != nil {
+				return nil, err
+			}
+			summary.TotalConverted++
+			convertedCoins = convertedCoins.Add(convertedCoins, coins)
+		} else {
+			quantumAddress = ZERO_ADDRESS
+		}
+		totalCoins = totalCoins.Add(totalCoins, coins)
+
+		conversionDetails := &ConversionDetails{
+			EthAddress:     ethAddress,
+			IsConverted:    isConverted,
+			QuantumAddress: quantumAddress,
+			Coins:          coins,
+		}
+		summary.ConversionList[i] = conversionDetails
+		i++
+	}
+	summary.Total = len(summary.ConversionList)
+	summary.TotalNotConverted = summary.Total - summary.TotalConverted
+	summary.ConvertedCoins = common.BigIntToHexString(convertedCoins)
+	summary.TotalCoins = common.BigIntToHexString(totalCoins)
+
+	return &summary, nil
 }

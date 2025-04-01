@@ -85,6 +85,8 @@ func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
 // Hex converts a hash to a hex string.
 func (h Hash) Hex() string { return hexutil.Encode(h[:]) }
 
+func (h Hash) HexLower() string { return strings.ToLower(h.Hex()) }
+
 // TerminalString implements log.TerminalStringer, formatting a string for console
 // output during logging.
 func (h Hash) TerminalString() string {
@@ -281,6 +283,10 @@ func (a Address) Hash() Hash { return BytesToHash(a[:]) }
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
 	return string(a.checksumHex())
+}
+
+func (a Address) HexLower() string {
+	return strings.ToLower(a.Hex())
 }
 
 // String implements fmt.Stringer.
@@ -487,4 +493,8 @@ func (ma *MixedcaseAddress) ValidChecksum() bool {
 // Original returns the mixed-case input string
 func (ma *MixedcaseAddress) Original() string {
 	return ma.original
+}
+
+func UintToHex(val uint64) string {
+	return hexutil.EncodeBig(big.NewInt(int64(val)))
 }

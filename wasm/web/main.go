@@ -47,6 +47,9 @@ func main() {
 	js.Global().Set("JsonToWalletKeyPair", js.FuncOf(JsonToWalletKeyPair))
 	js.Global().Set("ParseBigFloat", js.FuncOf(ParseBigFloat))
 	js.Global().Set("IsValidAddress", js.FuncOf(IsValidAddress))
+	js.Global().Set("SingleAddressArgumentMethod", js.FuncOf(SingleAddressArgumentMethod))
+	js.Global().Set("SingleAmountArgumentMethod", js.FuncOf(SingleAmountArgumentMethod))
+	js.Global().Set("NoArgumentMethod", js.FuncOf(NoArgumentMethod))
 	<-done
 }
 
@@ -365,4 +368,87 @@ func etherToWeiFloat(eth *big.Float) *big.Int {
 	fracInt, _ := new(big.Int).SetString(fracStr, 10)
 	wei := new(big.Int).Add(truncInt, fracInt)
 	return wei
+}
+
+func SingleAddressArgumentMethod(this js.Value, args []js.Value) interface{} {
+	if len(args) != 3 {
+		return nil
+	}
+	method := args[0].String()
+
+	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
+	if err != nil {
+		return nil
+	}
+
+	arguments := make([]interface{}, 0)
+	arguments = append(arguments, common.HexToAddress(args[2].String()))
+
+	data, err := abiData.Pack(method, arguments...)
+	if err != nil {
+		return nil
+	}
+
+	var d strings.Builder
+	for i := 0; i < len(data); i++ {
+		sh := data[i]
+		d.WriteString(string(sh))
+	}
+
+	return d.String()
+}
+
+func SingleAmountArgumentMethod(this js.Value, args []js.Value) interface{} {
+	method := args[0].String()
+
+	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
+	if err != nil {
+		return nil
+	}
+
+	var ethVal *big.Float
+	var weiVal *big.Int
+	ethVal, err = ParseBigFloatInner(args[2].String())
+	if err != nil {
+		return nil
+	}
+	weiVal = etherToWeiFloat(ethVal)
+
+	arguments := make([]interface{}, 0, 1)
+	arguments = append(arguments, weiVal)
+
+	data, err := abiData.Pack(method, arguments...)
+	if err != nil {
+		return nil
+	}
+
+	var d strings.Builder
+	for i := 0; i < len(data); i++ {
+		sh := data[i]
+		d.WriteString(string(sh))
+	}
+
+	return d.String()
+}
+
+func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
+	method := args[0].String()
+
+	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
+	if err != nil {
+		return nil
+	}
+
+	data, err := abiData.Pack(method)
+	if err != nil {
+		return nil
+	}
+
+	var d strings.Builder
+	for i := 0; i < len(data); i++ {
+		sh := data[i]
+		d.WriteString(string(sh))
+	}
+
+	return d.String()
 }

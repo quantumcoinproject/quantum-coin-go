@@ -18,6 +18,7 @@
 package types
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -307,6 +308,20 @@ func DecodeBlockFromRLP(input []byte) (*Block, error) {
 	}
 
 	return &blk, nil
+}
+
+func (b *Block) ToBytesRLP() ([]byte, error) {
+	var buff bytes.Buffer
+	buffWriter := bufio.NewWriter(&buff)
+	err := b.EncodeRLP(buffWriter)
+	if err != nil {
+		return nil, err
+	}
+	err = buffWriter.Flush()
+	if err != nil {
+		return nil, err
+	}
+	return buff.Bytes(), err
 }
 
 // EncodeRLP serializes b into the Ethereum RLP block format.

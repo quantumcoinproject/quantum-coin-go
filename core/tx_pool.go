@@ -599,12 +599,14 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	// Drop non-local transactions under our own minimal accepted gas price or tip
 
 	// Ensure the transaction adheres to nonce ordering
-	if pool.currentState.GetNonce(from) > tx.Nonce() {
+	poolNonce := pool.currentState.GetNonce(from)
+	if poolNonce > tx.Nonce() {
+		log.Trace("txpool nonce too low", "from", from, "poolNonce", poolNonce, "tx nonce", tx.Nonce())
 		return ErrNonceTooLow
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	log.Trace("validateTx gas error", "from", from, "balance", pool.currentState.GetBalance(from), "cost", tx.Cost())
+	log.Trace("validateTx gas", "from", from, "balance", pool.currentState.GetBalance(from), "cost", tx.Cost())
 	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
 		isGasExempt, err := conversionutil.IsGasExemptTxn(tx, pool.signer)
 		if err == nil && isGasExempt == true {
