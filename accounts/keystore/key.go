@@ -26,7 +26,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/QuantumCoinProject/qc/accounts"
@@ -143,7 +142,7 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	return nil
 }
 
-func newKeyFromOQS(privateKey *signaturealgorithm.PrivateKey) *Key {
+func newKeyFromSigAlgKey(privateKey *signaturealgorithm.PrivateKey) *Key {
 	id, err := uuid.NewRandom()
 	if err != nil {
 		panic(fmt.Sprintf("Could not create random uuid: %v", err))
@@ -162,27 +161,12 @@ func newKeyFromOQS(privateKey *signaturealgorithm.PrivateKey) *Key {
 	return key
 }
 
-// NewKeyForDirectICAP generates a key whose address fits into < 155 bits so it can fit
-// into the Direct ICAP spec. for simplicity and easier compatibility with other libs, we
-// retry until the first byte is 0.
-func NewKeyForDirectICAP(rand io.Reader) *Key {
-	privateKey, err := cryptobase.SigAlg.GenerateKey()
-	if err != nil {
-		panic("key generation: oqs.GenerateKey failed: " + err.Error())
-	}
-	key := newKeyFromOQS(privateKey)
-	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
-		return NewKeyForDirectICAP(rand)
-	}
-	return key
-}
-
 func newKey(rand io.Reader) (*Key, error) {
-	privateKey, err := cryptobase.SigAlg.GenerateKey()
+	privateKey, err := cryptobase.SigAlg.GenerateKeyWithReader(rand)
 	if err != nil {
 		return nil, err
 	}
-	return newKeyFromOQS(privateKey), nil
+	return newKeyFromSigAlgKey(privateKey), nil
 }
 
 func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Account, error) {

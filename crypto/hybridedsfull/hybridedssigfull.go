@@ -86,6 +86,47 @@ func (s HybridedsfullSig) GenerateKey() (*signaturealgorithm.PrivateKey, error) 
 	return privy, nil
 }
 
+func (s HybridedsfullSig) GenerateKeyWithReader(rand io.Reader) (*signaturealgorithm.PrivateKey, error) {
+	// first step is to create a slice of bytes with the desired length
+	seedBuf := make([]byte, SEED_SIZE)
+	// then we can call rand.Read.
+	n, err := rand.Read(seedBuf)
+	if err != nil {
+		return nil, err
+	}
+	if n < SEED_SIZE {
+		return nil, errors.New("n less than SEED_SIZE")
+	}
+	return s.GenerateKeyWithSeed(seedBuf[:])
+}
+
+func (s HybridedsfullSig) GetRequiredSeedLength() uint {
+	return SEED_SIZE
+}
+
+func (s HybridedsfullSig) GenerateKeyWithSeed(seed []byte) (*signaturealgorithm.PrivateKey, error) {
+	if len(seed) != SEED_SIZE {
+		return nil, errors.New("invalid seed size")
+	}
+	pubKey, priKey, err := GenerateKeyWithSeed(seed)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(pubKey) != s.publicKeyLength || len(priKey) != s.privateKeyLength {
+		panic("keygen basic check failed")
+	}
+
+	privy := new(signaturealgorithm.PrivateKey)
+	privy.PriData = make([]byte, len(priKey))
+	copy(privy.PriData, priKey)
+
+	privy.PublicKey.PubData = make([]byte, len(pubKey))
+	copy(privy.PublicKey.PubData, pubKey)
+
+	return privy, nil
+}
+
 func (s HybridedsfullSig) SerializePrivateKey(priv *signaturealgorithm.PrivateKey) ([]byte, error) {
 	priBytes, err := s.exportPrivateKey(priv)
 	if err != nil {

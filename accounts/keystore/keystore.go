@@ -478,7 +478,7 @@ func (ks *KeyStore) ImportKey(priv *signaturealgorithm.PrivateKey, passphrase st
 	ks.importMu.Lock()
 	defer ks.importMu.Unlock()
 
-	key := newKeyFromOQS(priv)
+	key := newKeyFromSigAlgKey(priv)
 	if ks.cache.hasAddress(key.Address) {
 		return accounts.Account{
 			Address: key.Address,

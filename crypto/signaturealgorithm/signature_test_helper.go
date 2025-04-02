@@ -2,6 +2,8 @@ package signaturealgorithm
 
 import (
 	"bytes"
+	"crypto/rand"
+	"errors"
 	"fmt"
 	"github.com/QuantumCoinProject/qc/common/hexutil"
 	"github.com/QuantumCoinProject/qc/crypto"
@@ -351,6 +353,117 @@ func SignatureAlgorithmTest(t *testing.T, sig SignatureAlgorithm) {
 
 	if bytes.Compare(key1.PublicKey.PubData, priDeserialized.PublicKey.PubData) != 0 {
 		t.Fatal("pub data compare failed")
+	}
+
+	//Rand reader test
+	pKeyRand, err := sig.GenerateKeyWithReader(rand.Reader)
+	if err != nil {
+		if errors.Is(err, NotImplementedErr) {
+
+		} else {
+			t.Fatal(err)
+		}
+	} else {
+		signature3, err := sig.Sign(digestHash2, pKeyRand)
+		if err != nil {
+			t.Fatal("pKeyRand Sign failed")
+		}
+		if len(signature3) != sig.SignatureWithPublicKeyLength() {
+			fmt.Println("SignatureLength expected", sig.SignatureWithPublicKeyLength(), "actual", len(signature3))
+			t.Fatal("SignatureLength failed")
+		}
+		v := sig.Verify(pKeyRand.PubData, digestHash2, signature3)
+		if v == false {
+			t.Fatal("Fatal failed")
+		}
+
+		v1 := sig.Verify(pKeyRand.PubData, digestHash1, signature3)
+		if v1 == true {
+			t.Fatal("Fatal passed unexpectedly")
+		}
+	}
+
+	//Seed test
+	// first step is to create a slice of bytes with the desired length
+	seedBuf := make([]byte, sig.GetRequiredSeedLength())
+	// then we can call rand.Read.
+	n, err := rand.Read(seedBuf)
+	if err != nil {
+		t.Fatal("rand read failed 1")
+	}
+	if n < int(sig.GetRequiredSeedLength()) {
+		t.Fatal("rand read failed 2")
+	}
+
+	pKeySeed1, err := sig.GenerateKeyWithSeed(seedBuf)
+	if err != nil {
+		if errors.Is(err, NotImplementedErr) {
+
+		} else {
+			t.Fatal(err)
+		}
+	} else {
+		pKeySeed2, err := sig.GenerateKeyWithSeed(seedBuf)
+		if err != nil {
+			if errors.Is(err, NotImplementedErr) {
+
+			} else {
+				t.Fatal(err)
+			}
+		}
+
+		if bytes.Compare(pKeySeed1.PubData, pKeySeed2.PubData) != 0 {
+			t.Fatal("failed seed pub a")
+		}
+
+		if bytes.Compare(pKeySeed1.PriData, pKeySeed2.PriData) != 0 {
+			t.Fatal("failed seed pub a")
+		}
+
+		signature4, err := sig.Sign(digestHash2, pKeySeed2)
+		if err != nil {
+			t.Fatal("pKeySeed Sign failed")
+		}
+		if len(signature4) != sig.SignatureWithPublicKeyLength() {
+			fmt.Println("SignatureLength expected", sig.SignatureWithPublicKeyLength(), "actual", len(signature4))
+			t.Fatal("SignatureLength failed")
+		}
+		v3 := sig.Verify(pKeySeed2.PubData, digestHash2, signature4)
+		if v3 == false {
+			t.Fatal("Fatal failed")
+		}
+
+		v4 := sig.Verify(pKeySeed2.PubData, digestHash1, signature4)
+		if v4 == true {
+			t.Fatal("Fatal passed unexpectedly")
+		}
+
+		seedBuf2 := make([]byte, sig.GetRequiredSeedLength())
+		// then we can call rand.Read.
+		n, err = rand.Read(seedBuf)
+		if err != nil {
+			t.Fatal("rand read failed 1")
+		}
+		if n < int(sig.GetRequiredSeedLength()) {
+			t.Fatal("rand read failed 2")
+		}
+
+		pKeySeed3, err := sig.GenerateKeyWithSeed(seedBuf2)
+		if err != nil {
+			if errors.Is(err, NotImplementedErr) {
+
+			} else {
+				t.Fatal(err)
+			}
+		}
+
+		if bytes.Compare(pKeySeed1.PubData, pKeySeed3.PubData) == 0 {
+			t.Fatal("failed seed pub b")
+		}
+
+		if bytes.Compare(pKeySeed1.PriData, pKeySeed3.PriData) == 0 {
+			t.Fatal("failed seed pri b")
+		}
 	}
 
 	sig.Zeroize(key1)

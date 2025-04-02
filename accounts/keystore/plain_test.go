@@ -24,7 +24,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/QuantumCoinProject/qc/common"
@@ -173,14 +172,6 @@ func loadKeyStoreTestV3(file string, t *testing.T) map[string]KeyStoreTestV3 {
 		t.Fatal(err)
 	}
 	return tests
-}
-
-func TestKeyForDirectICAP(t *testing.T) {
-	t.Parallel()
-	key := NewKeyForDirectICAP(rand.Reader)
-	if !strings.HasPrefix(key.Address.Hex(), "0x00") {
-		t.Errorf("Expected first address byte to be zero, have: %s", key.Address.Hex())
-	}
 }
 
 func TestV3_31_Byte_Key(t *testing.T) {
