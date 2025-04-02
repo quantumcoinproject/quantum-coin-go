@@ -20,6 +20,7 @@ const (
 	CRYPTO_SIGNATURE_BYTES = 2 + 64 + 2420 + 40 + CRYPTO_MESSAGE_LEN //2558
 	HYBRID_DIGEST_LEN      = 64
 	SIG_NAME               = "dilithium-ed25519-sphincs"
+	SEED_SIZE              = 160
 )
 
 var (
@@ -39,6 +40,34 @@ var (
 	ErrVerifyFailed           = errors.New("verify failed")
 	ErrRecoverPublicKeyFailed = errors.New("recover public key length")
 )
+
+func GenerateKeyWithSeed(seed []byte) (publicKey []byte, secretKey []byte, err error) {
+	publicKey = make([]byte, CRYPTO_PUBLICKEY_BYTES)
+	secretKey = make([]byte, CRYPTO_SECRETKEY_BYTES)
+
+	rv := C.crypto_sign_dilithium_ed25519_sphincs_keypair_seed(
+		(*C.uchar)(unsafe.Pointer(&publicKey[0])),
+		(*C.uchar)(unsafe.Pointer(&secretKey[0])),
+		(*C.uchar)(unsafe.Pointer(&seed[0])))
+
+	if rv != OK {
+		return nil, nil, errors.New("GenerateKey failed")
+	}
+
+	if bytes.Compare(publicKey[:32], secretKey[32:64]) != 0 {
+		return nil, nil, ErrKeypairFailed
+	}
+
+	if bytes.Compare(publicKey[32:32+1312], secretKey[64+2560:64+2560+1312]) != 0 {
+		return nil, nil, ErrKeypairFailed
+	}
+
+	if bytes.Compare(publicKey[32+1312:], secretKey[64+2560+1312+64:]) != 0 {
+		return nil, nil, ErrKeypairFailed
+	}
+
+	return publicKey[:], secretKey[:], nil
+}
 
 func GenerateKey() (publicKey []byte, secretKey []byte, err error) {
 	publicKey = make([]byte, CRYPTO_PUBLICKEY_BYTES)

@@ -73,6 +73,18 @@ func (s MockSig) GenerateKey() (*signaturealgorithm.PrivateKey, error) {
 	return privy, nil
 }
 
+func (s MockSig) GenerateKeyWithReader(io.Reader) (*signaturealgorithm.PrivateKey, error) {
+	return nil, signaturealgorithm.NotImplementedErr
+}
+
+func (s MockSig) GetRequiredSeedLength() uint {
+	return 0
+}
+
+func (s MockSig) GenerateKeyWithSeed([]byte) (*signaturealgorithm.PrivateKey, error) {
+	return nil, signaturealgorithm.NotImplementedErr
+}
+
 func (s MockSig) SerializePrivateKey(priv *signaturealgorithm.PrivateKey) ([]byte, error) {
 	priBytes, err := s.exportPrivateKey(priv)
 	if err != nil {

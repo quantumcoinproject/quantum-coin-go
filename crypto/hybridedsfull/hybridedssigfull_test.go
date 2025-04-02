@@ -3,6 +3,8 @@ package hybridedsfull
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/QuantumCoinProject/qc/common"
+	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
 	"testing"
 )
@@ -16,6 +18,25 @@ func testHybridedsfullSigBasic(t *testing.T) {
 
 func TestHybridedsfullSig_Basic(t *testing.T) {
 	testHybridedsfullSigBasic(t)
+}
+
+func TestHybridedsSeed(t *testing.T) {
+	var seed [SEED_SIZE]byte
+	for i := byte(0); i < SEED_SIZE; i++ {
+		seed[i] = i
+	}
+
+	sig := CreateHybridedsfullSig()
+	pKey, err := sig.GenerateKeyWithSeed(seed[:])
+	if err != nil {
+		t.Fatal("failed")
+	}
+
+	addr := crypto.PublicKeyBytesToAddress(pKey.PubData)
+	fmt.Println(crypto.PublicKeyBytesToAddress(pKey.PubData))
+	if addr.IsEqualTo(common.HexToAddress("0xa77aAa180c39411D22812F8f9d1e3CeacfB58A8A1aa9De2a408bd9Ff5b81Aad6")) == false {
+		t.Fatal("failed address check")
+	}
 }
 
 func testBase64(t *testing.T) {

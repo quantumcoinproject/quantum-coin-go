@@ -1,9 +1,13 @@
 package signaturealgorithm
 
 import (
+	"errors"
 	"github.com/QuantumCoinProject/qc/common"
+	"io"
 	"math/big"
 )
+
+var NotImplementedErr = errors.New("not implemented")
 
 type PublicKey struct {
 	PubData []byte
@@ -24,6 +28,9 @@ type SignatureAlgorithm interface {
 	SignatureStartValue() byte
 
 	GenerateKey() (*PrivateKey, error)
+	GenerateKeyWithReader(io.Reader) (*PrivateKey, error)
+	GetRequiredSeedLength() uint
+	GenerateKeyWithSeed([]byte) (*PrivateKey, error)
 
 	SerializePrivateKey(*PrivateKey) ([]byte, error)
 	DeserializePrivateKey([]byte) (*PrivateKey, error)

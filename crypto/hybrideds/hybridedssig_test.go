@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"github.com/QuantumCoinProject/qc/common"
 	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/QuantumCoinProject/qc/crypto/hybridedsfull"
 	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
@@ -27,6 +28,26 @@ func TestHybridedsSig_Basic(t *testing.T) {
 
 	fmt.Println("NativeGolangVerify true test")
 	testHybridedsSigBasic(t, true)
+}
+
+func TestHybridedsSeed(t *testing.T) {
+	var seed [SEED_SIZE]byte
+	for i := byte(0); i < SEED_SIZE; i++ {
+		seed[i] = i
+	}
+
+	sig := CreateHybridedsSig(true)
+	pKey, err := sig.GenerateKeyWithSeed(seed[:])
+	if err != nil {
+		t.Fatal("failed")
+	}
+
+	addr := crypto.PublicKeyBytesToAddress(pKey.PubData)
+	fmt.Println(crypto.PublicKeyBytesToAddress(pKey.PubData))
+	if addr.IsEqualTo(common.HexToAddress("0xa77aAa180c39411D22812F8f9d1e3CeacfB58A8A1aa9De2a408bd9Ff5b81Aad6")) == false {
+		t.Fatal("failed address check")
+	}
+
 }
 
 func testCompactFull(t *testing.T, nativeGolandVerify bool) {

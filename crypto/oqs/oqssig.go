@@ -62,6 +62,18 @@ func (s OqsSig) GenerateKey() (*signaturealgorithm.PrivateKey, error) {
 	return GenerateKey(s.sigName)
 }
 
+func (s OqsSig) GenerateKeyWithReader(io.Reader) (*signaturealgorithm.PrivateKey, error) {
+	return nil, signaturealgorithm.NotImplementedErr
+}
+
+func (s OqsSig) GetRequiredSeedLength() uint {
+	return 0
+}
+
+func (s OqsSig) GenerateKeyWithSeed([]byte) (*signaturealgorithm.PrivateKey, error) {
+	return nil, signaturealgorithm.NotImplementedErr
+}
+
 func (s OqsSig) SerializePrivateKey(priv *signaturealgorithm.PrivateKey) ([]byte, error) {
 	priBytes, err := ExportPrivateKey(s.sigName, priv)
 	if err != nil {
