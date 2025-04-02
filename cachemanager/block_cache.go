@@ -8,9 +8,6 @@ import (
 	"github.com/QuantumCoinProject/qc/log"
 )
 
-const BlockDetailsKey = "block-%d" //%d is block number
-const LastBlockKey = "last-block"
-
 func (c *CacheManager) putLastBlockNumberInDb(blockNumber uint64, batch *ethdb.Batch) error {
 	txnBatch := *batch
 	blockKey := []byte(LastBlockKey)

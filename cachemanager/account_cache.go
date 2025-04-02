@@ -1,6 +1,13 @@
 package cachemanager
 
+import "github.com/QuantumCoinProject/qc/ethclient"
+
 const AccountSummaryKey = "account-%s"
+
+type AccountDetails struct {
+	Address string                `json:"address,omitempty"`
+	AccType ethclient.AccountType `json:"accountType,omitempty"`
+}
 
 /*func (c *CacheManager) getAccount(address common.Address, blockNumber *big.Int, batch *ethdb.Batch) (*AccountDetails, error) {
 	accountDetails, err := c.getAccountFromCacheOrDb(address)
