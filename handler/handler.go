@@ -150,6 +150,7 @@ type P2PHandler struct {
 
 	rebroadcastLock            sync.Mutex
 	rebroadcastLastCleanupTime time.Time
+	consensusPacketHelper      *ConsensusPacketHelper
 }
 
 var lock = &sync.Mutex{}
@@ -203,6 +204,7 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		rebroadcastCount:           config.RebroadcastCount,
 		rebroadcastMap:             make(map[common.Hash]int64),
 		rebroadcastLastCleanupTime: time.Now(),
+		consensusPacketHelper:      NewConsensusPacketHelper(config.Chain),
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast

@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -67,9 +66,9 @@ func (h *EthHandler) AcceptTxs() bool {
 
 // Handle is invoked from a peer's message P2PHandler when it receives a new remote
 // message that the P2PHandler couldn't consume and serve itself.
-func (h *EthHandler) Handle(peer *eth.Peer, packet eth.Packet) error {
+func (h *EthHandler) Handle(peer *eth.Peer, pkt eth.Packet) error {
 	// Consume any broadcasts and announces, forwarding the rest to the Downloader
-	switch packet := packet.(type) {
+	switch packet := pkt.(type) {
 	case *eth.BlockHeadersPacket:
 		return h.handleHeaders(peer, *packet)
 
@@ -319,39 +318,44 @@ func (h *EthHandler) ShouldRebroadcastIfYesSetFlag(packetHash common.Hash) bool 
 }
 
 func (h *EthHandler) rebroadcast(incomingPeerId string, packet *eth.ConsensusPacket) {
-	log.Trace("rebroadcast", "packet", packet.Hash().Hex())
+	log.Info("rebroadcast", "packet", packet.Hash().Hex(), "rebroadcastCount", h.rebroadcastCount)
+
 	if h.consensusHandler.Handler.ShouldRebroadCast(packet, incomingPeerId) == false {
 		return
 	}
-	packetHash := packet.Hash()
-	shouldRebroadcast := h.ShouldRebroadcastIfYesSetFlag(packetHash)
-	if shouldRebroadcast == false {
+
+	peerList := h.peers.PeerIdList()
+	broadcastList, err := h.consensusPacketHelper.GetPeerListToBroadcast(incomingPeerId, packet, peerList)
+	if err != nil {
+		log.Warn("GetPeerListToBroadcast", "error", err)
 		return
 	}
-	peerList := h.peers.PeerIdList()
-	for i := len(peerList) - 1; i > 0; i-- { //Fisher Yates shuffle. Send to a random set of peers each time
+	for i := len(broadcastList) - 1; i > 0; i-- { //Fisher Yates shuffle. Send to a random set of peers each time
 		minVal := 0
 		maxVal := i
 		j := rand.Intn(maxVal-minVal) + minVal //non-crypto rand is ok for this purpose
-		temp := peerList[i]
-		peerList[i] = peerList[j]
-		peerList[j] = temp
+		temp := broadcastList[i]
+		broadcastList[i] = broadcastList[j]
+		broadcastList[j] = temp
 	}
 
+	/*packetHash := packet.Hash()
+	shouldRebroadcast := h.ShouldRebroadcastIfYesSetFlag(packetHash)
+	if shouldRebroadcast == false {
+		return
+	}*/
+
 	count := 0
-	for index := range peerList {
-		p := h.peers.peer(peerList[index])
+	for index := range broadcastList {
+		p := h.peers.peer(broadcastList[index])
 		if p == nil {
 			continue
 		}
-		log.Trace("Rebroadcast peer", "peer", peerList[index])
-		if strings.Compare(incomingPeerId, p.ID()) != 0 {
-			log.Trace("Rebroadcast ConsensusPacket", "incoming peer", incomingPeerId, "outgoing peer", p.ID(), "parentHash", packet.ParentHash, "packetHash", packetHash.Hex())
-			p.AsyncSendConsensusPacket(packet)
-			count = count + 1
-			if count >= h.rebroadcastCount {
-				break
-			}
+		log.Trace("Rebroadcast ConsensusPacket", "incoming peer", incomingPeerId, "outgoing peer", p.ID(), "parentHash", packet.ParentHash, "packetHash", packet.Hash())
+		p.AsyncSendConsensusPacket(packet)
+		count = count + 1
+		if count >= h.rebroadcastCount {
+			break
 		}
 	}
 }

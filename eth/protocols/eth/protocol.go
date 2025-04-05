@@ -410,6 +410,14 @@ func (*RequestPeerListPacket) Kind() byte   { return RequestPeerListMsg }
 func (*PeerListPacket) Name() string { return "PeerListPacket" }
 func (*PeerListPacket) Kind() byte   { return PeerListMsg }
 
+func (c *ConsensusPacket) CopyFrom(otherPacket *ConsensusPacket) {
+	c.ConsensusData = make([]byte, len(otherPacket.ConsensusData))
+	copy(c.ConsensusData, otherPacket.ConsensusData)
+	c.Signature = make([]byte, len(otherPacket.Signature))
+	copy(c.Signature, otherPacket.Signature)
+	c.ParentHash.CopyFrom(otherPacket.ParentHash)
+}
+
 func NewConsensusPacket(otherPacket *ConsensusPacket) (c ConsensusPacket) {
 	c.ConsensusData = make([]byte, len(otherPacket.ConsensusData))
 	copy(c.ConsensusData, otherPacket.ConsensusData)
