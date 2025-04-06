@@ -18,10 +18,10 @@ package core
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/core/vm"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"math"
 	"math/big"
 )

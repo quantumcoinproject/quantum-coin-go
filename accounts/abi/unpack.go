@@ -23,7 +23,7 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 var (

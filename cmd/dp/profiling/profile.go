@@ -2,7 +2,7 @@ package profiling
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"net/http"
 	"os"
 	"runtime/pprof"

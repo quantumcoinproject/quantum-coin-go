@@ -21,10 +21,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
 	"github.com/VictoriaMetrics/fastcache"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb/memorydb"
 )
 
 func copyDestructs(destructs map[common.Hash]struct{}) map[common.Hash]struct{} {

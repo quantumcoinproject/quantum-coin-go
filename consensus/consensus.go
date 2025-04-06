@@ -18,11 +18,11 @@
 package consensus
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/state"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"math/big"
 )
 

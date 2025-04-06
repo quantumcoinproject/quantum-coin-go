@@ -26,9 +26,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/math"
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 )
 
 const jsondata = `

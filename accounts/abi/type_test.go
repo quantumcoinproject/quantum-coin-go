@@ -21,8 +21,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // typeWithoutStringer is a alias for the Type type which simply doesn't implement

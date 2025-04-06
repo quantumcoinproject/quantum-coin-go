@@ -21,10 +21,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/uint256"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/uint256"
 )
 
 // emptyCodeHash is used by create to ensure deployment is disallowed to already

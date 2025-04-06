@@ -21,7 +21,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // Handler returns a log handler which logs to the unit test log of t.

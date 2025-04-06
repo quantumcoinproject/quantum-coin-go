@@ -17,7 +17,7 @@
 package vm
 
 import (
-	"github.com/QuantumCoinProject/qc/uint256"
+	"github.com/quantumcoinproject/quantum-coin-go/uint256"
 )
 
 // Gas costs

@@ -23,8 +23,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 func TestChainIterator(t *testing.T) {

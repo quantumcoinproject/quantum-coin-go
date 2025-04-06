@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 func TestTransaction(t *testing.T) {

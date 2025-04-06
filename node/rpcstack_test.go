@@ -25,10 +25,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/internal/testlog"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/gorilla/websocket"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/testlog"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -17,10 +17,10 @@
 package enode
 
 import (
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/p2p/enr"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enr"
 )
 
 func newLocalNodeForTesting() (*LocalNode, *DB) {

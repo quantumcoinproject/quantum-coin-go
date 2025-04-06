@@ -19,7 +19,7 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io"
 	"io/ioutil"
 	"net"
@@ -29,9 +29,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/p2p"
-	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 
 	"github.com/stretchr/testify/assert"
 )

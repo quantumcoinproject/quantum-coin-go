@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/core/state"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/core/vm"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/trie"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
 
 // stateAtBlock retrieves the state database associated with a certain block.

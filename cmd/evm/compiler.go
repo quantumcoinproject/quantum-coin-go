@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/QuantumCoinProject/qc/cmd/evm/internal/compiler"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/evm/internal/compiler"
 
 	"gopkg.in/urfave/cli.v1"
 )

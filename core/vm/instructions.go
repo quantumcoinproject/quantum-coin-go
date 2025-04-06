@@ -17,11 +17,11 @@
 package vm
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/uint256"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/uint256"
 )
 
 func opAdd(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byte, error) {

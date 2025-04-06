@@ -23,13 +23,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/p2p/enode"
-	"github.com/QuantumCoinProject/qc/trie"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 	"math/rand"
 )
 
@@ -338,12 +338,6 @@ func (h *EthHandler) rebroadcast(incomingPeerId string, packet *eth.ConsensusPac
 		broadcastList[i] = broadcastList[j]
 		broadcastList[j] = temp
 	}
-
-	/*packetHash := packet.Hash()
-	shouldRebroadcast := h.ShouldRebroadcastIfYesSetFlag(packetHash)
-	if shouldRebroadcast == false {
-		return
-	}*/
 
 	count := 0
 	for index := range broadcastList {

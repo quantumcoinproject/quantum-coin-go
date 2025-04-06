@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 )
 
 var (

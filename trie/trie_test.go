@@ -21,7 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 	"hash"
 	"io/ioutil"
 	"math/big"
@@ -31,13 +31,13 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/ethdb/leveldb"
-	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
-	"github.com/QuantumCoinProject/qc/rlp"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb/leveldb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb/memorydb"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 func init() {

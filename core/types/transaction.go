@@ -20,8 +20,8 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io"
 	"math/big"
 	"runtime/debug"
@@ -29,8 +29,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 var (

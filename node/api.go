@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/internal/debug"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/p2p"
-	"github.com/QuantumCoinProject/qc/p2p/enode"
-	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/debug"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 )
 
 // apis returns the collection of built-in RPC APIs.

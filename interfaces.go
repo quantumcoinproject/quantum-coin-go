@@ -22,8 +22,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 // NotFound is returned by API methods if the requested item does not exist.

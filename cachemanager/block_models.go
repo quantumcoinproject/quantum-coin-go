@@ -1,8 +1,8 @@
 package cachemanager
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
 )
 
 const BlockDetailsKey = "block-%d" //%d is block number

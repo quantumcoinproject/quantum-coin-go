@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/common/math"
-	"github.com/QuantumCoinProject/qc/signer/core/apitypes"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
+	"github.com/quantumcoinproject/quantum-coin-go/signer/core/apitypes"
 )
 
 // GnosisSafeTx is a type to parse the safe-tx returned by the relayer,

@@ -1,8 +1,8 @@
 package cryptobase
 
 import (
-	"github.com/QuantumCoinProject/qc/crypto/drng/ChaCha20"
-	"github.com/QuantumCoinProject/qc/crypto/hybrideds"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/drng/ChaCha20"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
 )
 
 var SigAlg = hybrideds.CreateHybridedsSig(true)

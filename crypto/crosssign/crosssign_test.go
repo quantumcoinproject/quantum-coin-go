@@ -3,7 +3,7 @@ package crosssign
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"

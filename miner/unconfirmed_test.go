@@ -19,7 +19,7 @@ package miner
 import (
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 // noopChainRetriever is an implementation of headerRetriever that always

@@ -19,7 +19,7 @@ package rlp
 import (
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 )
 
 // TestIterator tests some basic things about the ListIterator. A more

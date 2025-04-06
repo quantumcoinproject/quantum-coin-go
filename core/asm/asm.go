@@ -21,7 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
 )
 
 // Iterator for disassembled EVM instructions

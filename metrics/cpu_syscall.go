@@ -22,7 +22,7 @@ package metrics
 import (
 	syscall "golang.org/x/sys/unix"
 
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // getProcessCPUTime retrieves the process' CPU time since program startup.

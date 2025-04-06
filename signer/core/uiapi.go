@@ -21,14 +21,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io/ioutil"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/accounts/keystore"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
 )
 
 // SignerUIAPI implements methods Clef provides for a UI to query, in the bidirectional communication

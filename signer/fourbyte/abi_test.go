@@ -22,8 +22,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/accounts/abi"
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 func verify(t *testing.T, jsondata, calldata string, exp []interface{}) {

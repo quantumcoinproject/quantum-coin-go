@@ -23,10 +23,10 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/rlp"
 	"github.com/VictoriaMetrics/fastcache"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 // randomHash generates a random blob of data and returns it as a hash.

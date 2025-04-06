@@ -1,11 +1,11 @@
 package cachemanager
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/ethclient"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
 	"strings"
 )

@@ -33,8 +33,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 type allocItem struct{ Addr, Balance *big.Int }

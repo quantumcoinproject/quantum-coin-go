@@ -20,7 +20,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"gopkg.in/urfave/cli.v1"
 )
 

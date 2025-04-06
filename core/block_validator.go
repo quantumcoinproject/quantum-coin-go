@@ -18,11 +18,11 @@ package core
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/consensus"
-	"github.com/QuantumCoinProject/qc/core/state"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/trie"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
 
 // BlockValidator is responsible for validating block headers, uncles and

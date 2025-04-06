@@ -19,8 +19,8 @@ package leveldb
 import (
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/ethdb/dbtest"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb/dbtest"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 )

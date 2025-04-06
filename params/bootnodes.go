@@ -17,7 +17,7 @@
 package params
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on

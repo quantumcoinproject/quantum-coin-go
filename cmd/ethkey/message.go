@@ -19,12 +19,12 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io/ioutil"
 
-	"github.com/QuantumCoinProject/qc/accounts/keystore"
-	"github.com/QuantumCoinProject/qc/cmd/utils"
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"gopkg.in/urfave/cli.v1"
 )
 

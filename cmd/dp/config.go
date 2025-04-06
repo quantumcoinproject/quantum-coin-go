@@ -27,14 +27,14 @@ import (
 
 	"gopkg.in/urfave/cli.v1"
 
-	"github.com/QuantumCoinProject/qc/cmd/utils"
-	"github.com/QuantumCoinProject/qc/eth/ethconfig"
-	"github.com/QuantumCoinProject/qc/internal/ethapi"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/metrics"
-	"github.com/QuantumCoinProject/qc/node"
-	"github.com/QuantumCoinProject/qc/params"
 	"github.com/naoina/toml"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/ethconfig"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/metrics"
+	"github.com/quantumcoinproject/quantum-coin-go/node"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 var (

@@ -24,14 +24,14 @@ import (
 	"math/big"
 	"reflect"
 
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/accounts/keystore"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/internal/ethapi"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/signer/core/apitypes"
-	"github.com/QuantumCoinProject/qc/signer/storage"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/signer/core/apitypes"
+	"github.com/quantumcoinproject/quantum-coin-go/signer/storage"
 )
 
 const (

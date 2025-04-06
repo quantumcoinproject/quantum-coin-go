@@ -21,12 +21,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/core/state"
-	"github.com/QuantumCoinProject/qc/core/vm"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 // Config is a basic type specifying certain configuration flags for running

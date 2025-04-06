@@ -20,7 +20,7 @@ import (
 	"container/heap"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common/mclock"
+	"github.com/quantumcoinproject/quantum-coin-go/common/mclock"
 )
 
 // LazyQueue is a priority queue data structure where priorities can change over

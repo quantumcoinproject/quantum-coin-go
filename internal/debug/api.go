@@ -34,7 +34,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // Handler is the global debugging handler.

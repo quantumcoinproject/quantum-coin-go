@@ -26,7 +26,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 var (

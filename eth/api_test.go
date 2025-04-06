@@ -24,11 +24,11 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/core/state"
-	"github.com/QuantumCoinProject/qc/crypto"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 )
 
 var dumper = spew.ConfigState{Indent: "    "}

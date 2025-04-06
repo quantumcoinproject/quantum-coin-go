@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 const BlockTransactionPageKey = "block-transaction-list-%d-%d" //%d is block number, %d is page number

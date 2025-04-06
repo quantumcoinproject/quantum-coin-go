@@ -23,13 +23,13 @@ import (
 	"sort"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/mclock"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/metrics"
 	mapset "github.com/deckarep/golang-set"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/mclock"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 )
 
 const (

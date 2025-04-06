@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/QuantumCoinProject/qc/internal/flags"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

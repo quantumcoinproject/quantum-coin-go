@@ -18,14 +18,14 @@ package enode
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io"
 
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/p2p/enr"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enr"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 var enrKeyVal = string(([]byte{115, 101, 99, 112, 50, 53, 54, 107, 49})[:])

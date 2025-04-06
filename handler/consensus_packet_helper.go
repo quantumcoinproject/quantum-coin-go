@@ -1,10 +1,10 @@
 package handler
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"sync"
 	"time"
 )

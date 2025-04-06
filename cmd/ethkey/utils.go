@@ -22,8 +22,8 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/cmd/utils"
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"gopkg.in/urfave/cli.v1"
 )
 

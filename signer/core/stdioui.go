@@ -19,9 +19,9 @@ package core
 import (
 	"context"
 
-	"github.com/QuantumCoinProject/qc/internal/ethapi"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 )
 
 type StdIOUI struct {

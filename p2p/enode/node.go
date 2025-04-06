@@ -21,15 +21,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"math/bits"
 	"net"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/p2p/enr"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enr"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 var errMissingPrefix = errors.New("missing 'enr:' prefix for base64-encoded record")

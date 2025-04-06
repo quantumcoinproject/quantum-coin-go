@@ -28,14 +28,14 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/QuantumCoinProject/qc/console/prompt"
-	"github.com/QuantumCoinProject/qc/internal/jsre"
-	"github.com/QuantumCoinProject/qc/internal/jsre/deps"
-	"github.com/QuantumCoinProject/qc/internal/web3ext"
-	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/dop251/goja"
 	"github.com/mattn/go-colorable"
 	"github.com/peterh/liner"
+	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/jsre"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/jsre/deps"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/web3ext"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 )
 
 var (

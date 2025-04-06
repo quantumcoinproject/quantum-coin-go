@@ -22,7 +22,7 @@ package keystore
 import (
 	"time"
 
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/rjeczalik/notify"
 )
 

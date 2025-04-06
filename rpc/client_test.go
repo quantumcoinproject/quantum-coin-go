@@ -32,8 +32,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/log"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 func TestClientRequest(t *testing.T) {

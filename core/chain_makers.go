@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/consensus"
-	"github.com/QuantumCoinProject/qc/core/state"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/core/vm"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 // BlockGen creates blocks for testing.

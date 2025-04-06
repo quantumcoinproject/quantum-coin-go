@@ -19,8 +19,8 @@ package vm
 import (
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/uint256"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/uint256"
 )
 
 // ContractRef is a reference to the contract's backing object

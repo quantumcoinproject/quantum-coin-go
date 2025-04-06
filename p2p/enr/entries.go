@@ -21,7 +21,7 @@ import (
 	"io"
 	"net"
 
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 // Entry is implemented by known node record entry types.

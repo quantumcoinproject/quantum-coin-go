@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/uint256"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/uint256"
 )
 
 var activators = map[int]func(*JumpTable){

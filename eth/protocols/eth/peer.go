@@ -21,11 +21,11 @@ import (
 	"math/rand"
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/p2p"
-	"github.com/QuantumCoinProject/qc/rlp"
 	mapset "github.com/deckarep/golang-set"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 const (

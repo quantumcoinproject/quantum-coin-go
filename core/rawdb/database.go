@@ -24,12 +24,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/ethdb/leveldb"
-	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
-	"github.com/QuantumCoinProject/qc/log"
 	"github.com/olekukonko/tablewriter"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb/leveldb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb/memorydb"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // freezerdb is a database wrapper that enabled freezer data retrievals.

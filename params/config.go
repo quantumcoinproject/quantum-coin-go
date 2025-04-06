@@ -19,10 +19,10 @@ package params
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // Genesis hashes to enforce below configs on.

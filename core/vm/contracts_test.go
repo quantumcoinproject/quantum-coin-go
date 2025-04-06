@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // precompiledTest defines the input/output pairs for precompiled contract tests.

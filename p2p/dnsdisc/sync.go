@@ -21,8 +21,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common/mclock"
-	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/quantumcoinproject/quantum-coin-go/common/mclock"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
 )
 
 // This is the number of consecutive leaf requests that may fail before

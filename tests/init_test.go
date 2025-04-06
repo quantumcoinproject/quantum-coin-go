@@ -30,7 +30,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 var (

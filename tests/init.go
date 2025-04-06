@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"sort"
 
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 // Forks table defines supported forks and their chain config.

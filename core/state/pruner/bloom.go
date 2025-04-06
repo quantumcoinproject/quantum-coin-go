@@ -22,10 +22,10 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/log"
 	bloomfilter "github.com/holiman/bloomfilter/v2"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // stateBloomHasher is a wrapper around a byte blob to satisfy the interface API

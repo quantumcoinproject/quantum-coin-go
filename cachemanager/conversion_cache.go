@@ -2,8 +2,8 @@ package cachemanager
 
 import (
 	"encoding/json"
-	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
-	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 )
 
 const ConversionKey = "conversion"

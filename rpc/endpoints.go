@@ -20,7 +20,7 @@ import (
 	"net"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // StartIPCEndpoint starts an IPC endpoint.

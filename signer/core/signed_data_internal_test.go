@@ -21,7 +21,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 )
 
 func TestBytesPadding(t *testing.T) {

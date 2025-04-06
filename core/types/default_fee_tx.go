@@ -1,7 +1,7 @@
 package types
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"math/big"
 )
 

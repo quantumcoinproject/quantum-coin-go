@@ -20,8 +20,8 @@ import (
 	"context"
 	"net"
 
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/p2p/netutil"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/netutil"
 )
 
 // ServeListener accepts connections on l, serving JSON-RPC on them.

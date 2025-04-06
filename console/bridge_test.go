@@ -19,8 +19,8 @@ package console
 import (
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/internal/jsre"
 	"github.com/dop251/goja"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/jsre"
 )
 
 // TestUndefinedAsParam ensures that personal functions can receive

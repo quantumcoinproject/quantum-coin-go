@@ -18,11 +18,11 @@ package types
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"math/big"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 func TestChainId(t *testing.T) {

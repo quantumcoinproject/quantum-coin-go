@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 func BenchmarkCutOriginal(b *testing.B) {

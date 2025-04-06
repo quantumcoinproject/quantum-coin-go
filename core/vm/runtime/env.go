@@ -17,8 +17,8 @@
 package runtime
 
 import (
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
 )
 
 func NewEnv(cfg *Config) *vm.EVM {

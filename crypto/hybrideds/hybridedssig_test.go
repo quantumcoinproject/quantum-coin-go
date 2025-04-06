@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/crypto/hybridedsfull"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"testing"
 )
 

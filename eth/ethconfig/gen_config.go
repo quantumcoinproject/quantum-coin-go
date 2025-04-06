@@ -6,12 +6,12 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/eth/downloader"
-	"github.com/QuantumCoinProject/qc/eth/gasprice"
-	"github.com/QuantumCoinProject/qc/miner"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/downloader"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/gasprice"
+	"github.com/quantumcoinproject/quantum-coin-go/miner"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 // MarshalTOML marshals as TOML.

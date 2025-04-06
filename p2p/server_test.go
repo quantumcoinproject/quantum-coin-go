@@ -18,10 +18,10 @@ package p2p
 
 import (
 	"errors"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
-	"github.com/QuantumCoinProject/qc/p2p/rlpx"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/rlpx"
 	"io"
 	"math/rand"
 	"net"
@@ -29,9 +29,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/internal/testlog"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/p2p/enode"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/testlog"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
 )
 
 type testTransport struct {

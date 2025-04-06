@@ -18,14 +18,14 @@ package node
 
 import (
 	"bytes"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p"
 )
 
 // Tests that datadirs can be successfully created, be them manually configured

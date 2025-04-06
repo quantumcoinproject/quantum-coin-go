@@ -20,18 +20,18 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"hash"
 	"math/big"
 	"reflect"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/math"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 var (

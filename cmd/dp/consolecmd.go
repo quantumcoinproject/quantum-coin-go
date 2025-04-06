@@ -22,10 +22,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/cmd/utils"
-	"github.com/QuantumCoinProject/qc/console"
-	"github.com/QuantumCoinProject/qc/node"
-	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
+	"github.com/quantumcoinproject/quantum-coin-go/console"
+	"github.com/quantumcoinproject/quantum-coin-go/node"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"gopkg.in/urfave/cli.v1"
 )
 

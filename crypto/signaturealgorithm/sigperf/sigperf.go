@@ -2,10 +2,10 @@ package main
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/crypto/hybrideds"
-	"github.com/QuantumCoinProject/qc/crypto/hybridedsfull"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"os"
 	"runtime/pprof"
 	"strconv"

@@ -17,8 +17,8 @@
 package core
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 // NewTxsEvent is posted when a batch of transactions enter the transaction pool.

@@ -17,7 +17,7 @@
 package keystore
 
 import (
-	"github.com/QuantumCoinProject/qc/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"os"
 	"strconv"
 	"testing"

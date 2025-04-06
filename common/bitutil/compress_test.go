@@ -21,7 +21,7 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 )
 
 // Tests that data bitset encoding and decoding works and is bijective.

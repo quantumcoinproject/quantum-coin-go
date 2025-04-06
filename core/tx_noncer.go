@@ -19,8 +19,8 @@ package core
 import (
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
 )
 
 // txNoncer is a tiny virtual state database to manage the executable nonces of

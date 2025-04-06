@@ -18,19 +18,19 @@ package snapshot
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 	"math/big"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/rlp"
-	"github.com/QuantumCoinProject/qc/trie"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb/memorydb"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
 
 // Tests that snapshot generation from an empty database.

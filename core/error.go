@@ -19,7 +19,7 @@ package core
 import (
 	"errors"
 
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 var (

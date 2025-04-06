@@ -17,10 +17,10 @@
 package eth
 
 import (
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/core/forkid"
-	"github.com/QuantumCoinProject/qc/p2p/enode"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/core/forkid"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 // ethEntry is the "eth" ENR entry which advertises eth protocol

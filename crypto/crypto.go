@@ -17,8 +17,8 @@
 package crypto
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"golang.org/x/crypto/sha3"
 )
 

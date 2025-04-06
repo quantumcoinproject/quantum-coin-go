@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // hashes is a helper to implement sort.Interface.

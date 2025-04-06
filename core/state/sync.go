@@ -19,10 +19,10 @@ package state
 import (
 	"bytes"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/rlp"
-	"github.com/QuantumCoinProject/qc/trie"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
 
 // NewStateSync create a new state trie download scheduler.

@@ -20,7 +20,7 @@ package utils
 import (
 	"fmt"
 
-	"github.com/QuantumCoinProject/qc/console/prompt"
+	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
 )
 
 // GetPassPhrase displays the given text(prompt) to the user and requests some textual

@@ -19,10 +19,10 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 )
 
 type bytesBacked interface {

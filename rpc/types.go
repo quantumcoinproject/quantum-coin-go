@@ -24,8 +24,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 )
 
 // API describes the set of methods offered over the RPC interface

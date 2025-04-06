@@ -25,9 +25,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/event"
-	"github.com/QuantumCoinProject/qc/p2p/enode"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/event"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 // Msg defines the structure of a p2p message.

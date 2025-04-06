@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/core/vm"
-	"github.com/QuantumCoinProject/qc/tests"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/tests"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -17,10 +17,10 @@
 package trie
 
 import (
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 type sliceBuffer []byte

@@ -1,8 +1,8 @@
 package keystore
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
 	"github.com/google/uuid"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 const (

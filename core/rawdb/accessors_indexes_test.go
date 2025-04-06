@@ -18,16 +18,16 @@ package rawdb
 
 import (
 	"bytes"
-	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 	"hash"
 	"math/big"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 // testHasher is the helper tool for transaction/receipt list hashing.

@@ -19,14 +19,14 @@ package eth
 import (
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"io"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/forkid"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/forkid"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 // Constants to match up protocol versions and messages

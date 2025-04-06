@@ -19,13 +19,13 @@ package accounts
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc"
-	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/event"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/event"
 )
 
 // Account represents an Ethereum account located at a specific location defined

@@ -27,9 +27,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/log"
 	mapset "github.com/deckarep/golang-set"
 	"github.com/gorilla/websocket"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 const (

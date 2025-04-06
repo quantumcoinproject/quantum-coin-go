@@ -20,17 +20,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io"
 	"io/ioutil"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/accounts/keystore"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // ErrNoChainID is returned whenever the user failed to specify a chain id.

@@ -24,10 +24,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/console/prompt"
-	"github.com/QuantumCoinProject/qc/internal/ethapi"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 type CommandlineUI struct {

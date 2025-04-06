@@ -3,7 +3,7 @@ package devp2p
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"testing"
 )
 

@@ -20,17 +20,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/common"
 	"github.com/google/uuid"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 const (

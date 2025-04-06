@@ -23,8 +23,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/signer/core/apitypes"
-	"github.com/QuantumCoinProject/qc/signer/fourbyte"
+	"github.com/quantumcoinproject/quantum-coin-go/signer/core/apitypes"
+	"github.com/quantumcoinproject/quantum-coin-go/signer/fourbyte"
 )
 
 func init() {

@@ -26,14 +26,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/event"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/p2p"
-	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/prometheus/tsdb/fileutil"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/event"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 )
 
 // Node is a container on which services can be registered.

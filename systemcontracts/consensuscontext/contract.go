@@ -1,10 +1,10 @@
 package consensuscontext
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"strings"
 )
-import "github.com/QuantumCoinProject/qc/accounts/abi"
+import "github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 
 // Steps after Contract is modified
 // 1) solc --bin --bin-runtime --abi c:\github\go-dp\systemcontracts\consensuscontext\ConsensusContextContract.sol  -o c:\github\go-dp\systemcontracts\consensuscontext

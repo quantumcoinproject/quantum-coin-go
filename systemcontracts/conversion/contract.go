@@ -1,8 +1,8 @@
 package conversion
 
 import (
-	"github.com/QuantumCoinProject/qc/accounts/abi"
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"strings"
 )
 

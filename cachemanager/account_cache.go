@@ -1,6 +1,6 @@
 package cachemanager
 
-import "github.com/QuantumCoinProject/qc/ethclient"
+import "github.com/quantumcoinproject/quantum-coin-go/ethclient"
 
 const AccountSummaryKey = "account-%s"
 

@@ -17,7 +17,7 @@
 package vm
 
 import (
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 func minSwapStack(n int) int {

@@ -28,10 +28,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/common"
 	"github.com/cespare/cp"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 var (

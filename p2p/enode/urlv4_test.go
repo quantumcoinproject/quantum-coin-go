@@ -19,15 +19,15 @@ package enode
 import (
 	"encoding/base64"
 	"errors"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/hashingalgorithm"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"net"
 	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/p2p/enr"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enr"
 )
 
 var (

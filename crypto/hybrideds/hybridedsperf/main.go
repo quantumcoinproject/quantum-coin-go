@@ -2,8 +2,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/crypto/hybrideds"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
 	"os"
 	"runtime/pprof"
 	"strconv"

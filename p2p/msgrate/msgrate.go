@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // measurementImpact is the impact a single measurement has on a peer's final

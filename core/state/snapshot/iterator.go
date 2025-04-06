@@ -21,9 +21,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 )
 
 // Iterator is an iterator to step over all the accounts or the specific

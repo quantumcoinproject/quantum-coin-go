@@ -20,8 +20,8 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 // accessList is an accumulator for the set of accounts and storage slots an EVM

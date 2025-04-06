@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 // VerifyGaslimit verifies the header gas limit according increase/decrease

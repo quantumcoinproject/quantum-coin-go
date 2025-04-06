@@ -17,7 +17,7 @@
 package state
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 type accessList struct {

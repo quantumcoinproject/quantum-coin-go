@@ -19,8 +19,8 @@ package trie
 import (
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/ethdb/memorydb"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb/memorydb"
 )
 
 // Tests that the trie database returns a missing trie node error if attempting

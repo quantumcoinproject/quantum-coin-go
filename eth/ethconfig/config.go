@@ -18,24 +18,24 @@
 package ethconfig
 
 import (
-	"github.com/QuantumCoinProject/qc/consensus/proofofstake"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/internal/ethapi"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
 	"math/big"
 	"os"
 	"os/user"
 	"runtime"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/consensus"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/eth/downloader"
-	"github.com/QuantumCoinProject/qc/eth/gasprice"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/miner"
-	"github.com/QuantumCoinProject/qc/node"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/downloader"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/gasprice"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/miner"
+	"github.com/quantumcoinproject/quantum-coin-go/node"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 // FullNodeGPO contains default gasprice oracle settings for full node.

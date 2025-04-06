@@ -16,7 +16,7 @@
 
 package core
 
-import "github.com/QuantumCoinProject/qc/common"
+import "github.com/quantumcoinproject/quantum-coin-go/common"
 
 // BadHashes represent a set of manually tracked bad hashes (usually hard forks)
 var BadHashes = map[common.Hash]bool{

@@ -19,7 +19,7 @@ package snapshot
 import (
 	"bytes"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // binaryIterator is a simplistic iterator to step over the accounts or storage

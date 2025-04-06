@@ -27,10 +27,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/log"
 	mapset "github.com/deckarep/golang-set"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // Minimum amount of time between cache reloads. This limit applies if the platform does
