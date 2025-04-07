@@ -2633,6 +2633,11 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 
 	rndVal := rand.Intn(MaxRand-minRand) + minRand
 
+	if blockNumber < cph.lastBlockNumber {
+		log.Warn("HandleConsensus", "blockNumber", blockNumber, "cph.lastBlockNumber", cph.lastBlockNumber)
+		return errors.New("HandleConsensus block number out of range")
+	}
+
 	cph.SetLatestBlockNumber(blockNumber)
 
 	if cph.initialized == false {
