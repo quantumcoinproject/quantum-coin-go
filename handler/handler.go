@@ -206,6 +206,12 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		rebroadcastLastCleanupTime: time.Now(),
 		consensusPacketHelper:      NewConsensusPacketHelper(config.Chain),
 	}
+	if h.rebroadcastCount == 0 {
+		log.Info("Rebroadcast count is 0, defaulting to 1")
+		h.rebroadcastCount = 1
+	} else {
+		log.Info("Rebroadcast", "count", h.rebroadcastCount)
+	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
 		// block is ahead, so fast sync was enabled for this node at a certain point.
