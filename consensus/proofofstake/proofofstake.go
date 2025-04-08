@@ -360,8 +360,23 @@ func (c *ProofOfStake) IsBlockReadyToSeal(chain consensus.ChainHeaderReader, hea
 	return true
 }
 
+// Whether ok to freeze transactions (final set for the block)
+func (c *ProofOfStake) ShouldFreezeTransactions(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) (bool, error) {
+	if c.signFn == nil {
+		return false, errors.New("not a miner")
+	}
+	blockState, _, err := c.consensusHandler.getBlockState(header.ParentHash)
+	if err != nil {
+		log.Debug("getBlockState", "err", err)
+		return false, err
+	}
+
+	return blockState > BLOCK_STATE_WAITING_FOR_PROPOSAL, nil
+}
+
 // HandleTransactions selects the transactions for including in the block according to the consensus rules.
-func (c *ProofOfStake) HandleTransactions(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txnMap map[common.Address]types.Transactions) (map[common.Address]types.Transactions, error) {
+func (c *ProofOfStake) HandleTransactions(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
+	txnMap map[common.Address]types.Transactions) (map[common.Address]types.Transactions, error) {
 	if c.signFn == nil {
 		return nil, errors.New("not a miner")
 	}

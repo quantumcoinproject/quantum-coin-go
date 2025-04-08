@@ -373,6 +373,10 @@ func (c *Mock) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *ty
 	return types.NewBlock(header, txs, receipts, trie.NewStackTrie(nil)), nil
 }
 
+func (c *Mock) ShouldFreezeTransactions(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) (bool, error) {
+	return false, nil
+}
+
 func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()

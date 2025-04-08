@@ -87,9 +87,10 @@ type environment struct {
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
 
-	header   *types.Header
-	txs      []*types.Transaction
-	receipts []*types.Receipt
+	header    *types.Header
+	txs       []*types.Transaction
+	receipts  []*types.Receipt
+	committed bool
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -193,7 +194,10 @@ type worker struct {
 
 	currentBlockPhase int32
 
-	selectedTransactions *types.TransactionsByNonce
+	selectedTransactions                *types.TransactionsByNonce
+	contextParentHash                   common.Hash
+	frozenTransactionsContextParentHash common.Hash
+	frozenTransactions                  *map[common.Address]types.Transactions
 }
 
 func newWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(*types.Block) bool, init bool) *worker {
@@ -600,6 +604,7 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		ancestors: mapset.NewSet(),
 		family:    mapset.NewSet(),
 		header:    header,
+		committed: false,
 	}
 
 	// Keep track of transactions which return errors so they can be removed
@@ -611,6 +616,9 @@ func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 		w.current.state.StopPrefetcher()
 	}
 	w.current = env
+	w.selectedTransactions = nil
+	w.contextParentHash.CopyFrom(parent.Hash())
+
 	return nil
 }
 
@@ -628,6 +636,7 @@ func (w *worker) updateSnapshot() {
 	)
 	w.snapshotReceipts = copyReceipts(w.current.receipts)
 	w.snapshotState = w.current.state.Copy()
+	w.current.committed = true
 }
 
 func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
@@ -649,7 +658,7 @@ func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Addres
 	log.Trace("state 5", "IntermediateRoot", w.current.state.IntermediateRoot(w.chain.Config().IsEIP158(w.current.header.Number)), "receipt", receipt, "err", err)
 
 	if err != nil {
-		log.Trace("state commit", "err", err)
+		log.Debug("state commit", "err", err, "tx", tx.Hash().Hex())
 		w.current.state.RevertToSnapshot(snap)
 		return nil, err
 	}
@@ -788,104 +797,148 @@ func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase com
 	return false
 }
 
+func (w *worker) freezeTransactionsIfNeeded(txnFilteredMap *map[common.Address]types.Transactions, s *state.StateDB) error {
+	shouldFreezeTxns, err := w.engine.ShouldFreezeTransactions(w.chain, w.current.header, s)
+	if err != nil {
+		log.Debug("freezeTransactionsIfNeeded", "err", err)
+		return err
+	} else {
+		if shouldFreezeTxns {
+			w.frozenTransactions = txnFilteredMap
+			w.frozenTransactionsContextParentHash.CopyFrom(w.current.header.ParentHash)
+			log.Trace("shouldFreezeTxns", "count", len(*txnFilteredMap))
+		}
+	}
+	return nil
+}
+
 func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	tstart := time.Now()
 	parent := w.chain.CurrentBlock()
-	log.Trace("proposePhase", "ParentHash", parent.ParentHash(), "number", parent.NumberU64())
 
-	if parent.Time() >= uint64(timestamp) {
-		timestamp = int64(parent.Time() + 1)
+	if w.current != nil && w.current.committed && w.contextParentHash.IsEqualTo(parent.Hash()) == true {
+		log.Trace("proposePhase current committed")
+		return nil
 	}
-	num := parent.Number()
-	log.Trace("w.config.GasFloor", "GasFloor", w.config.GasFloor)
-	header := &types.Header{
-		ParentHash: parent.Hash(),
-		Number:     num.Add(num, common.Big1),
-		GasLimit:   w.config.GasFloor,
-		Extra:      w.extra,
-		//Time:       uint64(timestamp),
-	}
-	log.Trace("proposePhase", "Number", header.Number, "parent", parent.ParentHash())
 
-	// Set baseFee and GasLimit if we are on an EIP-1559 chain
-	if w.chainConfig.IsLondon(header.Number) {
-		parentGasLimit := parent.GasLimit()
-		if !w.chainConfig.IsLondon(parent.Number()) {
-			// Bump by 2x
-			parentGasLimit = parent.GasLimit() * params.ElasticityMultiplier
+	tstart := time.Now()
+	if w.selectedTransactions == nil || w.contextParentHash.IsEqualTo(parent.Hash()) == false {
+		log.Trace("proposePhase", "ParentHash", parent.ParentHash(), "number", parent.NumberU64())
+
+		if parent.Time() >= uint64(timestamp) {
+			timestamp = int64(parent.Time() + 1)
 		}
-		log.Trace("CalcGasLimit1559")
-		header.GasLimit = core.CalcGasLimit1559(parentGasLimit, w.config.GasCeil)
-	}
-	// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
-	if w.isRunning() {
-		if w.coinbase == (common.Address{}) {
-			log.Error("Refusing to mine without etherbase")
-			return nil
+		num := parent.Number()
+		log.Trace("w.config.GasFloor", "GasFloor", w.config.GasFloor)
+		header := &types.Header{
+			ParentHash: parent.Hash(),
+			Number:     num.Add(num, common.Big1),
+			GasLimit:   w.config.GasFloor,
+			Extra:      w.extra,
+			//Time:       uint64(timestamp),
 		}
-		header.Coinbase = w.coinbase
-	}
+		log.Trace("proposePhase", "Number", header.Number, "parent", parent.ParentHash())
 
-	if err := w.engine.Prepare(w.chain, header); err != nil {
-		log.Error("Failed to prepare header for mining", "err", err)
-		return err
-	}
-
-	// Could potentially happen if starting to mine in an odd state.
-	err := w.makeCurrent(parent, header)
-	if err != nil {
-		log.Error("Failed to create mining context", "err", err)
-		return err
-	}
-
-	// Fill the block with all available pendingTxns transactions.
-	pendingTxns, err := w.eth.TxPool().Pending(false)
-	if err != nil {
-		log.Error("Failed to fetch pendingTxns transactions", "err", err)
-		return err
-	}
-
-	//Remove existing transactions
-	for addr, txList := range pendingTxns {
-		filteredList := make([]*types.Transaction, 0)
-		for _, txn := range txList {
-			if w.eth.BlockChain().DoesTransactionExist(txn.Hash()) == false {
-				filteredList = append(filteredList, txn)
+		// Set baseFee and GasLimit if we are on an EIP-1559 chain
+		if w.chainConfig.IsLondon(header.Number) {
+			parentGasLimit := parent.GasLimit()
+			if !w.chainConfig.IsLondon(parent.Number()) {
+				// Bump by 2x
+				parentGasLimit = parent.GasLimit() * params.ElasticityMultiplier
 			}
+			log.Trace("CalcGasLimit1559")
+			header.GasLimit = core.CalcGasLimit1559(parentGasLimit, w.config.GasCeil)
 		}
-		pendingTxns[addr] = filteredList
+		// Only set the coinbase if our consensus engine is running (avoid spurious block rewards)
+		if w.isRunning() {
+			if w.coinbase == (common.Address{}) {
+				log.Error("Refusing to mine without etherbase")
+				return nil
+			}
+			header.Coinbase = w.coinbase
+		}
+
+		if err := w.engine.Prepare(w.chain, header); err != nil {
+			log.Error("Failed to prepare header for mining", "err", err)
+			return err
+		}
+
+		// Could potentially happen if starting to mine in an odd state.
+		err := w.makeCurrent(parent, header)
+		if err != nil {
+			log.Error("Failed to create mining context", "err", err)
+			return err
+		}
+
+		// Fill the block with all available pendingTxns transactions.
+		pendingTxns, err := w.eth.TxPool().Pending(false)
+		if err != nil {
+			log.Error("Failed to fetch pendingTxns transactions", "err", err)
+			return err
+		}
+
+		//Remove existing transactions
+		for addr, txList := range pendingTxns {
+			filteredList := make([]*types.Transaction, 0)
+			for _, txn := range txList {
+				if w.eth.BlockChain().DoesTransactionExist(txn.Hash()) == false {
+					filteredList = append(filteredList, txn)
+				}
+			}
+			pendingTxns[addr] = filteredList
+		}
+
+		//Filter further (remove invalid nonces)
+		txsByNoncePreCheck := types.NewTransactionsByNonce(w.current.signer, pendingTxns, w.current.header.ParentHash)
+		txnFilteredMap := txsByNoncePreCheck.GetMap()
+		if w.frozenTransactionsContextParentHash.IsEqualTo(w.current.header.ParentHash) == false {
+			w.frozenTransactions = nil
+			log.Trace("frozenTransactionsContextParentHash not equal to current.header.ParentHash")
+		} else if w.frozenTransactions != nil {
+			log.Trace("frozenTransactions is not nil")
+			txnFilteredMap = *w.frozenTransactions
+		}
+
+		log.Debug("worker transactions", "pendingCount", len(pendingTxns), "postFilterCount", txsByNoncePreCheck.GetTotalCount())
+
+		s := w.current.state.Copy()
+		selectedTxns, err := w.engine.HandleTransactions(w.chain, w.current.header, s, txnFilteredMap)
+		if err != nil {
+			log.Debug("HandleTransactions", "err", err)
+
+			errInternal := w.freezeTransactionsIfNeeded(&txnFilteredMap, s)
+			if errInternal != nil {
+				log.Debug("freezeTransactionsIfNeeded", "errInternal", errInternal)
+			}
+
+			return err
+		}
+
+		errInternal := w.freezeTransactionsIfNeeded(&txnFilteredMap, s)
+		if errInternal != nil {
+			log.Debug("freezeTransactionsIfNeeded", "errInternal", errInternal)
+			return errInternal
+		}
+
+		if w.engine.IsBlockReadyToSeal(w.chain, w.current.header, s) == false {
+			log.Trace("block not ready to be sealed", "Hash", w.current.header.Hash(), "block", w.current.header.Number)
+			return errors.New("block not ready to be sealed")
+		}
+
+		log.Trace("HandleTransactions ok 1", "Number", w.current.header.Number)
+		if selectedTxns == nil {
+			selectedTxns = make(map[common.Address]types.Transactions)
+		}
+
+		//log.Trace("pendingTxns txn address count", len(pendingTxns), "block", header.Number.Uint64())
+		txsByNonce := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
+
+		w.selectedTransactions = txsByNonce
+	} else {
+		log.Info("proposePhase else", "parentHash", parent.Hash(), "number", parent.NumberU64())
 	}
-
-	//Filter further (remove invalid nonces)
-	txsByNoncePreCheck := types.NewTransactionsByNonce(w.current.signer, pendingTxns, w.current.header.ParentHash)
-	txnFilteredMap := txsByNoncePreCheck.GetMap()
-
-	log.Debug("worker transactions", "pendingCount", len(pendingTxns), "postFilterCount", txsByNoncePreCheck.GetTotalCount())
-
-	s := w.current.state.Copy()
-	selectedTxns, err := w.engine.HandleTransactions(w.chain, w.current.header, s, txnFilteredMap)
-	if err != nil {
-		log.Debug("HandleTransactions", "err", err)
-		return err
-	}
-
-	if w.engine.IsBlockReadyToSeal(w.chain, w.current.header, s) == false {
-		log.Trace("block not ready to be sealed", "Hash", w.current.header.Hash(), "block", w.current.header.Number)
-		return errors.New("block not ready to be sealed")
-	}
-
-	log.Trace("HandleTransactions ok 1", "Number", w.current.header.Number)
-	if selectedTxns == nil {
-		selectedTxns = make(map[common.Address]types.Transactions)
-	}
-
-	//log.Trace("pendingTxns txn address count", len(pendingTxns), "block", header.Number.Uint64())
-	txsByNonce := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
-
-	w.selectedTransactions = txsByNonce
 
 	log.Trace("HandleTransactions ok 3")
 	if w.commitTransactions(w.selectedTransactions, w.coinbase, interrupt) {

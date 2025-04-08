@@ -88,6 +88,8 @@ type Engine interface {
 	// HandleTransactions selects the transactions for including in the block according to the consensus rules.
 	HandleTransactions(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txnMap map[common.Address]types.Transactions) (map[common.Address]types.Transactions, error)
 
+	ShouldFreezeTransactions(chain ChainHeaderReader, header *types.Header, state *state.StateDB) (bool, error)
+
 	IsBlockReadyToSeal(chain ChainHeaderReader, header *types.Header, state *state.StateDB) bool
 
 	// Finalize runs any post-transaction state modifications (e.g. block rewards)
