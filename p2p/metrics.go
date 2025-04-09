@@ -21,7 +21,7 @@ package p2p
 import (
 	"net"
 
-	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 )
 
 const (

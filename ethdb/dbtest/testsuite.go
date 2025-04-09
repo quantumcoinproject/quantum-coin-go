@@ -22,7 +22,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 )
 
 // TestDatabaseSuite runs a suite of tests against a KeyValueStore database

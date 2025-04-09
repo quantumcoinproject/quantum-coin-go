@@ -19,7 +19,7 @@ package ethapi
 import (
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 type AddrLocker struct {

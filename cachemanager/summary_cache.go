@@ -3,7 +3,7 @@ package cachemanager
 import (
 	"encoding/json"
 	"errors"
-	"github.com/QuantumCoinProject/qc/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 )
 
 const SummaryKey = "summary"

@@ -22,12 +22,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/internal/ethapi"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/signer/core"
-	"github.com/QuantumCoinProject/qc/signer/rules/deps"
-	"github.com/QuantumCoinProject/qc/signer/storage"
 	"github.com/dop251/goja"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/signer/core"
+	"github.com/quantumcoinproject/quantum-coin-go/signer/rules/deps"
+	"github.com/quantumcoinproject/quantum-coin-go/signer/storage"
 )
 
 var (

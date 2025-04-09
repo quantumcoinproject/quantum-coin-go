@@ -27,7 +27,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
 )
 
 type testEncoder struct {

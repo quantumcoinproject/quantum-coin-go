@@ -2,9 +2,9 @@ package cachemanager
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/accounts/abi"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/systemcontracts/conversion"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"strings"
 	"testing"
 )

@@ -20,8 +20,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 )
 
 // Event is an event potentially triggered by the EVM's LOG mechanism. The Event

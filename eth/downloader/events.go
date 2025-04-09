@@ -16,7 +16,7 @@
 
 package downloader
 
-import "github.com/QuantumCoinProject/qc/core/types"
+import "github.com/quantumcoinproject/quantum-coin-go/core/types"
 
 type DoneEvent struct {
 	Latest *types.Header

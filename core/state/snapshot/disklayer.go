@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/rlp"
-	"github.com/QuantumCoinProject/qc/trie"
 	"github.com/VictoriaMetrics/fastcache"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
 
 // diskLayer is a low level persistent snapshot built on top of a key-value store.

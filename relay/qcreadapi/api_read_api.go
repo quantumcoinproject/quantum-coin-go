@@ -12,9 +12,9 @@ package qcreadapi
 
 import (
 	"errors"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/relay"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/relay"
 	"net/http"
 	"strconv"
 	"strings"

@@ -23,8 +23,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/accounts/abi"
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // decodedCallData is an internal type to represent a method call parsed according

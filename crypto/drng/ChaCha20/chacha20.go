@@ -1,8 +1,8 @@
 package ChaCha20
 
 import (
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"golang.org/x/crypto/chacha20"
 )
 

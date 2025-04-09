@@ -17,15 +17,15 @@
 package core
 
 import (
-	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/mockconsensus"
 	"runtime"
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/core/vm"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 func TestBlockUnhashedFields(t *testing.T) {

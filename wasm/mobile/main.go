@@ -2,16 +2,16 @@ package main
 
 import "C"
 import (
-	"encoding/hex"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/params"
-	abi "github.com/QuantumCoinProject/qc/wasm/accounts/abi"
-	wasm "github.com/QuantumCoinProject/qc/wasm/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
+	wasm "github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
 	"golang.org/x/crypto/scrypt"
 	"math/big"
 	"strconv"
@@ -162,29 +162,29 @@ func TxData(from, nonce, to, value, gasLimit, data, chainId,
 func ContractData(args **C.char, argvLength int) (*C.char, *C.char) {
 	var method string
 	var abiString string
-		
+
 	arguments := make([]interface{}, 0, argvLength-2)
-	
+
 	length := argvLength
 	cStrings := (*[1 << 28]*C.char)(unsafe.Pointer(args))[:length:length]
-	
-	for i, cString := range cStrings { 
+
+	for i, cString := range cStrings {
 		fmt.Println("cString : ", cString)
-	    switch i { 
-			case 0: 
-       			method = C.GoString(cString)
-       		case 1: 
-				abiString = C.GoString(cString)
-	    	default:  
-				arguments = append(arguments, C.GoString(cString))
-	    }
+		switch i {
+		case 0:
+			method = C.GoString(cString)
+		case 1:
+			abiString = C.GoString(cString)
+		default:
+			arguments = append(arguments, C.GoString(cString))
+		}
 	}
 
 	abiData, err := abi.JSON(strings.NewReader(abiString))
 	if err != nil {
 		return nil, C.CString(err.Error())
 	}
-	
+
 	data, err := abiData.Pack(method, arguments...)
 	if err != nil {
 		return nil, C.CString(err.Error())
@@ -268,11 +268,11 @@ func transaction(args0, args1, args2, args3, args4, args5, args6 string) (transa
 	g, _ := strconv.Atoi(args4)
 	var gasLimit = uint64(g)
 
-	//var data []byte 
+	//var data []byte
 	data, _ := hex.DecodeString(args5)
-	
+
 	var chainId, _ = new(big.Int).SetString(args6, 0)
-	
+
 	transactionDetails := TransactionDetails{
 		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
 		Value: weiVal, Data: data, ChainId: chainId}

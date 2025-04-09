@@ -1,7 +1,7 @@
 package cachemanager
 
 import (
-	"github.com/QuantumCoinProject/qc/ethclient"
+	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"strings"
 )
 

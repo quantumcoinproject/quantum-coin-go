@@ -23,7 +23,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/p2p/enr"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enr"
 )
 
 func TestReadNodes(t *testing.T) {

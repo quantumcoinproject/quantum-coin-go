@@ -19,7 +19,7 @@ package eth
 import (
 	"time"
 
-	"github.com/QuantumCoinProject/qc/p2p/tracker"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/tracker"
 )
 
 // requestTracker is a singleton tracker for eth/66 and newer request times.

@@ -19,7 +19,7 @@ package event_test
 import (
 	"fmt"
 
-	"github.com/QuantumCoinProject/qc/event"
+	"github.com/quantumcoinproject/quantum-coin-go/event"
 )
 
 func ExampleNewSubscription() {

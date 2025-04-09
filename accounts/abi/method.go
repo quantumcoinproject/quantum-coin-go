@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 )
 
 // FunctionType represents different types of functions a contract might have.

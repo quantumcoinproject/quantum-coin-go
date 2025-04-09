@@ -2,8 +2,8 @@ package proofofstake
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"os"
 	"testing"
 	"time"

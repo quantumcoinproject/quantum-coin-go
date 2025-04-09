@@ -19,7 +19,7 @@ package downloader
 import (
 	"fmt"
 
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 // peerDropFn is a callback type for dropping a peer detected as malicious.

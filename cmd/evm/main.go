@@ -22,9 +22,9 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/QuantumCoinProject/qc/cmd/evm/internal/t8ntool"
-	"github.com/QuantumCoinProject/qc/cmd/utils"
-	"github.com/QuantumCoinProject/qc/internal/flags"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/evm/internal/t8ntool"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

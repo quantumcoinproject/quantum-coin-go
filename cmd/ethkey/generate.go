@@ -18,15 +18,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
-	"github.com/QuantumCoinProject/qc/accounts/keystore"
-	"github.com/QuantumCoinProject/qc/cmd/utils"
 	"github.com/google/uuid"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 

@@ -2,7 +2,7 @@ package conversionutil
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"strings"
 	"testing"
 )

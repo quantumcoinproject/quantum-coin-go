@@ -19,9 +19,9 @@ package bind
 import (
 	"context"
 	"errors"
-	"github.com/QuantumCoinProject/qc"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"math/big"
 )
 

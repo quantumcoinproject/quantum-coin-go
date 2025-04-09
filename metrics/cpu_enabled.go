@@ -20,7 +20,7 @@
 package metrics
 
 import (
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/shirou/gopsutil/cpu"
 )
 

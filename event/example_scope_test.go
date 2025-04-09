@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/event"
+	"github.com/quantumcoinproject/quantum-coin-go/event"
 )
 
 // This example demonstrates how SubscriptionScope can be used to control the lifetime of

@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 )
 
 // Handler returns an HTTP handler which dump metrics in Prometheus format.

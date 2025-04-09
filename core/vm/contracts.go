@@ -20,10 +20,10 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/math"
-	"github.com/QuantumCoinProject/qc/crypto/blake2b"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/blake2b"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"math/big"
 
 	//lint:ignore SA1019 Needed for precompile

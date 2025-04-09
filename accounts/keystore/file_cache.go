@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/log"
 	mapset "github.com/deckarep/golang-set"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // fileCache is a cache of files seen during scan of keystore.

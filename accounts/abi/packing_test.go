@@ -19,7 +19,7 @@ package abi
 import (
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 type packUnpackTest struct {

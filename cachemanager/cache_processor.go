@@ -2,10 +2,10 @@ package cachemanager
 
 import (
 	"errors"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/ethclient"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
 	"strings"
 	"time"

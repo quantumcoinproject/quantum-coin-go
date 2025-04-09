@@ -24,19 +24,19 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/core/forkid"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/eth/downloader"
-	"github.com/QuantumCoinProject/qc/eth/fetcher"
-	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/event"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/p2p"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/trie"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/core/forkid"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/downloader"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/fetcher"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/event"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
 
 const (
@@ -150,6 +150,7 @@ type P2PHandler struct {
 
 	rebroadcastLock            sync.Mutex
 	rebroadcastLastCleanupTime time.Time
+	consensusPacketHelper      *ConsensusPacketHelper
 }
 
 var lock = &sync.Mutex{}
@@ -203,6 +204,13 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		rebroadcastCount:           config.RebroadcastCount,
 		rebroadcastMap:             make(map[common.Hash]int64),
 		rebroadcastLastCleanupTime: time.Now(),
+		consensusPacketHelper:      NewConsensusPacketHelper(config.Chain),
+	}
+	if h.rebroadcastCount == 0 {
+		log.Info("Rebroadcast count is 0, defaulting to 1")
+		h.rebroadcastCount = 1
+	} else {
+		log.Info("Rebroadcast", "count", h.rebroadcastCount)
 	}
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast

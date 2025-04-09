@@ -22,9 +22,9 @@ import (
 	"io"
 	"sort"
 
-	"github.com/QuantumCoinProject/qc/cmd/utils"
-	"github.com/QuantumCoinProject/qc/internal/debug"
-	"github.com/QuantumCoinProject/qc/internal/flags"
+	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/debug"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/flags"
 	"gopkg.in/urfave/cli.v1"
 )
 

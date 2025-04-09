@@ -26,7 +26,7 @@ import (
 	"sync"
 	"unicode"
 
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 var (

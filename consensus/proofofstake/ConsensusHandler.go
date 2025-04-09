@@ -3,18 +3,18 @@ package proofofstake
 import (
 	"bytes"
 	"errors"
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/hybrideds"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
-	"github.com/QuantumCoinProject/qc/eth/protocols/eth"
-	"github.com/QuantumCoinProject/qc/handler"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/node"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
+	"github.com/quantumcoinproject/quantum-coin-go/handler"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/node"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"io/ioutil"
 	"math"
 	"math/big"
@@ -2632,6 +2632,11 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	const minRand = 1
 
 	rndVal := rand.Intn(MaxRand-minRand) + minRand
+
+	if blockNumber < cph.lastBlockNumber {
+		log.Warn("HandleConsensus", "blockNumber", blockNumber, "cph.lastBlockNumber", cph.lastBlockNumber)
+		return errors.New("HandleConsensus block number out of range")
+	}
 
 	cph.SetLatestBlockNumber(blockNumber)
 

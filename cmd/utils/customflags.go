@@ -26,7 +26,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/common/math"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
 	"gopkg.in/urfave/cli.v1"
 )
 

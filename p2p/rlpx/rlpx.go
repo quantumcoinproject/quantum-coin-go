@@ -18,7 +18,7 @@
 package rlpx
 
 import (
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"net"
 	"time"
 )

@@ -19,19 +19,19 @@ package p2p
 import (
 	"bytes"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
 	"io"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/bitutil"
-	"github.com/QuantumCoinProject/qc/metrics"
-	"github.com/QuantumCoinProject/qc/p2p/rlpx"
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/bitutil"
+	"github.com/quantumcoinproject/quantum-coin-go/metrics"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/rlpx"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 const (

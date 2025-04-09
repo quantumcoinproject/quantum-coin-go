@@ -21,8 +21,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/internal/cmdtest"
 	"github.com/docker/docker/pkg/reexec"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/cmdtest"
 )
 
 type testEthkey struct {

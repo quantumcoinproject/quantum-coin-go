@@ -11,8 +11,8 @@ import "C"
 
 import (
 	"errors"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"unsafe"
 )
 

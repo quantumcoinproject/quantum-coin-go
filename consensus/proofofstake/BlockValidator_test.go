@@ -2,10 +2,10 @@ package proofofstake
 
 import (
 	"crypto/rand"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/rlp"
-	"github.com/QuantumCoinProject/qc/trie"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 	"math/big"
 	"runtime/debug"
 	"strings"

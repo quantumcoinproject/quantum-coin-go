@@ -11,7 +11,7 @@ import "C"
 
 import (
 	"errors"
-	"github.com/QuantumCoinProject/qc/crypto/keyestablishmentalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"math/big"
 	"unsafe"
 )

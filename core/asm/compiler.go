@@ -22,8 +22,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/common/math"
-	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
 )
 
 // Compiler contains information about the parsed source

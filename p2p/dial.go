@@ -27,10 +27,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common/mclock"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/p2p/enode"
-	"github.com/QuantumCoinProject/qc/p2p/netutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/mclock"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/netutil"
 )
 
 const (

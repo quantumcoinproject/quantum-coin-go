@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // weightedIterator is a iterator with an assigned weight. It is used to prioritise

@@ -18,9 +18,9 @@ package downloader
 
 import (
 	"context"
-	"github.com/QuantumCoinProject/qc"
-	"github.com/QuantumCoinProject/qc/event"
-	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go"
+	"github.com/quantumcoinproject/quantum-coin-go/event"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"sync"
 )
 

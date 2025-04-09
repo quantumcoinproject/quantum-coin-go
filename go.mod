@@ -1,4 +1,4 @@
-module github.com/QuantumCoinProject/qc
+module github.com/quantumcoinproject/quantum-coin-go
 
 go 1.22
 

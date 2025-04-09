@@ -20,8 +20,8 @@
 package node
 
 import (
-	"github.com/QuantumCoinProject/qc/p2p"
-	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 )
 
 // NoopLifecycle is a trivial implementation of the Service interface.

@@ -26,14 +26,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/console/prompt"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/eth"
-	"github.com/QuantumCoinProject/qc/eth/ethconfig"
-	"github.com/QuantumCoinProject/qc/internal/jsre"
-	"github.com/QuantumCoinProject/qc/miner"
-	"github.com/QuantumCoinProject/qc/node"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/eth"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/ethconfig"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/jsre"
+	"github.com/quantumcoinproject/quantum-coin-go/miner"
+	"github.com/quantumcoinproject/quantum-coin-go/node"
 )
 
 const (

@@ -18,7 +18,7 @@ package vm
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/uint256"
+	"github.com/quantumcoinproject/quantum-coin-go/uint256"
 )
 
 // Memory implements a simple memory model for the ethereum virtual machine.

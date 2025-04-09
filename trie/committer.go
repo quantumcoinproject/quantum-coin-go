@@ -19,10 +19,10 @@ package trie
 import (
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // leafChanSize is the size of the leafCh. It's a pretty arbitrary number, to allow

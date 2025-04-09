@@ -24,9 +24,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/internal/cmdtest"
-	"github.com/QuantumCoinProject/qc/rpc"
 	"github.com/docker/docker/pkg/reexec"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/cmdtest"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 )
 
 func tmpdir(t *testing.T) string {

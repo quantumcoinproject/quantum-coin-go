@@ -19,7 +19,7 @@ package params
 import (
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // DAOForkBlockExtra is the block header extra-data field to set for the DAO fork

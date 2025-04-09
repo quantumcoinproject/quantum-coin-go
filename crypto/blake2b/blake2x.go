@@ -7,7 +7,7 @@ package blake2b
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"io"
 )
 

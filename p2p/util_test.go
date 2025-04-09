@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common/mclock"
+	"github.com/quantumcoinproject/quantum-coin-go/common/mclock"
 )
 
 func TestExpHeap(t *testing.T) {

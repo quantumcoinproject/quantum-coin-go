@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 )
 
 func TestTextHash(t *testing.T) {

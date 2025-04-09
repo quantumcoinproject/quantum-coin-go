@@ -3,9 +3,9 @@ package cachemanager
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 func (c *CacheManager) putLastBlockNumberInDb(blockNumber uint64, batch *ethdb.Batch) error {

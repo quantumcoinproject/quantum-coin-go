@@ -19,19 +19,19 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/backupmanager"
-	"github.com/QuantumCoinProject/qc/consensus/misc"
-	"github.com/QuantumCoinProject/qc/conversionutil"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/misc"
+	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/consensus"
-	"github.com/QuantumCoinProject/qc/core/state"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/core/vm"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 // StateProcessor is a basic Processor, which takes care of transitioning
@@ -109,7 +109,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		allLogs = append(allLogs, receipt.Logs...)
 	}
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	err = p.engine.Finalize(p.bc, header, statedb, block.Transactions(), receipts)
+	err = p.engine.Finalize(p.bc, header, statedb, block.Transactions(), receipts, "StateProcessor.Process")
 	if err != nil {
 		return nil, nil, 0, err
 	}

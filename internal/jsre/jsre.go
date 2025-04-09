@@ -26,8 +26,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
 	"github.com/dop251/goja"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // JSRE is a JS runtime environment embedding the goja interpreter.

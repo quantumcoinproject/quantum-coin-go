@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/QuantumCoinProject/qc/node"
+	"github.com/quantumcoinproject/quantum-coin-go/node"
 )
 
 // SampleLifecycle is a trivial network service that can be attached to a node for

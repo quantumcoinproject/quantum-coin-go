@@ -18,15 +18,15 @@ package core
 
 import (
 	"container/heap"
-	"github.com/QuantumCoinProject/qc/conversionutil"
-	"github.com/QuantumCoinProject/qc/log"
+	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math"
 	"math/big"
 	"sort"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 // nonceHeap is a heap.Interface implementation over 64bit unsigned integers for

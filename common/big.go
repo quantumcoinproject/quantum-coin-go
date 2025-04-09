@@ -17,7 +17,7 @@
 package common
 
 import (
-	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"math/big"
 )
 

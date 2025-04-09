@@ -19,7 +19,7 @@ package tests
 import (
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
 )
 
 func TestVM(t *testing.T) {

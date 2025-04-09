@@ -22,7 +22,7 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/core/asm"
+	"github.com/quantumcoinproject/quantum-coin-go/core/asm"
 	"gopkg.in/urfave/cli.v1"
 )
 

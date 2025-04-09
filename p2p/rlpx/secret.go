@@ -6,7 +6,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/sha3"
 )

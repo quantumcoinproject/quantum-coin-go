@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 func TestHexOrDecimal256(t *testing.T) {

@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
 )
 
 func TestState(t *testing.T) {

@@ -19,7 +19,7 @@ package p2p
 import (
 	"container/heap"
 
-	"github.com/QuantumCoinProject/qc/common/mclock"
+	"github.com/quantumcoinproject/quantum-coin-go/common/mclock"
 )
 
 // expHeap tracks strings and their expiry time.

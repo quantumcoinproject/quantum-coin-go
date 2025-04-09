@@ -19,15 +19,15 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/consensus/mockconsensus"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/mockconsensus"
 	"testing"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/consensus"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/params"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 func verifyUnbrokenCanonchain(hc *HeaderChain) error {

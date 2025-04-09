@@ -21,9 +21,9 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/forkid"
-	"github.com/QuantumCoinProject/qc/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/forkid"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p"
 )
 
 const (

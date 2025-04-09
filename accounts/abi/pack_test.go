@@ -27,7 +27,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 // TestPack tests the general pack/unpack tests in packing_test.go

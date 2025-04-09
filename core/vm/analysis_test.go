@@ -19,7 +19,7 @@ package vm
 import (
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 )
 
 func TestJumpDestAnalysis(t *testing.T) {

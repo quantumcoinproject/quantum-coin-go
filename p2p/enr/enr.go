@@ -38,7 +38,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 const SizeLimit = 55000 // maximum encoded size of a node record in bytes //todo: signature

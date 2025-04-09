@@ -25,7 +25,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -19,8 +19,8 @@ package eth
 import (
 	"time"
 
-	"github.com/QuantumCoinProject/qc/common/bitutil"
-	"github.com/QuantumCoinProject/qc/core/rawdb"
+	"github.com/quantumcoinproject/quantum-coin-go/common/bitutil"
+	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 )
 
 const (

@@ -22,34 +22,34 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/QuantumCoinProject/qc/conversionutil"
-	"github.com/QuantumCoinProject/qc/core"
-	"github.com/QuantumCoinProject/qc/core/state"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
-	"github.com/QuantumCoinProject/qc/handler"
-	"github.com/QuantumCoinProject/qc/internal/ethapi"
-	"github.com/QuantumCoinProject/qc/systemcontracts/consensuscontext"
-	"github.com/QuantumCoinProject/qc/systemcontracts/conversion"
-	"github.com/QuantumCoinProject/qc/systemcontracts/staking"
-	"github.com/QuantumCoinProject/qc/trie"
+	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
+	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/handler"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/consensuscontext"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
+	"github.com/quantumcoinproject/quantum-coin-go/trie"
 	"io"
 	"math/big"
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/accounts"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/common/hexutil"
-	"github.com/QuantumCoinProject/qc/consensus"
-	"github.com/QuantumCoinProject/qc/core/types"
-	"github.com/QuantumCoinProject/qc/ethdb"
-	"github.com/QuantumCoinProject/qc/log"
-	"github.com/QuantumCoinProject/qc/params"
-	"github.com/QuantumCoinProject/qc/rlp"
-	"github.com/QuantumCoinProject/qc/rpc"
-	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv2"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
 )
 
 const (
@@ -360,8 +360,23 @@ func (c *ProofOfStake) IsBlockReadyToSeal(chain consensus.ChainHeaderReader, hea
 	return true
 }
 
+// Whether ok to freeze transactions (final set for the block)
+func (c *ProofOfStake) ShouldFreezeTransactions(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB) (bool, error) {
+	if c.signFn == nil {
+		return false, errors.New("not a miner")
+	}
+	blockState, _, err := c.consensusHandler.getBlockState(header.ParentHash)
+	if err != nil {
+		log.Debug("getBlockState", "err", err)
+		return false, err
+	}
+
+	return blockState > BLOCK_STATE_WAITING_FOR_PROPOSAL, nil
+}
+
 // HandleTransactions selects the transactions for including in the block according to the consensus rules.
-func (c *ProofOfStake) HandleTransactions(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txnMap map[common.Address]types.Transactions) (map[common.Address]types.Transactions, error) {
+func (c *ProofOfStake) HandleTransactions(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB,
+	txnMap map[common.Address]types.Transactions) (map[common.Address]types.Transactions, error) {
 	if c.signFn == nil {
 		return nil, errors.New("not a miner")
 	}
@@ -691,7 +706,7 @@ func (c *ProofOfStake) Convert(header *types.Header, state *state.StateDB, txn *
 }
 
 // Finalize implements consensus.Engine
-func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) error {
+func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt, source string) error {
 	if txs == nil {
 		txs = make([]*types.Transaction, 0)
 	} else {
@@ -897,7 +912,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	log.Info("Finalize Block", "root", header.Root, "hash", header.Hash(), "number", header.Number, "txn count", len(txs))
+	log.Info("Finalize Block", "root", header.Root, "hash", header.Hash(), "number", header.Number, "txn count", len(txs), "source", source)
 
 	return nil
 }
@@ -945,7 +960,7 @@ func burn(state *state.StateDB, burnAmount *big.Int) {
 }
 
 func (c *ProofOfStake) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs, receipts)
+	err := c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssemble")
 	if err != nil {
 		return nil, err
 	}
@@ -993,7 +1008,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	header.UnhashedConsensusData = make([]byte, len(data))
 	copy(header.UnhashedConsensusData, data)
 
-	err = c.Finalize(chain, header, state, txs, receipts)
+	err = c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssembleWithConsensus")
 	if err != nil {
 		return nil, err
 	}
@@ -1024,7 +1039,7 @@ func (c *ProofOfStake) Authorize(validator common.Address, signFn SignerFn, sign
 // the local signing credentials.
 func (c *ProofOfStake) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	header := block.Header()
-	log.Info("Seal Block", "Hash", block.ParentHash().String(), "Number", header.Number)
+	log.Info("Seal Block", "ParentHash", block.ParentHash().String(), "Number", header.Number)
 
 	delay := time.Second * 1
 	go func() {

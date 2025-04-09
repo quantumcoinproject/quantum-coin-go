@@ -19,7 +19,7 @@ package rpc
 import (
 	"fmt"
 
-	"github.com/QuantumCoinProject/qc/metrics"
+	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 )
 
 var (

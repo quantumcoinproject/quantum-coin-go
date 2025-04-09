@@ -20,8 +20,8 @@ import (
 	"errors"
 	"math/big"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 // senderFromServer is a types.Signer that remembers the sender address returned by the RPC

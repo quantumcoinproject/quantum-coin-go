@@ -1,7 +1,7 @@
 package oqs
 
 import (
-	"github.com/QuantumCoinProject/qc/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"testing"
 )
 

@@ -21,8 +21,8 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/QuantumCoinProject/qc/log"
 	mapset "github.com/deckarep/golang-set"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 const MetadataApi = "rpc"

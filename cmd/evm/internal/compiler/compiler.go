@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/QuantumCoinProject/qc/core/asm"
+	"github.com/quantumcoinproject/quantum-coin-go/core/asm"
 )
 
 func Compile(fn string, src []byte, debug bool) (string, error) {

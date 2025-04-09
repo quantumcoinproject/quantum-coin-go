@@ -1,7 +1,7 @@
 package mocksignaturealgorithm
 
 import (
-	"github.com/QuantumCoinProject/qc/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"math/rand"
 	"testing"
 )

@@ -25,8 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/QuantumCoinProject/qc/log"
 	natpmp "github.com/jackpal/go-nat-pmp"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 // An implementation of nat.Interface can map local ports to ports

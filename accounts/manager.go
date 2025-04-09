@@ -21,8 +21,8 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/event"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/event"
 )
 
 // Config contains the settings of the global account manager.

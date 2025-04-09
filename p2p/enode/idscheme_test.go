@@ -18,12 +18,12 @@ package enode
 
 import (
 	"encoding/hex"
-	"github.com/QuantumCoinProject/qc/crypto"
-	"github.com/QuantumCoinProject/qc/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"strings"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/p2p/enr"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

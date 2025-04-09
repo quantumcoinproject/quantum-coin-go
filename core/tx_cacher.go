@@ -19,7 +19,7 @@ package core
 import (
 	"runtime"
 
-	"github.com/QuantumCoinProject/qc/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 )
 
 // senderCacher is a concurrent transaction sender recoverer and cacher.

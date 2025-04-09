@@ -2,10 +2,10 @@ package staking
 
 import (
 	"fmt"
-	"github.com/QuantumCoinProject/qc/accounts/abi"
-	"github.com/QuantumCoinProject/qc/common"
-	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv1"
-	"github.com/QuantumCoinProject/qc/systemcontracts/staking/stakingv2"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv1"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
 	"strings"
 )
 

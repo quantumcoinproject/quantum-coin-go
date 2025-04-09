@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/QuantumCoinProject/qc/rlp"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 func newTestFullNode(v []byte) []interface{} {

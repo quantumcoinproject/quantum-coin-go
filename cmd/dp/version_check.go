@@ -25,8 +25,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/QuantumCoinProject/qc/log"
 	"github.com/jedisct1/go-minisign"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
