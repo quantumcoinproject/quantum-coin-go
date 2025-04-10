@@ -11,7 +11,7 @@ import (
 )
 
 const CleanupIntervalSeconds = 1800 * time.Second
-const ResendInterval = 180000
+const ResendInterval = 300000
 
 type PacketInfo struct {
 	packet       *eth.ConsensusPacket
