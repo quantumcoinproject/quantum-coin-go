@@ -560,7 +560,11 @@ func testTransactionNonceOrder_skip_byCount(txnCount int, skipMap map[int]bool, 
 
 		txnList := make([]*Transaction, 0)
 		for i := 0; i < txnCount; i++ {
-			tx, _ := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+			tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+			if err != nil {
+				fmt.Println(err)
+				t.Fatalf("failed")
+			}
 			tx.time = time.Unix(0, int64(len(keys)-start))
 			overallCount = overallCount + 1
 			txnList = append(txnList, tx)
