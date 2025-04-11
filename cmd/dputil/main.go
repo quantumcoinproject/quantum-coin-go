@@ -1973,7 +1973,7 @@ func ListTokenConversions() error {
 
 	outputR := "QuantumAddress,EthAddress,EthSignature\n"
 	for _, r := range *requests {
-		outputR = outputR + fmt.Sprintf("%s,%s,%s", r.QuantumAddress, r.EthAddress, r.EthSignature)
+		outputR = outputR + fmt.Sprintf("%s,%s,%s\n", r.QuantumAddress, r.EthAddress, r.EthSignature)
 	}
 	err = os.WriteFile(path.Join(outputFolder, "token-conversion-requests.csv"), []byte(outputR), 0644)
 	if err != nil {
@@ -2069,10 +2069,10 @@ func ListAddressTokenConversions() error {
 			}
 			verified := err == nil
 
-			outputR = outputR + fmt.Sprintf("%s,%s,%s,%v", r.QuantumAddress, r.EthAddress, r.EthSignature, verified)
+			outputR = outputR + fmt.Sprintf("%s,%s,%s,%v\n", r.QuantumAddress, r.EthAddress, r.EthSignature, verified)
 		}
 	}
-	err = os.WriteFile(path.Join(outputFolder, "token-conversion-requests.csv"), []byte(outputR), 0644)
+	err = os.WriteFile(path.Join(outputFolder, "address-token-conversion-requests.csv"), []byte(outputR), 0644)
 	if err != nil {
 		fmt.Println(err)
 		return err

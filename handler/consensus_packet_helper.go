@@ -11,7 +11,7 @@ import (
 )
 
 const CleanupIntervalSeconds = 1800 * time.Second
-const ResendInterval = 6000
+const ResendInterval = 300000
 
 type PacketInfo struct {
 	packet       *eth.ConsensusPacket
@@ -70,6 +70,7 @@ func (c *ConsensusPacketHelper) GetPeerListToBroadcast(fromPeerId string, pkt *e
 
 	c.cleanup()
 
+	currentParentHash := c.chain.CurrentHeader().ParentHash
 	packetHash := pkt.Hash()
 	pktInfo, ok := c.packetMap[packetHash]
 	if ok == false {
@@ -108,7 +109,7 @@ func (c *ConsensusPacketHelper) GetPeerListToBroadcast(fromPeerId string, pkt *e
 			continue
 		}
 		timeSent, ok := pktInfo.sentPeerList[peerId]
-		if ok == false || ElapsedMs(timeSent) > ResendInterval {
+		if ok == false || (ElapsedMs(timeSent) > ResendInterval && pktInfo.packet.ParentHash.IsEqualTo(currentParentHash)) {
 			broadcastPeerList = append(broadcastPeerList, peerId)
 			pktInfo.sentPeerList[peerId] = time.Now().UnixNano()
 			log.Trace("broadcastPeerList", "hash", pkt.ParentHash, "broadcastPeer", peerId, "packetHash", packetHash)

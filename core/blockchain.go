@@ -93,6 +93,7 @@ const (
 	maxFutureBlocks     = 256
 	maxTimeFutureBlocks = 30
 	TriesInMemory       = 128
+	ReorgThresold       = 3
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
@@ -2158,6 +2159,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	}
 	// Both sides of the reorg are at the same number, reduce both until the common
 	// ancestor is found
+	diffCount := 0
 	for {
 		// If the common ancestor was found, bail out
 		if oldBlock.Hash() == newBlock.Hash() {
@@ -2180,17 +2182,15 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 		if newBlock == nil {
 			return fmt.Errorf("invalid new chain")
 		}
+		diffCount = diffCount + 1
 	}
 	// Ensure the user sees large reorgs
 	if len(oldChain) > 0 && len(newChain) > 0 {
-		logFn := log.Info
-		msg := "Chain reorg detected"
-		if len(oldChain) > 63 {
-			msg = "Large chain reorg detected"
-			logFn = log.Warn
-		}
-		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
+		log.Warn("Chain reorg detected", "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
+		if diffCount >= ReorgThresold {
+			return fmt.Errorf("reorg threshold exceeded")
+		}
 		blockReorgAddMeter.Mark(int64(len(newChain)))
 		blockReorgDropMeter.Mark(int64(len(oldChain)))
 		blockReorgMeter.Mark(1)

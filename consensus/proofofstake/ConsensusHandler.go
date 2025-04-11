@@ -857,7 +857,7 @@ func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, 
 	}
 
 	cph.LogIncomingPacketStats()
-	err := cph.processPacket(packet, fromPeerId)
+	err := cph.processPacket(packet)
 	if errors.Is(err, OutOfOrderPackerErr) {
 		pkt := eth.NewConsensusPacket(packet)
 		packetMap, ok := cph.outOfOrderPacketsMap[packet.ParentHash]
@@ -903,7 +903,7 @@ func shouldSignFull(blockNumber uint64) bool {
 	return false
 }
 
-func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, fromPeerId string) error {
+func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
 	if packet == nil || packet.ConsensusData == nil || len(packet.ConsensusData) < 1 || packet.Signature == nil || len(packet.Signature) < hybrideds.CRYPTO_SIGNATURE_BYTES {
 		log.Debug("processPacket nil")
 		return errors.New("nil packet")
@@ -975,7 +975,7 @@ func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash) er
 	for key, pktList := range cph.outOfOrderPacketsMap {
 		for _, pkt := range pktList {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				err := cph.processPacket(pkt.Packet, "")
+				err := cph.processPacket(pkt.Packet)
 				if err != nil {
 					unprocessedPackets = append(unprocessedPackets, &OutOfOrderPacket{
 						Packet:       pkt.Packet,
@@ -1357,9 +1357,9 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 			_, txnExists := blockRoundDetails.selfKnownTransactions[proposalDetails.Txns[i]]
 			if txnExists == false {
 				unknownTxns = append(unknownTxns, proposalDetails.Txns[i])
-				log.Trace("handleProposeBlockPacket unknown", "txn", proposalDetails.Txns[i], "validator")
+				log.Debug("handleProposeBlockPacket unknown", "txn", proposalDetails.Txns[i], "validator", validator)
 			} else {
-				log.Trace("known txn", "txn", proposalDetails.Txns[i], "validator")
+				log.Debug("known txn", "txn", proposalDetails.Txns[i], "validator", validator)
 			}
 		}
 		if len(unknownTxns) > 0 {
@@ -2714,6 +2714,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	}
 
 	if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
+		blockRoundDetails.selfKnownTransactions = make(map[common.Hash]bool) //reset, since txn list could have changed (added or removed)
 		for _, txn := range txns {
 			blockRoundDetails.selfKnownTransactions[txn] = true
 		}
@@ -2737,14 +2738,14 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 				if HasExceededTimeThreshold(blockRoundDetails.initTime, timeoutMs*int64(blockRoundDetails.Round)) {
 					cph.ackBlockProposalTimeout(parentHash)
 				} else {
+					if blockRoundDetails.proposalPacket != nil && len(txns) > 0 { //packet was received earlier, but transactions might not have been present
+						go cph.HandleConsensusPacket(blockRoundDetails.proposalPacket, "") //in a sub-routine to prevent lock
+					}
 					cph.requestConsensusData(blockStateDetails)
 				}
 			}
 		}
 	} else if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS {
-		for _, txn := range txns {
-			blockRoundDetails.selfKnownTransactions[txn] = true
-		}
 		blockStateDetails.blockRoundMap[blockStateDetails.currentRound] = blockRoundDetails
 		cph.blockStateDetailsMap[parentHash] = blockStateDetails
 
