@@ -2746,10 +2746,6 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 			}
 		}
 	} else if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS {
-		blockRoundDetails.selfKnownTransactions = make(map[common.Hash]bool) //reset, since txn list could have changed (added or removed)
-		for _, txn := range txns {
-			blockRoundDetails.selfKnownTransactions[txn] = true
-		}
 		blockStateDetails.blockRoundMap[blockStateDetails.currentRound] = blockRoundDetails
 		cph.blockStateDetailsMap[parentHash] = blockStateDetails
 
