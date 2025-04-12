@@ -26,6 +26,7 @@ import (
 	"math"
 	"math/big"
 	mrand "math/rand"
+	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -2188,6 +2189,10 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(oldChain) > 0 && len(newChain) > 0 {
 		log.Warn("Chain reorg detected", "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
+		if os.Getenv("EXPERIMENTAL_FAIL_REORG") == "1" {
+			log.Warn("EXPERIMENTAL_FAIL_REORG is set")
+			return errors.New("reorg in fail mode")
+		}
 		if diffCount >= ReorgThresold {
 			return fmt.Errorf("reorg threshold exceeded")
 		}

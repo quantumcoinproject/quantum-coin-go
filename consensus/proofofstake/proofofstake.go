@@ -35,6 +35,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
 	"io"
 	"math/big"
+	"os"
 	"sync"
 	"time"
 
@@ -321,12 +322,15 @@ func recreateTxnMap(selectedTxns []common.Hash, txnAddressMap map[common.Hash]co
 	for _, txnHash := range selectedTxns {
 		addr, ok := txnAddressMap[txnHash]
 		if ok == false {
-			log.Warn("recreateTxnMap txn not fouud", "tx", txnHash)
+			log.Warn("recreateTxnMap txn not fouud", "tx", txnHash.Hex())
 			for k, v := range txnAddressMap {
 				log.Trace("recreateTxnMap txnAddressMap", "k", k, "v", v)
 			}
-			//return nil, errors.New("unknown transaction") //todo: fail?
-			continue
+			if os.Getenv("SKIP_TXN") == "1" {
+				log.Warn("SKIP_TXN is set")
+				continue
+			}
+			return nil, errors.New("unknown transaction") //todo: fail?
 		}
 		txnList, ok := txnMap[addr]
 		if ok == false {
