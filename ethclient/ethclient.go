@@ -750,3 +750,13 @@ func (ec *Client) GetInternalTransactions(ctx context.Context, txnHash common.Ha
 
 	return &tracedTransactions, nil
 }
+
+func (ec *Client) SetHead(ctx context.Context, blockNumberHex string) error {
+	err := ec.c.CallContext(ctx, nil, "debug_setHead", blockNumberHex)
+	if err != nil {
+		log.Warn("SetHead error", "err", err)
+		return err
+	}
+
+	return nil
+}
