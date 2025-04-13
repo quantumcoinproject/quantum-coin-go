@@ -148,7 +148,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 				return
 
 			case <-blockTimer.C:
-				log.Info("PrimordialCache downloadBlock BlockByNumber", "PrimordialBlock Number ", blockNumberToGet)
+				log.Debug("PrimordialCache downloadBlock BlockByNumber", "PrimordialBlock Number ", blockNumberToGet)
 
 				if blockNumberToGet == startBlockNumber || blockNumberToGet%int64(50) == 0 {
 					var latestBlockNumberHex *hexutil.Uint64
