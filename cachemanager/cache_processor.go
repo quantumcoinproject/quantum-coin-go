@@ -6,6 +6,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"math/big"
 	"strings"
 	"time"
@@ -287,6 +288,15 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		err = c.processAccountTransactions(k, &v, &txnBatch)
 		if err != nil {
 			log.Error("CacheManager processAccountTransaction", "error", err, "address", k)
+			return err
+		}
+	}
+
+	_, ok := liveAccountTxnMap[staking.STAKING_CONTRACT]
+	if ok || blockNumber%32 == 0 {
+		err = c.refreshValidators(blockNum, &txnBatch)
+		if err != nil {
+			log.Error("CacheManager refreshValidators", "error", err)
 			return err
 		}
 	}

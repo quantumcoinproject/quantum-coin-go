@@ -43,3 +43,13 @@ type ListAccountTokenTransactionsResponse struct {
 	PageCount uint64                      `json:"pageCount"`
 	Items     []AccountTransactionCompact `json:"items"`
 }
+
+type TokenTransactionList struct {
+	ContractAddress string               `json:"contractAddress"`
+	Transactions    []TransactionCompact `json:"transactions"`
+}
+
+type ListTokenTransactionsResponse struct {
+	PageCount uint64               `json:"pageCount"`
+	Items     []TransactionCompact `json:"items"`
+}
