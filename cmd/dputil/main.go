@@ -2,15 +2,18 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/crosssign"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"io"
 	"io/ioutil"
@@ -135,6 +138,9 @@ func printHelp() {
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil listaddresstokenconversions QUANTUM_WALLET_ADDRESS BURN_PROOF_CONTRACT_ADDRESS QUANTUM_CONTRACT_ADDRESS ETHEREUM_CONTRACT_ADDRESS OUTPUT_FOLDER")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil sethead BLOCK_NUMBER")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("===========")
@@ -302,6 +308,11 @@ func main() {
 		}
 	} else if os.Args[1] == "listaddresstokenconversions" {
 		err := ListAddressTokenConversions()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "sethead" {
+		err := SetHead()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -2160,4 +2171,48 @@ func RenounceTokenOwnerShip() error {
 	}
 
 	return renounceTokenOwnership(contractAddr, fromKey)
+}
+
+func SetHead() error {
+	if len(os.Args) < 3 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	blockNum := os.Args[2]
+
+	blockNumUint64, err := strconv.ParseUint(blockNum, 10, 64)
+	if err != nil {
+		fmt.Println("Enter block number correctly: ", blockNum)
+		return err
+	}
+
+	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you confirm setting the block head to number %d ?", blockNumUint64))
+	if err != nil {
+		return err
+	}
+	if ethConfirm != true {
+		return errors.New("confirmation not made")
+	}
+	fmt.Println()
+
+	if len(rawURL) == 0 {
+		return errors.New("DP_RAW_URL environment variable not specified")
+	}
+
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		fmt.Println("Dial failed, ensure DP_RAW_URL is set correctly", err)
+		return err
+	}
+
+	err = client.SetHead(context.Background(), hexutil.EncodeUint64(blockNumUint64))
+	if err != nil {
+		fmt.Println("SetHead failed", err, blockNumUint64)
+		return err
+	}
+
+	fmt.Println("SetHead succeeded")
+
+	return nil
 }
