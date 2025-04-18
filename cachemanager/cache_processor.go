@@ -299,6 +299,13 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 			log.Error("CacheManager refreshValidators", "error", err)
 			return err
 		}
+
+		stakingContractBalance, err := c.refreshStakingDetails(blockNum, &txnBatch)
+		if err != nil {
+			log.Error("CacheManager refreshStakingDetails", "error", err)
+			return err
+		}
+		runningSummary.StakedCoins = common.BigIntToHexString(stakingContractBalance)
 	}
 
 	if c.enableExtendedApis {

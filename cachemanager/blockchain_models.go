@@ -11,6 +11,7 @@ type BlockchainDetails struct {
 	TxnFeeRewardsCoins    string `json:"txnFeeRewardsCoins" gencodec:"required"`
 	TxnFeeBurntCoins      string `json:"txnFeeBurntCoins" gencodec:"required"`
 	SlashedCoins          string `json:"slashedCoins" gencodec:"required"`
+	StakedCoins           string `json:"stakedCoins" gencodec:"required"`
 }
 
 type GetBlockchainDetailsResponse struct {

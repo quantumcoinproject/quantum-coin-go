@@ -193,6 +193,7 @@ func (c *CacheManager) start() error {
 					TxnFeeRewardsCoins:    "0x0",
 					TxnFeeBurntCoins:      "0x0",
 					SlashedCoins:          "0x0",
+					StakedCoins:           "0x0",
 				}
 			}
 		} else {
