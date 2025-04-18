@@ -44,3 +44,8 @@ type ListValidatorsResponse struct {
 	PageCount uint64             `json:"pageCount"`
 	Items     []ValidatorCompact `json:"items"`
 }
+
+type ValidatorReport struct {
+	TotalValidators uint64 `json:"totalValidators,omitempty"`
+	ReportDate      int64  `json:"reportDate,omitempty"`
+}

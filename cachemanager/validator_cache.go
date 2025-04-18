@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
 	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
+	"time"
 )
 
 const ValidatorCountKey = "validator-count"
 const ValidatorPageKey = "validator-list-%d"
 const ValidatorPageSize uint64 = 10000
+const DailyValidatorReportKey = "daily-validator-report-%s"
 
 func getValidatorPageKey(pageCount uint64) []byte {
 	pageKey := fmt.Sprintf(ValidatorPageKey, pageCount)
@@ -37,6 +40,27 @@ func (c *CacheManager) refreshValidators(blockNumber *big.Int, batch *ethdb.Batc
 	if err != nil {
 		return err
 	}
+
+	validatorCount := uint64(0)
+	for _, validator := range validatorList {
+		if validator.IsValidationPaused == false {
+			balance, err := hexutil.DecodeBig(validator.NetBalance)
+			if err != nil {
+				log.Error("refreshValidators DecodeBig", "error", err)
+				return err
+			}
+			if balance.Cmp(proofofstake.MIN_VALIDATOR_DEPOSIT) >= 0 {
+				validatorCount = validatorCount + 1
+			}
+		}
+	}
+
+	reportTime := time.Now().UTC()
+	daily := &ValidatorReport{
+		TotalValidators: validatorCount,
+		ReportDate:      reportTime.Unix(),
+	}
+	err = c.putDailyValidatorDetailsInDb(daily, reportTime, batch)
 
 	return nil
 }
@@ -164,4 +188,29 @@ func (c *CacheManager) ListValidators(pageNumberInput int64) (ListValidatorsResp
 	listResponse.PageCount = pageCount
 
 	return listResponse, nil
+}
+
+func getDailyValidatorReportKey(date string) (key string, blob []byte) {
+	key = fmt.Sprintf(DailyValidatorReportKey, date)
+	blob = []byte(key)
+	return key, blob
+}
+
+func (c *CacheManager) putDailyValidatorDetailsInDb(item *ValidatorReport, reportTime time.Time, batch *ethdb.Batch) error {
+	txnBatch := *batch
+	key, keyBlob := getDailyValidatorReportKey(reportTime.Format("2006-02-01"))
+	log.Info("putDailyValidatorDetailsInDb", "key", key)
+
+	blob, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+
+	err = txnBatch.Put(keyBlob, blob)
+	if err != nil {
+		log.Error("putDailyValidatorDetailsInDb", "error", err, "key", key)
+		return err
+	}
+
+	return nil
 }

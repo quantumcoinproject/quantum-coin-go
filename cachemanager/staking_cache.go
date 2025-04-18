@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const DailyStakingKey = "staking-%s" //%s is epoch time at 11:59:59:00
+const DailyStakingReportKey = "daily-staking-report-%s" //%s is epoch time at 11:59:59:00
 
 func (c *CacheManager) refreshStakingDetails(blockNum *big.Int, batch *ethdb.Batch) (*big.Int, error) {
 	stakingContractBalance, err := c.client.BalanceAt(context.Background(), staking.STAKING_CONTRACT_ADDRESS, blockNum)
@@ -21,7 +21,7 @@ func (c *CacheManager) refreshStakingDetails(blockNum *big.Int, batch *ethdb.Bat
 	}
 
 	reportTime := time.Now().UTC()
-	daily := &StakingDetails{
+	daily := &StakingReport{
 		TotalStakedCoins: stakingContractBalance.String(),
 		ReportDate:       reportTime.Unix(),
 	}
@@ -30,15 +30,15 @@ func (c *CacheManager) refreshStakingDetails(blockNum *big.Int, batch *ethdb.Bat
 	return stakingContractBalance, nil
 }
 
-func getDailyStakingKey(date string) (key string, blob []byte) {
-	key = fmt.Sprintf(DailyStakingKey, date)
+func getDailyStakingReportKey(date string) (key string, blob []byte) {
+	key = fmt.Sprintf(DailyStakingReportKey, date)
 	blob = []byte(key)
 	return key, blob
 }
 
-func (c *CacheManager) putDailyStakingDetailsInDb(item *StakingDetails, reportTime time.Time, batch *ethdb.Batch) error {
+func (c *CacheManager) putDailyStakingDetailsInDb(item *StakingReport, reportTime time.Time, batch *ethdb.Batch) error {
 	txnBatch := *batch
-	key, keyBlob := getDailyStakingKey(reportTime.Format("2006-02-01"))
+	key, keyBlob := getDailyStakingReportKey(reportTime.Format("2006-02-01"))
 	log.Info("putDailyStakingDetailsInDb", "key", key)
 
 	blob, err := json.Marshal(item)

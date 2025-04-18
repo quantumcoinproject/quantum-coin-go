@@ -1,6 +1,6 @@
 package cachemanager
 
-type StakingDetails struct {
+type StakingReport struct {
 	TotalStakedCoins string `json:"totalStakedCoins,omitempty"`
 	ReportDate       int64  `json:"reportDate,omitempty"`
 }
