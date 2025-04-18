@@ -41,6 +41,7 @@ type CacheManager struct {
 	blockChan                chan *PrimordialBlockData
 	primodialCacheCancelChan chan bool
 	primordialCache          *PrimordialCache
+	genesis                  *core.Genesis
 }
 
 var chainID *big.Int
@@ -86,6 +87,7 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, g
 			log.Error("CacheManager Unmarshal", "error", err)
 			return nil, err
 		}
+		cManager.genesis = &genesis
 
 		genesisCirculatingSupply := big.NewInt(0)
 		if genesis.Alloc != nil {
@@ -121,7 +123,7 @@ func (c *CacheManager) initialize() error {
 	c.cacheDb = cacheManagerDb
 
 	c.primodialCacheCancelChan = make(chan bool)
-	c.primordialCache, err = NewPrimordialCache(c.cacheDir, c.nodeUrl, &c.primodialCacheCancelChan)
+	c.primordialCache, err = NewPrimordialCache(c.cacheDir, c.nodeUrl, c.genesis, &c.primodialCacheCancelChan)
 	if err != nil {
 		return err
 	}

@@ -31,7 +31,7 @@ func (c *CacheManager) getTransactionFromDb(hash string) (*TransactionDetails, e
 	item := TransactionDetails{}
 	err = json.Unmarshal(blob, &item)
 	if err != nil {
-		log.Error("getBlockFromDb", "error", err, "hash", hash, "error", err)
+		log.Error("getTransactionFromDb", "error", err, "hash", hash, "error", err)
 		return nil, err
 	}
 
@@ -41,7 +41,7 @@ func (c *CacheManager) getTransactionFromDb(hash string) (*TransactionDetails, e
 func (c *CacheManager) putTransactionInDb(item *TransactionDetails, batch *ethdb.Batch) error {
 	txnBatch := *batch
 	keyBlob := getTransactionKey(item.Hash)
-	log.Info("putBlockInDb", "Hash", item.Hash)
+	log.Info("putTransactionInDb", "Hash", item.Hash)
 
 	blob, err := json.Marshal(item)
 	if err != nil {
@@ -50,7 +50,7 @@ func (c *CacheManager) putTransactionInDb(item *TransactionDetails, batch *ethdb
 
 	err = txnBatch.Put(keyBlob, blob)
 	if err != nil {
-		log.Error("putBlockInDb", "error", err, "Hash", item.Hash)
+		log.Error("putTransactionInDb", "error", err, "Hash", item.Hash)
 		return err
 	}
 
