@@ -141,3 +141,8 @@ type ListTransactionsResponse struct {
 	PageCount uint64               `json:"pageCount"`
 	Items     []TransactionCompact `json:"items"`
 }
+
+type TransactionReport struct {
+	TotalTransactions uint64 `json:"totalTransactions,omitempty"`
+	ReportDate        int64  `json:"reportDate,omitempty"`
+}

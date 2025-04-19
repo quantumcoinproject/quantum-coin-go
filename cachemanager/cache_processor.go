@@ -280,6 +280,19 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		return err
 	}
 
+	blockTime := time.Unix(int64(block.Time), 0)
+	err = c.incrementDailyBlockDetailsInDb(blockTime, &txnBatch)
+	if err != nil {
+		log.Error("CacheManager incrementDailyBlockDetailsInDb", "error", err)
+		return err
+	}
+
+	err = c.incrementDailyTransactionDetailsInDb(uint64(len(txnList)), blockTime, &txnBatch)
+	if err != nil {
+		log.Error("CacheManager incrementDailyTransactionDetailsInDb", "error", err)
+		return err
+	}
+
 	err = c.processBlockTransactions(blockInfo, &txnList, &txnBatch)
 	if err != nil {
 		log.Error("CacheManager processBlockTransactions", "error", err)

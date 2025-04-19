@@ -196,10 +196,29 @@ func getDailyValidatorReportKey(date string) (key string, blob []byte) {
 	return key, blob
 }
 
+func (c *CacheManager) getDailyValidatorReport(reportTime time.Time) (*ValidatorReport, error) {
+	key, keyBlob := getDailyValidatorReportKey(reportTime.Format("2006-02-01"))
+	log.Debug("getDailyValidatorReport", "key", key, "reportTime", reportTime)
+
+	itemBlob, err := c.cacheDb.Get(keyBlob)
+	if err != nil {
+		log.Error("getDailyValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime)
+		return nil, err
+	}
+	var item ValidatorReport
+	err = json.Unmarshal(itemBlob, &item)
+	if err != nil {
+		log.Error("getDailyValidatorReport json.Unmarshal", "error", err, "reportTime", reportTime)
+		return nil, err
+	}
+
+	return &item, nil
+}
+
 func (c *CacheManager) putDailyValidatorDetailsInDb(item *ValidatorReport, reportTime time.Time, batch *ethdb.Batch) error {
 	txnBatch := *batch
 	key, keyBlob := getDailyValidatorReportKey(reportTime.Format("2006-02-01"))
-	log.Info("putDailyValidatorDetailsInDb", "key", key)
+	log.Debug("putDailyValidatorDetailsInDb", "key", key)
 
 	blob, err := json.Marshal(item)
 	if err != nil {
