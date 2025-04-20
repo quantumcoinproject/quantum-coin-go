@@ -49,3 +49,12 @@ type ValidatorReport struct {
 	TotalValidators uint64 `json:"totalValidators,omitempty"`
 	ReportDate      int64  `json:"reportDate,omitempty"`
 }
+
+type SpecificValidatorReport struct {
+	TotalOkBlocks                  uint64 `json:"totalOkBlocks,omitempty"`
+	TotalNilBlocksOfflineValidator uint64 `json:"totalNilBlocksOfflineValidator,omitempty"`
+	TotalNilBlocksOther            uint64 `json:"totalNilBlocksOther,omitempty"`
+	TotalBlockRewardsCoins         string `json:"totalBlockRewardsCoins,omitempty"`
+	TotalSlashedCoins              string `json:"totalSlashedCoins,omitempty"`
+	ReportDate                     int64  `json:"reportDate,omitempty"`
+}

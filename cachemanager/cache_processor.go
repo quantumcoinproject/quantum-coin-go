@@ -287,6 +287,12 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		return err
 	}
 
+	err = c.incrementDailySpecificValidatorDetailsInDb(blockInfo, blockTime, &txnBatch)
+	if err != nil {
+		log.Error("CacheManager incrementDailySpecificValidatorDetailsInDb", "error", err)
+		return err
+	}
+
 	err = c.incrementDailyTransactionDetailsInDb(uint64(len(txnList)), blockTime, &txnBatch)
 	if err != nil {
 		log.Error("CacheManager incrementDailyTransactionDetailsInDb", "error", err)

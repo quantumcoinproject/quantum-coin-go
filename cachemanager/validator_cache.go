@@ -17,6 +17,7 @@ const ValidatorCountKey = "validator-count"
 const ValidatorPageKey = "validator-list-%d"
 const ValidatorPageSize uint64 = 10000
 const DailyValidatorReportKey = "daily-validator-report-%s"
+const DailySpecificValidatorReportKey = "daily-specific-validator-report-%s-%s"
 
 func getValidatorPageKey(pageCount uint64) []byte {
 	pageKey := fmt.Sprintf(ValidatorPageKey, pageCount)
@@ -228,6 +229,94 @@ func (c *CacheManager) putDailyValidatorDetailsInDb(item *ValidatorReport, repor
 	err = txnBatch.Put(keyBlob, blob)
 	if err != nil {
 		log.Error("putDailyValidatorDetailsInDb", "error", err, "key", key)
+		return err
+	}
+
+	return nil
+}
+
+func getDailySpecificValidatorReportKey(date string, address string) (key string, blob []byte) {
+	key = fmt.Sprintf(DailySpecificValidatorReportKey, date, address)
+	blob = []byte(key)
+	return key, blob
+}
+
+func (c *CacheManager) getDailySpecificValidatorReport(reportTime time.Time, address string) (*SpecificValidatorReport, error) {
+	key, keyBlob := getDailySpecificValidatorReportKey(reportTime.Format("2006-02-01"), address)
+	log.Debug("getDailySpecificValidatorReport", "key", key, "reportTime", reportTime, "address", address)
+
+	itemBlob, err := c.cacheDb.Get(keyBlob)
+	if err != nil {
+		log.Error("getDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
+		return nil, err
+	}
+	var item SpecificValidatorReport
+	err = json.Unmarshal(itemBlob, &item)
+	if err != nil {
+		log.Error("getDailySpecificValidatorReport json.Unmarshal", "error", err, "reportTime", reportTime, "address", address)
+		return nil, err
+	}
+
+	return &item, nil
+}
+
+func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, reportTime time.Time, batch *ethdb.Batch) error {
+	txnBatch := *batch
+	var item *SpecificValidatorReport
+	var err error
+
+	item, err = c.getDailySpecificValidatorReport(reportTime, block.ConsensusDetails.BlockProposer)
+	if err != nil {
+		if err.Error() == LevelDbNoTFoundErrMsg {
+			item = &SpecificValidatorReport{
+				TotalBlockRewardsCoins: "0x0",
+				TotalSlashedCoins:      "0x0",
+				ReportDate:             reportTime.Unix(),
+			}
+		} else {
+			log.Error("putDailySpecificValidatorDetailsInDb getDailySpecificValidatorReport", "error", err, "reportTime", reportTime)
+			return err
+		}
+	}
+
+	var voteType proofofstake.VoteType
+	if block.ConsensusDetails.VoteType == OK_VOTE {
+		voteType = proofofstake.VOTE_TYPE_OK
+		item.TotalOkBlocks = item.TotalOkBlocks + 1
+	} else {
+		voteType = proofofstake.VOTE_TYPE_NIL
+		if block.ConsensusDetails.Rounds == 1 {
+			item.TotalNilBlocksOfflineValidator = item.TotalNilBlocksOfflineValidator + 1
+		} else {
+			item.TotalNilBlocksOther = item.TotalNilBlocksOther + 1
+		}
+	}
+	rewards, slashings := proofofstake.GetRewardsSlashingsByVote(big.NewInt(int64(block.Number)), voteType, block.ConsensusDetails.Rounds)
+	currentRewards, err := hexutil.DecodeBig(item.TotalBlockRewardsCoins)
+	if err != nil {
+		return err
+	}
+	currentSlashings, err := hexutil.DecodeBig(item.TotalSlashedCoins)
+	if err != nil {
+		return err
+	}
+	totalRewards := currentRewards.Add(currentRewards, rewards)
+	totalSlashings := currentSlashings.Add(currentSlashings, slashings)
+
+	item.TotalBlockRewardsCoins = hexutil.EncodeBig(totalRewards)
+	item.TotalSlashedCoins = hexutil.EncodeBig(totalSlashings)
+
+	key, keyBlob := getDailySpecificValidatorReportKey(reportTime.Format("2006-02-01"), block.ConsensusDetails.BlockProposer)
+	log.Info("putDailySpecificValidatorDetailsInDb", "key", key, "reportTime", reportTime)
+
+	blob, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+
+	err = txnBatch.Put(keyBlob, blob)
+	if err != nil {
+		log.Error("putDailySpecificValidatorDetailsInDb", "error", err, "key", key, "reportTime", reportTime)
 		return err
 	}
 
