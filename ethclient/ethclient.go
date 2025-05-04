@@ -741,7 +741,7 @@ func (ec *Client) GetInternalTransactions(ctx context.Context, txnHash common.Ha
 	}
 	err := ec.c.CallContext(ctx, &tracedTransactions, "tracer_traceTransaction", txnHash, traceConfig)
 	if err != nil {
-		log.Debug("TraceTransaction error", "err", err)
+		log.Warn("TraceTransaction error", "err", err, "txnHash", txnHash)
 		if strings.Contains(err.Error(), core.ErrInsufficientFunds.Error()) { //ErrInsufficientFunds for no gas conversion contract txn
 			return nil, TracingGasError
 		}

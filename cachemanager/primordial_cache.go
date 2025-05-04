@@ -267,7 +267,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
 					if err != nil {
 						log.Warn("PrimordialCache GetInternalTransactions", "err", err, "txn", tx.Hash())
-						if errors.Is(err, ethclient.TracingGasError) {
+						if errors.Is(err, ethclient.TracingGasError) && tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) { //happens for conversion contracts
 
 						} else {
 							delayNumber = int64(3000 * time.Millisecond)
