@@ -306,12 +306,10 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 	}
 
 	if blockNumber == 1 {
-		for addr, _ := range liveAccountTxnMap {
-			err = c.refreshAccount(blockNum, true, addr, &txnBatch)
-			if err != nil {
-				log.Error("CacheManager genesis refreshAccount", "error", err)
-				return err
-			}
+		err = c.refreshGenesis(&txnBatch)
+		if err != nil {
+			log.Error("CacheManager refreshGenesis", "error", err)
+			return err
 		}
 	}
 

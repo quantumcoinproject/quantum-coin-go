@@ -29,7 +29,52 @@ func getAccountKey(address string) []byte {
 	return []byte(pageKey)
 }
 
+func (c *CacheManager) refreshGenesis(batch *ethdb.Batch) error {
+	var err error
+	for addr, alloc := range c.genesis.Alloc {
+		address := addr.HexLower()
+		log.Info("CacheManager refreshGenesis", "address", address, "alloc", alloc.Balance)
+		var account *AccountDetails
+		account, err = c.getAccountFromDb(address)
+		if err != nil {
+			if err.Error() == LevelDbNoTFoundErrMsg {
+				primordialAccount, err := c.primordialCache.getAccountFromCacheOrDb(address)
+				if err != nil {
+					log.Error("refreshAccount", "address", address)
+					return err
+				}
+				account = &AccountDetails{
+					Address: address,
+					AccType: primordialAccount.AccType,
+				}
+				if primordialAccount.Code != nil {
+					account.Code = make([]byte, len(primordialAccount.Code))
+					copy(account.Code, primordialAccount.Code)
+				}
+			} else {
+				return err
+			}
+		} else {
+			log.Info("CacheManager refreshGenesis found account in db", "address", address, "alloc", alloc.Balance, "account", account)
+		}
+
+		account.Balance = hexutil.EncodeBig(alloc.Balance)
+		account.Nonce = alloc.Nonce
+
+		err = c.putAccountInDb(account, batch)
+		if err != nil {
+			log.Error("refreshGenesis putAccountInDb", "address", address, "error", err)
+			return err
+		}
+
+		return nil
+	}
+
+	return nil
+}
+
 func (c *CacheManager) refreshAccount(blockNumber *big.Int, shouldRefreshNonce bool, address string, batch *ethdb.Batch) error {
+	log.Debug("refreshAccount", "address", address)
 	var account *AccountDetails
 	account, err := c.getAccountFromDb(address)
 	if err != nil {
@@ -85,7 +130,7 @@ func (c *CacheManager) getAccountFromDb(address string) (*AccountDetails, error)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
 			log.Info("getAccountFromDb not found", "address", address)
-			return nil, nil
+			return nil, err
 		} else {
 			log.Error("getAccountFromDb", "address", address, "error", err)
 			return nil, err

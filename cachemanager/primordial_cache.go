@@ -481,6 +481,7 @@ func (c *PrimordialCache) UpsertAccount(address string, blockNumber *big.Int, ba
 // gets account from in-memory cache or persistent cache
 func (c *PrimordialCache) getAccountFromCacheOrDb(addr string) (*PrimordialAccountDetails, error) {
 	var accountDetails *PrimordialAccountDetails
+	addr = strings.ToLower(addr)
 
 	accountDetails, ok := c.addressMap[addr]
 	if ok == true {
@@ -517,7 +518,7 @@ func (c *PrimordialCache) refreshGenesis(blockNumber *big.Int, batch *ethdb.Batc
 			AccType: accType,
 		}
 		if code != nil {
-			accountDetails.Code = make([]byte, 0)
+			accountDetails.Code = make([]byte, len(code))
 			copy(accountDetails.Code, code)
 		}
 		err = c.putAccountInCacheAndDb(accountDetails, batch)
@@ -532,6 +533,7 @@ func (c *PrimordialCache) refreshGenesis(blockNumber *big.Int, batch *ethdb.Batc
 
 // puts account in in-memory cache and in persistent store
 func (c *PrimordialCache) putAccountInCacheAndDb(accountDetails *PrimordialAccountDetails, batch *ethdb.Batch) error {
+	log.Info("PrimordialCache putAccountInCacheAndDb", "addr", accountDetails.Address, "code length", len(accountDetails.Code), "type", accountDetails.AccType)
 	txnBatch := *batch
 
 	blob, err := json.Marshal(accountDetails)
