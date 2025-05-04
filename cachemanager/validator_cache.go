@@ -247,7 +247,11 @@ func (c *CacheManager) getDailySpecificValidatorReport(reportTime time.Time, add
 
 	itemBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
-		log.Error("getDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
+		if err.Error() == LevelDbNoTFoundErrMsg {
+			log.Info("getDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
+		} else {
+			log.Error("getDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
+		}
 		return nil, err
 	}
 	var item SpecificValidatorReport
@@ -263,9 +267,19 @@ func (c *CacheManager) getDailySpecificValidatorReport(reportTime time.Time, add
 func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, reportTime time.Time, batch *ethdb.Batch) error {
 	txnBatch := *batch
 	var item *SpecificValidatorReport
+	var proposer string
 	var err error
 
-	item, err = c.getDailySpecificValidatorReport(reportTime, block.ConsensusDetails.BlockProposer)
+	if block.ConsensusDetails.VoteType == OK_VOTE {
+		proposer = block.ConsensusDetails.BlockProposer
+	} else {
+		if len(block.ConsensusDetails.SlashedValidators) == 0 {
+			return nil
+		}
+		proposer = block.ConsensusDetails.SlashedValidators[0].SlashedAccount
+	}
+
+	item, err = c.getDailySpecificValidatorReport(reportTime, proposer)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
 			item = &SpecificValidatorReport{

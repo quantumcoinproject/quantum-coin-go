@@ -107,7 +107,7 @@ func (c *CacheManager) refreshAccount(blockNumber *big.Int, shouldRefreshNonce b
 
 	if shouldRefreshNonce {
 		var nonce *hexutil.Big
-		err = c.client.GetRpcClient().CallContext(context.Background(), &nonce, "eth_getTransactionCount", common.HexToAddress(address), blockNumber.Uint64())
+		err = c.client.GetRpcClient().CallContext(context.Background(), &nonce, "eth_getTransactionCount", common.HexToAddress(address), "latest") //use latest block for nonce
 		if err != nil {
 			log.Error("refreshAccount eth_getTransactionCount", "address", address, "error", err)
 			return err
