@@ -122,3 +122,8 @@ type ListBlocksResponse struct {
 	PageCount uint64         `json:"pageCount"`
 	Items     []BlockCompact `json:"items"`
 }
+
+type BlockReport struct {
+	TotalBlocks uint64 `json:"totalBlocks,omitempty"`
+	ReportDate  int64  `json:"reportDate,omitempty"`
+}

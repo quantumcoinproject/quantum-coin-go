@@ -91,6 +91,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 
 	receipts := make([]*PrimordialReceipt, len(internalBlockData.TransactionList))
 	txnList := make([]*TransactionDetails, len(internalBlockData.TransactionList))
+	senderList := make(map[string]bool)
 
 	for i, tx := range internalBlockData.TransactionList {
 		log.Trace("CacheManager processByCacheManager", "transaction", tx.Transaction.Hash)
@@ -112,6 +113,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		transaction.BlockNumber = blockNumber
 		transaction.Origin = tx.Transaction.From
 		transaction.From = tx.Transaction.From
+		senderList[transaction.From] = true
 		if tx.Transaction.To != nil {
 			transaction.To = *tx.Transaction.To
 		}
@@ -278,16 +280,49 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		return err
 	}
 
+	blockTime := time.Unix(int64(block.Time), 0)
+	err = c.incrementDailyBlockDetailsInDb(blockTime, &txnBatch)
+	if err != nil {
+		log.Error("CacheManager incrementDailyBlockDetailsInDb", "error", err)
+		return err
+	}
+
+	err = c.incrementDailySpecificValidatorDetailsInDb(blockInfo, blockTime, &txnBatch)
+	if err != nil {
+		log.Error("CacheManager incrementDailySpecificValidatorDetailsInDb", "error", err)
+		return err
+	}
+
+	err = c.incrementDailyTransactionDetailsInDb(uint64(len(txnList)), blockTime, &txnBatch)
+	if err != nil {
+		log.Error("CacheManager incrementDailyTransactionDetailsInDb", "error", err)
+		return err
+	}
+
 	err = c.processBlockTransactions(blockInfo, &txnList, &txnBatch)
 	if err != nil {
 		log.Error("CacheManager processBlockTransactions", "error", err)
 		return err
 	}
 
+	if blockNumber == 1 {
+		err = c.refreshGenesis(&txnBatch)
+		if err != nil {
+			log.Error("CacheManager refreshGenesis", "error", err)
+			return err
+		}
+	}
+
 	for k, v := range liveAccountTxnMap {
 		err = c.processAccountTransactions(k, &v, &txnBatch)
 		if err != nil {
 			log.Error("CacheManager processAccountTransaction", "error", err, "address", k)
+			return err
+		}
+		_, shouldUpdateNonce := senderList[k]
+		err = c.refreshAccount(blockNum, shouldUpdateNonce, k, &txnBatch)
+		if err != nil {
+			log.Error("CacheManager refreshAccount", "error", err, "address", k)
 			return err
 		}
 	}
@@ -299,6 +334,13 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 			log.Error("CacheManager refreshValidators", "error", err)
 			return err
 		}
+
+		stakingContractBalance, err := c.refreshStakingDetails(blockNum, &txnBatch)
+		if err != nil {
+			log.Error("CacheManager refreshStakingDetails", "error", err)
+			return err
+		}
+		runningSummary.StakedCoins = common.BigIntToHexString(stakingContractBalance)
 	}
 
 	if c.enableExtendedApis {

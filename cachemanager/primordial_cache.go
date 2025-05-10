@@ -10,6 +10,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
@@ -45,14 +46,16 @@ type PrimordialCache struct {
 	client     *ethclient.Client
 	addressMap map[string]*PrimordialAccountDetails
 	cancelChan *chan bool
+	genesis    *core.Genesis
 }
 
-func NewPrimordialCache(cacheDir string, nodeUrl string, cancelChan *chan bool) (*PrimordialCache, error) {
+func NewPrimordialCache(cacheDir string, nodeUrl string, genesis *core.Genesis, cancelChan *chan bool) (*PrimordialCache, error) {
 	pCache := &PrimordialCache{
 		nodeUrl:    nodeUrl,
 		cacheDir:   cacheDir,
 		addressMap: make(map[string]*PrimordialAccountDetails),
 		cancelChan: cancelChan,
+		genesis:    genesis,
 	}
 
 	var err error
@@ -264,7 +267,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 					internalTransactions, err := c.client.GetInternalTransactions(context.Background(), tx.Hash())
 					if err != nil {
 						log.Warn("PrimordialCache GetInternalTransactions", "err", err, "txn", tx.Hash())
-						if errors.Is(err, ethclient.TracingGasError) {
+						if errors.Is(err, ethclient.TracingGasError) && tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) { //happens for conversion contracts
 
 						} else {
 							delayNumber = int64(3000 * time.Millisecond)
@@ -309,6 +312,16 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 				}
 
 				txnBatch := c.cacheDb.NewBatch()
+				if blockNumBig.Uint64() == 1 {
+					err = c.refreshGenesis(blockNumBig, &txnBatch)
+					if err != nil {
+						log.Error("PrimordialCache refreshGenesis", "error", err)
+						delayNumber = int64(3000 * time.Millisecond)
+						blockTimer.Reset(time.Duration(delayNumber))
+						continue
+					}
+				}
+
 				blockKey := []byte(LastInternalBlockKey)
 				err = txnBatch.Put(blockKey, common.Uint64ToBytes(blockNumBig.Uint64()))
 				if err != nil {
@@ -468,6 +481,7 @@ func (c *PrimordialCache) UpsertAccount(address string, blockNumber *big.Int, ba
 // gets account from in-memory cache or persistent cache
 func (c *PrimordialCache) getAccountFromCacheOrDb(addr string) (*PrimordialAccountDetails, error) {
 	var accountDetails *PrimordialAccountDetails
+	addr = strings.ToLower(addr)
 
 	accountDetails, ok := c.addressMap[addr]
 	if ok == true {
@@ -492,8 +506,34 @@ func (c *PrimordialCache) getAccountFromCacheOrDb(addr string) (*PrimordialAccou
 	return accountDetails, nil
 }
 
+func (c *PrimordialCache) refreshGenesis(blockNumber *big.Int, batch *ethdb.Batch) error {
+	for addr, _ := range c.genesis.Alloc {
+		accType, code, err := c.client.GetAccountType(addr, blockNumber)
+		if err != nil {
+			log.Error("PrimordialCache refreshGenesis GetAccountType", "error", err)
+			return err
+		}
+		accountDetails := &PrimordialAccountDetails{
+			Address: addr.HexLower(),
+			AccType: accType,
+		}
+		if code != nil {
+			accountDetails.Code = make([]byte, len(code))
+			copy(accountDetails.Code, code)
+		}
+		err = c.putAccountInCacheAndDb(accountDetails, batch)
+		if err != nil {
+			log.Error("PrimordialCache refreshGenesis putAccountInCacheAndDb", "error", err)
+			return err
+		}
+	}
+
+	return nil
+}
+
 // puts account in in-memory cache and in persistent store
 func (c *PrimordialCache) putAccountInCacheAndDb(accountDetails *PrimordialAccountDetails, batch *ethdb.Batch) error {
+	log.Info("PrimordialCache putAccountInCacheAndDb", "addr", accountDetails.Address, "code length", len(accountDetails.Code), "type", accountDetails.AccType)
 	txnBatch := *batch
 
 	blob, err := json.Marshal(accountDetails)

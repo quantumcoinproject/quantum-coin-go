@@ -1,97 +1,167 @@
 package cachemanager
 
-import "github.com/quantumcoinproject/quantum-coin-go/ethclient"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
+	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"math/big"
+	"strings"
+)
 
-const AccountSummaryKey = "account-%s"
+const AccountDetailsKey = "account-%s"
 
 type AccountDetails struct {
-	Address string                `json:"address,omitempty"`
-	AccType ethclient.AccountType `json:"accountType,omitempty"`
+	Address                  string                `json:"address,omitempty"`
+	AccType                  ethclient.AccountType `json:"accountType,omitempty"`
+	Balance                  string                `json:"balance,omitempty"`
+	Nonce                    uint64                `json:"nonce,omitempty"`
+	Code                     []byte                `json:"code,omitempty"`
+	LastRefreshedBlockNumber string                `json:"lastRefreshedBlockNumber,omitempty"`
 }
 
-/*func (c *CacheManager) getAccount(address common.Address, blockNumber *big.Int, batch *ethdb.Batch) (*AccountDetails, error) {
-	accountDetails, err := c.getAccountFromCacheOrDb(address)
+func getAccountKey(address string) []byte {
+	pageKey := fmt.Sprintf(AccountDetailsKey, strings.ToLower(address))
+	return []byte(pageKey)
+}
+
+func (c *CacheManager) refreshGenesis(batch *ethdb.Batch) error {
+	var err error
+	for addr, alloc := range c.genesis.Alloc {
+		address := addr.HexLower()
+		log.Info("CacheManager refreshGenesis", "address", address, "alloc", alloc.Balance)
+		var account *AccountDetails
+		account, err = c.getAccountFromDb(address)
+		if err != nil {
+			if err.Error() == LevelDbNoTFoundErrMsg {
+				primordialAccount, err := c.primordialCache.getAccountFromCacheOrDb(address)
+				if err != nil {
+					log.Error("refreshAccount", "address", address)
+					return err
+				}
+				account = &AccountDetails{
+					Address: address,
+					AccType: primordialAccount.AccType,
+				}
+				if primordialAccount.Code != nil {
+					account.Code = make([]byte, len(primordialAccount.Code))
+					copy(account.Code, primordialAccount.Code)
+				}
+			} else {
+				return err
+			}
+		} else {
+			log.Info("CacheManager refreshGenesis found account in db", "address", address, "alloc", alloc.Balance, "account", account)
+		}
+
+		account.Balance = hexutil.EncodeBig(alloc.Balance)
+		account.Nonce = alloc.Nonce
+
+		err = c.putAccountInDb(account, batch)
+		if err != nil {
+			log.Error("refreshGenesis putAccountInDb", "address", address, "error", err)
+			return err
+		}
+
+		return nil
+	}
+
+	return nil
+}
+
+func (c *CacheManager) refreshAccount(blockNumber *big.Int, shouldRefreshNonce bool, address string, batch *ethdb.Batch) error {
+	log.Debug("refreshAccount", "address", address)
+	var account *AccountDetails
+	account, err := c.getAccountFromDb(address)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
-			acc, err := c.newAccount(address, blockNumber, batch)
+			primordialAccount, err := c.primordialCache.getAccountFromCacheOrDb(address)
 			if err != nil {
-				return nil, err
+				log.Error("refreshAccount", "address", address)
+				return err
 			}
-			return acc, nil
+			account = &AccountDetails{
+				Address: address,
+				AccType: primordialAccount.AccType,
+			}
+			if primordialAccount.Code != nil {
+				account.Code = make([]byte, len(primordialAccount.Code))
+				copy(account.Code, primordialAccount.Code)
+			}
 		} else {
-			return nil, err
+			return err
 		}
-	} else {
-		return accountDetails, err
 	}
-}
 
-// gets account from blockchain node and saves to cache
-func (c *CacheManager) newAccount(address common.Address, blockNumber *big.Int, batch *ethdb.Batch) (*AccountDetails, error) {
-	result, _, err := c.client.GetAccountType(address, blockNumber)
+	addr := common.HexToAddress(address)
+	balance, err := c.client.BalanceAt(context.Background(), addr, blockNumber)
 	if err != nil {
-		return nil, err
+		log.Error("refreshAccount BalanceAt", "address", address)
+		return err
 	}
-	acc := &AccountDetails{
-		AccType: result,
-		Address: strings.ToLower(address.Hex()),
+	account.Balance = hexutil.EncodeBig(balance)
+
+	if shouldRefreshNonce {
+		var nonce *hexutil.Big
+		err = c.client.GetRpcClient().CallContext(context.Background(), &nonce, "eth_getTransactionCount", common.HexToAddress(address), "latest") //use latest block for nonce
+		if err != nil {
+			log.Error("refreshAccount eth_getTransactionCount", "address", address, "error", err)
+			return err
+		}
+		account.Nonce = nonce.ToInt().Uint64()
 	}
 
-	err = c.putAccountInCacheAndDb(acc, batch)
+	err = c.putAccountInDb(account, batch)
 	if err != nil {
-		return nil, err
-	}
-
-	return acc, nil
-}
-
-// Gets account from in-memory cache or persistent cache
-func (c *CacheManager) getAccountFromCacheOrDb(address common.Address) (*AccountDetails, error) {
-	var accountDetails *AccountDetails
-	addr := strings.ToLower(address.Hex())
-
-	accountDetails, ok := c.addressMap[addr]
-	if ok == true {
-		log.Trace("getAccountFromCacheOrDb return from in memory cache", "address", address)
-		return accountDetails, nil
-	}
-
-	key := fmt.Sprintf(AccountSummaryKey, addr)
-
-	db := c.cacheDb
-	accountBlob, err := db.Get([]byte(key))
-	if err != nil {
-		return nil, err
-	}
-
-	accountDetails = &AccountDetails{}
-	err = json.Unmarshal(accountBlob, accountDetails)
-	if err != nil {
-		return nil, err
-	}
-
-	return accountDetails, nil
-}
-
-// puts account in in-memory cache and in persistent store
-func (c *CacheManager) putAccountInCacheAndDb(accountDetails *AccountDetails, batch *ethdb.Batch) error {
-	txnBatch := *batch
-
-	blob, err := json.Marshal(accountDetails)
-	if err != nil {
+		log.Error("refreshAccount putAccountInDb", "address", address, "error", err)
 		return err
 	}
 
-	accountAddress := strings.ToLower(accountDetails.Address)
-	key := fmt.Sprintf(AccountSummaryKey, accountAddress)
-	keyBlob := []byte(key)
+	return nil
+}
+
+func (c *CacheManager) getAccountFromDb(address string) (*AccountDetails, error) {
+	keyBlob := getAccountKey(address)
+	blob, err := c.cacheDb.Get(keyBlob)
+	if err != nil {
+		if err.Error() == LevelDbNoTFoundErrMsg {
+			log.Info("getAccountFromDb not found", "address", address)
+			return nil, err
+		} else {
+			log.Error("getAccountFromDb", "address", address, "error", err)
+			return nil, err
+		}
+	}
+
+	item := AccountDetails{}
+	err = json.Unmarshal(blob, &item)
+	if err != nil {
+		log.Error("getAccountFromDb", "error", err, "address", address, "error", err)
+		return nil, err
+	}
+
+	return &item, nil
+}
+
+func (c *CacheManager) putAccountInDb(item *AccountDetails, batch *ethdb.Batch) error {
+	txnBatch := *batch
+	keyBlob := getAccountKey(item.Address)
+	log.Info("putAccountInDb", "address", item.Address)
+
+	blob, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
 
 	err = txnBatch.Put(keyBlob, blob)
 	if err != nil {
+		log.Error("putAccountInDb", "error", err, "Hash", item.Address)
 		return err
 	}
 
-	c.addressMap[accountDetails.Address] = accountDetails
-
 	return nil
-}*/
+}

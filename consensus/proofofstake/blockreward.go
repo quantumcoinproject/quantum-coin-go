@@ -72,3 +72,22 @@ func (c *ProofOfStake) accumulateBalance(state *state.StateDB, amount *big.Int, 
 	state.AddBalance(addr, amount)
 	return nil
 }
+
+func GetRewardsSlashingsByVote(blockNumber *big.Int, voteType VoteType, rounds byte) (rewardsCoins *big.Int, slashedCoins *big.Int) {
+	rewardsCoins = big.NewInt(0)
+	slashedCoins = big.NewInt(0)
+
+	if voteType == VOTE_TYPE_OK {
+		rewardsCoins = GetReward(blockNumber)
+		return
+	} else if voteType == VOTE_TYPE_NIL {
+		if rounds == 1 {
+			if blockNumber.Uint64() >= slashStartBlockNumber {
+				slashedCoins = SLASH_AMOUNT
+			} else if blockNumber.Uint64() >= SlashV2StartBlock {
+				slashedCoins = SLASH_AMOUNT_V2
+			}
+		}
+	}
+	return
+}

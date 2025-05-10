@@ -574,7 +574,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 
 	if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) && time.Now().UTC().Unix() > conversionTxnLastTime {
-		log.Warn("conversion txn is not in allowed date range, dropping it", "txn", tx.Hash())
+		log.Debug("conversion txn is not in allowed date range, dropping it", "txn", tx.Hash())
 		return errors.New("conversion txn not in allowed time range")
 	}
 

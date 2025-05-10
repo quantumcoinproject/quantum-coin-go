@@ -37,6 +37,16 @@ func TestPacketHandler_canValidate(t *testing.T) {
 	}
 }
 
+func TestPropose(t *testing.T) {
+	valDetails := &ValidatorDetailsV2{
+		LastNiLBlock:  big.NewInt(2131746),
+		NilBlockCount: big.NewInt(32),
+	}
+
+	a, b := canPropose(valDetails, 112)
+	fmt.Println(a, b)
+}
+
 func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64, expected bool) bool {
 	valDetails := &ValidatorDetailsV2{
 		LastNiLBlock:  big.NewInt(lastNilBlock),
