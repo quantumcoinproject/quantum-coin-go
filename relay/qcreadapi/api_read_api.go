@@ -79,6 +79,11 @@ func (c *ReadApiAPIController) Routes() Routes {
 			"/latestblock",
 			c.GetLatestBlockDetails,
 		},
+		"GetBlockDetails": Route{
+			strings.ToUpper("Get"),
+			"/block/{blockNumber}",
+			c.GetBlockDetails,
+		},
 		"GetAccountDetails": Route{
 			strings.ToUpper("Get"),
 			"/account/{address}",
@@ -199,6 +204,64 @@ func (c *ReadApiAPIController) GetLatestBlockDetails(w http.ResponseWriter, r *h
 	_ = EncodeJSONResponse(result.Body, &result.Code, w)
 
 	log.Info("GetLatestBlockDetails ok", "requestId", requestId)
+}
+
+// GetBlockDetails - Get block details
+func (c *ReadApiAPIController) GetBlockDetails(w http.ResponseWriter, r *http.Request) {
+	log.Info("GetBlockDetails")
+	requestId := ""
+	if r.Header != nil {
+		requestId = r.Header.Get(REQUEST_ID_HEADER_NAME)
+	}
+	if len(requestId) > 0 {
+		log.Info("GetBlockDetails", "requestId", requestId)
+	}
+
+	c.setupCORS(&w, r)
+	if (*r).Method == "OPTIONS" {
+		log.Info("GetBlockDetails OPTIONS", "requestId", requestId)
+		return
+	}
+
+	blockNumber := int64(-1)
+	params := mux.Vars(r)
+	blockNumberParam := params["blockNumber"]
+	var err error
+	if len(blockNumberParam) > 0 {
+		blockNumber, err = strconv.ParseInt(blockNumberParam, 10, 64)
+		if err != nil {
+			c.errorHandler(w, r, &ParsingError{"blockNumber", err}, nil)
+			log.Error("GetBlockDetails", "requestId", requestId, "error", "invalid blockNumber")
+			return
+		}
+		if blockNumber <= 0 {
+			c.errorHandler(w, r, &ParsingError{"blockNumber", err}, nil)
+			log.Error("GetBlockDetails", "requestId", requestId, "error", "invalid blockNumber value")
+			return
+		}
+	}
+
+	if c.authorize(r) == false {
+		result := Response(http.StatusUnauthorized, nil)
+		// If no error, encode the body and the result code
+		_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+		log.Error("GetBlockDetails", "requestId", requestId, "error", "Unauthorized");
+		c.errorHandler(w, r, errors.New("Unauthorized"), &result)
+		return
+	}
+
+	result, err := c.service.GetBlockDetails(r.Context(), blockNumber)
+	// If an error occurred, encode the error with the status code
+	if err != nil {
+		log.Error("GetBlockDetails", "requestId", requestId, "error", err);
+		c.errorHandler(w, r, err, &result)
+		return
+	}
+	// If no error, encode the body and the result code
+	_ = EncodeJSONResponse(result.Body, &result.Code, w)
+
+	log.Info("GetBlockDetails ok", "requestId", requestId)
 }
 
 // GetAccountDetails - Get account details

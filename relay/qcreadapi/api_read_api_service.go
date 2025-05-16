@@ -100,8 +100,30 @@ func (s *ReadApiAPIService) GetLatestBlockDetails(ctx context.Context) (ImplResp
 
 	log.Info(relay.InfoTitleLatestBlockDetails, "blockNumber", latestBlockNumber.Int64(),  relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
 	l := latestBlockNumber.Int64()
-	return Response(http.StatusOK, BlockDetailsResponse{BlockDetails{&l}}), nil
+	blockDetails := cachemanager.Block{
+		Number: uint64(l),
+	}
+	return Response(http.StatusOK, BlockDetailsResponse{blockDetails}), nil
 }
+
+// GetBlockDetails - Get latest block details
+func (s *ReadApiAPIService) GetBlockDetails(ctx context.Context, blockNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleLatestBlockDetails, relay.MsgDial, s.DpUrl)
+
+	block, err := s.cacheManager.GetBlockDetails(uint64(blockNumber))
+	if err != nil {
+		log.Error(relay.MsgBlockNumber, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), errors.New(err.Error())
+	}
+	duration := time.Now().Sub(startTime)
+
+	log.Info(relay.InfoTitleLatestBlockDetails, "blockNumber", blockNumber,  relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
+	return Response(http.StatusOK, BlockDetailsResponse{*block}), nil
+}
+
 
 // GetAccountDetails - Get account details
 func (s *ReadApiAPIService) GetAccountDetails(ctx context.Context, address string) (ImplResponse, error) {

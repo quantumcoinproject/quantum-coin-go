@@ -10,12 +10,10 @@
 
 package qcreadapi
 
-
-
+import "github.com/quantumcoinproject/quantum-coin-go/cachemanager"
 
 type BlockDetailsResponse struct {
-
-	Result BlockDetails `json:"result,omitempty"`
+	Result cachemanager.Block `json:"result,omitempty"`
 }
 
 // AssertBlockDetailsResponseRequired checks if the required fields are not zero-ed

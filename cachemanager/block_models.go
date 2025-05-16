@@ -16,33 +16,32 @@ const (
 )
 
 type BlockConsensusDetails struct {
-	BlockProposer        string     `json:"blockProposer"`
-	VoteType             VoteType   `json:"voteType"`
-	ProposalHash         string     `json:"proposalHash"`
-	PrecommitHash        string     `json:"precommitHash"`
-	SlashedValidators    []Slashing `json:"slashedValidators,omitempty"`
-	Rounds               byte
-	SelectedTransactions []string `json:"selectedTransactions,omitempty"` //this will be a super-set of transactions that actually got executed
-	BlockTime            uint64   `json:"blockTime"`                      //as voted
-
-	BlockProposerRewards     string `json:"blockProposerRewards,omitempty"`     //total rewards, blockRewards + txnFeeRewards
-	BaseBlockProposerRewards string `json:"baseBlockProposerRewards,omitempty"` //block rewards excluding txn free rewards
-	TxnFeeRewards            string `json:"txnFeeRewards,omitempty"`
-	BurntTxnFee              string `json:"burntTxnFee,omitempty"`
-	SlashAmount              string `json:"slashAmount,omitempty"` //total slash amount
+	BlockProposer            string     `json:"blockProposer"`
+	VoteType                 string     `json:"voteType"`
+	ProposalHash             string     `json:"proposalHash"`
+	PrecommitHash            string     `json:"precommitHash"`
+	Slashings                []Slashing `json:"slashedValidators,omitempty"`
+	Rounds                   byte       `json:"rounds,omitempty"`
+	SelectedTransactions     []string   `json:"selectedTransactions,omitempty"`     //this will be a super-set of transactions that actually got executed
+	BlockTime                uint64     `json:"blockTime"`                          //as voted
+	BlockProposerRewards     string     `json:"blockProposerRewards,omitempty"`     //total rewards, blockRewards + txnFeeRewards
+	BaseBlockProposerRewards string     `json:"baseBlockProposerRewards,omitempty"` //block rewards excluding txn free rewards
+	TxnFeeRewards            string     `json:"txnFeeRewards,omitempty"`
+	BurntTxnFee              string     `json:"burntTxnFee,omitempty"`
+	SlashAmount              string     `json:"slashAmount,omitempty"` //total slash amount
 }
 
 type Block struct {
+	// The block number as of which the details were retrieved
+	BlockNumber      int64                 `json:"blockNumber,omitempty"`
 	Hash             string                `json:"hash,omitempty"`
 	ParentHash       string                `json:"parentHash,omitempty"`
 	StateRoot        string                `json:"stateRoot,omitempty"`
 	TransactionsRoot string                `json:"transactionsRoot,omitempty"`
 	ReceiptsRoot     string                `json:"receiptsRoot,omitempty"`
-	Number           uint64                `json:"number,omitempty"`
 	GasLimit         string                `json:"gasLimit,omitempty"`
 	GasUsed          string                `json:"gasUsed,omitempty"`
-	Time             uint64                `json:"timestamp,omitempty"` //will be different from ConsensusDetails blockTime for NIL blocks
-	MixDigest        string                `json:"mixHash,omitempty"`
+	BlockTime        uint64                `json:"timestamp,omitempty"`
 	TransactionCount uint                  `json:"transactionCount,omitempty"`
 	ConsensusDetails BlockConsensusDetails `json:"consensusDetails,omitempty"`
 }
@@ -54,25 +53,24 @@ func fromPrimordialBlockData(blockData *PrimordialBlockData) *Block {
 	block.StateRoot = blockData.Block.StateRoot
 	block.TransactionsRoot = blockData.Block.TransactionsRoot
 	block.ReceiptsRoot = blockData.Block.ReceiptsRoot
-	block.Number = blockData.Block.Number.Uint64()
+	block.BlockNumber = int64(blockData.Block.Number.Uint64())
 	block.GasLimit = common.UintToHex(blockData.Block.GasLimit)
 	block.GasUsed = common.UintToHex(blockData.Block.GasUsed)
-	block.Time = blockData.Block.Time
-	block.MixDigest = blockData.Block.MixDigest
+	block.BlockTime = blockData.Block.Time
 	block.TransactionCount = blockData.Block.TransactionsCount
 
 	block.ConsensusDetails.BlockProposer = blockData.ConsensusData.Data.BlockProposer.HexLower()
 	if blockData.ConsensusData.Data.VoteType == proofofstake.VOTE_TYPE_OK {
-		block.ConsensusDetails.VoteType = OK_VOTE
+		block.ConsensusDetails.VoteType = string(OK_VOTE)
 	} else {
-		block.ConsensusDetails.VoteType = NIL_VOTE
+		block.ConsensusDetails.VoteType = string(NIL_VOTE)
 	}
 	block.ConsensusDetails.ProposalHash = blockData.ConsensusData.Data.ProposalHash.HexLower()
 	block.ConsensusDetails.PrecommitHash = blockData.ConsensusData.Data.PrecommitHash.HexLower()
 	if blockData.ConsensusData.BlockRewardsInfo.SlashedValidators != nil {
-		block.ConsensusDetails.SlashedValidators = make([]Slashing, len(blockData.ConsensusData.BlockRewardsInfo.SlashedValidators))
+		block.ConsensusDetails.Slashings = make([]Slashing, len(blockData.ConsensusData.BlockRewardsInfo.SlashedValidators))
 		for i, v := range blockData.ConsensusData.BlockRewardsInfo.SlashedValidators {
-			block.ConsensusDetails.SlashedValidators[i] = Slashing{
+			block.ConsensusDetails.Slashings[i] = Slashing{
 				SlashedAccount: v.SlashedValidator.HexLower(),
 				SlashedAmount:  v.SlashedAmount,
 			}
@@ -106,10 +104,10 @@ type BlockCompact struct {
 func fromBlock(block *Block) *BlockCompact {
 	return &BlockCompact{
 		Hash:             block.Hash,
-		Number:           block.Number,
+		Number:           uint64(block.BlockNumber),
 		BlockProposer:    block.ConsensusDetails.BlockProposer,
 		TransactionCount: block.TransactionCount,
-		Time:             block.Time,
+		Time:             block.BlockTime,
 	}
 }
 

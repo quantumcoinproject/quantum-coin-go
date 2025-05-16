@@ -40,15 +40,15 @@ func getBlockKey(blockNumber uint64) (key string, blob []byte) {
 	return key, blob
 }
 
-func (c *CacheManager) getBlockFromDb(blockNumber uint64) (*Block, error) {
+func (c *CacheManager) GetBlockDetails(blockNumber uint64) (*Block, error) {
 	key, keyBlob := getBlockKey(blockNumber)
 	blob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Info("getBlockFromDb not found", "blockNumber", blockNumber, "key", key)
+			log.Info("GetBlockDetails not found", "blockNumber", blockNumber, "key", key)
 			return nil, nil
 		} else {
-			log.Error("getBlockFromDb", "blockNumber", blockNumber, "key", key, "error", err)
+			log.Error("GetBlockDetails", "blockNumber", blockNumber, "key", key, "error", err)
 			return nil, err
 		}
 	}
@@ -56,7 +56,7 @@ func (c *CacheManager) getBlockFromDb(blockNumber uint64) (*Block, error) {
 	item := Block{}
 	err = json.Unmarshal(blob, &item)
 	if err != nil {
-		log.Error("getBlockFromDb", "error", err, "blockNumber", blockNumber, "key", key, "error", err)
+		log.Error("GetBlockDetails", "error", err, "blockNumber", blockNumber, "key", key, "error", err)
 		return nil, err
 	}
 
@@ -65,7 +65,7 @@ func (c *CacheManager) getBlockFromDb(blockNumber uint64) (*Block, error) {
 
 func (c *CacheManager) putBlockInDb(item *Block, batch *ethdb.Batch) error {
 	txnBatch := *batch
-	key, keyBlob := getBlockKey(item.Number)
+	key, keyBlob := getBlockKey(uint64(item.BlockNumber))
 	log.Info("putBlockInDb", "key", key)
 
 	blob, err := json.Marshal(item)
@@ -152,7 +152,7 @@ func (c *CacheManager) incrementDailyBlockDetailsInDb(reportTime time.Time, batc
 	if err != nil {
 		return err
 	}
-	
+
 	err = txnBatch.Put(keyBlob, blob)
 	if err != nil {
 		log.Error("putDailyBlockDetailsInDb", "error", err, "key", key, "reportTime", reportTime)

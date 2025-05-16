@@ -359,7 +359,7 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 
 				retBlockData, err := c.getBlockFromDb(blockNumBig.Uint64())
 				if err != nil {
-					log.Error("PrimordialCache getBlockFromDb", "error", err)
+					log.Error("PrimordialCache GetBlockDetails", "error", err)
 					delayNumber = int64(3000 * time.Millisecond)
 					blockTimer.Reset(time.Duration(delayNumber))
 					continue
@@ -427,7 +427,7 @@ func (c *PrimordialCache) putBlockInDb(blockDetails *PrimordialBlockData, batch 
 
 func (c *PrimordialCache) getBlockFromDb(blockNumber uint64) (*PrimordialBlockData, error) {
 	blockKey, blockKeyBlob := c.getBlockKey(blockNumber)
-	log.Debug("PrimordialCache getBlockFromDb", "blockNumber", blockNumber, "blockKey", blockKey)
+	log.Debug("PrimordialCache GetBlockDetails", "blockNumber", blockNumber, "blockKey", blockKey)
 
 	db := c.cacheDb
 	compressed, err := db.Get([]byte(blockKeyBlob))

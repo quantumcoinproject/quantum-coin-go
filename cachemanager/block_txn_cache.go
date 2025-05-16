@@ -66,7 +66,7 @@ func (c *CacheManager) processBlockTransactions(block *Block, txnList *[]*Transa
 }
 
 func (c *CacheManager) getBlockTxnCount(blockNumber uint64) (uint64, error) {
-	block, err := c.getBlockFromDb(blockNumber)
+	block, err := c.GetBlockDetails(blockNumber)
 	if err != nil {
 		return 0, err
 	}
