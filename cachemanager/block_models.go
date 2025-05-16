@@ -60,7 +60,6 @@ func fromPrimordialBlockData(blockData *PrimordialBlockData) *Block {
 	block.Time = blockData.Block.Time
 	block.MixDigest = blockData.Block.MixDigest
 	block.TransactionCount = blockData.Block.TransactionsCount
-	block.StateRoot = blockData.Block.StateRoot
 
 	block.ConsensusDetails.BlockProposer = blockData.ConsensusData.Data.BlockProposer.HexLower()
 	if blockData.ConsensusData.Data.VoteType == proofofstake.VOTE_TYPE_OK {

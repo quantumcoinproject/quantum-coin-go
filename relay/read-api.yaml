@@ -1,6 +1,6 @@
 openapi: 3.0.1
 info:
-  title: Quantum Coin Read API
+  title: QuantumCoin Read API
   version: v1
 servers:
   - url: https://sdk.readrelay.quantumcoinapi.com
@@ -18,6 +18,64 @@ paths:
           description: request id
           schema:
             type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
+  '/block/{blockNumber}':
+    get:
+      tags:
+        - Read
+      summary: Get block details
+      operationId: GetBlockDetails
+      parameters:
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+        - name: blockNumber
+          in: path
+          required: true
+          description: the number of the block
+          schema:
+            type: number
+            format: int64
       responses:
         '200':
           description: Success
@@ -525,6 +583,75 @@ paths:
                 $ref: '#/components/schemas/ErrorResponseModel'
 components:
   schemas:
+    BlockVoteType:
+      enum:
+        - VoteTypeOk
+        - VoteTypeNil
+      type: string
+      description: The consensus vote type of the block
+    Slashing:
+      slashedAccount:
+        type: string
+        nullable: true
+        description: The account address that got slashed
+      slashedAmount:
+        type: string
+        nullable: true
+        description: The amount of the slashing
+    BlockConsensusDetails:
+      type: object
+      properties:
+        blockProposer:
+          type: string
+          nullable: true
+          description: The proposer of the block
+        voteType:
+          $ref: '#/components/schemas/TransactionType'
+        proposalHash:
+          type: string
+          nullable: true
+          description: The hash of the block proposal
+        precommitHash:
+          type: string
+          nullable: true
+          description: The hash of the precommit
+        slashings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Slashing'
+        rounds:
+          type: integer
+          nullable: true
+          description: The number of voting rounds
+        selectedTransactions:
+          type: array
+          items:
+            type: string
+        votedBlockTime:
+          type: integer
+          format: int64
+          nullable: true
+          description: The block time as voted
+        blockProposerRewards:
+          type: string
+          nullable: true
+          description: The rewards of the block proposer including transaction fees
+        baseBlockProposerRewards:
+          type: string
+          nullable: true
+          description: The rewards of the block proposer excluding transaction fee rewards
+        transactionFeeRewards:
+          type: string
+          nullable: true
+          description: The rewards from transaction fees
+        burntTransactionFees:
+          type: string
+          nullable: true
+          description: The total transaction fee that was burnt
+        totalSlashAmount:
+          type: string
+          nullable: true
+          description: The total amount slashed
     BlockDetails:
       type: object
       properties:
@@ -533,6 +660,47 @@ components:
           format: int64
           nullable: true
           description: The block number as of which the details were retrieved
+        hash:
+          type: string
+          nullable: true
+          description: The hash of the block
+        parentHash:
+          type: string
+          nullable: true
+          description: The hash of the parent block
+        stateRoot:
+          type: string
+          nullable: true
+          description: The state root
+        transactionsRoot:
+          type: string
+          nullable: true
+          description: The transactions root
+        receiptsRoot:
+          type: string
+          nullable: true
+          description: The receipts root
+        gasLimit:
+          type: string
+          nullable: true
+          description: The gas limit
+        gasUsed:
+          type: string
+          nullable: true
+          description: The gas used
+        blockTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: The gas used
+        transactionCount:
+          type: number
+          nullable: true
+          description: The count of transactions in the block
+        blockConsensusDetails:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlockConsensusDetails'
       additionalProperties: false
     BlockDetailsResponse:
       type: object
