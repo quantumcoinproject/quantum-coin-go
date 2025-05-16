@@ -62,9 +62,9 @@ func (c *CacheManager) processBlock(block *Block, batch *ethdb.Batch) error {
 	var blockCount uint64
 	var err error
 
-	err = c.putLastBlockNumberInDb(block.Number, batch)
+	err = c.putLastBlockNumberInDb(uint64(block.BlockNumber), batch)
 	if err != nil {
-		log.Error("CacheManager processBlock putLastBlockNumberInDb", "error", err, "blockNumber", block.Number)
+		log.Error("CacheManager processBlock putLastBlockNumberInDb", "error", err, "blockNumber", block.BlockNumber)
 		return err
 	}
 
@@ -86,7 +86,7 @@ func (c *CacheManager) processBlock(block *Block, batch *ethdb.Batch) error {
 	var blockPageKey []byte
 	var blockListBlob []byte
 
-	log.Debug("CacheManager processBlocks", "blockCount", blockCount, "blockNumber", block.Number)
+	log.Debug("CacheManager processBlocks", "blockCount", blockCount, "blockNumber", block.BlockNumber)
 
 	if newBlockCount%PageSize == 1 { //if it's the first block of the page, won't be in the cache
 		blockList.Blocks = make([]BlockCompact, 0)

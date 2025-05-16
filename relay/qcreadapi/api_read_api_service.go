@@ -101,7 +101,7 @@ func (s *ReadApiAPIService) GetLatestBlockDetails(ctx context.Context) (ImplResp
 	log.Info(relay.InfoTitleLatestBlockDetails, "blockNumber", latestBlockNumber.Int64(),  relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
 	l := latestBlockNumber.Int64()
 	blockDetails := cachemanager.Block{
-		Number: uint64(l),
+		BlockNumber: int64(l),
 	}
 	return Response(http.StatusOK, BlockDetailsResponse{blockDetails}), nil
 }

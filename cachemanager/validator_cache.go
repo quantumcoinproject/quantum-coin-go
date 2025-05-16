@@ -270,13 +270,13 @@ func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, 
 	var proposer string
 	var err error
 
-	if block.ConsensusDetails.VoteType == OK_VOTE {
+	if block.ConsensusDetails.VoteType == string(OK_VOTE) {
 		proposer = block.ConsensusDetails.BlockProposer
 	} else {
-		if len(block.ConsensusDetails.SlashedValidators) == 0 {
+		if len(block.ConsensusDetails.Slashings) == 0 {
 			return nil
 		}
-		proposer = block.ConsensusDetails.SlashedValidators[0].SlashedAccount
+		proposer = block.ConsensusDetails.Slashings[0].SlashedAccount
 	}
 
 	item, err = c.getDailySpecificValidatorReport(reportTime, proposer)
@@ -294,7 +294,7 @@ func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, 
 	}
 
 	var voteType proofofstake.VoteType
-	if block.ConsensusDetails.VoteType == OK_VOTE {
+	if block.ConsensusDetails.VoteType == string(OK_VOTE) {
 		voteType = proofofstake.VOTE_TYPE_OK
 		item.TotalOkBlocks = item.TotalOkBlocks + 1
 	} else {
@@ -305,7 +305,7 @@ func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, 
 			item.TotalNilBlocksOther = item.TotalNilBlocksOther + 1
 		}
 	}
-	rewards, slashings := proofofstake.GetRewardsSlashingsByVote(big.NewInt(int64(block.Number)), voteType, block.ConsensusDetails.Rounds)
+	rewards, slashings := proofofstake.GetRewardsSlashingsByVote(big.NewInt(block.BlockNumber), voteType, block.ConsensusDetails.Rounds)
 	currentRewards, err := hexutil.DecodeBig(item.TotalBlockRewardsCoins)
 	if err != nil {
 		return err
