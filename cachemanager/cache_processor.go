@@ -7,6 +7,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
+	"github.com/status-im/keycard-go/hexutils"
 	"math/big"
 	"strings"
 	"time"
@@ -120,8 +121,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		transaction.Gas = common.BigIntToHexString(big.NewInt(0).SetUint64(tx.Transaction.Gas))
 		transaction.GasPrice = common.BigIntToHexString(tx.Transaction.GasPrice)
 		if tx.Transaction.Data != nil {
-			transaction.Data = make([]byte, len(tx.Transaction.Data))
-			copy(transaction.Data, tx.Transaction.Data)
+			transaction.Input = hexutils.BytesToHex(tx.Transaction.Data)
 		}
 		transaction.Nonce = tx.Transaction.Nonce
 		transaction.Value = common.BigIntToHexString(tx.Transaction.Value)

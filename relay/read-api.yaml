@@ -5,6 +5,58 @@ info:
 servers:
   - url: https://sdk.readrelay.quantumcoinapi.com
 paths:
+  '/blockchaindetails':
+    get:
+      tags:
+        - Read
+      summary: Get blockchain details
+      operationId: GetBlockchainDetails
+      parameters:
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockchainDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
+
   '/latestblock':
     get:
       tags:
@@ -169,13 +221,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
-  '/blockchaindetails':
+
+
+
+  '/transaction/{hash}':
     get:
       tags:
         - Read
-      summary: Get blockchain details
-      operationId: GetBlockchainDetails
+      summary: Get Transaction
+      operationId: GetTransactionDetails
       parameters:
+        - name: hash
+          in: path
+          required: true
+          description: The transaction hash
+          schema:
+            type: string
         - name: x-request-id
           in: header
           required: false
@@ -188,7 +249,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/BlockchainDetailsResponse'
+                $ref: '#/components/schemas/TransactionResponse'
         '400':
           description: Bad Request
           content:
@@ -219,6 +280,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
+
   '/transactions/{pageNumber}':
     get:
       tags:
@@ -275,6 +337,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
+
+
   '/account/{address}':
     get:
       tags:
@@ -579,62 +643,9 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
-  '/transaction/{hash}':
-    get:
-      tags:
-        - Read
-      summary: Get Transaction
-      operationId: GetTransactionDetails
-      parameters:
-        - name: hash
-          in: path
-          required: true
-          description: The transaction hash
-          schema:
-            type: string
-        - name: x-request-id
-          in: header
-          required: false
-          description: request id
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransactionResponse'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponseModel'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponseModel'
-        '404':
-          description: Not Found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponseModel'
-        '429':
-          description: Request was throttled
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponseModel'
-        '503':
-          description: Server Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponseModel'
+
+
+
   '/token/{contractAddress}':
     get:
       tags:
@@ -1009,6 +1020,9 @@ components:
     TransactionDetails:
       type: object
       properties:
+        hash:
+          type: string
+          nullable: false
         blockHash:
           type: string
           nullable: true
@@ -1018,34 +1032,27 @@ components:
           format: int64
           nullable: true
           description: The number of the block in which the transaction was executed. If this transaction is pending or was discarded, this will be null.
+        origin:
+          type: string
+          nullable: false
         from:
           type: string
           nullable: false
+        to:
+          type: string
+          nullable: true
         gas:
           type: string
           nullable: false
         gasPrice:
           type: string
           nullable: false
-        hash:
-          type: string
-          nullable: false
         input:
           type: string
-          nullable: false
-        isDiscarded:
-          type: boolean
-          nullable: true
-        discardReason:
-          type: string
-          nullable: true
         nonce:
           type: integer
           format: int64
           nullable: false
-        to:
-          type: string
-          nullable: true
         value:
           type: string
           nullable: false
