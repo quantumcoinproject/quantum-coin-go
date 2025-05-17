@@ -113,7 +113,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
-
+  '/blocks/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List blocks
+      operationId: ListBlocks
+      parameters:
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListBlocksResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
   '/blockchaindetails':
     get:
       tags:
@@ -164,7 +219,62 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
-
+  '/transactions/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List transactions
+      operationId: ListTransactions
+      parameters:
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListTransactionsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
   '/account/{address}':
     get:
       tags:
@@ -702,6 +812,36 @@ components:
           items:
             $ref: '#/components/schemas/BlockConsensusDetails'
       additionalProperties: false
+    BlockDetailsCompact:
+      type: object
+      properties:
+        blockNumber:
+          type: integer
+          format: int64
+          nullable: true
+          description: The block number as of which the details were retrieved
+        hash:
+          type: string
+          nullable: true
+          description: The hash of the block
+        parentHash:
+          type: string
+          nullable: true
+          description: The hash of the parent block
+        blockTime:
+          type: string
+          format: date-time
+          nullable: true
+          description: The gas used
+        transactionCount:
+          type: number
+          nullable: true
+          description: The count of transactions in the block
+        blockProposer:
+          type: string
+          nullable: true
+          description: The proposer of the block
+      additionalProperties: false
     BlockDetailsResponse:
       type: object
       properties:
@@ -724,6 +864,67 @@ components:
           nullable: true
           description: The block number as of which the details were retrieved
       additionalProperties: false
+    ListBlocksResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlockDetailsCompact'
+    TransactionDetailsCompact:
+      type: object
+      properties:
+        hash:
+          type: string
+          nullable: false
+          description: The hash of the block
+        blockNumber:
+          type: integer
+          format: int64
+          nullable: false
+          description: The block number as of which the details were retrieved
+        createdAt:
+          type: string
+          format: date-time
+          nullable: false
+          description: The time the block was created
+        from:
+          type: string
+          nullable: false
+          description: The from address
+        to:
+          type: string
+          nullable: true
+          description: The to address
+        value:
+          type: string
+          nullable: false
+          description: The value in hex
+        txnFee:
+          type: string
+          nullable: false
+          description: The transaction fee in hex
+        status:
+          type: string
+          nullable: false
+          description: The status of the transaction. 0x1 means success, 0x0 means failure
+        transactionType:
+          $ref: '#/components/schemas/TransactionType'
+        tokenTransaction:
+          $ref: '#/components/schemas/TokenTransactionCompact'
+    ListTransactionsResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionDetailsCompact'
     AccountDetailsResponse:
       type: object
       properties:
