@@ -760,6 +760,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
 
+  '/report/validator/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List validator report
+      operationId: ListValidatorReport
+      parameters:
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListValidatorReportResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
 components:
   schemas:
     BlockVoteType:
@@ -1017,6 +1074,26 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/StakingReportCompact'
+    ValidatorReportCompact:
+      type: object
+      properties:
+        totalValidators:
+          type: integer
+          nullable: false
+        reportDate:
+          type: string
+          format: date-time
+          nullable: false
+    ListValidatorReportResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidatorReportCompact'
     AccountDetailsResponse:
       type: object
       properties:
