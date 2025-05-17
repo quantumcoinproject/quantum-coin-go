@@ -18,6 +18,22 @@ type ValidatorCompact struct {
 	ValidatorDeferralResetBlock     string `json:"validatorDeferralResetBlock" gencodec:"required"`
 }
 
+type ValidatorDetails struct {
+	Depositor                       string `json:"depositor"     gencodec:"required"`
+	Validator                       string `json:"validator"     gencodec:"required"`
+	Balance                         string `json:"balance"       gencodec:"required"`
+	NetBalance                      string `json:"netBalance"    gencodec:"required"`
+	BlockRewards                    string `json:"blockRewards"  gencodec:"required"`
+	Slashings                       string `json:"slashings"  gencodec:"required"`
+	IsValidationPaused              bool   `json:"isValidationPaused"  gencodec:"required"`
+	WithdrawalBlock                 string `json:"withdrawalBlock"  gencodec:"required"`
+	WithdrawalAmount                string `json:"withdrawalAmount"  gencodec:"required"`
+	LastNiLBlock                    string `json:"lastNiLBlock" gencodec:"required"`
+	NilBlockCount                   string `json:"nilBlockCount" gencodec:"required"`
+	BlockProposerDeferralResetBlock string `json:"blockProposerDeferralResetBlock" gencodec:"required"`
+	ValidatorDeferralResetBlock     string `json:"validatorDeferralResetBlock" gencodec:"required"`
+}
+
 func fromValidatorDetails(validatorDetails *proofofstake.ValidatorDetails) *ValidatorCompact {
 	return &ValidatorCompact{
 		Depositor:                       validatorDetails.Depositor.HexLower(),
@@ -33,6 +49,24 @@ func fromValidatorDetails(validatorDetails *proofofstake.ValidatorDetails) *Vali
 		NilBlockCount:                   validatorDetails.NilBlockCount,
 		BlockProposerDeferralResetBlock: validatorDetails.BlockProposerResetBlock,
 		ValidatorDeferralResetBlock:     validatorDetails.ValidatorResetBlock,
+	}
+}
+
+func fromValidatorCompact(validatorCompact *ValidatorCompact) *ValidatorDetails {
+	return &ValidatorDetails{
+		Depositor:                       validatorCompact.Depositor,
+		Validator:                       validatorCompact.Validator,
+		Balance:                         validatorCompact.Balance,
+		NetBalance:                      validatorCompact.NetBalance,
+		BlockRewards:                    validatorCompact.BlockRewards,
+		Slashings:                       validatorCompact.Slashings,
+		IsValidationPaused:              validatorCompact.IsValidationPaused,
+		WithdrawalBlock:                 validatorCompact.WithdrawalBlock,
+		WithdrawalAmount:                validatorCompact.WithdrawalAmount,
+		LastNiLBlock:                    validatorCompact.LastNiLBlock,
+		NilBlockCount:                   validatorCompact.NilBlockCount,
+		BlockProposerDeferralResetBlock: validatorCompact.BlockProposerDeferralResetBlock,
+		ValidatorDeferralResetBlock:     validatorCompact.ValidatorDeferralResetBlock,
 	}
 }
 

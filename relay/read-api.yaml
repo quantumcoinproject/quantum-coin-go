@@ -758,6 +758,63 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
 
+  '/validator/{address}':
+    get:
+      tags:
+        - Read
+      summary: Get validator details
+      operationId: GetValidatorDetails
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: the address of the validator or the depositor
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidatorDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
   '/report/staking/{pageNumber}':
     get:
       tags:
@@ -955,6 +1012,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListTransactionReportResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
+  '/report/specific-validator/{address}/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List specific validator report
+      operationId: ListSpecificValidatorReport
+      parameters:
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: address
+          in: path
+          required: true
+          description: The address of the validator or the depositor
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListSpecificValidatorReportResponse'
         '400':
           description: Bad Request
           content:
@@ -1263,6 +1383,41 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ValidatorReportCompact'
+    SpecificValidatorReportCompact:
+      type: object
+      properties:
+        totalOkBlocks:
+          type: integer
+          format: int64
+          nullable: false
+        totalNilBlocksOfflineValidator:
+          type: integer
+          format: int64
+          nullable: false
+        totalNilBlocksOther:
+          type: integer
+          format: int64
+          nullable: false
+        totalBlockRewardsCoins:
+          type: string
+          nullable: false
+        totalSlashedCoins:
+          type: string
+          nullable: false
+        reportDate:
+          type: string
+          format: date-time
+          nullable: false
+    ListSpecificValidatorReportResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SpecificValidatorReportCompact'
     BlockReportCompact:
       type: object
       properties:
@@ -1674,6 +1829,73 @@ components:
           nullable: true
           description: The block when the validator deferral status will be reset
       additionalProperties: false
+    ValidatorDetails:
+      type: object
+      properties:
+        depositor:
+          type: string
+          nullable: false
+          description: The depositor address
+        validator:
+          type: string
+          nullable: false
+          description: The validator address
+        balance:
+          type: string
+          nullable: false
+          description: The staking balance
+        netBalance:
+          type: string
+          nullable: false
+          description: The net staking balance
+        blockRewards:
+          type: string
+          nullable: false
+          description: The block rewards
+        slashings:
+          type: string
+          nullable: false
+          description: The total slashings
+        isValidationPaused:
+          type: boolean
+          nullable: false
+          description: Whether validation paused
+        withdrawalBlock:
+          type: integer
+          format: int64
+          nullable: true
+          description: The withdrawal block number
+        withdrawalAmount:
+          type: string
+          nullable: true
+          description: The withdrawal amount
+        lastNilBlock:
+          type: integer
+          format: int64
+          nullable: true
+          description: The last nil block
+        nilBlockCount:
+          type: integer
+          format: int64
+          nullable: true
+          description: The count of nil blocks
+        blockProposerDeferralResetBlock:
+          type: integer
+          format: int64
+          nullable: true
+          description: The block when the block proposer deferral status will be reset
+        validatorDeferralResetBlock:
+          type: integer
+          format: int64
+          nullable: true
+          description: The block when the validator deferral status will be reset
+      additionalProperties: false
+    ValidatorDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/ValidatorDetails'
     ListValidatorsResponse:
       type: object
       properties:

@@ -3,6 +3,7 @@ package cachemanager
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -138,6 +139,21 @@ func (c *CacheManager) processValidators(validators []*proofofstake.ValidatorDet
 	log.Info("CacheManager validatorBatch.Put", "validatorPageCount", validatorPageCount)
 
 	return nil
+}
+
+func (c *CacheManager) GetValidator(address string) (ValidatorDetails, error) {
+	listResponse, err := c.ListValidators(1)
+	if err != nil {
+		return ValidatorDetails{}, err
+	}
+
+	for _, validator := range listResponse.Items {
+		if validator.Validator == address || validator.Depositor == address {
+			val := fromValidatorCompact(&validator)
+			return *val, nil
+		}
+	}
+	return ValidatorDetails{}, errors.New(NotFoundErrMsg)
 }
 
 func (c *CacheManager) ListValidators(pageNumberInput int64) (ListValidatorsResponse, error) {
