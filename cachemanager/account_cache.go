@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
-	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
@@ -14,15 +13,6 @@ import (
 )
 
 const AccountDetailsKey = "account-%s"
-
-type AccountDetails struct {
-	Address                  string                `json:"address,omitempty"`
-	AccType                  ethclient.AccountType `json:"accountType,omitempty"`
-	Balance                  string                `json:"balance,omitempty"`
-	Nonce                    uint64                `json:"nonce,omitempty"`
-	Code                     []byte                `json:"code,omitempty"`
-	LastRefreshedBlockNumber string                `json:"lastRefreshedBlockNumber,omitempty"`
-}
 
 func getAccountKey(address string) []byte {
 	pageKey := fmt.Sprintf(AccountDetailsKey, strings.ToLower(address))
@@ -48,8 +38,7 @@ func (c *CacheManager) refreshGenesis(batch *ethdb.Batch) error {
 					AccType: primordialAccount.AccType,
 				}
 				if primordialAccount.Code != nil {
-					account.Code = make([]byte, len(primordialAccount.Code))
-					copy(account.Code, primordialAccount.Code)
+					account.Code = common.Bytes2Hex(primordialAccount.Code)
 				}
 			} else {
 				return err
@@ -89,8 +78,7 @@ func (c *CacheManager) refreshAccount(blockNumber *big.Int, shouldRefreshNonce b
 				AccType: primordialAccount.AccType,
 			}
 			if primordialAccount.Code != nil {
-				account.Code = make([]byte, len(primordialAccount.Code))
-				copy(account.Code, primordialAccount.Code)
+				account.Code = common.Bytes2Hex(primordialAccount.Code)
 			}
 		} else {
 			return err

@@ -581,9 +581,9 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 type AccountType string
 
 const (
-	ACCOUNT_TYPE_REGULAR  AccountType = "REGULAR"
-	ACCOUNT_TYPE_CONTRACT AccountType = "CONTRACT"
-	ACCOUNT_TYPE_TOKEN    AccountType = "TOKEN"
+	ACCOUNT_TYPE_REGULAR  AccountType = "Regular"
+	ACCOUNT_TYPE_CONTRACT AccountType = "Contract"
+	ACCOUNT_TYPE_TOKEN    AccountType = "Token"
 )
 
 func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (AccountType, []byte, error) {

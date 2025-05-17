@@ -702,6 +702,64 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
+
+  '/report/staking/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List staking report
+      operationId: ListStakingReport
+      parameters:
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListStakingReportResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
 components:
   schemas:
     BlockVoteType:
@@ -862,6 +920,11 @@ components:
     AccountDetails:
       type: object
       properties:
+        address:
+          type: string
+          nullable: true
+        accountType:
+          $ref: '#/components/schemas/AccountType'
         balance:
           type: string
           nullable: true
@@ -869,11 +932,9 @@ components:
           type: integer
           format: int64
           nullable: true
-        blockNumber:
-          type: integer
-          format: int64
+        code:
+          type: string
           nullable: true
-          description: The block number as of which the details were retrieved
       additionalProperties: false
     ListBlocksResponse:
       type: object
@@ -936,6 +997,26 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TransactionDetailsCompact'
+    StakingReportCompact:
+      type: object
+      properties:
+        totalStakedCoins:
+          type: string
+          nullable: false
+        reportDate:
+          type: string
+          format: date-time
+          nullable: false
+    ListStakingReportResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StakingReportCompact'
     AccountDetailsResponse:
       type: object
       properties:
@@ -1009,6 +1090,12 @@ components:
           items:
             $ref: '#/components/schemas/AccountTokenDetails'
       additionalProperties: false
+    AccountType:
+      enum:
+        - Regular
+        - Contract
+        - Token
+      type: string
     TransactionType:
       enum:
         - CoinTransfer
