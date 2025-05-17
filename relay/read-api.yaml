@@ -222,7 +222,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponseModel'
 
-
+  '/validators/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List validators
+      operationId: ListValidators
+      parameters:
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListValidatorsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
 
   '/transaction/{hash}':
     get:
@@ -1082,6 +1137,16 @@ components:
           nullable: true
           description: The proposer of the block
       additionalProperties: false
+    ListBlocksResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlockDetailsCompact'
     BlockDetailsResponse:
       type: object
       properties:
@@ -1107,16 +1172,6 @@ components:
           type: string
           nullable: true
       additionalProperties: false
-    ListBlocksResponse:
-      type: object
-      properties:
-        pageCount:
-          type: integer
-          format: int64
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/BlockDetailsCompact'
     TransactionDetailsCompact:
       type: object
       properties:
@@ -1558,6 +1613,77 @@ components:
         result:
           allOf:
             - $ref: '#/components/schemas/BlockchainDetails'
+    ValidatorDetailsCompact:
+      type: object
+      properties:
+        depositor:
+          type: string
+          nullable: false
+          description: The depositor address
+        validator:
+          type: string
+          nullable: false
+          description: The validator address
+        balance:
+          type: string
+          nullable: false
+          description: The staking balance
+        netBalance:
+          type: string
+          nullable: false
+          description: The net staking balance
+        blockRewards:
+          type: string
+          nullable: false
+          description: The block rewards
+        slashings:
+          type: string
+          nullable: false
+          description: The total slashings
+        isValidationPaused:
+          type: boolean
+          nullable: false
+          description: Whether validation paused
+        withdrawalBlock:
+          type: integer
+          format: int64
+          nullable: true
+          description: The withdrawal block number
+        withdrawalAmount:
+          type: string
+          nullable: true
+          description: The withdrawal amount
+        lastNilBlock:
+          type: integer
+          format: int64
+          nullable: true
+          description: The last nil block
+        nilBlockCount:
+          type: integer
+          format: int64
+          nullable: true
+          description: The count of nil blocks
+        blockProposerDeferralResetBlock:
+          type: integer
+          format: int64
+          nullable: true
+          description: The block when the block proposer deferral status will be reset
+        validatorDeferralResetBlock:
+          type: integer
+          format: int64
+          nullable: true
+          description: The block when the validator deferral status will be reset
+      additionalProperties: false
+    ListValidatorsResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidatorDetailsCompact'
     ErrorResponseModel:
       type: object
       properties:
