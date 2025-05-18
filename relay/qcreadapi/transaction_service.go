@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/quantumcoinproject/quantum-coin-go/cachemanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -12,6 +13,11 @@ import (
 	"net/http"
 	"time"
 )
+
+type ListTransactionReportResponse struct {
+	PageCount int64                             `json:"pageCount,omitempty"`
+	Items     []*cachemanager.TransactionReport `json:"items,omitempty"`
+}
 
 // GetTransactionDetails - Get transaction Details
 func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash string) (ImplResponse, error) {
@@ -138,4 +144,37 @@ func (s *ReadApiAPIService) GetTransactionDetails(ctx context.Context, hash stri
 	log.Info(relay.InfoTitleTransaction, relay.MsgHash, hash, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
 
 	return Response(http.StatusNotFound, nil), nil
+}
+
+// ListTransactionReport - List validator report
+func (s *ReadApiAPIService) ListTransactionReport(ctx context.Context, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleListAccountTransactions)
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info("ListTransactionReport", relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent, "pageNumber", pageNumber)
+
+	if pageNumber > 1 {
+		return Response(http.StatusNotFound, nil), NotFoundError
+	}
+
+	currDate := time.Now().UTC()
+	listResponse := ListTransactionReportResponse{
+		PageCount: 1,
+		Items:     make([]*cachemanager.TransactionReport, 0),
+	}
+	for i := 20; i >= 1; i++ {
+		reportDay := currDate.AddDate(0, 0, i-1)
+		report, err := s.cacheManager.GetDailyTransactionReport(reportDay)
+		if err != nil {
+			log.Error("ListTransactionReport", relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+			return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+		}
+		listResponse.Items = append(listResponse.Items, report)
+	}
+
+	return Response(http.StatusOK, listResponse), nil
 }

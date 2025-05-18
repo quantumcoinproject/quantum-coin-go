@@ -65,19 +65,19 @@ func getDailyTransactionReportKey(date string) (key string, blob []byte) {
 	return key, blob
 }
 
-func (c *CacheManager) getDailyTransactionReport(reportTime time.Time) (*TransactionReport, error) {
+func (c *CacheManager) GetDailyTransactionReport(reportTime time.Time) (*TransactionReport, error) {
 	key, keyBlob := getDailyTransactionReportKey(reportTime.Format("2006-02-01"))
-	log.Debug("getDailyTransactionReport", "key", key, "reportTime", reportTime)
+	log.Debug("GetDailyTransactionReport", "key", key, "reportTime", reportTime)
 
 	itemBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
-		log.Error("getDailyTransactionReport cacheDb.Get", "error", err, "reportTime", reportTime)
+		log.Error("GetDailyTransactionReport cacheDb.Get", "error", err, "reportTime", reportTime)
 		return nil, err
 	}
 	var item TransactionReport
 	err = json.Unmarshal(itemBlob, &item)
 	if err != nil {
-		log.Error("getDailyTransactionReport json.Unmarshal", "error", err, "reportTime", reportTime)
+		log.Error("GetDailyTransactionReport json.Unmarshal", "error", err, "reportTime", reportTime)
 		return nil, err
 	}
 
@@ -88,7 +88,7 @@ func (c *CacheManager) incrementDailyTransactionDetailsInDb(blockTxnCount uint64
 	txnBatch := *batch
 	var item *TransactionReport
 	var err error
-	item, err = c.getDailyTransactionReport(reportTime)
+	item, err = c.GetDailyTransactionReport(reportTime)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
 			item = &TransactionReport{
@@ -96,7 +96,7 @@ func (c *CacheManager) incrementDailyTransactionDetailsInDb(blockTxnCount uint64
 				ReportDate:        reportTime.Unix(),
 			}
 		} else {
-			log.Error("putDailyTransactionDetailsInDb getDailyTransactionReport", "error", err, "reportTime", reportTime)
+			log.Error("putDailyTransactionDetailsInDb GetDailyTransactionReport", "error", err, "reportTime", reportTime)
 			return err
 		}
 	} else {

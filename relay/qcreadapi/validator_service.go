@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+type ListValidatorReportResponse struct {
+	PageCount int64                           `json:"pageCount,omitempty"`
+	Items     []*cachemanager.ValidatorReport `json:"items,omitempty"`
+}
+
 type ValidatorDetailsResponse struct {
 	Result *cachemanager.ValidatorDetails `json:"result,omitempty"`
 }
@@ -50,4 +55,37 @@ func (s *ReadApiAPIService) GetValidatorDetails(ctx context.Context, address str
 	}
 
 	return Response(http.StatusOK, valDetails), nil
+}
+
+// ListValidatorReport - List validator report
+func (s *ReadApiAPIService) ListValidatorReport(ctx context.Context, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleListAccountTransactions)
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info("ListValidatorReport", relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent, "pageNumber", pageNumber)
+
+	if pageNumber > 1 {
+		return Response(http.StatusNotFound, nil), NotFoundError
+	}
+
+	currDate := time.Now().UTC()
+	listResponse := ListValidatorReportResponse{
+		PageCount: 1,
+		Items:     make([]*cachemanager.ValidatorReport, 0),
+	}
+	for i := 20; i >= 1; i++ {
+		reportDay := currDate.AddDate(0, 0, i-1)
+		report, err := s.cacheManager.GetDailyValidatorReport(reportDay)
+		if err != nil {
+			log.Error("ListValidatorReport", relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+			return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+		}
+		listResponse.Items = append(listResponse.Items, report)
+	}
+
+	return Response(http.StatusOK, listResponse), nil
 }

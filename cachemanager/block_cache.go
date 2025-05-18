@@ -138,7 +138,7 @@ func (c *CacheManager) incrementDailyBlockDetailsInDb(reportTime time.Time, batc
 				ReportDate:  reportTime.Unix(),
 			}
 		} else {
-			log.Error("putDailyTransactionDetailsInDb getDailyTransactionReport", "error", err, "reportTime", reportTime)
+			log.Error("incrementDailyBlockDetailsInDb GetDailyBlockReport", "error", err, "reportTime", reportTime)
 			return err
 		}
 	} else {
