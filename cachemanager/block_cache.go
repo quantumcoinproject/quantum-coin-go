@@ -107,19 +107,19 @@ func (c *CacheManager) getDailyBlockReportKey(reportTime time.Time) (*BlockRepor
 	return &item, nil
 }
 
-func (c *CacheManager) getDailyBlockReport(reportTime time.Time) (*BlockReport, error) {
+func (c *CacheManager) GetDailyBlockReport(reportTime time.Time) (*BlockReport, error) {
 	key, keyBlob := getDailyBlockReportKey(reportTime.Format("2006-02-01"))
-	log.Debug("getDailyBlockReport", "key", key, "reportTime", reportTime)
+	log.Debug("GetDailyBlockReport", "key", key, "reportTime", reportTime)
 
 	itemBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
-		log.Error("getDailyBlockReport cacheDb.Get", "error", err, "reportTime", reportTime)
+		log.Error("GetDailyBlockReport cacheDb.Get", "error", err, "reportTime", reportTime)
 		return nil, err
 	}
 	var item BlockReport
 	err = json.Unmarshal(itemBlob, &item)
 	if err != nil {
-		log.Error("getDailyBlockReport json.Unmarshal", "error", err, "reportTime", reportTime)
+		log.Error("GetDailyBlockReport json.Unmarshal", "error", err, "reportTime", reportTime)
 		return nil, err
 	}
 
@@ -130,7 +130,7 @@ func (c *CacheManager) incrementDailyBlockDetailsInDb(reportTime time.Time, batc
 	txnBatch := *batch
 	var item *BlockReport
 	var err error
-	item, err = c.getDailyBlockReport(reportTime)
+	item, err = c.GetDailyBlockReport(reportTime)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
 			item = &BlockReport{

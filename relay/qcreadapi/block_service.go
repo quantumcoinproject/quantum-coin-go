@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+type ListBlockReportResponse struct {
+	PageCount int64                       `json:"pageCount,omitempty"`
+	Items     []*cachemanager.BlockReport `json:"items,omitempty"`
+}
+
 // GetLatestBlockDetails - Get latest block details
 func (s *ReadApiAPIService) GetLatestBlockDetails(ctx context.Context) (ImplResponse, error) {
 
@@ -65,4 +70,37 @@ func (s *ReadApiAPIService) GetBlockDetails(ctx context.Context, blockNumber int
 
 	log.Info(relay.InfoTitleLatestBlockDetails, "blockNumber", blockNumber, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
 	return Response(http.StatusOK, BlockDetailsResponse{*block}), nil
+}
+
+// ListBlockReport - List block report
+func (s *ReadApiAPIService) ListBlockReport(ctx context.Context, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info(relay.InfoTitleListAccountTransactions)
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info("ListBlockReport", relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent, "pageNumber", pageNumber)
+
+	if pageNumber > 1 {
+		return Response(http.StatusNotFound, nil), NotFoundError
+	}
+
+	currDate := time.Now().UTC()
+	listResponse := ListBlockReportResponse{
+		PageCount: 1,
+		Items:     make([]*cachemanager.BlockReport, 0),
+	}
+	for i := 20; i >= 1; i++ {
+		reportDay := currDate.AddDate(0, 0, i-1)
+		report, err := s.cacheManager.GetDailyBlockReport(reportDay)
+		if err != nil {
+			log.Error(relay.MsgBlockNumber, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusInternalServerError)
+			return Response(http.StatusInternalServerError, nil), errors.New(err.Error())
+		}
+		listResponse.Items = append(listResponse.Items, report)
+	}
+
+	return Response(http.StatusOK, listResponse), nil
 }
