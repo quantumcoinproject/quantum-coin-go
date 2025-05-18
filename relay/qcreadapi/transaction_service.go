@@ -178,3 +178,25 @@ func (s *ReadApiAPIService) ListTransactionReport(ctx context.Context, pageNumbe
 
 	return Response(http.StatusOK, listResponse), nil
 }
+
+// ListTransactions - List transactions
+func (s *ReadApiAPIService) ListTransactions(ctx context.Context, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info("ListTransactions")
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info("ListTransactions", "pageNumber", pageNumber, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	listResponse, err := s.cacheManager.ListTransactions(pageNumber)
+	if err != nil {
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
+	}
+
+	return Response(http.StatusOK, listResponse), nil
+}

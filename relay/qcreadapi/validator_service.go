@@ -89,3 +89,25 @@ func (s *ReadApiAPIService) ListValidatorReport(ctx context.Context, pageNumber 
 
 	return Response(http.StatusOK, listResponse), nil
 }
+
+// ListValidators - List validators
+func (s *ReadApiAPIService) ListValidators(ctx context.Context, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info("ListValidators")
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info("ListValidators", "pageNumber", pageNumber, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	listResponse, err := s.cacheManager.ListValidators(pageNumber)
+	if err != nil {
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
+	}
+
+	return Response(http.StatusOK, listResponse), nil
+}

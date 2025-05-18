@@ -104,3 +104,25 @@ func (s *ReadApiAPIService) ListBlockReport(ctx context.Context, pageNumber int6
 
 	return Response(http.StatusOK, listResponse), nil
 }
+
+// ListBlocks - List blocks
+func (s *ReadApiAPIService) ListBlocks(ctx context.Context, pageNumber int64) (ImplResponse, error) {
+
+	startTime := time.Now()
+
+	log.Info("ListBlocks")
+
+	duration := time.Now().Sub(startTime)
+
+	log.Info("ListBlocks", "pageNumber", pageNumber, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusNoContent)
+
+	listResponse, err := s.cacheManager.ListBlocks(pageNumber)
+	if err != nil {
+		if err.Error() == cachemanager.LevelDbNoTFoundErrMsg {
+			return Response(http.StatusNotFound, nil), NotFoundError
+		}
+		return Response(http.StatusInternalServerError, nil), InternalError
+	}
+
+	return Response(http.StatusOK, listResponse), nil
+}
