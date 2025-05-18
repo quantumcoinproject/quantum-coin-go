@@ -257,23 +257,23 @@ func getDailySpecificValidatorReportKey(date string, address string) (key string
 	return key, blob
 }
 
-func (c *CacheManager) getDailySpecificValidatorReport(reportTime time.Time, address string) (*SpecificValidatorReport, error) {
+func (c *CacheManager) GetDailySpecificValidatorReport(reportTime time.Time, address string) (*SpecificValidatorReport, error) {
 	key, keyBlob := getDailySpecificValidatorReportKey(reportTime.Format("2006-02-01"), address)
-	log.Debug("getDailySpecificValidatorReport", "key", key, "reportTime", reportTime, "address", address)
+	log.Debug("GetDailySpecificValidatorReport", "key", key, "reportTime", reportTime, "address", address)
 
 	itemBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Info("getDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
+			log.Info("GetDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
 		} else {
-			log.Error("getDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
+			log.Error("GetDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
 		}
 		return nil, err
 	}
 	var item SpecificValidatorReport
 	err = json.Unmarshal(itemBlob, &item)
 	if err != nil {
-		log.Error("getDailySpecificValidatorReport json.Unmarshal", "error", err, "reportTime", reportTime, "address", address)
+		log.Error("GetDailySpecificValidatorReport json.Unmarshal", "error", err, "reportTime", reportTime, "address", address)
 		return nil, err
 	}
 
@@ -295,7 +295,7 @@ func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, 
 		proposer = block.ConsensusDetails.Slashings[0].SlashedAccount
 	}
 
-	item, err = c.getDailySpecificValidatorReport(reportTime, proposer)
+	item, err = c.GetDailySpecificValidatorReport(reportTime, proposer)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
 			item = &SpecificValidatorReport{
@@ -304,7 +304,7 @@ func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, 
 				ReportDate:             reportTime.Unix(),
 			}
 		} else {
-			log.Error("putDailySpecificValidatorDetailsInDb getDailySpecificValidatorReport", "error", err, "reportTime", reportTime)
+			log.Error("putDailySpecificValidatorDetailsInDb GetDailySpecificValidatorReport", "error", err, "reportTime", reportTime)
 			return err
 		}
 	}
