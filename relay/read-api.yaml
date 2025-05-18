@@ -1291,6 +1291,10 @@ components:
         code:
           type: string
           nullable: true
+        blockNumber:
+          type: integer
+          format: int64
+          nullable: true
       additionalProperties: false
     TransactionDetailsCompact:
       type: object

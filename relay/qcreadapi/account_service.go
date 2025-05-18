@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+type AccountDetailsResponse struct {
+	Result *cachemanager.AccountDetails `json:"result,omitempty"`
+}
+
 // GetAccountDetails - Get account details
 func (s *ReadApiAPIService) GetAccountDetails(ctx context.Context, address string) (ImplResponse, error) {
 
@@ -73,16 +77,24 @@ func (s *ReadApiAPIService) GetAccountDetails(ctx context.Context, address strin
 		return Response(http.StatusBadRequest, nil), errors.New(err.Error())
 	}
 
-	b := accountBalance.String()
-	n := accountNonce.Int64()
-	l := latestBlockNumber.Int64()
+	accDetailsCache, err := s.cacheManager.GetAccountDetails(address)
+	if err != nil {
+		log.Error(relay.MsgBlockNumber, relay.MsgError, errors.New(err.Error()), relay.MsgStatus, http.StatusBadRequest)
+		return Response(http.StatusBadRequest, nil), errors.New(err.Error())
+	}
+
+	accDetailsCache.Balance = accountBalance.String()
+	accDetailsCache.Nonce = uint64(accountNonce.Int64())
+	accDetailsCache.BlockNumber = latestBlockNumber.Int64()
+	accDetailsResponse := AccountDetailsResponse{
+		Result: accDetailsCache,
+	}
 
 	duration := time.Now().Sub(startTime)
 
 	log.Info(relay.InfoTitleAccountDetails, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
-
-	return Response(http.StatusOK, AccountDetailsResponse{
-		AccountDetails{&b, &n, &l}}), nil
+	
+	return Response(http.StatusOK, accDetailsResponse), nil
 }
 
 // ListAccountTransactions - List account transactions
