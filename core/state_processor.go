@@ -23,6 +23,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/misc"
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"math/big"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -53,6 +54,13 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 	}
 }
 
+type ProcessMode byte
+
+const (
+	ProcessModeWorker      ProcessMode = 1
+	ProcessModeInsertChain ProcessMode = 2
+)
+
 // Process processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb and applying any rewards to both
 // the processor (coinbase) and any included uncles.
@@ -62,13 +70,11 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 // transactions failed to execute due to insufficient gas it will return an error.
 func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg vm.Config) (types.Receipts, []*types.Log, uint64, error) {
 	var (
-		receipts    types.Receipts
-		usedGas     = new(uint64)
-		header      = block.Header()
-		blockHash   = block.Hash()
-		blockNumber = block.Number()
-		allLogs     []*types.Log
-		gp          = new(GasPool).AddGas(block.GasLimit())
+		receipts types.Receipts
+		usedGas  = new(uint64)
+		header   = block.Header()
+		allLogs  []*types.Log
+		gp       = new(GasPool).AddGas(block.GasLimit())
 	)
 
 	err := p.engine.PostPare(p.bc, header)
@@ -79,35 +85,15 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	if p.config.DAOForkSupport && p.config.DAOForkBlock != nil && p.config.DAOForkBlock.Cmp(block.Number()) == 0 {
 		misc.ApplyDAOHardFork(statedb)
 	}
-	blockContext := NewEVMBlockContext(header, p.bc, nil)
 
 	// Iterate over and process the individual transactions
-	for i, tx := range block.Transactions() {
-		signer := types.MakeSigner(p.config, header.Number)
-		msg, err := tx.AsMessage(signer)
-		if err != nil {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
-		}
-
-		vmConfig := cfg
-		isGasExemptTxn, err := conversionutil.IsGasExemptTxn(tx, signer)
-		if err == nil && isGasExemptTxn {
-			vmConfig = *cfg.DeepCopy()
-			vmConfig.OverrideGasFailure = true
-			msg.OverrideGasPrice(big.NewInt(0))
-			log.Trace("Process OverrideGasPrice", "txn", tx.Hash(), "price", msg.GasPrice())
-		}
-
-		vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, p.config, vmConfig)
-
-		statedb.Prepare(tx.Hash(), i)
-		receipt, err := applyTransaction(msg, p.config, p.bc, nil, gp, statedb, blockNumber, blockHash, tx, usedGas, vmenv)
-		if err != nil {
-			return nil, nil, 0, fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
-		}
-		receipts = append(receipts, receipt)
-		allLogs = append(allLogs, receipt.Logs...)
+	signer := types.MakeSigner(p.config, header.Number)
+	txnList := block.Transactions()
+	receipts, allLogs, _, _, err = ProcessTransactions(p.config, p.bc, gp, statedb, header, &txnList, usedGas, cfg, &signer, ProcessModeInsertChain)
+	if err != nil {
+		return nil, nil, 0, err
 	}
+
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
 	err = p.engine.Finalize(p.bc, header, statedb, block.Transactions(), receipts, "StateProcessor.Process")
 	if err != nil {
@@ -175,10 +161,20 @@ func applyTransaction(msg types.Message, config *params.ChainConfig, bc ChainCon
 // and uses the input parameters for its environment. It returns the receipt
 // for the transaction, gas used and an error if the transaction failed,
 // indicating the block was invalid.
-func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *common.Address, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction,
-	usedGas *uint64, cfg vm.Config, isGasExemptTxn bool) (*types.Receipt, error) {
+func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, statedb *state.StateDB, header *types.Header, tx *types.Transaction,
+	usedGas *uint64, cfg vm.Config, signer *types.Signer) (*types.Receipt, error) {
 	if bc == nil {
 		return nil, errors.New("ChainContext is nil")
+	}
+
+	isGasExemptTxn := false
+
+	if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) == true {
+		isGasExempt, err := conversionutil.IsGasExemptTxn(tx, *signer)
+		if err == nil && isGasExempt {
+			log.Info("commitTransaction GasExemptTxn", "txn", tx.Hash())
+			isGasExemptTxn = true
+		}
 	}
 
 	msg, err := tx.AsMessage(types.MakeSigner(config, header.Number))
@@ -198,4 +194,78 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, author *commo
 	blockContext := NewEVMBlockContext(header, bc, nil)
 	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, config, vmConfig)
 	return applyTransaction(msg, config, bc, nil, gp, statedb, header.Number, header.Hash(), tx, usedGas, vmenv)
+}
+
+func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPool, statedb *state.StateDB, header *types.Header, txList *types.Transactions,
+	usedGas *uint64, cfg vm.Config, signer *types.Signer, processMode ProcessMode) (receipts []*types.Receipt, logs []*types.Log,
+	passedTransactions types.Transactions, failedTransactions types.Transactions, err error) {
+	receipts = make([]*types.Receipt, 0)
+	logs = make([]*types.Log, 0)
+
+	count := 0
+	for i, tx := range *txList {
+		if gp.Gas() < params.TxGas {
+			log.Info("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
+			if processMode == ProcessModeWorker {
+				break
+			}
+			//if ProcessModeInsertChain, this is unexpected
+			return nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
+		}
+
+		if tx.Protected() && !config.IsEIP155(header.Number) {
+			if processMode == ProcessModeInsertChain {
+				return nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
+			}
+			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", config.EIP155Block)
+			continue
+		}
+		from, err := types.Sender(*signer, tx)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		statedb.Prepare(tx.Hash(), count)
+		snap := statedb.Snapshot()
+		receipt, err := ApplyTransaction(config, bc, gp, statedb, header, tx, usedGas, cfg, signer)
+
+		if err != nil {
+			if processMode == ProcessModeInsertChain {
+				errOut := fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
+				return nil, nil, nil, nil, errOut
+			} else {
+				statedb.RevertToSnapshot(snap)
+				failedTransactions = append(failedTransactions, tx)
+				switch {
+				case errors.Is(err, ErrGasLimitReached):
+					// Pop the current out-of-gas transaction without shifting in the next from the account
+					log.Trace("Gas limit exceeded for current block", "sender", from)
+
+				case errors.Is(err, ErrNonceTooLow):
+					// New head notification data race between the transaction pool and miner, shift
+					log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+
+				case errors.Is(err, ErrNonceTooHigh):
+					// Reorg notification data race between the transaction pool and miner, skip account =
+					log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
+
+				case errors.Is(err, ErrTxTypeNotSupported):
+					// Pop the unsupported transaction without shifting in the next from the account
+					log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+
+				default:
+					// Strange error, discard the transaction and get the next in line (note, the
+					// nonce-too-high clause will prevent us from executing in vain).
+					log.Trace("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+				}
+			}
+			continue
+		}
+		count = count + 1
+		receipts = append(receipts, receipt)
+		logs = append(logs, receipt.Logs...)
+		passedTransactions = append(passedTransactions, tx)
+	}
+
+	return receipts, logs, passedTransactions, failedTransactions, nil
 }
