@@ -26,11 +26,14 @@ import (
 )
 
 func TestChainId(t *testing.T) {
-	key, _ := defaultTestKey()
+	key, _, err := defaultTestKey()
+	if err != nil {
+		t.Fatalf(err.Error())
+		return
+	}
 
 	tx := NewTransaction(0, common.Address{}, new(big.Int), 0, new(big.Int), nil)
-
-	var err error
+	
 	tx, err = SignTx(tx, NewLondonSigner(big.NewInt(DEFAULT_CHAIN_ID)), key)
 	if err != nil {
 		t.Fatal(err)
