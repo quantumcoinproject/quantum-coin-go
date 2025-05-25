@@ -55,7 +55,6 @@ import (
 const (
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
-	extraDataBaseLen   = 4002
 )
 
 // ProofOfStake proof-of-authority protocol constants.
@@ -409,9 +408,9 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 		return consensus.ErrFutureBlock
 	}
 
-	// Check that the extra-data contains both the vanity and signature
-	if len(header.Extra) < extraVanity {
-		return errMissingVanity
+	_, err := VerifyExtraData(header)
+	if err != nil {
+		return err
 	}
 
 	// Ensure that the mix digest is zero as we don't have fork protection currently
@@ -961,7 +960,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	copy(header.UnhashedConsensusData, data)
 
 	//Extra data
-	if header.Number.Uint64() >= ExtraDataStartBlock {
+	if header.Number.Uint64() > ExtraDataStartBlock {
 		extraData, err := EncodeBlockExtraData(skippedTransactions, errorTransactions, header.Extra)
 		if err != nil {
 			return nil, err
