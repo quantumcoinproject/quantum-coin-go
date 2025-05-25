@@ -322,7 +322,8 @@ func (c *Mock) VerifyBlock(chain consensus.ChainHeaderReader, block *types.Block
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt, source string) error {
+func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
+	passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions, source string) error {
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
@@ -330,7 +331,7 @@ func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 }
 
 func (c *Mock) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssemble")
+	err := c.Finalize(chain, header, state, txs, receipts, nil, nil, nil, "FinalizeAndAssemble")
 	if err != nil {
 		return nil, err
 	}
@@ -344,14 +345,14 @@ func (c *Mock) ShouldFreezeTransactions(chain consensus.ChainHeaderReader, heade
 }
 
 func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
-	skippedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
+	passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
 		return nil, errUnknownBlock
 	}
 
-	err := c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssembleWithConsensus")
+	err := c.Finalize(chain, header, state, txs, receipts, passedTransactions, skippedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
 	if err != nil {
 		return nil, err
 	}

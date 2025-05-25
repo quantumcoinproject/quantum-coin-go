@@ -22,6 +22,7 @@ import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"io"
 	"math/big"
 	"runtime/debug"
@@ -345,6 +346,24 @@ func (s Transactions) Len() int { return len(s) }
 func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	tx := s[i]
 	tx.encodeTyped(w)
+}
+
+func (s Transactions) IsEqualTo(other Transactions) bool {
+	if len(s) != len(other) {
+		log.Warn("transactions are not equal", "s len", len(s), "other len", len(other))
+		return false
+	}
+
+	for i, _ := range other {
+		hashA := s[i].Hash()
+		hashB := other[i].Hash()
+		if hashA.IsEqualTo(hashB) == false {
+			log.Warn("transactions are not equal", "i", i, "hashA", hashA.Hex(), "hashB", hashB.Hex())
+			return false
+		}
+	}
+
+	return true
 }
 
 // TxDifference returns a new set which is the difference between a and b.

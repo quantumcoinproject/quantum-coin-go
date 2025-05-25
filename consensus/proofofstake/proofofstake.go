@@ -656,7 +656,8 @@ func (c *ProofOfStake) Convert(header *types.Header, state *state.StateDB, txn *
 }
 
 // Finalize implements consensus.Engine
-func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt, source string) error {
+func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
+	passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions, source string) error {
 	if txs == nil {
 		txs = make([]*types.Transaction, 0)
 	} else {
@@ -687,6 +688,11 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	blockConsensusData := &BlockConsensusData{}
 	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
+	if err != nil {
+		return err
+	}
+
+	err = c.verifyTransactions(header, txs, blockConsensusData, passedTransactions, skippedTransactions, errorTransactions)
 	if err != nil {
 		return err
 	}
@@ -910,7 +916,7 @@ func burn(state *state.StateDB, burnAmount *big.Int) {
 }
 
 func (c *ProofOfStake) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssemble")
+	err := c.Finalize(chain, header, state, txs, receipts, nil, nil, nil, "FinalizeAndAssemble")
 	if err != nil {
 		return nil, err
 	}
@@ -920,7 +926,7 @@ func (c *ProofOfStake) FinalizeAndAssemble(chain consensus.ChainHeaderReader, he
 }
 
 func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
-	skippedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
+	passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -969,7 +975,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 		copy(header.Extra, extraData)
 	}
 
-	err = c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssembleWithConsensus")
+	err = c.Finalize(chain, header, state, txs, receipts, passedTransactions, skippedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
 	if err != nil {
 		return nil, err
 	}
@@ -1050,6 +1056,110 @@ func (c *ProofOfStake) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 
 func (c *ProofOfStake) GetConsensusPacketHandler() *ConsensusHandler {
 	return c.consensusHandler
+}
+
+func MakeMap(transactions types.Transactions) (map[common.Hash]bool, error) {
+	m := make(map[common.Hash]bool)
+	for _, tx := range transactions {
+		_, ok := m[tx.Hash()]
+		if ok {
+			log.Error("MakeMap Duplicate transaction", "hash", tx.Hash())
+			return nil, errors.New("duplicate transaction")
+		}
+		m[tx.Hash()] = true
+	}
+	return m, nil
+}
+
+func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*types.Transaction, blockConsensusData *BlockConsensusData, passedTransactions types.Transactions,
+	skippedTransactions types.Transactions, errorTransactions types.Transactions) error {
+	if header.Number.Uint64() < ExtraDataStartBlock {
+		//todo: verify
+		return nil
+	}
+
+	actualTxnCount := len(passedTransactions) + len(skippedTransactions) + len(errorTransactions)
+	if len(blockConsensusData.SelectedTransactions) != actualTxnCount {
+		log.Error("verifyTransactions wrong number of transactions",
+			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
+			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions))
+		return errors.New("wrong number of transactions")
+	}
+
+	blockTransactions := types.Transactions(transactions)
+
+	if blockTransactions.IsEqualTo(passedTransactions) == false {
+		return errors.New("wrong number of passed transactions")
+	}
+
+	blockExtraData, err := DecodeBlockExtraData(header.Extra)
+	if err != nil {
+		return err
+	}
+
+	if skippedTransactions.IsEqualTo(blockExtraData.SkippedTransactions) {
+		return errors.New("wrong number of skipped transactions")
+	}
+
+	if errorTransactions.IsEqualTo(blockExtraData.ErrorTransactions) {
+		return errors.New("wrong number of error transactions")
+	}
+
+	selectTxnMap := make(map[common.Hash]bool)
+	for _, t := range blockConsensusData.SelectedTransactions {
+		_, ok := selectTxnMap[t]
+		if ok {
+			log.Error("verifyTransactions selected txn duplicate", "txn", t)
+			return errors.New("duplicated transaction found")
+		}
+		selectTxnMap[t] = true
+	}
+
+	passedTxnMap, err := MakeMap(blockTransactions)
+	if err != nil {
+		log.Error("verifyTransactions passedTxnMap error")
+		return err
+	}
+
+	skippedTxnMap, err := MakeMap(skippedTransactions)
+	if err != nil {
+		log.Error("verifyTransactions errorTxnMap error")
+		return err
+	}
+
+	errorTxnMap, err := MakeMap(errorTransactions)
+	if err != nil {
+		log.Error("verifyTransactions errorTxnMap error")
+		return err
+	}
+
+	for k, _ := range selectTxnMap {
+		foundCount := 0
+		_, ok1 := passedTxnMap[k]
+		if ok1 {
+			foundCount = foundCount + 1
+		}
+
+		_, ok2 := skippedTxnMap[k]
+		if ok2 {
+			foundCount = foundCount + 1
+		}
+
+		_, ok3 := errorTxnMap[k]
+		if ok3 {
+			foundCount = foundCount + 1
+		}
+
+		if foundCount == 0 {
+			log.Error("verifyTransactions couldn't find txn in passed or skipped or error txn list", "txn", k)
+			return errors.New("couldn't find txn in passed or skipped or error txn list")
+		} else if foundCount != 1 {
+			log.Error("verifyTransactions found multiple occurrences of txn", "txn", k, "foundCount", foundCount, "ok1", ok1, "ok2", ok2, "ok3", ok3)
+			return errors.New("verifyTransactions found multiple occurrences of txn")
+		}
+	}
+
+	return nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

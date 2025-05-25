@@ -73,6 +73,9 @@ func VerifyExtraData(header *types.Header) (*BlockExtraData, error) {
 			log.Error("VerifyExtraData b", "number", header.Number.Uint64(), "actual", common.Bytes2Hex(header.Extra), "expected", common.Bytes2Hex(DefaultExtraData))
 			return nil, errors.New("invalid ExtraData a")
 		}
+		if len(blockExtraData.ExtraData) != 0 {
+			return nil, errors.New("invalid ExtraData c")
+		}
 
 		//todo: further verification
 

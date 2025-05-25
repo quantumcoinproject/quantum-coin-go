@@ -88,6 +88,7 @@ type environment struct {
 	header     *types.Header
 	txs        []*types.Transaction
 	receipts   []*types.Receipt
+	passedTxs  []*types.Transaction
 	skippedTxs []*types.Transaction
 	errorTxs   []*types.Transaction
 	committed  bool
@@ -679,6 +680,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase com
 	w.current.tcount = len(passedTransactions)
 	w.current.txs = append(w.current.txs, passedTransactions...)
 	w.current.receipts = append(w.current.receipts, receipts...)
+	w.current.passedTxs = passedTransactions
 	w.current.errorTxs = errorTransactions
 	w.current.skippedTxs = skippedTransactions
 
@@ -867,7 +869,7 @@ func (w *worker) commit(interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
-	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts, w.current.skippedTxs, w.current.errorTxs)
+	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts, w.current.passedTxs, w.current.skippedTxs, w.current.errorTxs)
 	if err != nil {
 		log.Trace("commit2", "err", err)
 		return err

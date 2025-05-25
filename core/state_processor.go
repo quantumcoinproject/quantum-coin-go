@@ -89,13 +89,13 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	signer := types.MakeSigner(p.config, header.Number)
 	txnList := block.Transactions()
-	receipts, allLogs, _, _, _, err = ProcessTransactions(p.config, p.bc, gp, statedb, header, &txnList, usedGas, cfg, &signer, ProcessModeInsertChain)
+	receipts, allLogs, passedTransactions, skippedTransactions, errorTransactions, err := ProcessTransactions(p.config, p.bc, gp, statedb, header, &txnList, usedGas, cfg, &signer, ProcessModeInsertChain)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	err = p.engine.Finalize(p.bc, header, statedb, block.Transactions(), receipts, "StateProcessor.Process")
+	err = p.engine.Finalize(p.bc, header, statedb, block.Transactions(), receipts, passedTransactions, skippedTransactions, errorTransactions, "StateProcessor.Process")
 	if err != nil {
 		return nil, nil, 0, err
 	}
