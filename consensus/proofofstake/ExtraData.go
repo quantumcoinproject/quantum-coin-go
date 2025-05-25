@@ -14,6 +14,10 @@ type BlockExtraData struct {
 }
 
 func EncodeBlockExtraData(skippedTransactions types.Transactions, errorTransactions types.Transactions, currentExtraData []byte) ([]byte, error) {
+	if len(currentExtraData) != extraDataBaseLen {
+		log.Error("EncodeBlockExtraData", "extraData length invalid", len(currentExtraData))
+		return nil, errors.New("invalid ExtraData")
+	}
 	blockExtraData := BlockExtraData{
 		SkippedTransactions: skippedTransactions,
 		ExtraData:           make([]byte, 0),
