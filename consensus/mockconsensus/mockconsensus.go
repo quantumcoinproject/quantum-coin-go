@@ -27,12 +27,8 @@ import (
 )
 
 const (
-	checkpointInterval = 1024                   // Number of blocks after which to save the vote snapshot to the database
-	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
-	inmemorySignatures = 4096                   // Number of recent block signatures to keep in memory
-	wiggleTime         = 500 * time.Millisecond // Random delay (per validator) to allow concurrent signers
-
-	systemRewardPercent = 4 // it means 1/2^4 = 1/16 percentage of gas fee incoming will be distributed to system
+	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
+	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 )
 
 // Mock proof-of-authority protocol constants.
@@ -131,36 +127,6 @@ var (
 // SignerFn hashes and signs the data to be signed by a backing account.
 type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
 type SignerTxFn func(accounts.Account, *types.Transaction, *big.Int) (*types.Transaction, error)
-
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
-	// If the signature's already cached, return that
-	hash := header.Hash()
-	if address, known := sigcache.Get(hash); known {
-		return address.(common.Address), nil
-	}
-	// Retrieve the signature from the header extra-data
-	if len(header.Extra) < extraSeal {
-		return common.Address{}, errMissingSignature
-	}
-
-	signature := header.Extra[len(header.Extra)-extraSeal:]
-
-	// Recover the public key and the Ethereum address
-	if len(signature) == 0 {
-		panic("signature is empty")
-	}
-	pubkey, err := cryptobase.SigAlg.PublicKeyBytesFromSignature(SealHash(header).Bytes(), signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var validator common.Address
-	validator.CopyFrom(crypto.PublicKeyBytesToAddress(pubkey[:]))
-
-	//fmt.Println("validator", validator, "block", header.Number)
-	sigcache.Add(hash, validator)
-	return validator, nil
-}
 
 // Mock is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
@@ -96,12 +95,6 @@ type BlockConsensusData struct {
 type BlockAdditionalConsensusData struct {
 	ConsensusPackets []eth.ConsensusPacket `json:"consensusPackets" gencodec:"required"`
 	InitTime         uint64                `json:"initTime" gencodec:"required"`
-}
-
-type BlockExtraInformation struct {
-	SkippedTransactions types.Transactions `json:"skippedTransactions" gencodec:"required"`
-	ErrorTransactions   types.Transactions `json:"errorTransactions" gencodec:"required"`
-	ExtraData           []byte             `json:"extraData" gencodec:"required"`
 }
 
 // todo: use mono clock

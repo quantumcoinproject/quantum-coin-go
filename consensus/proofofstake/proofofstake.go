@@ -55,6 +55,7 @@ import (
 const (
 	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
 	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
+	extraDataBaseLen   = 4002
 )
 
 // ProofOfStake proof-of-authority protocol constants.
@@ -98,6 +99,8 @@ var (
 	OfflineValidatorDeferStartBlock = SlashV2StartBlock + 10
 
 	SixtySevenVoteStartBlock = uint64(OfflineValidatorDeferStartBlock + 10)
+
+	ExtraDataStartBlock = uint64(3000000)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -405,14 +408,11 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
-	// Checkpoint blocks need to enforce zero beneficiary
 
 	// Check that the extra-data contains both the vanity and signature
 	if len(header.Extra) < extraVanity {
 		return errMissingVanity
 	}
-
-	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
 
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
@@ -426,10 +426,20 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 		}
 	}
 	// Verify that the gas limit is <= 2^63-1
-	cap := uint64(0x7fffffffffffffff)
-	if header.GasLimit > cap {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
+	gasCap := uint64(0x7fffffffffffffff)
+	if header.GasLimit > gasCap {
+		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, gasCap)
 	} // If all checks passed, validate any special fields for hard forks
+
+	//Extra data
+	if header.Number.Uint64() >= ExtraDataStartBlock {
+		blockExtraData, err := DecodeBlockExtraData(header.Extra)
+		if err != nil {
+			return err
+		}
+		//todo: verify blockExtraData
+		log.Debug("blockExtraData", "decoded", len(blockExtraData.ExtraData))
+	}
 
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
@@ -480,13 +490,13 @@ func (c *ProofOfStake) verifySeal(chain consensus.ChainHeaderReader, header *typ
 	}
 
 	blockConsensusData := &BlockConsensusData{}
-	err := rlp.DecodeBytes(header.ConsensusData, &blockConsensusData)
+	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
 		return err
 	}
 
 	blockAdditionalConsensusData := &BlockAdditionalConsensusData{}
-	err = rlp.DecodeBytes(header.UnhashedConsensusData, &blockAdditionalConsensusData)
+	err = rlp.DecodeBytes(header.UnhashedConsensusData, blockAdditionalConsensusData)
 	if err != nil {
 		return err
 	}
@@ -677,7 +687,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	}
 
 	blockConsensusData := &BlockConsensusData{}
-	err := rlp.DecodeBytes(header.ConsensusData, &blockConsensusData)
+	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
 		return err
 	}
@@ -853,7 +863,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	log.Info("Finalize Block", "root", header.Root, "hash", header.Hash(), "number", header.Number, "txn count", len(txs), "source", source)
+	log.Info("Finalize Block", "root", header.Root, "hash", header.Hash(), "number", header.Number, "txn count", len(txs), "source", source, "extraDataLen", len(header.Extra))
 
 	return nil
 }
@@ -949,6 +959,16 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	}
 	header.UnhashedConsensusData = make([]byte, len(data))
 	copy(header.UnhashedConsensusData, data)
+
+	//Extra data
+	if header.Number.Uint64() >= ExtraDataStartBlock {
+		extraData, err := EncodeBlockExtraData(skippedTransactions, errorTransactions, header.Extra)
+		if err != nil {
+			return nil, err
+		}
+		header.Extra = make([]byte, len(extraData))
+		copy(header.Extra, extraData)
+	}
 
 	err = c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssembleWithConsensus")
 	if err != nil {

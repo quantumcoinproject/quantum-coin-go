@@ -343,7 +343,7 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 
 	header := block.Header()
 
-	err := rlp.DecodeBytes(header.ConsensusData, &blockConsensusData)
+	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
 		log.Error("pos ParseRewardsInfo", "error", err, "len", len(header.ConsensusData))
 		return nil, err
@@ -419,7 +419,7 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 		return nil, errUnknownBlock
 	}
 
-	err = rlp.DecodeBytes(header.ConsensusData, &blockConsensusData)
+	err = rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
 		return nil, err
 	}
