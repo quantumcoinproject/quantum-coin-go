@@ -89,7 +89,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	signer := types.MakeSigner(p.config, header.Number)
 	txnList := block.Transactions()
-	receipts, allLogs, _, _, err = ProcessTransactions(p.config, p.bc, gp, statedb, header, &txnList, usedGas, cfg, &signer, ProcessModeInsertChain)
+	receipts, allLogs, _, _, _, err = ProcessTransactions(p.config, p.bc, gp, statedb, header, &txnList, usedGas, cfg, &signer, ProcessModeInsertChain)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -198,31 +198,33 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, 
 
 func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPool, statedb *state.StateDB, header *types.Header, txList *types.Transactions,
 	usedGas *uint64, cfg vm.Config, signer *types.Signer, processMode ProcessMode) (receipts []*types.Receipt, logs []*types.Log,
-	passedTransactions types.Transactions, failedTransactions types.Transactions, err error) {
+	passedTransactions types.Transactions, failedTransactions types.Transactions, skippedTransactions types.Transactions, err error) {
 	receipts = make([]*types.Receipt, 0)
 	logs = make([]*types.Log, 0)
 
 	count := 0
 	for i, tx := range *txList {
 		if gp.Gas() < params.TxGas {
-			log.Info("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
+			log.Debug("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
 			if processMode == ProcessModeWorker {
-				break
+				skippedTransactions = append(skippedTransactions, tx)
+				continue
 			}
 			//if ProcessModeInsertChain, this is unexpected
-			return nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
+			return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
 		}
 
 		if tx.Protected() && !config.IsEIP155(header.Number) {
 			if processMode == ProcessModeInsertChain {
-				return nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
+				return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
 			}
+			skippedTransactions = append(skippedTransactions, tx)
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", config.EIP155Block)
 			continue
 		}
 		from, err := types.Sender(*signer, tx)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return nil, nil, nil, nil, nil, err
 		}
 
 		statedb.Prepare(tx.Hash(), count)
@@ -232,7 +234,7 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		if err != nil {
 			if processMode == ProcessModeInsertChain {
 				errOut := fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
-				return nil, nil, nil, nil, errOut
+				return nil, nil, nil, nil, nil, errOut
 			} else {
 				statedb.RevertToSnapshot(snap)
 				failedTransactions = append(failedTransactions, tx)
@@ -267,5 +269,5 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		passedTransactions = append(passedTransactions, tx)
 	}
 
-	return receipts, logs, passedTransactions, failedTransactions, nil
+	return receipts, logs, passedTransactions, failedTransactions, skippedTransactions, nil
 }

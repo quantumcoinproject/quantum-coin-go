@@ -668,7 +668,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase com
 
 	var coalescedLogs []*types.Log
 	txnList := createTransactionList(txs)
-	receipts, coalescedLogs, passedTransactions, _, err := core.ProcessTransactions(w.chainConfig, w.chain, w.current.gasPool, w.current.state, w.current.header,
+	receipts, coalescedLogs, passedTransactions, _, _, err := core.ProcessTransactions(w.chainConfig, w.chain, w.current.gasPool, w.current.state, w.current.header,
 		&txnList, &w.current.header.GasUsed, *w.chain.GetVMConfig(), &w.current.signer, core.ProcessModeWorker)
 	if err != nil {
 		log.Error("ProcessTransactions", "error", err)
