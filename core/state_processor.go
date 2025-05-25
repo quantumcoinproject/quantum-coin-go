@@ -198,7 +198,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, 
 
 func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPool, statedb *state.StateDB, header *types.Header, txList *types.Transactions,
 	usedGas *uint64, cfg vm.Config, signer *types.Signer, processMode ProcessMode) (receipts []*types.Receipt, logs []*types.Log,
-	passedTransactions types.Transactions, failedTransactions types.Transactions, skippedTransactions types.Transactions, err error) {
+	passedTransactions types.Transactions, errorTransactions types.Transactions, skippedTransactions types.Transactions, err error) {
 	receipts = make([]*types.Receipt, 0)
 	logs = make([]*types.Log, 0)
 
@@ -237,7 +237,7 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 				return nil, nil, nil, nil, nil, errOut
 			} else {
 				statedb.RevertToSnapshot(snap)
-				failedTransactions = append(failedTransactions, tx)
+				errorTransactions = append(errorTransactions, tx)
 				switch {
 				case errors.Is(err, ErrGasLimitReached):
 					// Pop the current out-of-gas transaction without shifting in the next from the account
@@ -269,5 +269,5 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		passedTransactions = append(passedTransactions, tx)
 	}
 
-	return receipts, logs, passedTransactions, failedTransactions, skippedTransactions, nil
+	return receipts, logs, passedTransactions, errorTransactions, skippedTransactions, nil
 }

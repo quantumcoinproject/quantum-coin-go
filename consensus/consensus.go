@@ -108,7 +108,7 @@ type Engine interface {
 		receipts []*types.Receipt) (*types.Block, error)
 
 	FinalizeAndAssembleWithConsensus(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-		receipts []*types.Receipt) (*types.Block, error)
+		receipts []*types.Receipt, skippedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.

@@ -85,10 +85,12 @@ type environment struct {
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
 
-	header    *types.Header
-	txs       []*types.Transaction
-	receipts  []*types.Receipt
-	committed bool
+	header     *types.Header
+	txs        []*types.Transaction
+	receipts   []*types.Receipt
+	skippedTxs []*types.Transaction
+	errorTxs   []*types.Transaction
+	committed  bool
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -668,7 +670,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase com
 
 	var coalescedLogs []*types.Log
 	txnList := createTransactionList(txs)
-	receipts, coalescedLogs, passedTransactions, _, _, err := core.ProcessTransactions(w.chainConfig, w.chain, w.current.gasPool, w.current.state, w.current.header,
+	receipts, coalescedLogs, passedTransactions, errorTransactions, skippedTransactions, err := core.ProcessTransactions(w.chainConfig, w.chain, w.current.gasPool, w.current.state, w.current.header,
 		&txnList, &w.current.header.GasUsed, *w.chain.GetVMConfig(), &w.current.signer, core.ProcessModeWorker)
 	if err != nil {
 		log.Error("ProcessTransactions", "error", err)
@@ -677,6 +679,8 @@ func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase com
 	w.current.tcount = len(passedTransactions)
 	w.current.txs = append(w.current.txs, passedTransactions...)
 	w.current.receipts = append(w.current.receipts, receipts...)
+	w.current.errorTxs = errorTransactions
+	w.current.skippedTxs = skippedTransactions
 
 	log.Trace("commitTransactions7")
 	if !w.isRunning() && len(coalescedLogs) > 0 {
@@ -863,7 +867,7 @@ func (w *worker) commit(interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
-	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts)
+	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts, w.current.skippedTxs, w.current.errorTxs)
 	if err != nil {
 		log.Trace("commit2", "err", err)
 		return err
