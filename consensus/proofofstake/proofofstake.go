@@ -444,7 +444,7 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 	}
 
 	/*//Extra data
-	if header.Number.Uint64() >= core.ExtraDataStartBlock {
+	if header.Number.Uint64() >= core.DeepCheckStartBlock {
 		blockExtraData, err := DecodeBlockExtraData(header.Extra)
 		if err != nil {
 			return err
@@ -979,7 +979,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	copy(header.UnhashedConsensusData, data)
 
 	//Extra data
-	if header.Number.Uint64() >= core.ExtraDataStartBlock {
+	if header.Number.Uint64() >= core.DeepCheckStartBlock {
 		extraData, err := EncodeBlockExtraData(skippedTransactions, errorTransactions, header.Extra)
 		if err != nil {
 			return nil, err
@@ -1086,7 +1086,7 @@ func MakeMap(transactions types.Transactions) (map[common.Hash]bool, error) {
 
 func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*types.Transaction, blockConsensusData *BlockConsensusData, passedTransactions types.Transactions,
 	skippedTransactions types.Transactions, errorTransactions types.Transactions) error {
-	if header.Number.Uint64() < core.ExtraDataStartBlock {
+	if header.Number.Uint64() < core.DeepCheckStartBlock {
 		//todo: verify
 		return nil
 	}

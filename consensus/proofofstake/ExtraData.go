@@ -59,7 +59,7 @@ func DecodeBlockExtraData(extraData []byte) (*BlockExtraData, error) {
 }
 
 func VerifyExtraData(header *types.Header) (*BlockExtraData, error) {
-	if header.Number.Uint64() < core.ExtraDataStartBlock {
+	if header.Number.Uint64() < core.DeepCheckStartBlock {
 		if bytes.Compare(header.Extra, DefaultExtraData) != 0 {
 			log.Error("VerifyExtraData a", "number", header.Number.Uint64(), "actual", common.Bytes2Hex(header.Extra), "expected", common.Bytes2Hex(DefaultExtraData))
 			return nil, errors.New("invalid ExtraData a")

@@ -836,7 +836,7 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 			return errors.New("block not ready to be sealed")
 		}
 
-		if header.Number.Uint64() < core.ExtraDataStartBlock {
+		if header.Number.Uint64() < core.DeepCheckStartBlock {
 			txsByNonce, _, err := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
 			if err != nil {
 				return err

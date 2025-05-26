@@ -57,11 +57,12 @@ func NewStateProcessor(config *params.ChainConfig, bc *BlockChain, engine consen
 type ProcessMode byte
 
 const (
-	ProcessModeWorker      ProcessMode = 1
-	ProcessModeInsertChain ProcessMode = 2
+	ProcessModeWorker                     ProcessMode = 1
+	ProcessModeInsertChainReturnOnError   ProcessMode = 2
+	ProcessModeInsertChainNoReturnOnError ProcessMode = 3
 )
 
-const ExtraDataStartBlock = uint64(3000000)
+const DeepCheckStartBlock = uint64(3000000)
 const DefaultGasLimit = 300000000
 
 // Process processes the state changes according to the Ethereum rules by running
@@ -89,10 +90,18 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		misc.ApplyDAOHardFork(statedb)
 	}
 
+	var processMode ProcessMode
+	if header.Number.Uint64() < DeepCheckStartBlock {
+		processMode = ProcessModeInsertChainReturnOnError
+	} else {
+		processMode = ProcessModeInsertChainNoReturnOnError
+	}
+
 	// Iterate over and process the individual transactions
 	signer := types.MakeSigner(p.config, header.Number)
 	txnList := block.Transactions()
-	receipts, allLogs, passedTransactions, skippedTransactions, errorTransactions, err := ProcessTransactions(p.config, p.bc, gp, statedb, header, &txnList, usedGas, cfg, &signer, ProcessModeInsertChain)
+	receipts, allLogs, passedTransactions, skippedTransactions, errorTransactions, err := ProcessTransactions(p.config, p.bc, gp, statedb, header,
+		&txnList, usedGas, cfg, &signer, processMode)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -206,6 +215,9 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 	logs = make([]*types.Log, 0)
 
 	if len(*txList) == 0 {
+		if header.GasUsed != 0 {
+			return nil, nil, nil, nil, nil, errors.New("GasUsed is invalid")
+		}
 		return receipts, logs, passedTransactions, errorTransactions, skippedTransactions, nil
 	}
 
@@ -228,16 +240,15 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 
 		if gp.Gas() < params.TxGas {
 			log.Debug("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
-			if processMode == ProcessModeWorker {
-				skippedTransactions = append(skippedTransactions, tx)
-				continue
+			if processMode == ProcessModeInsertChainReturnOnError {
+				return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
 			}
-			//if ProcessModeInsertChain, this is unexpected
-			return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
+			skippedTransactions = append(skippedTransactions, tx)
+			continue
 		}
 
 		if tx.Protected() && !config.IsEIP155(header.Number) {
-			if processMode == ProcessModeInsertChain {
+			if processMode == ProcessModeInsertChainReturnOnError {
 				return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
 			}
 			skippedTransactions = append(skippedTransactions, tx)
@@ -254,11 +265,13 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		receipt, err := ApplyTransaction(config, bc, gp, statedb, header, tx, usedGas, cfg, signer)
 
 		if err != nil {
-			if processMode == ProcessModeInsertChain {
+			if processMode == ProcessModeInsertChainReturnOnError {
 				errOut := fmt.Errorf("could not apply tx [%v]: %w", tx.Hash().Hex(), err)
 				return nil, nil, nil, nil, nil, errOut
 			} else {
-				statedb.RevertToSnapshot(snap)
+				if processMode == ProcessModeWorker {
+					statedb.RevertToSnapshot(snap)
+				}
 				errorTransactions = append(errorTransactions, tx)
 				switch {
 				case errors.Is(err, ErrGasLimitReached):
