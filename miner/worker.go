@@ -195,7 +195,7 @@ type worker struct {
 
 	currentBlockPhase int32
 
-	selectedTransactions                *types.TransactionsByNonce
+	selectedTransactions                types.Transactions
 	contextParentHash                   common.Hash
 	frozenTransactionsContextParentHash common.Hash
 	frozenTransactions                  *map[common.Address]types.Transactions
@@ -654,7 +654,7 @@ func createTransactionList(txs *types.TransactionsByNonce) types.Transactions {
 	return txnList
 }
 
-func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase common.Address, interrupt *int32) (bool, error) {
+func (w *worker) commitTransactions(coinbase common.Address, interrupt *int32) (bool, error) {
 	log.Trace("commitTransactions1")
 	// Short circuit if current is nil
 	if w.current == nil {
@@ -670,9 +670,8 @@ func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase com
 	}
 
 	var coalescedLogs []*types.Log
-	txnList := createTransactionList(txs)
 	receipts, coalescedLogs, passedTransactions, errorTransactions, skippedTransactions, err := core.ProcessTransactions(w.chainConfig, w.chain, w.current.gasPool, w.current.state, w.current.header,
-		&txnList, &w.current.header.GasUsed, *w.chain.GetVMConfig(), &w.current.signer, core.ProcessModeWorker)
+		&w.selectedTransactions, &w.current.header.GasUsed, *w.chain.GetVMConfig(), &w.current.signer, core.ProcessModeWorker)
 	if err != nil {
 		log.Error("ProcessTransactions", "error", err)
 		return false, err
@@ -745,7 +744,6 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 			Number:     num.Add(num, common.Big1),
 			GasLimit:   w.config.GasFloor,
 			Extra:      w.extra,
-			//Time:       uint64(timestamp),
 		}
 		log.Trace("proposePhase", "Number", header.Number, "parent", parent.ParentHash())
 
@@ -838,23 +836,29 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 			return errors.New("block not ready to be sealed")
 		}
 
-		log.Trace("HandleTransactions ok 1", "Number", w.current.header.Number)
-		if selectedTxns == nil {
-			selectedTxns = make(map[common.Address]types.Transactions)
-		}
-		
-		txsByNonce, err := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
-		if err != nil {
-			return err
+		if header.Number.Uint64() < core.ExtraDataStartBlock {
+			txsByNonce, err := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
+			if err != nil {
+				return err
+			}
+			w.selectedTransactions = createTransactionList(txsByNonce)
+		} else {
+			log.Trace("HandleTransactions ok 1", "Number", w.current.header.Number)
+			w.selectedTransactions = make([]*types.Transaction, 0)
+
+			for _, txs := range selectedTxns {
+				for _, v := range txs {
+					w.selectedTransactions = append(w.selectedTransactions, v)
+				}
+			}
 		}
 
-		w.selectedTransactions = txsByNonce
 	} else {
 		log.Info("proposePhase else", "parentHash", parent.Hash(), "number", parent.NumberU64())
 	}
 
 	log.Trace("HandleTransactions ok 3")
-	commitResult, err := w.commitTransactions(w.selectedTransactions, w.coinbase, interrupt)
+	commitResult, err := w.commitTransactions(w.coinbase, interrupt)
 	if err != nil {
 		return err
 	}
