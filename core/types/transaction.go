@@ -447,7 +447,7 @@ type TransactionsByNonce struct {
 // NewTransactionsByNonce creates a transaction set that can retrieve transactions in a nonce-honouring way.
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, parentHash common.Hash) *TransactionsByNonce {
+func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, parentHash common.Hash) (*TransactionsByNonce, error) {
 	// Initialize a time based heap with the head transactions
 	heads := make(TxBySortPrefix, 0, len(txs))
 	for from, accTxs := range txs {
@@ -475,7 +475,10 @@ func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, 
 			delete(txs, from)
 			continue
 		}
-		acc, _ := Sender(signer, accTxs[0])
+		acc, err := Sender(signer, accTxs[0])
+		if err != nil {
+			return nil, err
+		}
 		sortPrefix := crypto.Keccak256(parentHash.Bytes(), acc.Bytes())
 		wrapped, err := NewWrapperTxn(accTxs[0], sortPrefix)
 		// Remove transaction if sender doesn't match from, or if wrapping fails.
@@ -497,7 +500,7 @@ func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, 
 	}
 	output.internalSort()
 	output.ResetCursor()
-	return output
+	return output, nil
 }
 
 func (t *TransactionsByNonce) GetList() []common.Hash {

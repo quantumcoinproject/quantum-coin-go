@@ -799,7 +799,10 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 		}
 
 		//Filter further (remove invalid nonces)
-		txsByNoncePreCheck := types.NewTransactionsByNonce(w.current.signer, pendingTxns, w.current.header.ParentHash)
+		txsByNoncePreCheck, err := types.NewTransactionsByNonce(w.current.signer, pendingTxns, w.current.header.ParentHash)
+		if err != nil {
+			return err
+		}
 		txnFilteredMap := txsByNoncePreCheck.GetMap()
 		if w.frozenTransactionsContextParentHash.IsEqualTo(w.current.header.ParentHash) == false {
 			w.frozenTransactions = nil
@@ -839,9 +842,11 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 		if selectedTxns == nil {
 			selectedTxns = make(map[common.Address]types.Transactions)
 		}
-
-		//log.Trace("pendingTxns txn address count", len(pendingTxns), "block", header.Number.Uint64())
-		txsByNonce := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
+		
+		txsByNonce, err := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
+		if err != nil {
+			return err
+		}
 
 		w.selectedTransactions = txsByNonce
 	} else {
