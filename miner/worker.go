@@ -797,7 +797,7 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 		}
 
 		//Filter further (remove invalid nonces)
-		txsByNoncePreCheck, err := types.NewTransactionsByNonce(w.current.signer, pendingTxns, w.current.header.ParentHash)
+		txsByNoncePreCheck, _, err := types.NewTransactionsByNonce(w.current.signer, pendingTxns, w.current.header.ParentHash)
 		if err != nil {
 			return err
 		}
@@ -837,13 +837,13 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 		}
 
 		if header.Number.Uint64() < core.ExtraDataStartBlock {
-			txsByNonce, err := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
+			txsByNonce, _, err := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
 			if err != nil {
 				return err
 			}
 			w.selectedTransactions = createTransactionList(txsByNonce)
 		} else {
-			log.Trace("HandleTransactions ok 1", "Number", w.current.header.Number)
+			log.Trace("updating selectedTransactions", "Number", w.current.header.Number)
 			w.selectedTransactions = make([]*types.Transaction, 0)
 
 			for _, txs := range selectedTxns {

@@ -246,7 +246,7 @@ func TestTransactionSort(t *testing.T) {
 	}
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	ok := txset.NextCursor()
@@ -300,7 +300,7 @@ func TestTransactionSortIncreasing(t *testing.T) {
 	}
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	ok := txset.NextCursor()
@@ -354,7 +354,7 @@ func TestTransactionSortDecreasing(t *testing.T) {
 	}
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	ok := txset.NextCursor()
@@ -412,7 +412,7 @@ func TestTransactionSortIncreaseDecrease(t *testing.T) {
 	}
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	ok := txset.NextCursor()
@@ -464,7 +464,7 @@ func TestTransactionSortSingle(t *testing.T) {
 	}
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	ok := txset.NextCursor()
@@ -517,7 +517,7 @@ func TestTransactionSortSingleAccount(t *testing.T) {
 	}
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	ok := txset.NextCursor()
@@ -546,7 +546,7 @@ func TestTransactionSortNoTxns(t *testing.T) {
 
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	overallCount := 0
@@ -605,7 +605,7 @@ func testTransactionNonceOrder_byCount(txnCount int, t *testing.T) {
 	}
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	ok := txset.NextCursor()
@@ -680,7 +680,7 @@ func testTransactionNonceOrder_skip_byCount(txnCount int, skipMap map[int]bool, 
 	}
 	// Sort the transactions and cross check the nonce ordering
 	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _ := NewTransactionsByNonce(signer, groups, parentHash)
+	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
 
 	count := 0
 	ok := txset.NextCursor()

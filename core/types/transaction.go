@@ -444,10 +444,46 @@ type TransactionsByNonce struct {
 	round            int
 }
 
+func flatten(txs map[common.Address]Transactions) Transactions {
+	var transactions Transactions
+	for _, txnList := range txs {
+		for i := 0; i < len(txnList); i++ {
+			transactions = append(transactions, txnList[i])
+		}
+	}
+
+	return transactions
+}
+
+func NewTransactionsByNonceFromList(signer Signer, txnList *Transactions, parentHash common.Hash) (*TransactionsByNonce, Transactions, error) {
+	var skippedTransactions Transactions
+	txs := make(map[common.Address]Transactions)
+	for _, txn := range *txnList {
+		from, err := Sender(signer, txn)
+		if err != nil {
+			skippedTransactions = append(skippedTransactions, txn)
+			continue
+		}
+		_, ok := txs[from]
+		if ok == false {
+			txs[from] = make(Transactions, 0)
+		}
+		txs[from] = append(txs[from], txn)
+	}
+	txnByNonce, skipped, err := NewTransactionsByNonce(signer, txs, parentHash)
+	if err != nil {
+		return nil, nil, err
+	}
+	skippedTransactions = append(skippedTransactions, skipped...)
+	return txnByNonce, skippedTransactions, nil
+}
+
 // NewTransactionsByNonce creates a transaction set that can retrieve transactions in a nonce-honouring way.
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, parentHash common.Hash) (*TransactionsByNonce, error) {
+func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, parentHash common.Hash) (*TransactionsByNonce, Transactions, error) {
+	before := flatten(txs)
+
 	// Initialize a time based heap with the head transactions
 	heads := make(TxBySortPrefix, 0, len(txs))
 	for from, accTxs := range txs {
@@ -477,7 +513,7 @@ func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, 
 		}
 		acc, err := Sender(signer, accTxs[0])
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		sortPrefix := crypto.Keccak256(parentHash.Bytes(), acc.Bytes())
 		wrapped, err := NewWrapperTxn(accTxs[0], sortPrefix)
@@ -500,7 +536,13 @@ func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, 
 	}
 	output.internalSort()
 	output.ResetCursor()
-	return output, nil
+
+	after := flatten(txs)
+	skippedTransactions := TxDifference(before, after)
+
+	log.Debug("NewTransactionsByNonce", "before txn count", len(before), "after txn count", len(after))
+
+	return output, skippedTransactions, nil
 }
 
 func (t *TransactionsByNonce) GetList() []common.Hash {

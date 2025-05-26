@@ -204,8 +204,94 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 	receipts = make([]*types.Receipt, 0)
 	logs = make([]*types.Log, 0)
 
+	if len(*txList) == 0 {
+		return receipts, logs, passedTransactions, errorTransactions, skippedTransactions, nil
+	}
+
+	txs, skipped, err := types.NewTransactionsByNonceFromList(*signer, txList, header.ParentHash)
+	if err != nil {
+		log.Error("ProcessTransactions NewTransactionsByNonceFromList error", "error", err)
+		return nil, nil, nil, nil, nil, err
+	}
+	skippedTransactions = append(skippedTransactions, skipped...)
+
+	hasRecords := txs.NextCursor()
 	count := 0
-	for i, tx := range *txList {
+
+	for {
+		if hasRecords == false {
+			log.Debug("ProcessTransactions loop done")
+			break
+		}
+		tx := txs.PeekCursor()
+
+		if gp.Gas() < params.TxGas {
+			log.Debug("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
+			if processMode == ProcessModeWorker {
+				skippedTransactions = append(skippedTransactions, tx)
+				continue
+			}
+			//if ProcessModeInsertChain, this is unexpected
+			return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
+		}
+
+		if tx.Protected() && !config.IsEIP155(header.Number) {
+			if processMode == ProcessModeInsertChain {
+				return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
+			}
+			skippedTransactions = append(skippedTransactions, tx)
+			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", config.EIP155Block)
+			continue
+		}
+		from, err := types.Sender(*signer, tx)
+		if err != nil {
+			return nil, nil, nil, nil, nil, err
+		}
+
+		statedb.Prepare(tx.Hash(), count)
+		snap := statedb.Snapshot()
+		receipt, err := ApplyTransaction(config, bc, gp, statedb, header, tx, usedGas, cfg, signer)
+
+		if err != nil {
+			if processMode == ProcessModeInsertChain {
+				errOut := fmt.Errorf("could not apply tx [%v]: %w", tx.Hash().Hex(), err)
+				return nil, nil, nil, nil, nil, errOut
+			} else {
+				statedb.RevertToSnapshot(snap)
+				errorTransactions = append(errorTransactions, tx)
+				switch {
+				case errors.Is(err, ErrGasLimitReached):
+					// Pop the current out-of-gas transaction without shifting in the next from the account
+					log.Trace("Gas limit exceeded for current block", "sender", from)
+
+				case errors.Is(err, ErrNonceTooLow):
+					// New head notification data race between the transaction pool and miner, shift
+					log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+
+				case errors.Is(err, ErrNonceTooHigh):
+					// Reorg notification data race between the transaction pool and miner, skip account =
+					log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
+
+				case errors.Is(err, ErrTxTypeNotSupported):
+					// Pop the unsupported transaction without shifting in the next from the account
+					log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+
+				default:
+					// Strange error, discard the transaction and get the next in line (note, the
+					// nonce-too-high clause will prevent us from executing in vain).
+					log.Trace("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+				}
+			}
+			continue
+		}
+		count = count + 1
+		receipts = append(receipts, receipt)
+		logs = append(logs, receipt.Logs...)
+		passedTransactions = append(passedTransactions, tx)
+		hasRecords = txs.NextCursor()
+	}
+
+	/*for i, tx := range *txList {
 		if gp.Gas() < params.TxGas {
 			log.Debug("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
 			if processMode == ProcessModeWorker {
@@ -269,7 +355,7 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		receipts = append(receipts, receipt)
 		logs = append(logs, receipt.Logs...)
 		passedTransactions = append(passedTransactions, tx)
-	}
+	}*/
 
 	return receipts, logs, passedTransactions, errorTransactions, skippedTransactions, nil
 }
