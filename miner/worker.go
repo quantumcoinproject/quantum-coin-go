@@ -662,7 +662,7 @@ func (w *worker) commitTransactions(coinbase common.Address, interrupt *int32) (
 		return true, nil
 	}
 
-	w.current.header.GasLimit = 300000000
+	w.current.header.GasLimit = core.DefaultGasLimit
 	gasLimit := w.current.header.GasLimit
 
 	if w.current.gasPool == nil {

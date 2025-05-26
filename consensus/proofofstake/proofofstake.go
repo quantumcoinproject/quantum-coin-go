@@ -116,8 +116,14 @@ var (
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 
-	// errInvalidDifficulty is returned if the difficulty of a block neither 1 or 2.
+	// errInvalidDifficulty is returned if the difficulty of a block is not the blockNumber
 	errInvalidDifficulty = errors.New("invalid difficulty")
+
+	errInvalidCoinbase = errors.New("invalid coinbase")
+
+	errInvalidNonce = errors.New("invalid nonce")
+
+	errInvalidGasLimit = errors.New("invalid gas limit")
 )
 
 // SignerFn hashes and signs the data to be signed by a backing account.
@@ -406,9 +412,12 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 		return consensus.ErrFutureBlock
 	}
 
-	_, err := VerifyExtraData(header)
-	if err != nil {
-		return err
+	if header.Coinbase.IsEqualTo(ZERO_ADDRESS) == false {
+		return errInvalidCoinbase
+	}
+
+	if header.Nonce.Uint64() != 0 {
+		return errInvalidNonce
 	}
 
 	// Ensure that the mix digest is zero as we don't have fork protection currently
@@ -423,12 +432,18 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 		}
 	}
 	// Verify that the gas limit is <= 2^63-1
-	gasCap := uint64(0x7fffffffffffffff)
-	if header.GasLimit > gasCap {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, gasCap)
-	} // If all checks passed, validate any special fields for hard forks
+	if header.GasLimit != core.DefaultGasLimit {
+		return errInvalidGasLimit
+	}
 
-	//Extra data
+	//GasUsed is checked in state_processor
+
+	_, err := VerifyExtraData(header)
+	if err != nil {
+		return err
+	}
+
+	/*//Extra data
 	if header.Number.Uint64() >= core.ExtraDataStartBlock {
 		blockExtraData, err := DecodeBlockExtraData(header.Extra)
 		if err != nil {
@@ -436,7 +451,7 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 		}
 		//todo: verify blockExtraData
 		log.Debug("blockExtraData", "decoded", len(blockExtraData.ExtraData))
-	}
+	}*/
 
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)

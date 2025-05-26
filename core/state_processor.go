@@ -62,6 +62,7 @@ const (
 )
 
 const ExtraDataStartBlock = uint64(3000000)
+const DefaultGasLimit = 300000000
 
 // Process processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb and applying any rewards to both
@@ -291,71 +292,10 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		hasRecords = txs.NextCursor()
 	}
 
-	/*for i, tx := range *txList {
-		if gp.Gas() < params.TxGas {
-			log.Debug("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
-			if processMode == ProcessModeWorker {
-				skippedTransactions = append(skippedTransactions, tx)
-				continue
-			}
-			//if ProcessModeInsertChain, this is unexpected
-			return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
-		}
-
-		if tx.Protected() && !config.IsEIP155(header.Number) {
-			if processMode == ProcessModeInsertChain {
-				return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
-			}
-			skippedTransactions = append(skippedTransactions, tx)
-			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", config.EIP155Block)
-			continue
-		}
-		from, err := types.Sender(*signer, tx)
-		if err != nil {
-			return nil, nil, nil, nil, nil, err
-		}
-
-		statedb.Prepare(tx.Hash(), count)
-		snap := statedb.Snapshot()
-		receipt, err := ApplyTransaction(config, bc, gp, statedb, header, tx, usedGas, cfg, signer)
-
-		if err != nil {
-			if processMode == ProcessModeInsertChain {
-				errOut := fmt.Errorf("could not apply tx %d [%v]: %w", i, tx.Hash().Hex(), err)
-				return nil, nil, nil, nil, nil, errOut
-			} else {
-				statedb.RevertToSnapshot(snap)
-				errorTransactions = append(errorTransactions, tx)
-				switch {
-				case errors.Is(err, ErrGasLimitReached):
-					// Pop the current out-of-gas transaction without shifting in the next from the account
-					log.Trace("Gas limit exceeded for current block", "sender", from)
-
-				case errors.Is(err, ErrNonceTooLow):
-					// New head notification data race between the transaction pool and miner, shift
-					log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
-
-				case errors.Is(err, ErrNonceTooHigh):
-					// Reorg notification data race between the transaction pool and miner, skip account =
-					log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
-
-				case errors.Is(err, ErrTxTypeNotSupported):
-					// Pop the unsupported transaction without shifting in the next from the account
-					log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
-
-				default:
-					// Strange error, discard the transaction and get the next in line (note, the
-					// nonce-too-high clause will prevent us from executing in vain).
-					log.Trace("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
-				}
-			}
-			continue
-		}
-		count = count + 1
-		receipts = append(receipts, receipt)
-		logs = append(logs, receipt.Logs...)
-		passedTransactions = append(passedTransactions, tx)
-	}*/
+	gasUsed := DefaultGasLimit - gp.Gas()
+	if header.GasUsed != gasUsed {
+		return nil, nil, nil, nil, nil, errors.New("gas limit exceeded")
+	}
 
 	return receipts, logs, passedTransactions, errorTransactions, skippedTransactions, nil
 }
