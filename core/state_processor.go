@@ -180,7 +180,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, 
 	}
 
 	isGasExemptTxn := false
-
+	
 	if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) == true {
 		isGasExempt, err := conversionutil.IsGasExemptTxn(tx, *signer)
 		if err == nil && isGasExempt {

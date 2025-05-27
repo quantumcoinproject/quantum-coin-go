@@ -2,6 +2,7 @@ package types
 
 import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"math/big"
 )
 
@@ -34,7 +35,7 @@ func (al AccessList) StorageKeys() int {
 	return sum
 }
 
-var GAS_TIER_DEFAULT_PRICE = big.NewInt(47619047619047600) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
+var GAS_TIER_DEFAULT_PRICE = big.NewInt(defaults.DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
 var GAS_TIER_2x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(2))
 var GAS_TIER_5x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(5))
 var GAS_TIER_10x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(10))

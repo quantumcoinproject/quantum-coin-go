@@ -24,6 +24,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
@@ -33,7 +34,7 @@ import (
 
 func TestTxnFee(t *testing.T) {
 
-	txnFeeTotal := common.SafeMulBigInt(big.NewInt(types.DEFAULT_PRICE), new(big.Int).SetUint64(21000))
+	txnFeeTotal := common.SafeMulBigInt(big.NewInt(defaults.DEFAULT_PRICE), new(big.Int).SetUint64(21000))
 	burnAmount, txnFeeRewards := calculateTxnFeeSplitCoins(txnFeeTotal)
 	log.Info("TestTxnFee1", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
 

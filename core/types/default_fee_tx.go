@@ -2,6 +2,7 @@ package types
 
 import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"math/big"
 )
 
@@ -31,8 +32,7 @@ func (al AccessList) StorageKeys() int {
 	return sum
 }
 
-var DEFAULT_PRICE = int64(47619047619047600)
-var GAS_TIER_DEFAULT_PRICE = big.NewInt(DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
+var GAS_TIER_DEFAULT_PRICE = big.NewInt(defaults.DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
 
 type DefaultFeeTx struct {
 	ChainID    *big.Int
