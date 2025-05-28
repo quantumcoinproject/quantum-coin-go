@@ -80,7 +80,7 @@ func (arg *TransactionArgs) context() []byte {
 // setDefaults fills in default values for unspecified tx fields.
 func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.GasPrice == nil {
-		return errors.New("GasPrice is nil")
+		args.GasPrice = types.GetDefaultGasPriceHexBig()
 	}
 	// After london, default to 1559 unless gasPrice is set
 	//head := b.CurrentHeader()

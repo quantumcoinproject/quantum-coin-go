@@ -35,10 +35,9 @@ func (al AccessList) StorageKeys() int {
 	return sum
 }
 
-var GAS_TIER_DEFAULT_PRICE = big.NewInt(defaults.DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
-var GAS_TIER_2x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(2))
-var GAS_TIER_5x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(5))
-var GAS_TIER_10x_PRICE = common.SafeMulBigInt(GAS_TIER_DEFAULT_PRICE, big.NewInt(10))
+func GetDefaultGasPrice() *big.Int {
+	return big.NewInt(defaults.DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
+}
 
 type DefaultFeeTx struct {
 	ChainID    *big.Int
@@ -120,19 +119,9 @@ func (tx *DefaultFeeTx) protected() bool        { return true }
 func (tx *DefaultFeeTx) accessList() AccessList { return tx.AccessList }
 func (tx *DefaultFeeTx) data() []byte           { return tx.Data }
 func (tx *DefaultFeeTx) gas() uint64            { return tx.Gas }
-func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GAS_TIER_DEFAULT_PRICE }
+func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GetDefaultGasPrice() }
 func (tx *DefaultFeeTx) gasPrice() *big.Int {
-	if tx.MaxGasTier == GAS_TIER_DEFAULT {
-		return GAS_TIER_DEFAULT_PRICE
-	} else if tx.MaxGasTier == GAS_TIER_2X {
-		return GAS_TIER_2x_PRICE
-	} else if tx.MaxGasTier == GAS_TIER_5X {
-		return GAS_TIER_5x_PRICE
-	} else if tx.MaxGasTier == GAS_TIER_10X {
-		return GAS_TIER_10x_PRICE
-	}
-
-	return GAS_TIER_DEFAULT_PRICE
+	return GetDefaultGasPrice()
 }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }

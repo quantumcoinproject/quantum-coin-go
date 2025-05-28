@@ -1590,7 +1590,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 
 	if args.GasPrice == nil {
 		log.Info("GasPrice is nil. Setting GasPrice to GAS_TIER_DEFAULT_PRICE")
-		args.GasPrice = (*hexutil.Big)(types.GAS_TIER_DEFAULT_PRICE)
+		args.GasPrice = types.GetDefaultGasPriceHexBig()
 	}
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {
