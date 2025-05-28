@@ -294,6 +294,7 @@ func (w *worker) pending() (*types.Block, *state.StateDB) {
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
 	if w.snapshotState == nil {
+		log.Warn("worker pending snapshotState is nil")
 		return nil, nil
 	}
 	return w.snapshotBlock, w.snapshotState.Copy()
