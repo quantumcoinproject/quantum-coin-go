@@ -904,18 +904,18 @@ func (p *Pending) Transactions(ctx context.Context) (*[]*Transaction, error) {
 func (p *Pending) Account(ctx context.Context, args struct {
 	Address common.Address
 }) *Account {
-	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	latestBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	return &Account{
 		backend:       p.backend,
 		address:       args.Address,
-		blockNrOrHash: pendingBlockNr,
+		blockNrOrHash: latestBlockNr,
 	}
 }
 
 func (p *Pending) Call(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (*CallResult, error) {
-	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	result, err := ethapi.DoCall(ctx, p.backend, args.Data, pendingBlockNr, nil, 5*time.Second, p.backend.RPCGasCap())
 	if err != nil {
 		return nil, err
@@ -935,7 +935,7 @@ func (p *Pending) Call(ctx context.Context, args struct {
 func (p *Pending) EstimateGas(ctx context.Context, args struct {
 	Data ethapi.TransactionArgs
 }) (Long, error) {
-	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	gas, err := ethapi.DoEstimateGas(ctx, p.backend, args.Data, pendingBlockNr, p.backend.RPCGasCap())
 	return Long(gas), err
 }

@@ -112,7 +112,7 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 			Data:       args.Data,
 			AccessList: args.AccessList,
 		}
-		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 		estimated, err := DoEstimateGas(ctx, b, callArgs, pendingBlockNr, b.RPCGasCap())
 		if err != nil {
 			return err
