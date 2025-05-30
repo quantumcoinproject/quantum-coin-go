@@ -462,6 +462,7 @@ func NewTransactionsByNonceFromList(signer Signer, txnList *Transactions, parent
 		from, err := Sender(signer, txn)
 		if err != nil {
 			skippedTransactions = append(skippedTransactions, txn)
+			log.Debug("NewTransactionsByNonceFromList", "error", err, "txn", txn.Hash().Hex(), "len skip", len(skippedTransactions))
 			continue
 		}
 		_, ok := txs[from]
@@ -472,6 +473,7 @@ func NewTransactionsByNonceFromList(signer Signer, txnList *Transactions, parent
 	}
 	txnByNonce, skipped, err := NewTransactionsByNonce(signer, txs, parentHash)
 	if err != nil {
+		log.Debug("NewTransactionsByNonceFromList NewTransactionsByNonce", "error", err, "skip count", len(skipped))
 		return nil, nil, err
 	}
 	skippedTransactions = append(skippedTransactions, skipped...)

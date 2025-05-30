@@ -4,6 +4,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
 )
 
@@ -113,7 +114,8 @@ func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
 func (tx *DefaultFeeTx) verifyFields() bool {
-	if tx.gasPrice() != GetDefaultGasPrice() {
+	if tx.gasPrice().Cmp(GetDefaultGasPrice()) != 0 {
+		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "GetDefaultGasPrice()", GetDefaultGasPrice())
 		return false
 	}
 	return len(tx.Remarks) <= MAX_REMARKS_LENGTH

@@ -180,7 +180,7 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, 
 	}
 
 	isGasExemptTxn := false
-	
+
 	if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) == true {
 		isGasExempt, err := conversionutil.IsGasExemptTxn(tx, *signer)
 		if err == nil && isGasExempt {
@@ -226,6 +226,7 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		log.Error("ProcessTransactions NewTransactionsByNonceFromList error", "error", err)
 		return nil, nil, nil, nil, nil, err
 	}
+	log.Debug("ProcessTransactions NewTransactionsByNonceFromList", "skipped count", len(skipped))
 	skippedTransactions = append(skippedTransactions, skipped...)
 
 	hasRecords := txs.NextCursor()
@@ -276,28 +277,29 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 				switch {
 				case errors.Is(err, ErrGasLimitReached):
 					// Pop the current out-of-gas transaction without shifting in the next from the account
-					log.Trace("Gas limit exceeded for current block", "sender", from)
+					log.Debug("Gas limit exceeded for current block", "sender", from)
 
 				case errors.Is(err, ErrNonceTooLow):
 					// New head notification data race between the transaction pool and miner, shift
-					log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+					log.Debug("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
 
 				case errors.Is(err, ErrNonceTooHigh):
 					// Reorg notification data race between the transaction pool and miner, skip account =
-					log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
+					log.Debug("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
 
 				case errors.Is(err, ErrTxTypeNotSupported):
 					// Pop the unsupported transaction without shifting in the next from the account
-					log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+					log.Debug("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
 
 				default:
 					// Strange error, discard the transaction and get the next in line (note, the
 					// nonce-too-high clause will prevent us from executing in vain).
-					log.Trace("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+					log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
 				}
 			}
 			continue
 		}
+		log.Debug("ProcessTransactions", "tx", tx.Hash().Hex(), "gp Gas", gp.Gas())
 		count = count + 1
 		receipts = append(receipts, receipt)
 		logs = append(logs, receipt.Logs...)
@@ -307,6 +309,9 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 
 	gasUsed := DefaultGasLimit - gp.Gas()
 	if header.GasUsed != gasUsed {
+		log.Error("ProcessTransactions() gas limit exceeded", "block", header.Number.Uint64(), "DefaultGasLimit", DefaultGasLimit,
+			"gasUsed", gasUsed, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas(), "block txn count", len(*txList),
+			"passed txn count", len(passedTransactions), "skipped txn count", len(skippedTransactions), "error txn count", len(errorTransactions))
 		return nil, nil, nil, nil, nil, errors.New("gas limit exceeded")
 	}
 
