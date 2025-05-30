@@ -542,7 +542,7 @@ func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, 
 	after := flatten(txs)
 	skippedTransactions := TxDifference(before, after)
 
-	log.Debug("NewTransactionsByNonce", "before txn count", len(before), "after txn count", len(after))
+	log.Info("NewTransactionsByNonce", "before txn count", len(before), "after txn count", len(after))
 
 	return output, skippedTransactions, nil
 }
