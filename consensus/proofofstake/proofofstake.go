@@ -942,7 +942,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 
 	//Extra data
 	if header.Number.Uint64() >= defaults.DeepCheckStartBlock {
-		extraData, err := EncodeBlockExtraData(skippedTransactions, errorTransactions, header.Extra)
+		extraData, err := EncodeBlockExtraData(skippedTransactions, errorTransactions, header.Extra, header.Number.Uint64())
 		if err != nil {
 			return nil, err
 		}

@@ -20,11 +20,19 @@ type BlockExtraData struct {
 	ExtraData           []byte             `json:"extraData" gencodec:"required"`
 }
 
-func EncodeBlockExtraData(skippedTransactions types.Transactions, errorTransactions types.Transactions, currentExtraData []byte) ([]byte, error) {
-	if len(currentExtraData) != len(DefaultExtraData) {
-		log.Error("EncodeBlockExtraData", "extraData length invalid", len(currentExtraData))
-		return nil, errors.New("invalid ExtraData")
+func EncodeBlockExtraData(skippedTransactions types.Transactions, errorTransactions types.Transactions, currentExtraData []byte, blockNumber uint64) ([]byte, error) {
+	if blockNumber < defaults.DeepCheckStartBlock {
+		if len(currentExtraData) != len(DefaultExtraData) {
+			log.Error("EncodeBlockExtraData a", "extraData length invalid", len(currentExtraData), "blockNumber", blockNumber)
+			return nil, errors.New("invalid ExtraData")
+		}
+	} else {
+		if len(currentExtraData) < len(DefaultExtraData) { //todo: deep check
+			log.Error("EncodeBlockExtraData b", "extraData length invalid", len(currentExtraData), blockNumber, blockNumber)
+			return nil, errors.New("invalid ExtraData")
+		}
 	}
+
 	blockExtraData := BlockExtraData{
 		SkippedTransactions: skippedTransactions,
 		ExtraData:           make([]byte, 0),
