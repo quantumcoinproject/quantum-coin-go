@@ -1210,7 +1210,7 @@ func (p *ProofOfStake) SetNilBlock(
 	method := staking.GetContract_Method_SetNilBlock()
 	abiData, err := p.GetStakingContractAbi()
 	if err != nil {
-		log.Error("SetNilBlock abi error", "err", err)
+		log.Error("SetNilBlock abi error", "err", err, "blockNumber", header.Number.Uint64())
 		return err
 	}
 	contractAddress := common.HexToAddress(staking.GetStakingContract_Address_String())

@@ -35,8 +35,8 @@ func EncodeBlockExtraData(skippedTransactions types.Transactions, errorTransacti
 
 	blockExtraData := BlockExtraData{
 		SkippedTransactions: skippedTransactions,
-		ExtraData:           make([]byte, 0),
 		ErrorTransactions:   errorTransactions,
+		ExtraData:           make([]byte, 0),
 	}
 
 	data, err := rlp.EncodeToBytes(&blockExtraData)
@@ -48,38 +48,40 @@ func EncodeBlockExtraData(skippedTransactions types.Transactions, errorTransacti
 	return append(currentExtraData, data...), nil
 }
 
-func DecodeBlockExtraData(extraData []byte) (*BlockExtraData, error) {
+func DecodeBlockExtraData(extraData []byte) (*BlockExtraData, []byte, error) {
 	if len(extraData) < len(DefaultExtraData)+1 {
 		log.Error("DecodeBlockExtraData", "extraData length invalid", len(extraData))
-		return nil, errors.New("invalid ExtraData")
+		return nil, nil, errors.New("invalid ExtraData")
 	}
 	blockExtraData := BlockExtraData{}
 
-	data := extraData[len(DefaultExtraData)+1:]
+	data := extraData[len(DefaultExtraData):]
 
 	err := rlp.DecodeBytes(data, &blockExtraData)
 	if err != nil {
 		log.Error("DecodeBlockExtraData", "error", err)
-		return nil, err
+		return nil, nil, err
 	}
 
-	return &blockExtraData, nil
+	origExtraData := extraData[:len(DefaultExtraData)]
+
+	return &blockExtraData, origExtraData, nil
 }
 
-func VerifyExtraData(header *types.Header) (*BlockExtraData, error) {
-	if header.Number.Uint64() < defaults.DeepCheckStartBlock {
-		if bytes.Compare(header.Extra, DefaultExtraData) != 0 {
-			log.Error("VerifyExtraData a", "number", header.Number.Uint64(), "actual", common.Bytes2Hex(header.Extra), "expected", common.Bytes2Hex(DefaultExtraData))
+func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, error) {
+	if blockNumber < defaults.DeepCheckStartBlock {
+		if bytes.Compare(extraData, DefaultExtraData) != 0 {
+			log.Error("VerifyExtraData a", "number", blockNumber, "actual", common.Bytes2Hex(extraData), "expected", common.Bytes2Hex(DefaultExtraData))
 			return nil, errors.New("invalid ExtraData a")
 		}
 		return nil, nil
 	} else {
-		blockExtraData, err := DecodeBlockExtraData(header.Extra)
+		blockExtraData, origExtraData, err := DecodeBlockExtraData(extraData)
 		if err != nil {
 			return nil, err
 		}
-		if bytes.Compare(header.Extra[:len(DefaultExtraData)+1], DefaultExtraData) != 0 {
-			log.Error("VerifyExtraData b", "number", header.Number.Uint64(), "actual", common.Bytes2Hex(header.Extra), "expected", common.Bytes2Hex(DefaultExtraData))
+		if bytes.Compare(origExtraData, DefaultExtraData) != 0 {
+			log.Error("VerifyExtraData b", "number", blockNumber, "actual", common.Bytes2Hex(extraData), "expected", common.Bytes2Hex(DefaultExtraData))
 			return nil, errors.New("invalid ExtraData a")
 		}
 		if len(blockExtraData.ExtraData) != 0 {

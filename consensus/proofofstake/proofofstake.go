@@ -399,7 +399,7 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 
 	//GasUsed is checked in state_processor
 
-	_, err := VerifyExtraData(header)
+	_, err := VerifyExtraData(number, header.Extra)
 	if err != nil {
 		return err
 	}
@@ -721,7 +721,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		for _, val := range blockConsensusData.SlashedBlockProposers {
 			err = c.SetNilBlock(val, state, header)
 			if err != nil {
-				log.Error("SetNilBlock err", "err", err)
+				log.Error("SetNilBlock err", "err", err, "blockNumber", header.Number.Uint64())
 				return err
 			}
 		}
@@ -1064,19 +1064,28 @@ func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*
 	blockTransactions := types.Transactions(transactions)
 
 	if blockTransactions.IsEqualTo(passedTransactions) == false {
+		log.Error("verifyTransactions passedTransactions IsEqualTo fail",
+			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
+			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions))
 		return errors.New("wrong number of passed transactions")
 	}
 
-	blockExtraData, err := DecodeBlockExtraData(header.Extra)
+	blockExtraData, _, err := DecodeBlockExtraData(header.Extra)
 	if err != nil {
 		return err
 	}
 
 	if skippedTransactions.IsEqualTo(blockExtraData.SkippedTransactions) {
+		log.Error("verifyTransactions skippedTransactions IsEqualTo fail",
+			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
+			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions))
 		return errors.New("wrong number of skipped transactions")
 	}
 
 	if errorTransactions.IsEqualTo(blockExtraData.ErrorTransactions) {
+		log.Error("verifyTransactions errorTransactions IsEqualTo fail",
+			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
+			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions))
 		return errors.New("wrong number of error transactions")
 	}
 
