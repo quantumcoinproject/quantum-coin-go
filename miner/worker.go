@@ -25,6 +25,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/state"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/event"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
@@ -837,7 +838,7 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 			return errors.New("block not ready to be sealed")
 		}
 
-		if header.Number.Uint64() < core.DeepCheckStartBlock {
+		if header.Number.Uint64() < defaults.DeepCheckStartBlock {
 			txsByNonce, _, err := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
 			if err != nil {
 				return err

@@ -9,6 +9,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
@@ -1921,8 +1922,9 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 		DefaultConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK, DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK, DefaultConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
 		DefaultConfig.VALIDATOR_NIL_BLOCK_START_BLOCK, DefaultConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
 		DefaultConfig.CONTEXT_BASED_START_BLOCK, DefaultConfig.CONTEXT_BASED_BLOCK_THRESHOLD, DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK, DefaultConfig.PACKET_PROTOCOL_START_BLOCK,
-		DefaultConfig.PROPOSAL_TIME_HASH_START_BLOCK, DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, DefaultConfig.SixtyVoteStartBlock, DefaultConfig.SlashV2StartBlock, DefaultConfig.OfflineValidatorDeferStartBlock,
-		DefaultConfig.SixtySevenVoteStartBlock,
+		DefaultConfig.PROPOSAL_TIME_HASH_START_BLOCK, DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, DefaultConfig.SixtyVoteStartBlock,
+		DefaultConfig.SlashV2StartBlock, DefaultConfig.OfflineValidatorDeferStartBlock,
+		DefaultConfig.SixtySevenVoteStartBlock, defaults.DeepCheckStartBlock,
 	}
 
 	for _, b := range blockNumbers {

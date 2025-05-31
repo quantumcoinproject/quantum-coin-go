@@ -22,6 +22,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/misc"
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"math/big"
@@ -62,7 +63,6 @@ const (
 	ProcessModeInsertChainNoReturnOnError ProcessMode = 3
 )
 
-const DeepCheckStartBlock = uint64(3000000)
 const DefaultGasLimit = 300000000
 
 // Process processes the state changes according to the Ethereum rules by running
@@ -91,7 +91,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	var processMode ProcessMode
-	if header.Number.Uint64() < DeepCheckStartBlock {
+	if header.Number.Uint64() < defaults.DeepCheckStartBlock {
 		processMode = ProcessModeInsertChainReturnOnError
 	} else {
 		processMode = ProcessModeInsertChainNoReturnOnError
