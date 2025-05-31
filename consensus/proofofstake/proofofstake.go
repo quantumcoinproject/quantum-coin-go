@@ -1075,71 +1075,79 @@ func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*
 		return err
 	}
 
-	if skippedTransactions.IsEqualTo(blockExtraData.SkippedTransactions) {
+	if skippedTransactions.IsEqualTo(blockExtraData.SkippedTransactions) == false {
 		log.Error("verifyTransactions skippedTransactions IsEqualTo fail",
 			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
-			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions))
+			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions),
+			"blockExtraData.SkippedTransactions", blockExtraData.SkippedTransactions, "blockExtraData.ErrorTransactions", blockExtraData.ErrorTransactions)
 		return errors.New("wrong number of skipped transactions")
 	}
 
-	if errorTransactions.IsEqualTo(blockExtraData.ErrorTransactions) {
+	if errorTransactions.IsEqualTo(blockExtraData.ErrorTransactions) == false {
 		log.Error("verifyTransactions errorTransactions IsEqualTo fail",
 			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
-			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions))
+			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions),
+			"blockExtraData.SkippedTransactions", blockExtraData.SkippedTransactions, "blockExtraData.ErrorTransactions", blockExtraData.ErrorTransactions)
 		return errors.New("wrong number of error transactions")
 	}
 
-	selectTxnMap := make(map[common.Hash]bool)
-	for _, t := range blockConsensusData.SelectedTransactions {
-		_, ok := selectTxnMap[t]
-		if ok {
-			log.Error("verifyTransactions selected txn duplicate", "txn", t)
-			return errors.New("duplicated transaction found")
+	if blockConsensusData.VoteType == VOTE_TYPE_NIL {
+		if len(skippedTransactions) > 0 || len(errorTransactions) > 0 || len(passedTransactions) > 0 || len(blockConsensusData.SelectedTransactions) > 0 {
+			return errors.New("verifyTransactions skippedTransactions errorTransactions is present in NIL BLOCK")
 		}
-		selectTxnMap[t] = true
-	}
-
-	passedTxnMap, err := MakeMap(blockTransactions)
-	if err != nil {
-		log.Error("verifyTransactions passedTxnMap error")
-		return err
-	}
-
-	skippedTxnMap, err := MakeMap(skippedTransactions)
-	if err != nil {
-		log.Error("verifyTransactions errorTxnMap error")
-		return err
-	}
-
-	errorTxnMap, err := MakeMap(errorTransactions)
-	if err != nil {
-		log.Error("verifyTransactions errorTxnMap error")
-		return err
-	}
-
-	for k, _ := range selectTxnMap {
-		foundCount := 0
-		_, ok1 := passedTxnMap[k]
-		if ok1 {
-			foundCount = foundCount + 1
+	} else {
+		selectTxnMap := make(map[common.Hash]bool)
+		for _, t := range blockConsensusData.SelectedTransactions {
+			_, ok := selectTxnMap[t]
+			if ok {
+				log.Error("verifyTransactions selected txn duplicate", "txn", t)
+				return errors.New("duplicated transaction found")
+			}
+			selectTxnMap[t] = true
 		}
 
-		_, ok2 := skippedTxnMap[k]
-		if ok2 {
-			foundCount = foundCount + 1
+		passedTxnMap, err := MakeMap(blockTransactions)
+		if err != nil {
+			log.Error("verifyTransactions passedTxnMap error")
+			return err
 		}
 
-		_, ok3 := errorTxnMap[k]
-		if ok3 {
-			foundCount = foundCount + 1
+		skippedTxnMap, err := MakeMap(skippedTransactions)
+		if err != nil {
+			log.Error("verifyTransactions errorTxnMap error")
+			return err
 		}
 
-		if foundCount == 0 {
-			log.Error("verifyTransactions couldn't find txn in passed or skipped or error txn list", "txn", k)
-			return errors.New("couldn't find txn in passed or skipped or error txn list")
-		} else if foundCount != 1 {
-			log.Error("verifyTransactions found multiple occurrences of txn", "txn", k, "foundCount", foundCount, "ok1", ok1, "ok2", ok2, "ok3", ok3)
-			return errors.New("verifyTransactions found multiple occurrences of txn")
+		errorTxnMap, err := MakeMap(errorTransactions)
+		if err != nil {
+			log.Error("verifyTransactions errorTxnMap error")
+			return err
+		}
+
+		for k, _ := range selectTxnMap {
+			foundCount := 0
+			_, ok1 := passedTxnMap[k]
+			if ok1 {
+				foundCount = foundCount + 1
+			}
+
+			_, ok2 := skippedTxnMap[k]
+			if ok2 {
+				foundCount = foundCount + 1
+			}
+
+			_, ok3 := errorTxnMap[k]
+			if ok3 {
+				foundCount = foundCount + 1
+			}
+
+			if foundCount == 0 {
+				log.Error("verifyTransactions couldn't find txn in passed or skipped or error txn list", "txn", k)
+				return errors.New("couldn't find txn in passed or skipped or error txn list")
+			} else if foundCount != 1 {
+				log.Error("verifyTransactions found multiple occurrences of txn", "txn", k, "foundCount", foundCount, "ok1", ok1, "ok2", ok2, "ok3", ok3)
+				return errors.New("verifyTransactions found multiple occurrences of txn")
+			}
 		}
 	}
 
