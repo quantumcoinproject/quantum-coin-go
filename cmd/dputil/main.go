@@ -504,6 +504,7 @@ func sendTxn() {
 	from := os.Args[2]
 	to := os.Args[3]
 	quantity := os.Args[4]
+	shouldConfirm := os.Getenv("SHOULD_CONFIRM")
 
 	if common.IsHexAddress(from) == false {
 		fmt.Println("Invalid address", from)
@@ -526,14 +527,16 @@ func sendTxn() {
 
 	fmt.Println("Send", "from", from, "to", to, "quantity", quantity, "coins", coins)
 
-	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to send %v coins from address %s to address %s?", coins, from, to))
-	if err != nil {
-		log.Error("error", err)
-		return
-	}
-	if ethConfirm != true {
-		log.Error("confirmation not made")
-		return
+	if shouldConfirm != "no" {
+		ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to send %v coins from address %s to address %s?", coins, from, to))
+		if err != nil {
+			log.Error("error", err)
+			return
+		}
+		if ethConfirm != true {
+			log.Error("confirmation not made")
+			return
+		}
 	}
 	fmt.Println()
 

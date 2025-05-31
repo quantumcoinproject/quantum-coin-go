@@ -229,10 +229,10 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 	log.Debug("ProcessTransactions NewTransactionsByNonceFromList", "skipped count", len(skipped))
 	skippedTransactions = append(skippedTransactions, skipped...)
 
-	hasRecords := txs.NextCursor()
 	count := 0
 
 	for {
+		hasRecords := txs.NextCursor()
 		if hasRecords == false {
 			log.Debug("ProcessTransactions loop done")
 			break
@@ -304,7 +304,7 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		receipts = append(receipts, receipt)
 		logs = append(logs, receipt.Logs...)
 		passedTransactions = append(passedTransactions, tx)
-		hasRecords = txs.NextCursor()
+
 	}
 
 	gasUsed := DefaultGasLimit - gp.Gas()
