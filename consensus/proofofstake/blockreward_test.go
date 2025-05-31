@@ -225,8 +225,8 @@ func TestRewardVerifyYearly(t *testing.T) {
 }
 
 func TestRewardVerifyBlocks(t *testing.T) {
-	startBlockNumber := big.NewInt(int64(rewardStartBlockNumber) - 1000)
-	endBlockNumber := big.NewInt(int64(rewardStartBlockNumber - 500))
+	startBlockNumber := big.NewInt(int64(DefaultConfig.RewardStartBlockNumber) - 1000)
+	endBlockNumber := big.NewInt(int64(DefaultConfig.RewardStartBlockNumber - 500))
 	incrementBlock := big.NewInt(1)
 
 	for startBlockNumber.Int64() <= endBlockNumber.Int64() {

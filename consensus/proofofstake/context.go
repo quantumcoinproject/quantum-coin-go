@@ -136,7 +136,7 @@ func (p *ProofOfStake) GetConsensusContext(key string, blockHash common.Hash) ([
 
 func GetConsensusContextKey(blockNumber uint64) (string, error) {
 	var key string
-	if blockNumber <= CONSENSUS_CONTEXT_START_BLOCK {
+	if blockNumber <= DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK {
 		return key, errors.New("GetBlockConsensusContextFn blockNumber below CONSENSUS_CONTEXT_START_BLOCK")
 	}
 
@@ -148,13 +148,13 @@ func GetConsensusContextKey(blockNumber uint64) (string, error) {
 
 func GetBlockConsensusContextKeyForBlock(currrentBlockNumber uint64) (string, error) {
 	var key string
-	if currrentBlockNumber < CONTEXT_BASED_START_BLOCK {
+	if currrentBlockNumber < DefaultConfig.CONTEXT_BASED_START_BLOCK {
 		return key, errors.New("GetBlockConsensusContextFn blockNumber below CONTEXT_BASED_START_BLOCK")
 	}
 
-	if currrentBlockNumber > CONSENSUS_CONTEXT_START_BLOCK+CONSENSUS_CONTEXT_MAX_BLOCK_COUNT {
-		return GetConsensusContextKey(currrentBlockNumber - CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
+	if currrentBlockNumber > DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK+DefaultConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT {
+		return GetConsensusContextKey(currrentBlockNumber - DefaultConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
 	} else {
-		return GetConsensusContextKey(currrentBlockNumber - CONTEXT_BASED_BLOCK_THRESHOLD)
+		return GetConsensusContextKey(currrentBlockNumber - DefaultConfig.CONTEXT_BASED_BLOCK_THRESHOLD)
 	}
 }

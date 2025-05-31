@@ -256,7 +256,7 @@ func (p *PeerHandler) CreateConsensusPacket(data []byte) (*eth.ConsensusPacket, 
 
 func (p *PeerHandler) SendCapabilityPacket(peerList []string) error {
 	log.Debug("PeerHandler SendCapabilityPacket", "peer count", len(peerList))
-	if p.p2pHandler == nil || p.isConsensusRelay == false || p.getLatestBlockNumberFn() < PACKET_PROTOCOL_START_BLOCK {
+	if p.p2pHandler == nil || p.isConsensusRelay == false || p.getLatestBlockNumberFn() < DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
 		return nil
 	}
 
@@ -307,7 +307,7 @@ func (p *PeerHandler) ConnectAvailableConsensusRelay() {
 
 func (p *PeerHandler) SendRequestConsensusSyncPacket(peerId string) error {
 	log.Trace("PeerHandler SendRequestConsensusSyncPacket", "peerId", peerId)
-	if p.p2pHandler == nil || p.getLatestBlockNumberFn() < PACKET_PROTOCOL_START_BLOCK {
+	if p.p2pHandler == nil || p.getLatestBlockNumberFn() < DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
 		log.Debug("PeerHandler SendRequestConsensusSyncPacket return", "peerId", peerId)
 		return nil
 	}
@@ -532,9 +532,9 @@ func (p *PeerHandler) SetCurrentParentHash(parentHash common.Hash, currentBlockN
 	}
 
 	if p.isConsensusRelay {
-		if currentBlockNumber == PACKET_PROTOCOL_START_BLOCK { //Special case, to trigger on-going connections
+		if currentBlockNumber == DefaultConfig.PACKET_PROTOCOL_START_BLOCK { //Special case, to trigger on-going connections
 			go p.SendCapabilityToAllPeers()
-		} else if currentBlockNumber > PACKET_PROTOCOL_START_BLOCK {
+		} else if currentBlockNumber > DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
 			if len(p.peerMap) > len(p.syncPeerMap) && currentBlockNumber%128 == 0 {
 				go p.SendCapabilityToDeltaPeers()
 			}

@@ -59,45 +59,8 @@ const (
 
 // ProofOfStake proof-of-authority protocol constants.
 var (
-	epochLength = uint64(30000) // Default number of blocks after which to checkpoint and reset the pending votes
-
 	extraVanity = 32                                               // Fixed number of extra-data prefix bytes reserved for validator vanity
 	extraSeal   = cryptobase.SigAlg.SignatureWithPublicKeyLength() // Fixed number of extra-data suffix bytes reserved for validator seal
-
-	SLASH_AMOUNT = params.EtherToWei(big.NewInt(10))
-
-	SLASH_AMOUNT_V2 = params.EtherToWei(big.NewInt(100))
-
-	rewardStartBlockNumber = uint64(277204)
-	slashStartBlockNumber  = uint64(1497600)
-
-	FULL_SIGN_PROPOSAL_CUTOFF_BLOCK     = uint64(421888)
-	FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS = uint64(4096)
-
-	STAKING_CONTRACT_V2_CUTOFF_BLOCK  = FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
-	CONSENSUS_CONTEXT_START_BLOCK     = FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
-	CONSENSUS_CONTEXT_MAX_BLOCK_COUNT = uint64(512000)
-
-	VALIDATOR_NIL_BLOCK_START_BLOCK      = STAKING_CONTRACT_V2_CUTOFF_BLOCK + 1
-	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK = VALIDATOR_NIL_BLOCK_START_BLOCK + 16
-
-	CONTEXT_BASED_START_BLOCK     = uint64(536000)
-	CONTEXT_BASED_BLOCK_THRESHOLD = uint64(64000)
-	BLOCK_TIME_ORIG_START_BLOCK   = uint64(CONTEXT_BASED_START_BLOCK + 1)
-	PACKET_PROTOCOL_START_BLOCK   = uint64(BLOCK_TIME_ORIG_START_BLOCK + 32)
-
-	PROPOSAL_TIME_HASH_START_BLOCK        = uint64(1507600)
-	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK = uint64(1597600)
-
-	//Note: both of the below should add upto 100
-	TxnFeeRewardsPercentage = int64(50)
-
-	SixtyVoteStartBlock = uint64(1386825)
-
-	SlashV2StartBlock               = uint64(2082171)
-	OfflineValidatorDeferStartBlock = SlashV2StartBlock + 10
-
-	SixtySevenVoteStartBlock = uint64(OfflineValidatorDeferStartBlock + 10)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -170,9 +133,6 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database,
 	// Set any missing consensus parameters to their defaults
 	conf := *chainConfig
 
-	if conf.ProofOfStake.Epoch == 0 {
-		conf.ProofOfStake.Epoch = epochLength
-	}
 	// Allocate the snapshot caches and c.ProofOfStakereate the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
@@ -604,7 +564,7 @@ func (c *ProofOfStake) VerifyBlock(chain consensus.ChainHeaderReader, block *typ
 	}
 
 	var valDetailsMap map[common.Address]*ValidatorDetailsV2
-	if number >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if number >= DefaultConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		valDetailsMap, err = c.ListValidatorsAsMap(header.ParentHash)
 		if err != nil {
 			return err
@@ -725,13 +685,13 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	//Block Slashing
 	//If Round = 1, then it means PROPOSER was likely offline, as opposed to Round = 2 which means validators were not able to get consensus on time
-	if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= slashStartBlockNumber {
+	if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= DefaultConfig.SlashStartBlockNumber {
 
 		var slashAmount *big.Int
-		if blockNumber < SlashV2StartBlock {
-			slashAmount = SLASH_AMOUNT
+		if blockNumber < DefaultConfig.SlashV2StartBlock {
+			slashAmount = DefaultConfig.SLASH_AMOUNT
 		} else {
-			slashAmount = SLASH_AMOUNT_V2
+			slashAmount = DefaultConfig.SLASH_AMOUNT_V2
 		}
 
 		for _, val := range blockConsensusData.SlashedBlockProposers {
@@ -756,7 +716,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	//Validator nil block
 	//If Round = 1, then it means PROPOSER was likely offline, as opposed to Round = 2 which means validators were not able to get consensus on time
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL && blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil &&
-		len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= VALIDATOR_NIL_BLOCK_START_BLOCK {
+		len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= DefaultConfig.VALIDATOR_NIL_BLOCK_START_BLOCK {
 		for _, val := range blockConsensusData.SlashedBlockProposers {
 			err = c.SetNilBlock(val, state, header)
 			if err != nil {
@@ -767,7 +727,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	}
 
 	//Block Rewards
-	if blockConsensusData.VoteType == VOTE_TYPE_OK && blockNumber >= rewardStartBlockNumber {
+	if blockConsensusData.VoteType == VOTE_TYPE_OK && blockNumber >= DefaultConfig.RewardStartBlockNumber {
 		blockProposerRewardAmount := GetReward(header.Number)
 
 		//Add same amount of reward to Staking Contract, so that it is available for withdrawal later on
@@ -818,7 +778,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 
 		//Validator nil block reset
-		if blockNumber > VALIDATOR_NIL_BLOCK_START_BLOCK {
+		if blockNumber > DefaultConfig.VALIDATOR_NIL_BLOCK_START_BLOCK {
 			err = c.ResetNilBlock(blockConsensusData.BlockProposer, state, header)
 			if err != nil {
 				log.Error("ResetNilBlock err", "err", err)
@@ -828,20 +788,20 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	}
 
 	//Staking V2
-	if blockNumber == STAKING_CONTRACT_V2_CUTOFF_BLOCK {
-		log.Info("Setting stakingv2 contract code", "blockNumber", STAKING_CONTRACT_V2_CUTOFF_BLOCK)
+	if blockNumber == DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+		log.Info("Setting stakingv2 contract code", "blockNumber", DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK)
 		stakingContractCode := common.FromHex(stakingv2.STAKING_RUNTIME_BIN)
 		state.SetCode(staking.STAKING_CONTRACT_ADDRESS, stakingContractCode)
 	}
 
 	//Consensus Context
-	if blockNumber == CONSENSUS_CONTEXT_START_BLOCK {
-		log.Info("Setting consensus context contract code", "blockNumber", CONSENSUS_CONTEXT_START_BLOCK)
+	if blockNumber == DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK {
+		log.Info("Setting consensus context contract code", "blockNumber", DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK)
 		consensuscontextContractCode := common.FromHex(consensuscontext.CONSENSUS_CONTEXT_RUNTIME_BIN)
 		state.SetCode(consensuscontext.CONSENSUS_CONTEXT_CONTRACT_ADDRESS, consensuscontextContractCode)
 	}
 
-	if blockNumber > CONSENSUS_CONTEXT_START_BLOCK {
+	if blockNumber > DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK {
 		key, err := GetConsensusContextKey(blockNumber)
 		if err != nil {
 			log.Error("GetBlockConsensusContextFn err", "err", err)
@@ -856,8 +816,8 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 
 		//Remove the oldest key
-		if blockNumber > (CONSENSUS_CONTEXT_START_BLOCK + CONSENSUS_CONTEXT_MAX_BLOCK_COUNT) {
-			oldKey, err := GetConsensusContextKey(blockNumber - CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
+		if blockNumber > (DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK + DefaultConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT) {
+			oldKey, err := GetConsensusContextKey(blockNumber - DefaultConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
 			if err != nil {
 				log.Error("GetBlockConsensusContextKey oldKey err", "err", err)
 				return err
@@ -873,7 +833,8 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	//Fix blocktime
 	parent := chain.GetHeader(header.ParentHash, blockNumber-1)
-	if (blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= BLOCK_TIME_ORIG_START_BLOCK) && blockConsensusData.VoteType == VOTE_TYPE_OK && parent.Time < blockConsensusData.BlockTime {
+	if (blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK) &&
+		blockConsensusData.VoteType == VOTE_TYPE_OK && parent.Time < blockConsensusData.BlockTime {
 		header.Time = blockConsensusData.BlockTime
 	} else {
 		header.Time = parent.Time + c.config.Period
@@ -919,7 +880,7 @@ func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transactio
 }
 
 func calculateTxnFeeSplitCoins(txnFeeTotal *big.Int) (burnAmount *big.Int, txnFeeRewardsAmount *big.Int) {
-	txnFeeRewardsAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(TxnFeeRewardsPercentage))
+	txnFeeRewardsAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(DefaultConfig.TxnFeeRewardsPercentage))
 	burnAmount = common.SafeSubBigInt(txnFeeTotal, txnFeeRewardsAmount)
 	return burnAmount, txnFeeRewardsAmount
 }

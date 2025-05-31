@@ -668,7 +668,7 @@ func (p *ProofOfStake) AddDepositorSlashing(blockHash common.Hash,
 func (p *ProofOfStake) GetStakingContractAbi() (abi.ABI, error) {
 	blockNumber := p.blockchain.CurrentBlock().NumberU64()
 
-	if blockNumber < STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		return staking.GetStakingContract_ABI()
 	} else {
 		return staking.GetStakingContractV2_ABI()
@@ -1045,7 +1045,7 @@ func (p *ProofOfStake) ListValidators(blockHash common.Hash, blockNumber uint64)
 	for _, val := range *out {
 		var validatorDetails *ValidatorDetails
 
-		if blockNumber < STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+		if blockNumber < DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 			validatorDetails, err = p.GetStakingDetailsByValidatorAddress(val, blockHash)
 			if err != nil {
 				return nil, err

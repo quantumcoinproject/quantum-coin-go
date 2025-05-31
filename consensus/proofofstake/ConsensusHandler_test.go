@@ -1688,7 +1688,7 @@ func TestValidateBlockProposalTime(t *testing.T) {
 		t.Fatalf("failed 4")
 	}
 
-	if ValidateBlockProposalTime(BLOCK_TIME_ORIG_START_BLOCK, GetProposalTime(BLOCK_TIME_ORIG_START_BLOCK)) == false {
+	if ValidateBlockProposalTime(DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK, GetProposalTime(DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK)) == false {
 		t.Fatalf("failed 5")
 	}
 }
@@ -1782,7 +1782,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(BLOCK_TIME_ORIG_START_BLOCK, uint64(tm)) == false {
+	if ValidateBlockProposalTimeConsensus(DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK, uint64(tm)) == false {
 		t.Fatalf("failed 14")
 	}
 }
@@ -1885,19 +1885,19 @@ func Test_requestconsensuspacket_negative(t *testing.T) {
 }
 
 func Test_shouldSignFull(t *testing.T) {
-	for i := uint64(0); i < FULL_SIGN_PROPOSAL_CUTOFF_BLOCK; i++ {
+	for i := uint64(0); i < DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK; i++ {
 		if shouldSignFull(uint64(i)) == true {
 			t.Fatalf("failed 1")
 		}
 	}
 
-	for i := FULL_SIGN_PROPOSAL_CUTOFF_BLOCK; i < FULL_SIGN_PROPOSAL_CUTOFF_BLOCK*100; i += FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS {
+	for i := DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK; i < DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK*100; i += DefaultConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS {
 		if shouldSignFull(uint64(i)) == false {
 			t.Fatalf("failed 2")
 		}
 	}
 
-	for i := FULL_SIGN_PROPOSAL_CUTOFF_BLOCK + 1; i < FULL_SIGN_PROPOSAL_CUTOFF_BLOCK+FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS-1; i++ {
+	for i := DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK + 1; i < DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK+DefaultConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS-1; i++ {
 		if shouldSignFull(uint64(i)) == true {
 			t.Fatalf("failed 3")
 		}
@@ -1906,7 +1906,7 @@ func Test_shouldSignFull(t *testing.T) {
 
 func TestPacketHandler_basic_fullsign(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_fullsign starting")
-	TEST_CONSENSUS_BLOCK_NUMBER = FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
+	TEST_CONSENSUS_BLOCK_NUMBER = DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
 	for i := 1; i <= TEST_ITERATIONS; i++ {
 		fmt.Println("iteration", i)
 		testPacketHandler_basic(4, t)
@@ -1917,12 +1917,12 @@ func TestPacketHandler_basic_fullsign(t *testing.T) {
 
 func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
-	var blockNumbers = []uint64{1, rewardStartBlockNumber, slashStartBlockNumber, FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
-		FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, STAKING_CONTRACT_V2_CUTOFF_BLOCK, CONSENSUS_CONTEXT_START_BLOCK, CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
-		VALIDATOR_NIL_BLOCK_START_BLOCK, BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
-		CONTEXT_BASED_START_BLOCK, CONTEXT_BASED_BLOCK_THRESHOLD, BLOCK_TIME_ORIG_START_BLOCK, PACKET_PROTOCOL_START_BLOCK,
-		PROPOSAL_TIME_HASH_START_BLOCK, BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, SixtyVoteStartBlock, SlashV2StartBlock, OfflineValidatorDeferStartBlock,
-		SixtySevenVoteStartBlock,
+	var blockNumbers = []uint64{1, DefaultConfig.RewardStartBlockNumber, DefaultConfig.SlashStartBlockNumber, DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
+		DefaultConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK, DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK, DefaultConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
+		DefaultConfig.VALIDATOR_NIL_BLOCK_START_BLOCK, DefaultConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
+		DefaultConfig.CONTEXT_BASED_START_BLOCK, DefaultConfig.CONTEXT_BASED_BLOCK_THRESHOLD, DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK, DefaultConfig.PACKET_PROTOCOL_START_BLOCK,
+		DefaultConfig.PROPOSAL_TIME_HASH_START_BLOCK, DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, DefaultConfig.SixtyVoteStartBlock, DefaultConfig.SlashV2StartBlock, DefaultConfig.OfflineValidatorDeferStartBlock,
+		DefaultConfig.SixtySevenVoteStartBlock,
 	}
 
 	for _, b := range blockNumbers {

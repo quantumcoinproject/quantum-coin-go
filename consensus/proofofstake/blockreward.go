@@ -19,7 +19,7 @@ var (
 	blockSecond = 6
 	blockYearly = big.NewInt(int64((((60 * 60) * 24) / blockSecond) * 365))
 
-	rewardStartBlock = big.NewInt(int64(rewardStartBlockNumber))
+	rewardStartBlock = big.NewInt(int64(DefaultConfig.RewardStartBlockNumber))
 )
 
 func GetReward(blockNumber *big.Int) *big.Int {
@@ -82,10 +82,10 @@ func GetRewardsSlashingsByVote(blockNumber *big.Int, voteType VoteType, rounds b
 		return
 	} else if voteType == VOTE_TYPE_NIL {
 		if rounds == 1 {
-			if blockNumber.Uint64() >= slashStartBlockNumber {
-				slashedCoins = SLASH_AMOUNT
-			} else if blockNumber.Uint64() >= SlashV2StartBlock {
-				slashedCoins = SLASH_AMOUNT_V2
+			if blockNumber.Uint64() >= DefaultConfig.SlashStartBlockNumber {
+				slashedCoins = DefaultConfig.SLASH_AMOUNT
+			} else if blockNumber.Uint64() >= DefaultConfig.SlashV2StartBlock {
+				slashedCoins = DefaultConfig.SLASH_AMOUNT_V2
 			}
 		}
 	}
