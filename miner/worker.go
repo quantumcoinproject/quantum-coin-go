@@ -643,8 +643,8 @@ func (w *worker) updateSnapshot() {
 
 func createTransactionList(txs *types.TransactionsByNonce) types.Transactions {
 	var txnList types.Transactions
-	hasRecords := txs.NextCursor()
 	for {
+		hasRecords := txs.NextCursor()
 		if hasRecords == false {
 			log.Trace("createTransactionArray break")
 			break
