@@ -72,7 +72,7 @@ func (V4ID) Verify(r *enr.Record, sig []byte) error {
 	}
 	h := hashingalgorithm.NewHashState()
 	rlp.Encode(h, r.AppendElements(nil))
-	if !cryptobase.SigAlg.Verify(entry, h.Sum(nil), sig) {
+	if !cryptobase.DynamicSigVerifier.Verify(entry, h.Sum(nil), sig) {
 		return enr.ErrInvalidSig
 	}
 	return nil

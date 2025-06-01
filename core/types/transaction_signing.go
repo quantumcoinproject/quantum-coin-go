@@ -262,7 +262,7 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 		return common.Address{}, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
-	if !cryptobase.SigAlg.ValidateSignatureValues(sighash[:], V, R, S) {
+	if !cryptobase.DynamicSigVerifier.ValidateSignatureValues(sighash[:], V, R, S) {
 		log.Debug("recoverPlain failed, ErrInvalidSig", "hash", sighash)
 		return common.Address{}, ErrInvalidSig
 	}

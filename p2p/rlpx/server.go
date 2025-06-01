@@ -272,7 +272,7 @@ func (s *Server) handleClientVerify() error {
 		return err
 	}
 
-	if !cryptobase.SigAlg.Verify(clientPubKeyDataRemote, transcriptHash, clientVerifyMessage.Signature[:clientVerifyMessage.SignatureLen]) {
+	if !cryptobase.DynamicSigVerifier.Verify(clientPubKeyDataRemote, transcriptHash, clientVerifyMessage.Signature[:clientVerifyMessage.SignatureLen]) {
 		return errors.New("client's signature verification failed")
 	}
 

@@ -930,7 +930,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
 			return InvalidPacketErr
 		}
 
-		if cryptobase.SigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
+		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
 			return InvalidPacketErr
 		}
 	} else {
@@ -940,7 +940,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
 			return InvalidPacketErr
 		}
 
-		if cryptobase.SigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+		if cryptobase.DynamicSigVerifier.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 			log.Debug("processPacket invalid 3")
 			return InvalidPacketErr
 		}
@@ -1487,7 +1487,7 @@ func parsePacket(packet *eth.ConsensusPacket) (byte, common.Address, error) {
 		log.Trace("invalid 1", "err", err)
 		return 0, ZERO_ADDRESS, err
 	}
-	if cryptobase.SigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+	if cryptobase.DynamicSigVerifier.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 		log.Trace("invalid 2")
 		return 0, ZERO_ADDRESS, InvalidPacketErr
 	}

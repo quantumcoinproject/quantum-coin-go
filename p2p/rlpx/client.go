@@ -196,7 +196,7 @@ func (c *Client) PerformHandshake() error {
 		return errors.New("Public key mismatch")
 	}
 
-	if !cryptobase.SigAlg.Verify(serverPubKeyDataLocal, transcriptHash, serverVerifyMessage.Signature[:serverVerifyMessage.SignatureLen]) {
+	if !cryptobase.DynamicSigVerifier.Verify(serverPubKeyDataLocal, transcriptHash, serverVerifyMessage.Signature[:serverVerifyMessage.SignatureLen]) {
 		return errors.New("server's signature verification failed")
 	}
 

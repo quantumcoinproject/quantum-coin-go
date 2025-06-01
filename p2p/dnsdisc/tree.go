@@ -284,7 +284,7 @@ func (e *rootEntry) verifySignature(pubkey *signaturealgorithm.PublicKey) bool {
 	if err != nil {
 		return false
 	}
-	return cryptobase.SigAlg.Verify(enckey, e.sigHash(), sig)
+	return cryptobase.DynamicSigVerifier.Verify(enckey, e.sigHash(), sig)
 }
 
 func (e *branchEntry) String() string {

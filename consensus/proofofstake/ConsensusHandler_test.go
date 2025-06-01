@@ -173,7 +173,7 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 			log.Info("a1")
 			return ZERO_ADDRESS, err
 		}
-		if cryptobase.SigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
+		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
 			log.Info("a2")
 			return ZERO_ADDRESS, InvalidPacketErr
 		}
@@ -191,7 +191,7 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 			log.Info("a4", "len", len(packet.Signature), "packetType", packetType, "packet.ParentHash", packet.ParentHash, "getTestParentHash", getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER), "startIndex", startIndex)
 			return ZERO_ADDRESS, err
 		}
-		if cryptobase.SigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+		if cryptobase.DynamicSigVerifier.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 			log.Info("a5")
 			return ZERO_ADDRESS, InvalidPacketErr
 		}
