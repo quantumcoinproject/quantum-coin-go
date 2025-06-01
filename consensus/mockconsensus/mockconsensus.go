@@ -323,7 +323,7 @@ func (c *Mock) VerifyBlock(chain consensus.ChainHeaderReader, block *types.Block
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
 func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
-	passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions, source string) error {
+	passedTransactions types.Transactions, errorTransactions types.Transactions, source string) error {
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
@@ -331,7 +331,7 @@ func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 }
 
 func (c *Mock) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs, receipts, nil, nil, nil, "FinalizeAndAssemble")
+	err := c.Finalize(chain, header, state, txs, receipts, nil, nil, "FinalizeAndAssemble")
 	if err != nil {
 		return nil, err
 	}
@@ -345,14 +345,14 @@ func (c *Mock) ShouldFreezeTransactions(chain consensus.ChainHeaderReader, heade
 }
 
 func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
-	passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
+	passedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
 		return nil, errUnknownBlock
 	}
 
-	err := c.Finalize(chain, header, state, txs, receipts, passedTransactions, skippedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
+	err := c.Finalize(chain, header, state, txs, receipts, passedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
 	if err != nil {
 		return nil, err
 	}
@@ -365,6 +365,10 @@ func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReade
 // with.
 func (c *Mock) Authorize(validator common.Address, signFn SignerFn, signTxFn SignerTxFn, account accounts.Account) {
 
+}
+
+func (c *Mock) ParseHeaderDetails(chain consensus.ChainHeaderReader, header *types.Header) (errorTransactions types.Transactions, err error) {
+	return nil, nil
 }
 
 // Seal implements consensus.Engine, attempting to create a sealed block using

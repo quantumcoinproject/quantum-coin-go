@@ -265,6 +265,7 @@ type ConsensusData struct {
 	AdditionalData           *BlockAdditionalConsensusData `json:"additionalData"     gencodec:"required"`
 	ExtendedConsensusPackets []*ExtendedConsensusPacket    `json:"extendedConsensusPackets"     gencodec:"required"`
 	BlockRewardsInfo         *BlockRewardsInfo             `json:"blockRewardsInfo"     gencodec:"required"`
+	BlockExtraData           *BlockExtraData               `json:"blockExtraData"     gencodec:"required"`
 }
 
 type ProposalExtendedDetails struct {
@@ -473,6 +474,11 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 	}
 
 	consensusData.BlockRewardsInfo, err = ParseRewardsInfo(block, receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	consensusData.BlockExtraData, _, err = DecodeBlockExtraData(block.Extra(), blockNumber)
 	if err != nil {
 		return nil, err
 	}

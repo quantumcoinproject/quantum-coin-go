@@ -63,8 +63,6 @@ const (
 	ProcessModeInsertChainNoReturnOnError ProcessMode = 3
 )
 
-const DefaultGasLimit = 300000000
-
 // Process processes the state changes according to the Ethereum rules by running
 // the transaction messages using the statedb and applying any rewards to both
 // the processor (coinbase) and any included uncles.
@@ -100,14 +98,25 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	// Iterate over and process the individual transactions
 	signer := types.MakeSigner(p.config, header.Number)
 	txnList := block.Transactions()
-	receipts, allLogs, passedTransactions, skippedTransactions, errorTransactions, err := ProcessTransactions(p.config, p.bc, gp, statedb, header,
+
+	errTxns, err := p.engine.ParseHeaderDetails(p.bc, header)
+	if err != nil {
+		log.Error("StateProcessor process ParseHeaderDetails", "error", err)
+		return nil, nil, 0, err
+	}
+	log.Debug("StateProcessor process", "blockNumber", header.Number.Uint64(),
+		"block txn count", len(block.Transactions()), "error txn count", len(errTxns), err)
+
+	txnList = append(txnList, errTxns...)
+
+	receipts, allLogs, passedTransactions, errorTransactions, err := ProcessTransactions(p.config, p.bc, gp, statedb, header,
 		&txnList, usedGas, cfg, &signer, processMode)
 	if err != nil {
 		return nil, nil, 0, err
 	}
 
 	// Finalize the block, applying any consensus engine specific extras (e.g. block rewards)
-	err = p.engine.Finalize(p.bc, header, statedb, block.Transactions(), receipts, passedTransactions, skippedTransactions, errorTransactions, "StateProcessor.Process")
+	err = p.engine.Finalize(p.bc, header, statedb, block.Transactions(), receipts, passedTransactions, errorTransactions, "StateProcessor.Process")
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -210,24 +219,24 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, 
 
 func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPool, statedb *state.StateDB, header *types.Header, txList *types.Transactions,
 	usedGas *uint64, cfg vm.Config, signer *types.Signer, processMode ProcessMode) (receipts []*types.Receipt, logs []*types.Log,
-	passedTransactions types.Transactions, errorTransactions types.Transactions, skippedTransactions types.Transactions, err error) {
+	passedTransactions types.Transactions, errorTransactions types.Transactions, err error) {
 	receipts = make([]*types.Receipt, 0)
 	logs = make([]*types.Log, 0)
 
 	if len(*txList) == 0 {
 		if header.GasUsed != 0 {
-			return nil, nil, nil, nil, nil, errors.New("GasUsed is invalid")
+			return nil, nil, nil, nil, errors.New("GasUsed is invalid")
 		}
-		return receipts, logs, passedTransactions, errorTransactions, skippedTransactions, nil
+		return receipts, logs, passedTransactions, errorTransactions, nil
 	}
 
 	txs, skipped, err := types.NewTransactionsByNonceFromList(*signer, txList, header.ParentHash)
 	if err != nil {
 		log.Error("ProcessTransactions NewTransactionsByNonceFromList error", "error", err)
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	log.Debug("ProcessTransactions NewTransactionsByNonceFromList", "skipped count", len(skipped))
-	skippedTransactions = append(skippedTransactions, skipped...)
+	errorTransactions = append(errorTransactions, skipped...)
 
 	count := 0
 
@@ -242,23 +251,23 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		if gp.Gas() < params.TxGas {
 			log.Debug("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
 			if processMode == ProcessModeInsertChainReturnOnError {
-				return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
+				return nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
 			}
-			skippedTransactions = append(skippedTransactions, tx)
+			errorTransactions = append(errorTransactions, tx)
 			continue
 		}
 
 		if tx.Protected() && !config.IsEIP155(header.Number) {
 			if processMode == ProcessModeInsertChainReturnOnError {
-				return nil, nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
+				return nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
 			}
-			skippedTransactions = append(skippedTransactions, tx)
+			errorTransactions = append(errorTransactions, tx)
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", config.EIP155Block)
 			continue
 		}
 		from, err := types.Sender(*signer, tx)
 		if err != nil {
-			return nil, nil, nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		statedb.Prepare(tx.Hash(), count)
@@ -268,7 +277,7 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		if err != nil {
 			if processMode == ProcessModeInsertChainReturnOnError {
 				errOut := fmt.Errorf("could not apply tx [%v]: %w", tx.Hash().Hex(), err)
-				return nil, nil, nil, nil, nil, errOut
+				return nil, nil, nil, nil, errOut
 			} else {
 				if processMode == ProcessModeWorker {
 					statedb.RevertToSnapshot(snap)
@@ -307,13 +316,14 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 
 	}
 
-	gasUsed := DefaultGasLimit - gp.Gas()
+	blockGasLimit := defaults.GetGasLimit(header.Number.Uint64())
+	gasUsed := blockGasLimit - gp.Gas()
 	if header.GasUsed != gasUsed {
-		log.Error("ProcessTransactions() gas limit exceeded", "block", header.Number.Uint64(), "DefaultGasLimit", DefaultGasLimit,
+		log.Error("ProcessTransactions() gas limit exceeded", "block", header.Number.Uint64(), "blockGasLimit", blockGasLimit,
 			"gasUsed", gasUsed, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas(), "block txn count", len(*txList),
-			"passed txn count", len(passedTransactions), "skipped txn count", len(skippedTransactions), "error txn count", len(errorTransactions))
-		return nil, nil, nil, nil, nil, errors.New("gas limit exceeded")
+			"passed txn count", len(passedTransactions), "error txn count", len(errorTransactions))
+		return nil, nil, nil, nil, errors.New("gas limit exceeded")
 	}
 
-	return receipts, logs, passedTransactions, errorTransactions, skippedTransactions, nil
+	return receipts, logs, passedTransactions, errorTransactions, nil
 }

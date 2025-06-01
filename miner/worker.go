@@ -86,13 +86,12 @@ type environment struct {
 	tcount    int            // tx count in cycle
 	gasPool   *core.GasPool  // available gas used to pack transactions
 
-	header     *types.Header
-	txs        []*types.Transaction
-	receipts   []*types.Receipt
-	passedTxs  []*types.Transaction
-	skippedTxs []*types.Transaction
-	errorTxs   []*types.Transaction
-	committed  bool
+	header    *types.Header
+	txs       []*types.Transaction
+	receipts  []*types.Receipt
+	passedTxs []*types.Transaction
+	errorTxs  []*types.Transaction
+	committed bool
 }
 
 // task contains all information for consensus engine sealing and result submitting.
@@ -664,7 +663,7 @@ func (w *worker) commitTransactions(coinbase common.Address, interrupt *int32) (
 		return true, nil
 	}
 
-	w.current.header.GasLimit = core.DefaultGasLimit
+	w.current.header.GasLimit = defaults.GetGasLimit(w.current.header.Number.Uint64())
 	gasLimit := w.current.header.GasLimit
 
 	if w.current.gasPool == nil {
@@ -672,7 +671,7 @@ func (w *worker) commitTransactions(coinbase common.Address, interrupt *int32) (
 	}
 
 	var coalescedLogs []*types.Log
-	receipts, coalescedLogs, passedTransactions, errorTransactions, skippedTransactions, err := core.ProcessTransactions(w.chainConfig, w.chain, w.current.gasPool, w.current.state, w.current.header,
+	receipts, coalescedLogs, passedTransactions, errorTransactions, err := core.ProcessTransactions(w.chainConfig, w.chain, w.current.gasPool, w.current.state, w.current.header,
 		&w.selectedTransactions, &w.current.header.GasUsed, *w.chain.GetVMConfig(), &w.current.signer, core.ProcessModeWorker)
 	if err != nil {
 		log.Error("ProcessTransactions", "error", err)
@@ -683,7 +682,6 @@ func (w *worker) commitTransactions(coinbase common.Address, interrupt *int32) (
 	w.current.receipts = append(w.current.receipts, receipts...)
 	w.current.passedTxs = passedTransactions
 	w.current.errorTxs = errorTransactions
-	w.current.skippedTxs = skippedTransactions
 
 	log.Trace("commitTransactions7")
 	if !w.isRunning() && len(coalescedLogs) > 0 {
@@ -880,7 +878,7 @@ func (w *worker) commit(interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
-	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts, w.current.passedTxs, w.current.skippedTxs, w.current.errorTxs)
+	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts, w.current.passedTxs, w.current.errorTxs)
 	if err != nil {
 		log.Trace("commit2", "err", err)
 		return err

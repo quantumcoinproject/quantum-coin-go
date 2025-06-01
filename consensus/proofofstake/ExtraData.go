@@ -15,12 +15,11 @@ const DefaultExtraDataHex = "d392446f676550726f746f636f6c31323331323300000000000
 var DefaultExtraData = common.Hex2Bytes(DefaultExtraDataHex)
 
 type BlockExtraData struct {
-	SkippedTransactions types.Transactions `json:"skippedTransactions" gencodec:"required"`
-	ErrorTransactions   types.Transactions `json:"errorTransactions" gencodec:"required"`
-	ExtraData           []byte             `json:"extraData" gencodec:"required"`
+	ErrorTransactions types.Transactions `json:"errorTransactions" gencodec:"required"`
+	ExtraData         []byte             `json:"extraData" gencodec:"required"`
 }
 
-func EncodeBlockExtraData(skippedTransactions types.Transactions, errorTransactions types.Transactions, currentExtraData []byte, blockNumber uint64) ([]byte, error) {
+func EncodeBlockExtraData(errorTransactions types.Transactions, currentExtraData []byte, blockNumber uint64) ([]byte, error) {
 	if blockNumber < defaults.DeepCheckStartBlock {
 		if len(currentExtraData) != len(DefaultExtraData) {
 			log.Error("EncodeBlockExtraData a", "extraData length invalid", len(currentExtraData), "blockNumber", blockNumber)
@@ -34,9 +33,8 @@ func EncodeBlockExtraData(skippedTransactions types.Transactions, errorTransacti
 	}
 
 	blockExtraData := BlockExtraData{
-		SkippedTransactions: skippedTransactions,
-		ErrorTransactions:   errorTransactions,
-		ExtraData:           make([]byte, 0),
+		ErrorTransactions: errorTransactions,
+		ExtraData:         make([]byte, 0),
 	}
 
 	data, err := rlp.EncodeToBytes(&blockExtraData)
@@ -48,7 +46,10 @@ func EncodeBlockExtraData(skippedTransactions types.Transactions, errorTransacti
 	return append(currentExtraData, data...), nil
 }
 
-func DecodeBlockExtraData(extraData []byte) (*BlockExtraData, []byte, error) {
+func DecodeBlockExtraData(extraData []byte, blockNumber uint64) (*BlockExtraData, []byte, error) {
+	if blockNumber < defaults.DeepCheckStartBlock {
+		return nil, extraData, nil
+	}
 	if len(extraData) < len(DefaultExtraData)+1 {
 		log.Error("DecodeBlockExtraData", "extraData length invalid", len(extraData))
 		return nil, nil, errors.New("invalid ExtraData")
@@ -76,7 +77,7 @@ func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, err
 		}
 		return nil, nil
 	} else {
-		blockExtraData, origExtraData, err := DecodeBlockExtraData(extraData)
+		blockExtraData, origExtraData, err := DecodeBlockExtraData(extraData, blockNumber)
 		if err != nil {
 			return nil, err
 		}

@@ -98,7 +98,7 @@ type Engine interface {
 	// Note: The block header and state database might be updated to reflect any
 	// consensus rules that happen at finalization (e.g. block rewards).
 	Finalize(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
-		passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions, source string) error
+		passedTransactions types.Transactions, errorTransactions types.Transactions, source string) error
 
 	// FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
 	// rewards) and assembles the final block.
@@ -109,7 +109,9 @@ type Engine interface {
 		receipts []*types.Receipt) (*types.Block, error)
 
 	FinalizeAndAssembleWithConsensus(chain ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction,
-		receipts []*types.Receipt, passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error)
+		receipts []*types.Receipt, passedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error)
+
+	ParseHeaderDetails(chain ChainHeaderReader, header *types.Header) (errorTransactions types.Transactions, err error)
 
 	// Seal generates a new sealing request for the given input block and pushes
 	// the result into the given channel.

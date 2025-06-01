@@ -392,8 +392,8 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 			return errInvalidDifficulty
 		}
 	}
-	// Verify that the gas limit is <= 2^63-1
-	if header.GasLimit != core.DefaultGasLimit {
+	blockGasLimit := defaults.GetGasLimit(number)
+	if header.GasLimit != blockGasLimit {
 		return errInvalidGasLimit
 	}
 
@@ -631,7 +631,7 @@ func (c *ProofOfStake) Convert(header *types.Header, state *state.StateDB, txn *
 
 // Finalize implements consensus.Engine
 func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
-	passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions, source string) error {
+	passedTransactions types.Transactions, errorTransactions types.Transactions, source string) error {
 	if txs == nil {
 		txs = make([]*types.Transaction, 0)
 	} else {
@@ -666,7 +666,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		return err
 	}
 
-	err = c.verifyTransactions(header, txs, blockConsensusData, passedTransactions, skippedTransactions, errorTransactions)
+	err = c.verifyTransactions(header, txs, blockConsensusData, passedTransactions, errorTransactions, source)
 	if err != nil {
 		return err
 	}
@@ -891,7 +891,7 @@ func burn(state *state.StateDB, burnAmount *big.Int) {
 }
 
 func (c *ProofOfStake) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs, receipts, nil, nil, nil, "FinalizeAndAssemble")
+	err := c.Finalize(chain, header, state, txs, receipts, nil, nil, "FinalizeAndAssemble")
 	if err != nil {
 		return nil, err
 	}
@@ -901,7 +901,7 @@ func (c *ProofOfStake) FinalizeAndAssemble(chain consensus.ChainHeaderReader, he
 }
 
 func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
-	passedTransactions types.Transactions, skippedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
+	passedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -942,7 +942,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 
 	//Extra data
 	if header.Number.Uint64() >= defaults.DeepCheckStartBlock {
-		extraData, err := EncodeBlockExtraData(skippedTransactions, errorTransactions, header.Extra, header.Number.Uint64())
+		extraData, err := EncodeBlockExtraData(errorTransactions, header.Extra, header.Number.Uint64())
 		if err != nil {
 			return nil, err
 		}
@@ -950,7 +950,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 		copy(header.Extra, extraData)
 	}
 
-	err = c.Finalize(chain, header, state, txs, receipts, passedTransactions, skippedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
+	err = c.Finalize(chain, header, state, txs, receipts, passedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
 	if err != nil {
 		return nil, err
 	}
@@ -1047,52 +1047,44 @@ func MakeMap(transactions types.Transactions) (map[common.Hash]bool, error) {
 }
 
 func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*types.Transaction, blockConsensusData *BlockConsensusData, passedTransactions types.Transactions,
-	skippedTransactions types.Transactions, errorTransactions types.Transactions) error {
+	errorTransactions types.Transactions, source string) error {
 	if header.Number.Uint64() < defaults.DeepCheckStartBlock {
 		//todo: verify
 		return nil
 	}
 
-	actualTxnCount := len(passedTransactions) + len(skippedTransactions) + len(errorTransactions)
+	actualTxnCount := len(passedTransactions) + len(errorTransactions)
 	if len(blockConsensusData.SelectedTransactions) != actualTxnCount {
-		log.Error("verifyTransactions wrong number of transactions",
+		log.Error("verifyTransactions wrong number of transactions", "blockNumber", header.Number.Uint64(),
 			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
-			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions))
+			"len(passedTransactions)", len(passedTransactions), "len(errorTransactions)", len(errorTransactions), "source", source)
 		return errors.New("wrong number of transactions")
 	}
 
 	blockTransactions := types.Transactions(transactions)
 
 	if blockTransactions.IsEqualTo(passedTransactions) == false {
-		log.Error("verifyTransactions passedTransactions IsEqualTo fail",
+		log.Error("verifyTransactions passedTransactions IsEqualTo fail", "blockNumber", header.Number.Uint64(),
 			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
-			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions))
+			"len(passedTransactions)", len(passedTransactions), "len(errorTransactions)", len(errorTransactions), "source", source)
 		return errors.New("wrong number of passed transactions")
 	}
 
-	blockExtraData, _, err := DecodeBlockExtraData(header.Extra)
+	blockExtraData, _, err := DecodeBlockExtraData(header.Extra, header.Number.Uint64())
 	if err != nil {
 		return err
-	}
-
-	if skippedTransactions.IsEqualTo(blockExtraData.SkippedTransactions) == false {
-		log.Error("verifyTransactions skippedTransactions IsEqualTo fail",
-			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
-			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions),
-			"blockExtraData.SkippedTransactions", blockExtraData.SkippedTransactions, "blockExtraData.ErrorTransactions", blockExtraData.ErrorTransactions)
-		return errors.New("wrong number of skipped transactions")
 	}
 
 	if errorTransactions.IsEqualTo(blockExtraData.ErrorTransactions) == false {
 		log.Error("verifyTransactions errorTransactions IsEqualTo fail",
 			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
-			"len(passedTransactions)", len(passedTransactions), "len(skippedTransactions)", len(skippedTransactions), "len(errorTransactions)", len(errorTransactions),
-			"blockExtraData.SkippedTransactions", blockExtraData.SkippedTransactions, "blockExtraData.ErrorTransactions", blockExtraData.ErrorTransactions)
+			"len(passedTransactions)", len(passedTransactions), "len(errorTransactions)", len(errorTransactions),
+			"blockExtraData.ErrorTransactions", len(blockExtraData.ErrorTransactions))
 		return errors.New("wrong number of error transactions")
 	}
 
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL {
-		if len(skippedTransactions) > 0 || len(errorTransactions) > 0 || len(passedTransactions) > 0 || len(blockConsensusData.SelectedTransactions) > 0 {
+		if len(errorTransactions) > 0 || len(passedTransactions) > 0 || len(blockConsensusData.SelectedTransactions) > 0 {
 			return errors.New("verifyTransactions skippedTransactions errorTransactions is present in NIL BLOCK")
 		}
 	} else {
@@ -1112,12 +1104,6 @@ func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*
 			return err
 		}
 
-		skippedTxnMap, err := MakeMap(skippedTransactions)
-		if err != nil {
-			log.Error("verifyTransactions errorTxnMap error")
-			return err
-		}
-
 		errorTxnMap, err := MakeMap(errorTransactions)
 		if err != nil {
 			log.Error("verifyTransactions errorTxnMap error")
@@ -1131,13 +1117,8 @@ func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*
 				foundCount = foundCount + 1
 			}
 
-			_, ok2 := skippedTxnMap[k]
+			_, ok2 := errorTxnMap[k]
 			if ok2 {
-				foundCount = foundCount + 1
-			}
-
-			_, ok3 := errorTxnMap[k]
-			if ok3 {
 				foundCount = foundCount + 1
 			}
 
@@ -1145,13 +1126,24 @@ func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*
 				log.Error("verifyTransactions couldn't find txn in passed or skipped or error txn list", "txn", k)
 				return errors.New("couldn't find txn in passed or skipped or error txn list")
 			} else if foundCount != 1 {
-				log.Error("verifyTransactions found multiple occurrences of txn", "txn", k, "foundCount", foundCount, "ok1", ok1, "ok2", ok2, "ok3", ok3)
+				log.Error("verifyTransactions found multiple occurrences of txn", "txn", k, "foundCount", foundCount, "ok1", ok1, "ok2", ok2)
 				return errors.New("verifyTransactions found multiple occurrences of txn")
 			}
 		}
 	}
 
 	return nil
+}
+
+func (c *ProofOfStake) ParseHeaderDetails(chain consensus.ChainHeaderReader, header *types.Header) (errorTransactions types.Transactions, err error) {
+	if header.Number.Uint64() < defaults.DeepCheckStartBlock {
+		return errorTransactions, nil
+	}
+	blockExtraInfo, _, err := DecodeBlockExtraData(header.Extra, header.Number.Uint64())
+	if err != nil {
+		return nil, err
+	}
+	return blockExtraInfo.ErrorTransactions, nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

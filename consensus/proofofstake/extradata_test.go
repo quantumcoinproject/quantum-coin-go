@@ -19,28 +19,22 @@ func TestExtraData_basic(t *testing.T) {
 }
 
 func TestExtraData_encode_decode(t *testing.T) {
-	var skippedTransactions types.Transactions
 	var errorTransactions types.Transactions
 	blockNumber := defaults.DeepCheckStartBlock
 
-	encoded, err := EncodeBlockExtraData(skippedTransactions, errorTransactions, DefaultExtraData, blockNumber)
+	encoded, err := EncodeBlockExtraData(errorTransactions, DefaultExtraData, blockNumber)
 	if err != nil {
 		t.Fatalf(err.Error())
 		return
 	}
 
-	decoded, origExtraData, err := DecodeBlockExtraData(encoded)
+	decoded, origExtraData, err := DecodeBlockExtraData(encoded, blockNumber)
 	if err != nil {
 		t.Fatalf(err.Error())
 		return
 	}
 
 	if bytes.Compare(origExtraData, DefaultExtraData) != 0 {
-		return
-	}
-
-	if decoded.SkippedTransactions.IsEqualTo(skippedTransactions) == false {
-		t.Fatalf("SkippedTransactions check fail")
 		return
 	}
 
@@ -60,11 +54,6 @@ func TestExtraData_encode_decode(t *testing.T) {
 		return
 	}
 
-	if verified.SkippedTransactions.IsEqualTo(skippedTransactions) == false {
-		t.Fatalf("SkippedTransactions check fail")
-		return
-	}
-
 	if verified.ErrorTransactions.IsEqualTo(errorTransactions) == false {
 		t.Fatalf("SkippedTransactions check fail")
 		return
@@ -72,13 +61,12 @@ func TestExtraData_encode_decode(t *testing.T) {
 }
 
 func TestExtraData_encode_decode_negative(t *testing.T) {
-	var skippedTransactions types.Transactions
 	var errorTransactions types.Transactions
 	blockNumber := defaults.DeepCheckStartBlock
 
 	extraDataDummy := []byte{1, 2, 3}
 
-	_, err := EncodeBlockExtraData(skippedTransactions, errorTransactions, extraDataDummy, blockNumber)
+	_, err := EncodeBlockExtraData(errorTransactions, extraDataDummy, blockNumber)
 	if err == nil {
 		t.Fatalf("EncodeBlockExtraData passed incorrectly")
 		return
