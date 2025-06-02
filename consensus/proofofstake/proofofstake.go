@@ -642,6 +642,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			}
 			signerHash, err := c.signer.Hash(tx)
 			if err != nil {
+				log.Trace("Finalize Hash failed", "Hash", tx.Hash(), "error", err)
 				return err
 			}
 			if !tx.Verify(signerHash.Bytes()) {
@@ -1088,6 +1089,24 @@ func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*
 			return errors.New("verifyTransactions skippedTransactions errorTransactions is present in NIL BLOCK")
 		}
 	} else {
+		for _, tx := range errorTransactions {
+			if tx.VerifyFields() == false {
+				log.Trace("errorTransactions Txn VerifyFields failed", "Hash", tx.Hash())
+				return errors.New("Transaction VerifyFields failed")
+			}
+			signerHash, err := c.signer.Hash(tx)
+			if err != nil {
+				log.Trace("errorTransactionssignerHash failed", "Hash", tx.Hash(), "error", err)
+				return err
+			}
+			if !tx.Verify(signerHash.Bytes()) {
+				log.Trace("errorTransactions Txn Verify failed", "Hash", tx.Hash())
+				return errors.New("Transaction verify failed")
+			} else {
+				log.Trace("errorTransactions Txn Verify ok", "Hash", tx.Hash())
+			}
+		}
+
 		selectTxnMap := make(map[common.Hash]bool)
 		for _, t := range blockConsensusData.SelectedTransactions {
 			_, ok := selectTxnMap[t]

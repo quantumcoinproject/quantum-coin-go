@@ -750,6 +750,11 @@ var (
 		Name:  "rebroadcastcount",
 		Usage: "Rebroadcast packets to N number of peers.",
 	}
+
+	CryptoBreakglassBlockFlag = cli.IntFlag{
+		Name:  "crypto.breakglass.block",
+		Usage: "Block after which full sign mode is force required for new transactions and attestations.",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1233,6 +1238,10 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(RebroadcastCountFlag.Name) {
 		cfg.RebroadcastCount = ctx.GlobalInt(RebroadcastCountFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(CryptoBreakglassBlockFlag.Name) {
+		cfg.CryptoBreakglassBlock = ctx.GlobalUint64(CryptoBreakglassBlockFlag.Name)
 	}
 
 	if ctx.GlobalIsSet(ProfPortFlag.Name) {
