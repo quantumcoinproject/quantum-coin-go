@@ -732,7 +732,7 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 
 	tstart := time.Now()
 	if w.selectedTransactions == nil || w.contextParentHash.IsEqualTo(parent.Hash()) == false {
-		log.Trace("proposePhase", "ParentHash", parent.ParentHash(), "number", parent.NumberU64())
+		log.Debug("proposePhase", "ParentHash", parent.ParentHash(), "number", parent.NumberU64())
 
 		if parent.Time() >= uint64(timestamp) {
 			timestamp = int64(parent.Time() + 1)
@@ -852,12 +852,12 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 				}
 			}
 		}
-
+		log.Debug("proposePhase if", "parentHash", parent.Hash(), "number", parent.NumberU64(), "selectedTransactions count", len(w.selectedTransactions))
 	} else {
-		log.Info("proposePhase else", "parentHash", parent.Hash(), "number", parent.NumberU64())
+		log.Debug("proposePhase else", "parentHash", parent.Hash(), "number", parent.NumberU64())
 	}
 
-	log.Trace("HandleTransactions ok 3")
+	log.Debug("HandleTransactions ok 3", "time taken", time.Since(tstart))
 	commitResult, err := w.commitTransactions(w.coinbase, interrupt)
 	if err != nil {
 		return err
@@ -866,7 +866,7 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 		log.Trace("commitTransactions nil", "ParentHash", w.current.header.ParentHash)
 	}
 
-	log.Trace("HandleTransactions ok 4")
+	log.Debug("HandleTransactions ok 4", "time taken", time.Since(tstart))
 	return w.commit(w.fullTaskHook, true, tstart)
 }
 
