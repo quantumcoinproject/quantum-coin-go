@@ -1,0 +1,24 @@
+package hybridpqc
+
+import (
+	"errors"
+	"github.com/quantumcoinproject/circl/sign/mldsa/mldsa44"
+)
+
+const CRYPTO_DILITHIUM_PUBLICKEY_BYTES = 1312
+
+func VerifyDilithium(digestHash []byte, signature []byte, publicKey []byte) error {
+
+	var pubKey mldsa44.PublicKey
+
+	var buf2 [CRYPTO_DILITHIUM_PUBLICKEY_BYTES]byte
+	copy(buf2[:], publicKey)
+
+	pubKey.Unpack(&buf2)
+
+	if mldsa44.VerifyNoContext(&pubKey, digestHash, signature) == false {
+		return errors.New("verify failed")
+	}
+
+	return nil
+}

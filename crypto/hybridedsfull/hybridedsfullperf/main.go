@@ -61,5 +61,5 @@ func main() {
 		}
 	}
 	duration := time.Since(start)
-	fmt.Println("Verify Time Taken", duration)
+	fmt.Println("Verify Time Taken", duration, "average ms", float64(duration.Milliseconds())/float64(count))
 }
