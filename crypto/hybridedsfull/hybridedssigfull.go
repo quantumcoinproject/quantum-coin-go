@@ -3,11 +3,13 @@ package hybridedsfull
 import (
 	"bufio"
 	"bytes"
+	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridpqc"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io"
 	"io/ioutil"
@@ -315,7 +317,42 @@ func (s HybridedsfullSig) Verify(pubKey []byte, digestHash []byte, signature []b
 		return false
 	}
 
-	err = Verify(digestHash, sigBytes, pubKey)
+	msgLen := len(digestHash)
+	if msgLen <= 0 || msgLen > 255 {
+		return false
+	}
+
+	if len(sigBytes) != CRYPTO_HYBRID_SIGNATURE_BYTES+msgLen {
+		return false
+	}
+
+	if sigBytes[0] != SIGNATURE_ID {
+		return false
+	}
+
+	if int(sigBytes[1]) != msgLen {
+		return false
+	}
+
+	ed25519Signature := sigBytes[2 : 2+CRYPTO_ED25519_SIGNATURE_BYTES]
+	ed25519PubKey := pubKey[:CRYPTO_ED25519_PUBLICKEY_BYTES]
+
+	ok := ed25519.Verify(ed25519PubKey, digestHash, ed25519Signature)
+	if ok == false {
+		return false
+	}
+
+	dilithiumSignature := sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES+msgLen : 2+CRYPTO_ED25519_SIGNATURE_BYTES+msgLen+CRYPTO_DILITHIUM_SIGNATURE_BYTES]
+	dilithiumPubKey := pubKey[CRYPTO_ED25519_PUBLICKEY_BYTES : CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES]
+
+	err = hybridpqc.VerifyDilithium(digestHash, dilithiumSignature, dilithiumPubKey)
+	if err != nil {
+		return false
+	}
+
+	sphincsSignature := sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES+msgLen+CRYPTO_DILITHIUM_SIGNATURE_BYTES : 2+CRYPTO_ED25519_SIGNATURE_BYTES+msgLen+CRYPTO_DILITHIUM_SIGNATURE_BYTES+CRYPTO_SPHINCS_SIGNATURE_BYTES]
+	sphincsPubKey := pubKey[CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES : CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES+CRYPTO_SPHINCS_PUBLICKEY_BYTES]
+	err = hybridpqc.VerifySphincs(digestHash, sphincsSignature, sphincsPubKey)
 	if err != nil {
 		return false
 	}
@@ -349,10 +386,9 @@ func (s HybridedsfullSig) PublicKeyAndSignatureFromCombinedSignature(digestHash 
 		return nil, nil, err
 	}
 
-	err = Verify(digestHash, signature, pubKey)
-
-	if err != nil {
-		return nil, nil, err
+	ok := s.Verify(pubKey, digestHash, sig)
+	if ok == false {
+		return nil, nil, errors.New("Verify failed")
 	}
 
 	return signature, pubKey, nil
@@ -371,14 +407,14 @@ func (s HybridedsfullSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes
 }
 
 func (s HybridedsfullSig) PublicKeyBytesFromSignature(digestHash []byte, sig []byte) ([]byte, error) {
-	sigBytes, pubKeyBytes, err := common.ExtractTwoParts(sig)
+	_, pubKeyBytes, err := common.ExtractTwoParts(sig)
 	if err != nil {
 		return nil, err
 	}
 
-	err = Verify(digestHash, sigBytes, pubKeyBytes)
-	if err != nil {
-		return nil, err
+	ok := s.Verify(pubKeyBytes, digestHash, sig)
+	if ok == false {
+		return nil, errors.New("verify failed")
 	}
 
 	return pubKeyBytes, nil
@@ -397,15 +433,15 @@ func (s HybridedsfullSig) PublicKeyFromSignatureWithContext(digestHash []byte, s
 		return nil, errors.New("invalid context")
 	}
 
-	sigBytes, pubKeyBytes, err := common.ExtractTwoParts(sig)
+	_, pubKeyBytes, err := common.ExtractTwoParts(sig)
 	if err != nil {
 		return nil, err
 	}
 
 	newDigestHash := crypto.Keccak256(digestHash, context)
-	err = Verify(newDigestHash, sigBytes, pubKeyBytes)
-	if err != nil {
-		return nil, err
+	ok := s.Verify(pubKeyBytes, newDigestHash, sig)
+	if ok == false {
+		return nil, errors.New("verify failed")
 	}
 
 	return s.DeserializePublicKey(pubKeyBytes)
@@ -426,11 +462,7 @@ func (osig HybridedsfullSig) ValidateSignatureValues(digestHash []byte, v byte, 
 		}
 
 		combinedSignature := common.CombineTwoParts(signature, pubKey)
-		if !osig.Verify(pubKey, digestHash, combinedSignature) {
-			return false
-		}
-
-		return true
+		return osig.Verify(pubKey, digestHash, combinedSignature)
 	}
 	return false
 }

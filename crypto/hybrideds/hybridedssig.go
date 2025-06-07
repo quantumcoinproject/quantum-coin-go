@@ -408,7 +408,10 @@ func (s HybridedsSig) VerifyNative(pubKey []byte, digestHash []byte, signature [
 		return false
 	}*/
 
-	err = hybridpqc.VerifyDilithium(hybridDigest, sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES:2+CRYPTO_ED25519_SIGNATURE_BYTES+CRYPTO_DILITHIUM_SIGNATURE_BYTES], pubKey[CRYPTO_ED25519_PUBLICKEY_BYTES:CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES])
+	dilithiumSignature := sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES : 2+CRYPTO_ED25519_SIGNATURE_BYTES+CRYPTO_DILITHIUM_SIGNATURE_BYTES]
+	dilithiumPubKey := pubKey[CRYPTO_ED25519_PUBLICKEY_BYTES : CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES]
+
+	err = hybridpqc.VerifyDilithium(hybridDigest, dilithiumSignature, dilithiumPubKey)
 	if err != nil {
 		return false
 	}
