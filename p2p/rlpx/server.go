@@ -37,10 +37,10 @@ type Server struct {
 	rbuf ReadBuffer
 	wbuf WriteBuffer
 
-	clientHelloMessage  *clientHelloMessage
-	serverHelloMessage  *serverHelloMessage
-	serverVerifyMessage *serverVerifyMessage
-	clientVerifyMessage *clientVerifyMessage
+	cliHelloMessage  *clientHelloMessage
+	srvHelloMessage  *serverHelloMessage
+	srvVerifyMessage *serverVerifyMessage
+	cliVerifyMessage *clientVerifyMessage
 
 	kemCipherText   []byte //kemCipherTextLength
 	kemSharedSecret []byte //kemSecretLength
@@ -119,7 +119,7 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	//Handle client hello message
-	s.clientHelloMessage = clientHelloMessage
+	s.cliHelloMessage = clientHelloMessage
 	err = s.handleClientHello()
 	if err != nil {
 		return err
@@ -131,7 +131,7 @@ func (s *Server) PerformHandshake() error {
 		return err
 	}
 
-	serverHelloPacket, err := s.serializer.Serialize(s.serverHelloMessage)
+	serverHelloPacket, err := s.serializer.Serialize(s.srvHelloMessage)
 	if err != nil {
 		return err
 	}
@@ -142,12 +142,12 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	//Find the transcript of the session
-	clientHelloTranscript, err := s.serializer.SerializeDeterministic(s.clientHelloMessage, 0)
+	clientHelloTranscript, err := s.serializer.SerializeDeterministic(s.cliHelloMessage, 0)
 	if err != nil {
 		return err
 	}
 
-	serverHelloTranscript, err := s.serializer.SerializeDeterministic(s.serverHelloMessage, 0)
+	serverHelloTranscript, err := s.serializer.SerializeDeterministic(s.srvHelloMessage, 0)
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (s *Server) PerformHandshake() error {
 	serverVerifyMessage.Signature = make([]byte, cryptobase.SigAlg.SignatureWithPublicKeyLength())
 	copy(serverVerifyMessage.Signature[:], signature)
 	serverVerifyMessage.SignatureLen = uint(len(signature))
-	s.serverVerifyMessage = serverVerifyMessage
+	s.srvVerifyMessage = serverVerifyMessage
 
 	serverVerifyPacket, err := s.serializer.Serialize(serverVerifyMessage)
 	if err != nil {
@@ -182,7 +182,7 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	//Create the transcript
-	serverVerifyTranscript, err := s.serializer.SerializeDeterministic(s.serverVerifyMessage, 0)
+	serverVerifyTranscript, err := s.serializer.SerializeDeterministic(s.srvVerifyMessage, 0)
 	if err != nil {
 		return err
 	}
@@ -224,14 +224,14 @@ func (s *Server) makeServerHello() error {
 
 	serverHelloMessage.CipherText = make([]byte, s.kem.AlgDetails.LengthCiphertext)
 	copy(serverHelloMessage.CipherText[:], s.kemCipherText[:])
-	s.serverHelloMessage = serverHelloMessage
+	s.srvHelloMessage = serverHelloMessage
 
 	return nil
 }
 
 func (s *Server) handleClientHello() error {
 
-	ciphertext, sharedSecret, err := s.kem.EncapsulateSecret(s.clientHelloMessage.ClientKemPublicKey[:])
+	ciphertext, sharedSecret, err := s.kem.EncapsulateSecret(s.cliHelloMessage.ClientKemPublicKey[:])
 	if err != nil {
 		return err
 	}
@@ -255,10 +255,10 @@ func (s *Server) handleClientVerify() error {
 		return err
 	}
 
-	s.clientVerifyMessage = clientVerifyMessage
+	s.cliVerifyMessage = clientVerifyMessage
 
 	//Find the transcript of the session
-	clientVerifyTranscript, err := s.serializer.SerializeDeterministic(s.clientVerifyMessage, 0)
+	clientVerifyTranscript, err := s.serializer.SerializeDeterministic(s.cliVerifyMessage, 0)
 	if err != nil {
 		return err
 	}
