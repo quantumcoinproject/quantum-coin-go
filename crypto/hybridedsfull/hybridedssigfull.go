@@ -299,7 +299,7 @@ func (s HybridedsfullSig) SignWithContext(digestHash []byte, prv *signaturealgor
 		return nil, errors.New("SignWithContext failed context")
 	}
 
-	if context[0] == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID {
+	if context[0] == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
 		newDigestHash := crypto.Keccak256(digestHash, context)
 		return s.Sign(newDigestHash, prv)
 	}
@@ -372,7 +372,7 @@ func (s HybridedsfullSig) VerifyWithContext(pubKey []byte, digestHash []byte, si
 		return false
 	}
 
-	if context[0] == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID {
+	if context[0] == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
 		newDigestHash := crypto.Keccak256(digestHash, context)
 		return s.Verify(pubKey, newDigestHash, signature)
 	}
@@ -429,7 +429,7 @@ func (s HybridedsfullSig) PublicKeyFromSignature(digestHash []byte, sig []byte) 
 }
 
 func (s HybridedsfullSig) PublicKeyFromSignatureWithContext(digestHash []byte, sig []byte, context []byte) (*signaturealgorithm.PublicKey, error) {
-	if context[0] != crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID {
+	if context[0] != byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
 		return nil, errors.New("invalid context")
 	}
 

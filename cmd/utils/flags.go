@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"io"
 	"io/ioutil"
 	"math"
@@ -1242,6 +1243,12 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(CryptoBreakglassBlockFlag.Name) {
 		cfg.CryptoBreakglassBlock = ctx.GlobalUint64(CryptoBreakglassBlockFlag.Name)
+		err := defaults.SetCryptoBreakGlassBlock(cfg.CryptoBreakglassBlock)
+		if err != nil {
+			log.Error("SetCryptoBreakGlassBlock failed", "err", err)
+		} else {
+			log.Warn("CryptoBreakGlassBlock mode", "blockNumber", cfg.CryptoBreakglassBlock)
+		}
 	}
 
 	if ctx.GlobalIsSet(ProfPortFlag.Name) {

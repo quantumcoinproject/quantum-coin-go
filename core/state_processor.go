@@ -22,6 +22,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/misc"
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
@@ -186,6 +187,18 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, 
 	usedGas *uint64, cfg vm.Config, signer *types.Signer) (*types.Receipt, error) {
 	if bc == nil {
 		return nil, errors.New("ChainContext is nil")
+	}
+
+	//Check breakglass compatibility
+	blockNumber := header.Number.Uint64()
+	_, _, s := tx.RawSignatureValues()
+	compatible, err := cryptobase.DynamicSigVerifier.IsBreakglassCompatible(blockNumber, s.Bytes())
+	if err != nil {
+		log.Debug("ApplyTransaction IsBreakglassCompatible", "error", err, "tx", tx.Hash().Hex(), "currentBlockNumber", blockNumber)
+		return nil, err
+	} else if compatible == false {
+		log.Warn("ApplyTransaction compatible false", "error", err, "currentBlockNumber", blockNumber)
+		return nil, errors.New("tx signature type is not allowed")
 	}
 
 	isGasExemptTxn := false

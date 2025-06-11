@@ -77,7 +77,7 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 			return
 		}
 
-		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, []byte{crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID}) == false {
+		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}) == false {
 			err = InvalidPacketErr
 			resultsChan <- &PacketParseResult{err: err}
 			return
