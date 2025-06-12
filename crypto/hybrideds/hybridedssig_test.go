@@ -83,7 +83,7 @@ func testCompactFull(t *testing.T, nativeGolandVerify bool) {
 		t.Fatal("Verify failed 2")
 	}
 
-	context := []byte{crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID}
+	context := []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}
 
 	//The actual test
 	signatureContext, err := sigCompact.SignWithContext(digestHash1, keyCompact1, context)
@@ -128,7 +128,7 @@ func testCompactFull(t *testing.T, nativeGolandVerify bool) {
 		t.Fatal("Sign full failed")
 	}
 
-	if sigCompact.VerifyWithContext(keyCompact1.PubData, digestHash1, signatureFull, []byte{crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID}) == true {
+	if sigCompact.VerifyWithContext(keyCompact1.PubData, digestHash1, signatureFull, []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)}) == true {
 		t.Fatal("Verify passed unexpectedly 2")
 	}
 
