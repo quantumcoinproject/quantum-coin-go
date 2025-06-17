@@ -1,7 +1,6 @@
 package cryptobase
 
 import (
-	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
@@ -71,17 +70,13 @@ func (dv DynamicVerifier) ValidateSignatureValues(digestHash []byte, v byte, r, 
 	}
 }
 
-func (dv DynamicVerifier) IsBreakglassCompatible(blockNumber uint64, signature []byte) (bool, error) {
+func (dv DynamicVerifier) IsSignatureTypeAllowed(blockNumber uint64, signature []byte) (bool, error) {
+	algType := crypto.SignatureAlgorithmType(signature[0])
+
 	isBreakglassBlock := defaults.IsCryptoBreakglassMode(blockNumber)
 	if isBreakglassBlock == false {
-		return false, nil
-
+		return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID, nil
+	} else {
+		return algType == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID, nil
 	}
-
-	sigBytes, _, err := common.ExtractTwoParts(signature)
-	if err != nil {
-		return false, errors.New("invalid signature")
-	}
-	algType := crypto.SignatureAlgorithmType(sigBytes[0])
-	return algType == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID, nil
 }
