@@ -69,7 +69,7 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 		startIndex = 1
 	}
 
-	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) == cryptobase.SigAlg.SignatureWithPublicKeyLength() {
+	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != cryptobase.SigAlgHybridEdsFull.SignatureWithPublicKeyLength() {
 		err = errors.New("invalid breakglass signature length")
 		resultsChan <- &PacketParseResult{err: err}
 	}

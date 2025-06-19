@@ -901,6 +901,11 @@ func shouldSignFull(blockNumber uint64) bool {
 	if blockNumber >= DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK && blockNumber%DefaultConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS == 0 {
 		return true
 	}
+	if defaults.IsCryptoBreakglassMode(blockNumber) {
+		{
+			return true
+		}
+	}
 	return false
 }
 
@@ -924,7 +929,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 	var pubKey *signaturealgorithm.PublicKey
 	var err error
 
-	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) == cryptobase.SigAlg.SignatureWithPublicKeyLength() {
+	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != cryptobase.SigAlgHybridEdsFull.SignatureWithPublicKeyLength() {
 		return errors.New("invalid breakglass signature length")
 	}
 
