@@ -162,3 +162,11 @@ func (dv DynamicVerifier) IsSignatureTypeAllowed(blockNumber uint64, signature [
 		return algType == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID, nil
 	}
 }
+
+func GetSigAlg(blockNumber uint64) signaturealgorithm.SignatureAlgorithm {
+	if defaults.IsCryptoBreakglassMode(blockNumber) {
+		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridEdsFull)
+	} else {
+		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridEds)
+	}
+}

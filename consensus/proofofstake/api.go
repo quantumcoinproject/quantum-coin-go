@@ -444,7 +444,7 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 	consensusData.ExtendedConsensusPackets = make([]*ExtendedConsensusPacket, 0)
 	for i := 0; i < len(blockAdditionalConsensusData.ConsensusPackets); i++ {
 		packet := blockAdditionalConsensusData.ConsensusPackets[i]
-		round, signer, err := parsePacket(&packet)
+		round, signer, err := parsePacket(&packet, blockNumber)
 		if err != nil {
 			consensusData.ExtendedConsensusPackets = append(consensusData.ExtendedConsensusPackets, &ExtendedConsensusPacket{})
 			continue

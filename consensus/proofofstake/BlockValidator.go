@@ -7,6 +7,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -68,34 +69,41 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 		startIndex = 1
 	}
 
+	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) == cryptobase.SigAlg.SignatureWithPublicKeyLength() {
+		err = errors.New("invalid breakglass signature length")
+		resultsChan <- &PacketParseResult{err: err}
+	}
+
+	sigAlg := cryptobase.GetSigAlg(blockNumber)
+
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
 	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength() { //for verify, it is ok not to check the blockNumber for full
-		pubKey, err = cryptobase.SigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
+		pubKey, err = sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
 		if err != nil {
 			err = InvalidPacketErr
 			resultsChan <- &PacketParseResult{err: err}
 			return
 		}
 
-		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}) == false {
+		if sigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}) == false {
 			err = InvalidPacketErr
 			resultsChan <- &PacketParseResult{err: err}
 			return
 		}
 	} else {
-		pubKey, err = cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+		pubKey, err = sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
 			resultsChan <- &PacketParseResult{err: err}
 			return
 		}
-		if cryptobase.DynamicSigVerifier.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+		if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 			err = InvalidPacketErr
 			resultsChan <- &PacketParseResult{err: err}
 			return
 		}
 	}
 
-	validator, err = cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+	validator, err = sigAlg.PublicKeyToAddress(pubKey)
 	if err != nil {
 		log.Trace("invalid 3", "err", err)
 		resultsChan <- &PacketParseResult{err: err}

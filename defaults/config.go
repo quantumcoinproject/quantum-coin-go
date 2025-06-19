@@ -19,7 +19,7 @@ func GetGasLimit(blockNumber uint64) uint64 {
 }
 
 func SetCryptoBreakGlassBlock(blockNumber uint64) error {
-	if cryptoBreakglassBlock > 0 {
+	if cryptoBreakglassBlock > 0 && blockNumber != 0 {
 		return errors.New("SetCryptoBreakGlassBlock already set")
 	}
 	cryptoBreakglassBlock = blockNumber

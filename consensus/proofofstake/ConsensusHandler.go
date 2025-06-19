@@ -9,6 +9,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/handler"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -857,7 +858,7 @@ func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, 
 	}
 
 	cph.LogIncomingPacketStats()
-	err := cph.processPacket(packet)
+	err := cph.processPacket(packet, cph.latestBlockNumber)
 	if errors.Is(err, OutOfOrderPackerErr) {
 		pkt := eth.NewConsensusPacket(packet)
 		packetMap, ok := cph.outOfOrderPacketsMap[packet.ParentHash]
@@ -903,7 +904,7 @@ func shouldSignFull(blockNumber uint64) bool {
 	return false
 }
 
-func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
+func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNumber uint64) error {
 	if packet == nil || packet.ConsensusData == nil || len(packet.ConsensusData) < 1 || packet.Signature == nil || len(packet.Signature) < hybrideds.CRYPTO_SIGNATURE_BYTES {
 		log.Debug("processPacket nil")
 		return errors.New("nil packet")
@@ -923,30 +924,36 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
 	var pubKey *signaturealgorithm.PublicKey
 	var err error
 
+	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) == cryptobase.SigAlg.SignatureWithPublicKeyLength() {
+		return errors.New("invalid breakglass signature length")
+	}
+
+	sigAlg := cryptobase.GetSigAlg(blockNumber)
+
 	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength() { //for verify, it is ok not to check the blockNumber for full
-		pubKey, err = cryptobase.SigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
+		pubKey, err = sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
 		if err != nil {
 			log.Debug("processPacket invalid 1")
 			return InvalidPacketErr
 		}
 
-		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
+		if sigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
 			return InvalidPacketErr
 		}
 	} else {
-		pubKey, err = cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+		pubKey, err = sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
 			log.Debug("processPacket invalid 2")
 			return InvalidPacketErr
 		}
 
-		if cryptobase.DynamicSigVerifier.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+		if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 			log.Debug("processPacket invalid 3")
 			return InvalidPacketErr
 		}
 	}
 
-	validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+	validator, err := sigAlg.PublicKeyToAddress(pubKey)
 	if err != nil {
 		log.Debug("processPacket invalid 4")
 		return InvalidPacketErr
@@ -969,13 +976,13 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
 	return errors.New("unknown packet type")
 }
 
-func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash) error {
+func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash, blockNumber uint64) error {
 	unprocessedPackets := make([]*OutOfOrderPacket, 0)
 
 	for key, pktList := range cph.outOfOrderPacketsMap {
 		for _, pkt := range pktList {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				err := cph.processPacket(pkt.Packet)
+				err := cph.processPacket(pkt.Packet, blockNumber)
 				if err != nil {
 					unprocessedPackets = append(unprocessedPackets, &OutOfOrderPacket{
 						Packet:       pkt.Packet,
@@ -1479,20 +1486,21 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 	return nil
 }
 
-func parsePacket(packet *eth.ConsensusPacket) (byte, common.Address, error) {
+func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.Address, error) {
 	dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
 	digestHash := crypto.Keccak256(dataToVerify)
-	pubKey, err := cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+	sigAlg := cryptobase.GetSigAlg(blockNumber)
+	pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 	if err != nil {
 		log.Trace("invalid 1", "err", err)
 		return 0, ZERO_ADDRESS, err
 	}
-	if cryptobase.DynamicSigVerifier.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+	if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 		log.Trace("invalid 2")
 		return 0, ZERO_ADDRESS, InvalidPacketErr
 	}
 
-	validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+	validator, err := sigAlg.PublicKeyToAddress(pubKey)
 	if err != nil {
 		log.Trace("invalid 3", "err", err)
 		return 0, ZERO_ADDRESS, err
@@ -1553,44 +1561,7 @@ func parsePacket(packet *eth.ConsensusPacket) (byte, common.Address, error) {
 	return 0, ZERO_ADDRESS, InvalidPacketErr
 }
 
-func (cph *ConsensusHandler) findTotalDepositsInGreaterRound(parentHash common.Hash) *big.Int {
-	blockStateDetails := cph.blockStateDetailsMap[parentHash]
-	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
-
-	//Find deposit in greater rounds
-	valMap := make(map[common.Address]bool)
-	for _, pktList := range cph.outOfOrderPacketsMap {
-		for _, pkt := range pktList {
-			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				round, validator, err := parsePacket(pkt.Packet)
-				if err != nil {
-					continue
-				}
-				if round <= blockStateDetails.currentRound {
-					continue
-				}
-				_, ok := blockRoundDetails.validatorPrecommits[validator]
-				if ok { //if precommit from this validator, skip counting it
-					continue
-				}
-				valMap[validator] = true
-			}
-		}
-	}
-
-	totalGreaterRoundDepositCount := big.NewInt(0)
-	for val, depositAmount := range blockStateDetails.filteredValidatorsDepositMap {
-		exists, ok := valMap[val]
-		if ok == false || exists == false {
-			continue
-		}
-		totalGreaterRoundDepositCount = common.SafeAddBigInt(depositAmount, totalGreaterRoundDepositCount)
-	}
-
-	return totalGreaterRoundDepositCount
-}
-
-func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common.Hash) (bool, error) {
+func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common.Hash, blockNumber uint64) (bool, error) {
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
@@ -1599,7 +1570,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 	for _, pktList := range cph.outOfOrderPacketsMap {
 		for _, pkt := range pktList {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				round, validator, err := parsePacket(pkt.Packet)
+				round, validator, err := parsePacket(pkt.Packet, blockNumber)
 				if err != nil {
 					log.Trace("parsePacket", "err", err)
 					continue
@@ -1666,7 +1637,7 @@ func getPacketType(packet *eth.ConsensusPacket) ConsensusPacketType {
 	return packetType
 }
 
-func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Hash) (bool, error) {
+func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Hash, blockNumber uint64) (bool, error) {
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
@@ -1681,7 +1652,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 	for _, pktList := range cph.outOfOrderPacketsMap {
 		for _, pkt := range pktList {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				round, validator, err := parsePacket(pkt.Packet)
+				round, validator, err := parsePacket(pkt.Packet, blockNumber)
 				if err != nil {
 					log.Trace("parsePacket", "err", err)
 					continue
@@ -2211,7 +2182,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 				}
 				return nil
 			} else {
-				ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash)
+				ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash, blockStateDetails.blockNumber)
 				if err != nil {
 					return err
 				}
@@ -2398,7 +2369,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 			log.Trace("blockVoteType a3", "parentHash", parentHash)
 			return nil
 		} else {
-			ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash)
+			ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash, blockStateDetails.blockNumber)
 			if err != nil {
 				return err
 			}
@@ -2639,6 +2610,10 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	}
 
 	cph.SetLatestBlockNumber(blockNumber)
+	if defaults.IsCryptoBreakglassMode(blockNumber) {
+		log.Trace("IsCryptoBreakglassMode mode is set")
+		defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID))
+	}
 
 	if cph.initialized == false {
 
@@ -2695,7 +2670,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		return err
 	}
 
-	cph.processOutOfOrderPackets(parentHash)
+	cph.processOutOfOrderPackets(parentHash, blockNumber)
 
 	err = errors.New("not ready yet")
 
@@ -2756,7 +2731,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 			cph.ackBlockProposal(parentHash)
 		}
 	} else if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PRECOMMITS {
-		shouldMove, err := cph.shouldMoveToNextRoundPrecommit(parentHash)
+		shouldMove, err := cph.shouldMoveToNextRoundPrecommit(parentHash, blockNumber)
 		if err == nil && shouldMove {
 			return cph.initializeNewBlockRound(NEW_ROUND_REASON_WAIT_PRECOMMIT_TIMEOUT)
 		} else {

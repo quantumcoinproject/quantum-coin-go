@@ -165,6 +165,7 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 	} else {
 		startIndex = 1
 	}
+	sigAlg := cryptobase.GetSigAlg(TEST_CONSENSUS_BLOCK_NUMBER)
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
 	if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) && packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && packet.ParentHash.IsEqualTo(getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER)) {
@@ -186,17 +187,17 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 
 		return validator, nil
 	} else {
-		pubKey, err := cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+		pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
 			log.Info("a4", "len", len(packet.Signature), "packetType", packetType, "packet.ParentHash", packet.ParentHash, "getTestParentHash", getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER), "startIndex", startIndex)
 			return ZERO_ADDRESS, err
 		}
-		if cryptobase.DynamicSigVerifier.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+		if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 			log.Info("a5")
 			return ZERO_ADDRESS, InvalidPacketErr
 		}
 
-		validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+		validator, err := sigAlg.PublicKeyToAddress(pubKey)
 		if err != nil {
 			log.Info("a6")
 			return ZERO_ADDRESS, err
@@ -1936,5 +1937,27 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 		}
 	}
 	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	fmt.Println("TestPacketHandler_basic_various_blocks done")
+}
+
+func TestPacketHandler_breakglass(t *testing.T) {
+	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+
+	breakglassBlock := uint64(5000000)
+	defaults.SetCryptoBreakGlassBlock(breakglassBlock)
+	if defaults.IsCryptoBreakglassMode(breakglassBlock) == false {
+		t.Fatalf("failed IsCryptoBreakglassMode")
+		return
+	}
+	TEST_CONSENSUS_BLOCK_NUMBER = breakglassBlock
+	fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+	for i := 1; i <= TEST_ITERATIONS; i++ {
+		fmt.Println("iteration", i)
+		testPacketHandler_basic(4, t)
+	}
+
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	defaults.SetCryptoBreakGlassBlock(0)
+	defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID))
 	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }
