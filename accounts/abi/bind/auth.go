@@ -108,7 +108,7 @@ func NewKeyedTransactor(key *signaturealgorithm.PrivateKey) *TransactOpts {
 			}
 			digestBytes := digestHash.Bytes()
 
-			signature, err := cryptobase.SigAlg.Sign(digestBytes, key)
+			signature, err := cryptobase.DynamicSign.Sign(digestBytes, key)
 			if err != nil {
 				return nil, err
 			}
@@ -181,7 +181,7 @@ func NewKeyedTransactorWithChainID(key *signaturealgorithm.PrivateKey, chainID *
 				return nil, err
 			}
 
-			signature, err := cryptobase.SigAlg.Sign(digest.Bytes(), key)
+			signature, err := cryptobase.DynamicSign.Sign(digest.Bytes(), key)
 			if err != nil {
 				return nil, err
 			}

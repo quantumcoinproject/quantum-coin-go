@@ -73,4 +73,6 @@ type SignatureAlgorithm interface {
 	PublicKeyFromSignatureWithContext(digestHash []byte, sig []byte, context []byte) (*PublicKey, error)
 
 	ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) bool
+
+	GetAddress(digestHash []byte, sig []byte) (common.Address, error)
 }

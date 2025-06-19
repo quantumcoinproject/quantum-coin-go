@@ -19,7 +19,6 @@ package types
 import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -69,7 +68,7 @@ func SignTx(tx *Transaction, s Signer, prv *signaturealgorithm.PrivateKey) (*Tra
 	if err != nil {
 		return nil, err
 	}
-	sig, err := cryptobase.SigAlg.Sign(h[:], prv)
+	sig, err := cryptobase.DynamicSign.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +82,7 @@ func SignNewTx(prv *signaturealgorithm.PrivateKey, s Signer, txdata TxData) (*Tr
 	if err != nil {
 		return nil, err
 	}
-	sig, err := cryptobase.SigAlg.Sign(h[:], prv)
+	sig, err := cryptobase.DynamicSign.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +244,7 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 
 func decodeSignature(digestHash []byte, sig []byte) (r, s, v *big.Int, err error) {
 
-	signature, publicKey, err := cryptobase.SigAlg.PublicKeyAndSignatureFromCombinedSignature(digestHash, sig)
+	signature, publicKey, err := cryptobase.DynamicSigVerifier.PublicKeyAndSignatureFromCombinedSignature(digestHash, sig)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -269,21 +268,16 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 	// encode the signature in uncompressed format
 	r, s := R.Bytes(), S.Bytes()
 
-	combinedSignature, err := cryptobase.SigAlg.CombinePublicKeySignature(s, r)
+	combinedSignature, err := cryptobase.DynamicSigVerifier.CombinePublicKeySignature(s, r)
 	if err != nil {
 		return common.Address{}, err
 	}
 
-	// recover the public key from the signature
-	pub, err := cryptobase.SigAlg.PublicKeyBytesFromSignature(sighash[:], combinedSignature)
+	// recover the public key (address) from the signature
+	addr, err := cryptobase.DynamicSigVerifier.GetAddress(sighash[:], combinedSignature)
 	if err != nil {
 		return common.Address{}, err
 	}
-	if len(pub) != 0 && len(pub) != cryptobase.SigAlg.PublicKeyLength() {
-		return common.Address{}, errors.New("invalid public key")
-	}
-	var addr common.Address
-	addr.CopyFrom(crypto.PublicKeyBytesToAddress(pub[:]))
 
 	return addr, nil
 }

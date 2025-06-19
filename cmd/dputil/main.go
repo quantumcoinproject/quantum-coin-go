@@ -13,6 +13,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/crosssign"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"io"
@@ -155,6 +156,16 @@ func main() {
 		printHelp()
 		return
 	}
+	signMode := os.Getenv("SIGN_MODE")
+	if signMode == "2" {
+		defaults.SetCryptoSigningMode(2)
+	} else if signMode == "1" {
+		defaults.SetCryptoSigningMode(1)
+	} else if len(signMode) > 0 {
+		fmt.Println("Unknown value for environment variable SIGN_MODE")
+		return
+	}
+
 	rawURL = os.Getenv("DP_RAW_URL")
 	/*
 		if len(rawURL) == 0 {

@@ -124,6 +124,17 @@ func SignatureAlgorithmTest(t *testing.T, sig SignatureAlgorithm) {
 		t.Fatal("Sign failed")
 	}
 
+	addrRecover, err := sig.GetAddress(digestHash1, signature1)
+	if err != nil {
+		fmt.Println(err)
+		t.Fatal("Sign failed")
+	}
+
+	if addrRecover.IsEqualTo(addr1) == false {
+		fmt.Println(err)
+		t.Fatal("Address mismatch")
+	}
+
 	if sig.Verify(pubBytes1, digestHash1, signature1) != true {
 		t.Fatal("Verify failed")
 	}
@@ -202,7 +213,7 @@ func SignatureAlgorithmTest(t *testing.T, sig SignatureAlgorithm) {
 	}
 
 	if len(sigExtracted) != sig.SignatureLength() {
-		t.Fatal("invalid signature length")
+		t.Fatal("invalid signature length test")
 	}
 
 	if len(pubExtracted) != sig.PublicKeyLength() {

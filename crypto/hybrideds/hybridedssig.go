@@ -436,7 +436,7 @@ func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []by
 
 func (s HybridedsSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {
 	if len(sigBytes) < s.signatureLength {
-		return nil, errors.New("invalid signature length")
+		return nil, ErrInvalidSignatureLen
 	}
 
 	if len(pubKeyBytes) != s.publicKeyLength {
@@ -466,6 +466,19 @@ func (s HybridedsSig) PublicKeyFromSignature(digestHash []byte, sig []byte) (*si
 		return nil, err
 	}
 	return s.DeserializePublicKey(b)
+}
+
+func (s HybridedsSig) GetAddress(digestHash []byte, sig []byte) (common.Address, error) {
+	pubKeyBytes, err := s.PublicKeyBytesFromSignature(digestHash[:], sig)
+	if err != nil {
+		return common.Address{}, err
+	}
+	if len(pubKeyBytes) != 0 && len(pubKeyBytes) != s.PublicKeyLength() {
+		return common.Address{}, errors.New("invalid public key")
+	}
+	var addr common.Address
+	addr.CopyFrom(crypto.PublicKeyBytesToAddress(pubKeyBytes[:]))
+	return addr, nil
 }
 
 func (s HybridedsSig) PublicKeyFromSignatureWithContext(digestHash []byte, sig []byte, context []byte) (*signaturealgorithm.PublicKey, error) {

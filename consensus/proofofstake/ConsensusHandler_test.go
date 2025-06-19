@@ -361,7 +361,7 @@ func (vm *ValidatorManager) SignData(account accounts.Account, mimeType string, 
 	}
 
 	hash := crypto.Keccak256(data)
-	return cryptobase.SigAlg.Sign(hash, val.key)
+	return cryptobase.DynamicSign.Sign(hash, val.key)
 }
 
 func (vm *ValidatorManager) SignDataWithContext(account accounts.Account, mimeType string, data []byte, context []byte) ([]byte, error) {

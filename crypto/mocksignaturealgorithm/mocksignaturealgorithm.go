@@ -19,7 +19,7 @@ const (
 var (
 	ErrSignatureInitial       = errors.New("signature mechanism is not supported by OQS")
 	ErrInvalidMsgLen          = errors.New("invalid message length, need max 64 bytes")
-	ErrInvalidSignatureLen    = errors.New("invalid signature length")
+	ErrInvalidSignatureLen    = errors.New("invalid signature length mock")
 	ErrInvalidPublicKeyLen    = errors.New("invalid public key length")
 	ErrInvalidPrivateKeyLen   = errors.New("invalid private key length")
 	ErrInvalidRecoveryID      = errors.New("invalid signature recovery id")

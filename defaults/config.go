@@ -8,6 +8,7 @@ const DefaultGasLimit = 300000000
 
 var DEFAULT_PRICE = int64(47619047619047600)
 var cryptoBreakglassBlock uint64 = 0
+var signingMode byte = 1 //crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
 
 func GetGasLimit(blockNumber uint64) uint64 {
 	if blockNumber < GasPriceStartBlock {
@@ -27,4 +28,12 @@ func SetCryptoBreakGlassBlock(blockNumber uint64) error {
 
 func IsCryptoBreakglassMode(blockNumber uint64) bool {
 	return cryptoBreakglassBlock != 0 && blockNumber >= cryptoBreakglassBlock
+}
+
+func SetCryptoSigningMode(signMode byte) {
+	signingMode = signMode
+}
+
+func GetSigningMode() byte {
+	return signingMode
 }

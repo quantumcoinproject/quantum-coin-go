@@ -68,7 +68,7 @@ To sign a message contained in a file, use the --msgfile flag.
 			utils.Fatalf("Error decrypting key: %v", err)
 		}
 
-		signature, err := cryptobase.SigAlg.Sign(signHash(message), key.PrivateKey)
+		signature, err := cryptobase.DynamicSign.Sign(signHash(message), key.PrivateKey)
 		if err != nil {
 			utils.Fatalf("Failed to sign message: %v", err)
 		}
