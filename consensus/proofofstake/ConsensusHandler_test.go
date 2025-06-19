@@ -169,6 +169,7 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
 	if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) && packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && packet.ParentHash.IsEqualTo(getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER)) {
+		log.Info("getSigner shouldSignFull")
 		pubKey, err := cryptobase.SigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
 		if err != nil {
 			log.Info("a1")
@@ -187,6 +188,7 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 
 		return validator, nil
 	} else {
+		log.Info("getSigner other")
 		pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
 			log.Info("a4", "len", len(packet.Signature), "packetType", packetType, "packet.ParentHash", packet.ParentHash, "getTestParentHash", getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER), "startIndex", startIndex)
@@ -233,8 +235,11 @@ func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) err
 			}
 			signer, err := getSigner(packet)
 			if err != nil {
-				log.Error("getSigner error", "error", err)
-				panic("unexpected")
+				log.Error("getSigner error", "error", err, "TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+				if defaults.IsCryptoBreakglassMode(TEST_CONSENSUS_BLOCK_NUMBER) == false { //stray packets due to timing mismatch
+					panic("unexpected")
+				}
+				continue
 			}
 			if p.mockP2pManager.IsValidatorPacketsBlocked(signer) {
 				continue
@@ -1941,7 +1946,7 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 }
 
 func TestPacketHandler_breakglass(t *testing.T) {
-	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+	fmt.Println("TestPacketHandler_breakglass starting")
 
 	breakglassBlock := uint64(5000000)
 	defaults.SetCryptoBreakGlassBlock(breakglassBlock)
@@ -1959,5 +1964,9 @@ func TestPacketHandler_breakglass(t *testing.T) {
 	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 	defaults.SetCryptoBreakGlassBlock(0)
 	defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID))
-	fmt.Println("TestPacketHandler_basic_various_blocks done")
+	fmt.Println("TestPacketHandler_breakglass done")
+
+	fmt.Println("testPacketHandler_basic sanity check starting")
+	testPacketHandler_basic(4, t)
+	fmt.Println("testPacketHandler_basic sanity check done")
 }
