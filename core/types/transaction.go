@@ -107,6 +107,16 @@ func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
 	return rlp.Encode(w, tx.inner)
 }
 
+// RawHash outputs the raw hash
+func (tx *Transaction) RawHash() (common.Hash, error) {
+	var buff bytes.Buffer
+	err := tx.encodeTyped(&buff)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return common.BytesToHash(buff.Bytes()), nil
+}
+
 // MarshalBinary returns the canonical encoding of the transaction.
 // For legacy transactions, it returns the RLP encoding. For EIP-2718 typed
 // transactions, it returns the type and payload.
