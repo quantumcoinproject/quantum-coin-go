@@ -12,6 +12,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridpqc"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"golang.org/x/crypto/sha3"
 	"io"
 	"io/ioutil"
@@ -492,7 +493,13 @@ func (osig HybridedsSig) ValidateSignatureValues(digestHash []byte, v byte, r, s
 		pubKey, signature := r.Bytes(), s.Bytes()
 
 		if len(pubKey) != osig.PublicKeyLength() {
-			return false
+			if len(pubKey) > osig.PublicKeyLength() {
+				return false
+			}
+			//conversion issues since big.Int setBytes stores only positive integers. pad with zero's
+			log.Debug("ValidateSignatureValues padding zero", "pubKey len", len(pubKey), "expected len", osig.PublicKeyLength())
+			zeroBuff := make([]byte, osig.PublicKeyLength()-len(pubKey))
+			pubKey = append(zeroBuff, pubKey...)
 		}
 
 		if len(signature) < osig.SignatureLength() {
