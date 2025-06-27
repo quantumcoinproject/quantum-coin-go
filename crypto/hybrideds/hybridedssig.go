@@ -18,6 +18,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"runtime/debug"
 )
 
 const CRYPTO_ED25519_PUBLICKEY_BYTES = 32
@@ -441,6 +442,8 @@ func (s HybridedsSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []b
 	}
 
 	if len(pubKeyBytes) != s.publicKeyLength {
+		fmt.Println("combine")
+		debug.PrintStack()
 		return nil, errors.New("invalid public key length")
 	}
 
