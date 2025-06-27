@@ -225,8 +225,6 @@ func (t *Transaction) GasPrice(ctx context.Context) (hexutil.Big, error) {
 	switch tx.Type() {
 	case types.DefaultFeeTxType:
 		return (hexutil.Big)(*tx.GasPrice()), nil
-	case types.DynamicFeeTxType:
-		return (hexutil.Big)(*tx.GasPrice()), nil
 	default:
 		return hexutil.Big(*tx.GasPrice()), nil
 	}
@@ -240,8 +238,6 @@ func (t *Transaction) MaxFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	switch tx.Type() {
 	case types.DefaultFeeTxType:
 		return (*hexutil.Big)(tx.GasPrice()), nil
-	case types.DynamicFeeTxType:
-		return (*hexutil.Big)(tx.GasFeeCap()), nil
 	default:
 		return nil, nil
 	}

@@ -1133,7 +1133,6 @@ type RPCTransaction struct {
 	Gas              hexutil.Uint64    `json:"gas"`
 	GasPrice         *hexutil.Big      `json:"gasPrice"`
 	GasFeeCap        *hexutil.Big      `json:"maxFeePerGas,omitempty"`
-	GasTipCap        *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
 	Hash             common.Hash       `json:"hash"`
 	Input            hexutil.Bytes     `json:"input"`
 	Nonce            hexutil.Uint64    `json:"nonce"`
@@ -1207,15 +1206,6 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 		al := tx.AccessList()
 		result.Accesses = &al
 		result.ChainID = (*hexutil.Big)(tx.ChainId())
-		price := (*hexutil.Big)(tx.GasPrice())
-		result.GasPrice = price
-		result.MaxGasTier = hexutil.Uint64(tx.MaxGasTier().Uint64())
-	case types.DynamicFeeTxType:
-		al := tx.AccessList()
-		result.Accesses = &al
-		result.ChainID = (*hexutil.Big)(tx.ChainId())
-		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
-		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
 		price := (*hexutil.Big)(tx.GasPrice())
 		result.GasPrice = price
 		result.MaxGasTier = hexutil.Uint64(tx.MaxGasTier().Uint64())

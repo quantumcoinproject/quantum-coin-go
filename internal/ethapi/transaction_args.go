@@ -32,14 +32,12 @@ import (
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
-	From                 *common.Address `json:"from"`
-	To                   *common.Address `json:"to"`
-	Gas                  *hexutil.Uint64 `json:"gas"`
-	GasPrice             *hexutil.Big    `json:"gasPrice"`
-	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
-	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
-	Value                *hexutil.Big    `json:"value"`
-	Nonce                *hexutil.Uint64 `json:"nonce"`
+	From     *common.Address `json:"from"`
+	To       *common.Address `json:"to"`
+	Gas      *hexutil.Uint64 `json:"gas"`
+	GasPrice *hexutil.Big    `json:"gasPrice"`
+	Value    *hexutil.Big    `json:"value"`
+	Nonce    *hexutil.Uint64 `json:"nonce"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -175,23 +173,6 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) (types.Message, erro
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
-	case args.MaxFeePerGas != nil:
-		al := types.AccessList{}
-		if args.AccessList != nil {
-			al = *args.AccessList
-		}
-		data = &types.DynamicFeeTx{
-			To:         args.To,
-			ChainID:    (*big.Int)(args.ChainID),
-			Nonce:      uint64(*args.Nonce),
-			Gas:        uint64(*args.Gas),
-			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
-			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
-			Value:      (*big.Int)(args.Value),
-			Data:       args.data(),
-			Remarks:    args.context(),
-			AccessList: al,
-		}
 	case args.AccessList != nil:
 		data = &types.DefaultFeeTx{
 			To:         args.To,
