@@ -210,7 +210,8 @@ func sanityCheckSignature(digestHash []byte, v *big.Int, r *big.Int, s *big.Int,
 		// must already be equal to the recovery id.
 		plainV = byte(v.Uint64())
 	}
-	if !cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, plainV, r, s) {
+	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, plainV, r, s)
+	if isOk == false {
 		return ErrInvalidSig
 	}
 
@@ -338,7 +339,8 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 
 func (tx *Transaction) Verify(digestHash []byte) bool {
 	_, r, s := tx.RawSignatureValues()
-	return cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, 1, r, s)
+	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, 1, r, s)
+	return isOk
 }
 
 // Transactions implements DerivableList for transactions.

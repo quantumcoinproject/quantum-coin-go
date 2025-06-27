@@ -365,26 +365,26 @@ func (s MockSig) PublicKeyFromSignatureWithContext(digestHash []byte, sig []byte
 
 // ValidateSignatureValues verifies whether the signature values are valid with
 // the given chain rules. The v value is assumed to be either 0 or 1.
-func (osig MockSig) ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) bool {
+func (osig MockSig) ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) (isOk bool, pub []byte, sig []byte) {
 	if v == 0 || v == 1 {
 		pubKey, signature := r.Bytes(), s.Bytes()
 
 		if len(pubKey) != osig.PublicKeyLength() {
-			return false
+			return false, nil, nil
 		}
 
 		if len(signature) < osig.SignatureLength() {
-			return false
+			return false, nil, nil
 		}
 
 		combinedSignature := common.CombineTwoParts(signature, pubKey)
 		if !osig.Verify(pubKey, digestHash, combinedSignature) {
-			return false
+			return false, nil, nil
 		}
 
-		return true
+		return true, nil, nil
 	}
-	return false
+	return false, nil, nil
 }
 
 func (s MockSig) PublicKeyStartValue() byte {

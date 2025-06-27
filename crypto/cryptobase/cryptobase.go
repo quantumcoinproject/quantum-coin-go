@@ -137,10 +137,10 @@ func (dv DynamicVerifier) VerifyWithContext(pubKey []byte, digestHash []byte, si
 	}
 }
 
-func (dv DynamicVerifier) ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) bool {
+func (dv DynamicVerifier) ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) (isOk bool, pubKey []byte, signature []byte) {
 	sigBytes := s.Bytes()
 	if len(sigBytes) < 1 {
-		return false
+		return false, nil, nil
 	}
 	algType := crypto.SignatureAlgorithmType(sigBytes[0])
 	if algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID {
@@ -148,7 +148,7 @@ func (dv DynamicVerifier) ValidateSignatureValues(digestHash []byte, v byte, r, 
 	} else if algType == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID {
 		return SigAlgHybridEdsFull.ValidateSignatureValues(digestHash, v, r, s)
 	} else {
-		return false
+		return false, nil, nil
 	}
 }
 

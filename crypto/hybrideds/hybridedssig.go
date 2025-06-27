@@ -488,13 +488,13 @@ func (s HybridedsSig) PublicKeyFromSignatureWithContext(digestHash []byte, sig [
 
 // ValidateSignatureValues verifies whether the signature values are valid with
 // the given chain rules. The v value is assumed to be either 0 or 1.
-func (osig HybridedsSig) ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) bool {
+func (osig HybridedsSig) ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) (isOk bool, pub []byte, sig []byte) {
 	if v == 0 || v == 1 {
 		pubKey, signature := r.Bytes(), s.Bytes()
 
 		if len(pubKey) != osig.PublicKeyLength() {
 			if len(pubKey) > osig.PublicKeyLength() {
-				return false
+				return false, nil, nil
 			}
 			//conversion issues since big.Int setBytes stores only positive integers. pad with zero's
 			log.Debug("ValidateSignatureValues padding zero", "pubKey len", len(pubKey), "expected len", osig.PublicKeyLength())
@@ -503,17 +503,17 @@ func (osig HybridedsSig) ValidateSignatureValues(digestHash []byte, v byte, r, s
 		}
 
 		if len(signature) < osig.SignatureLength() {
-			return false
+			return false, nil, nil
 		}
 
 		combinedSignature := common.CombineTwoParts(signature, pubKey)
 		if !osig.Verify(pubKey, digestHash, combinedSignature) {
-			return false
+			return false, nil, nil
 		}
 
-		return true
+		return true, pubKey, signature
 	}
-	return false
+	return false, nil, nil
 }
 
 func (s HybridedsSig) PublicKeyStartValue() byte {

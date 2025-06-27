@@ -261,14 +261,13 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 		return common.Address{}, ErrInvalidSig
 	}
 	V := byte(Vb.Uint64() - 27)
-	if !cryptobase.DynamicSigVerifier.ValidateSignatureValues(sighash[:], V, R, S) {
+	isOk, pub, sig := cryptobase.DynamicSigVerifier.ValidateSignatureValues(sighash[:], V, R, S)
+	if isOk == false {
 		log.Debug("recoverPlain failed, ErrInvalidSig", "hash", sighash)
 		return common.Address{}, ErrInvalidSig
 	}
-	// encode the signature in uncompressed format
-	r, s := R.Bytes(), S.Bytes()
 
-	combinedSignature, err := cryptobase.DynamicSigVerifier.CombinePublicKeySignature(s, r)
+	combinedSignature, err := cryptobase.DynamicSigVerifier.CombinePublicKeySignature(sig, pub)
 	if err != nil {
 		return common.Address{}, err
 	}
