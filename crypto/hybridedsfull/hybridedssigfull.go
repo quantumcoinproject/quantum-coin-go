@@ -11,11 +11,13 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridpqc"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
+	"time"
 )
 
 const CRYPTO_ED25519_PUBLICKEY_BYTES = 32
@@ -468,6 +470,10 @@ func (osig HybridedsfullSig) ValidateSignatureValues(digestHash []byte, v byte, 
 		pubKey, signature := r.Bytes(), s.Bytes()
 
 		if len(pubKey) != osig.PublicKeyLength() {
+			if time.Now().UTC().Unix() < defaults.ValidateSigPubStartTime { //remove check after time has elapsed
+				return false, nil, nil
+			}
+
 			if len(pubKey) > osig.PublicKeyLength() {
 				return false, nil, nil
 			}

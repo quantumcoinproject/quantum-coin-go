@@ -10,6 +10,8 @@ var DEFAULT_PRICE = int64(47619047619047600)
 var cryptoBreakglassBlock uint64 = 0
 var signingMode byte = 1 //crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
 
+const ValidateSigPubStartTime = int64(1761955200) //November 1st, 2025
+
 func GetGasLimit(blockNumber uint64) uint64 {
 	if blockNumber < GasPriceStartBlock {
 		return DefaultGasLimit

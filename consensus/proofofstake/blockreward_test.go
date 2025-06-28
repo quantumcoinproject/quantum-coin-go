@@ -188,7 +188,7 @@ func TestRewardGenerateBlocks1(t *testing.T) {
 
 	for startBlockNumber.Int64() <= endBlockNumber.Int64() {
 		reward := new(big.Int).Set(GetReward(startBlockNumber))
-		fmt.Println("Block Number : ", startBlockNumber, " reward : ", reward)
+		fmt.Println("Block Number : ", startBlockNumber, " reward (wei) : ", reward, " rewards (eth) : ", params.WeiToEther(reward))
 		startBlockNumber = common.SafeAddBigInt(startBlockNumber, incrementBlock)
 	}
 }
