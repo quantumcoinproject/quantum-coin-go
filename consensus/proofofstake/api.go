@@ -27,6 +27,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -110,7 +111,7 @@ func (api *API) GetStakingDetailsByValidatorAddress(validator common.Address, bl
 		return nil, errUnknownBlock
 	}
 
-	if blockNumber < DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		return api.proofofstake.GetStakingDetailsByValidatorAddress(validator, header.Hash())
 	} else {
 		validatorDetailsV2, err := api.proofofstake.GetStakingDetailsByValidatorAddressV2(validator, header.Hash())
@@ -171,7 +172,7 @@ func (api *API) GetStakingDetailsByDepositorAddress(depositor common.Address, bl
 		return nil, err
 	}
 
-	if blockNumber < DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		return api.proofofstake.GetStakingDetailsByValidatorAddress(validator, header.Hash())
 	} else {
 		validatorDetailsV2, err := api.proofofstake.GetStakingDetailsByValidatorAddressV2(validator, header.Hash())
@@ -320,7 +321,7 @@ func (api *API) GetBlockProposalDetails(blockNumberHex string) (*ProposalExtende
 			}
 
 			var proposalHash common.Hash
-			if blockNumber >= DefaultConfig.PROPOSAL_TIME_HASH_START_BLOCK {
+			if blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
 				proposalHash = GetCombinedTxnHashWithTime(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns, proposalDetails.BlockTime)
 			} else {
 				proposalHash = GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
@@ -376,14 +377,14 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 		blockRewardsInfo.BlockProposerRewards = hexutil.EncodeUint64(0)
 
 		totalSlashings := big.NewInt(0)
-		if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= DefaultConfig.SlashStartBlockNumber {
+		if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= defaults.DefaultConfig.PosConfig.SlashStartBlockNumber {
 			blockRewardsInfo.SlashedValidators = make([]*Slashing, len(blockConsensusData.SlashedBlockProposers))
 
 			var slashAmount *big.Int
-			if header.Number.Uint64() >= DefaultConfig.SlashV2StartBlock {
-				slashAmount = DefaultConfig.SLASH_AMOUNT
+			if header.Number.Uint64() >= defaults.DefaultConfig.PosConfig.SlashV2StartBlock {
+				slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT
 			} else {
-				slashAmount = DefaultConfig.SLASH_AMOUNT_V2
+				slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT_V2
 			}
 
 			for i, val := range blockConsensusData.SlashedBlockProposers {

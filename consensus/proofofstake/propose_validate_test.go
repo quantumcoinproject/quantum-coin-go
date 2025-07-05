@@ -3,6 +3,7 @@ package proofofstake
 import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"math/big"
 	"strconv"
 	"testing"
@@ -29,10 +30,10 @@ func TestPacketHandler_canValidate(t *testing.T) {
 	if canValidateTest(0, 10, 100, true) == false {
 		t.Fatalf("failed2")
 	}
-	if canValidateTest(int64(DefaultConfig.OfflineValidatorDeferStartBlock+1000), 127, uint64(DefaultConfig.OfflineValidatorDeferStartBlock+100), true) == false {
+	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1000), 127, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+100), true) == false {
 		t.Fatalf("failed3")
 	}
-	if canValidateTest(int64(DefaultConfig.OfflineValidatorDeferStartBlock+1000), 128, uint64(DefaultConfig.OfflineValidatorDeferStartBlock+100), false) == false {
+	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1000), 128, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+100), false) == false {
 		t.Fatalf("failed4")
 	}
 }
@@ -88,33 +89,33 @@ func TestPacketHandler_canPropose(t *testing.T) {
 			t.Fatalf("failed")
 		}
 
-		if canProposeTest(int64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER), DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, false) == false {
+		if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER), defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, false) == false {
 			t.Fatalf("failed")
 		}
 
-		if canProposeTest(int64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER),
-			uint64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+50), true) == false {
+		if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER),
+			uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+50), true) == false {
 			t.Fatalf("failed")
 		}
 	}
 
-	if canProposeTest(int64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK), 1024,
-		uint64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2-1), false) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK), 1024,
+		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2-1), false) == false {
 		t.Fatalf("failed")
 	}
 
-	if canProposeTest(int64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 1024,
-		uint64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+1), true) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 1024,
+		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+1), true) == false {
 		t.Fatalf("failed")
 	}
 
-	if canProposeTest(int64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 28,
-		uint64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), false) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 28,
+		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), false) == false {
 		t.Fatalf("failed")
 	}
 
-	if canProposeTest(int64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 27,
-		uint64(DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), true) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 27,
+		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), true) == false {
 		t.Fatalf("failed")
 	}
 }
@@ -257,7 +258,7 @@ func TestPacketHandler_getBlockProposerV3(t *testing.T) {
 }
 
 func TestPacketHandler_canPropose_v3_positive(t *testing.T) {
-	lastNilBlock := int64(DefaultConfig.OfflineValidatorDeferStartBlock + 1000)
+	lastNilBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000)
 	currentBlock := uint64(2083437)
 	if canProposeTest(lastNilBlock, 17, currentBlock, true) == false {
 		t.Fatalf("failed")
@@ -266,7 +267,7 @@ func TestPacketHandler_canPropose_v3_positive(t *testing.T) {
 }
 
 func TestPacketHandler_canPropose_v3_positive_max_block_delay_equal(t *testing.T) {
-	lastNilBlock := int64(DefaultConfig.OfflineValidatorDeferStartBlock + 1000)
+	lastNilBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000)
 	currentBlock := uint64(2148717)
 	if canProposeTest(lastNilBlock, 32, currentBlock, true) == false {
 		t.Fatalf("failed")
@@ -275,7 +276,7 @@ func TestPacketHandler_canPropose_v3_positive_max_block_delay_equal(t *testing.T
 }
 
 func TestPacketHandler_canPropose_v3_positive_max_block_delay_greater(t *testing.T) {
-	lastNilBlock := int64(DefaultConfig.OfflineValidatorDeferStartBlock + 1000)
+	lastNilBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000)
 	currentBlock := uint64(2148717)
 	if canProposeTest(lastNilBlock, 33, currentBlock, true) == false {
 		t.Fatalf("failed")
@@ -284,7 +285,7 @@ func TestPacketHandler_canPropose_v3_positive_max_block_delay_greater(t *testing
 }
 
 func TestPacketHandler_canPropose_v3_negative_max_block_delay_greater(t *testing.T) {
-	lastNilBlock := int64(DefaultConfig.OfflineValidatorDeferStartBlock + 1000)
+	lastNilBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000)
 	currentBlock := uint64(2148717 - 1)
 	if canProposeTest(lastNilBlock, 33, currentBlock, false) == false {
 		t.Fatalf("failed")

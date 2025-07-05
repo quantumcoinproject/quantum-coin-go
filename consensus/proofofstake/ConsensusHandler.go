@@ -400,11 +400,11 @@ func (cph *ConsensusHandler) isValidator(parentHash common.Hash) (bool, error) {
 
 func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[common.Address]*big.Int, round byte,
 	validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, blockNumber uint64, contextHash common.Hash) (common.Address, error) {
-	if blockNumber >= DefaultConfig.CONTEXT_BASED_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
 		return getBlockProposerV2(contextHash, validatorDetailsMap, round, blockNumber) //passing contextHash instead of parentHash
 	}
 
-	if blockNumber >= DefaultConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		return getBlockProposerV2(parentHash, validatorDetailsMap, round, blockNumber)
 	}
 	var proposer common.Address
@@ -456,9 +456,9 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool
 	}
 
 	var maxBlockDelay uint64
-	if currentBlockNumber >= DefaultConfig.OfflineValidatorDeferStartBlock {
+	if currentBlockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock {
 		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V3
-	} else if currentBlockNumber >= DefaultConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
+	} else if currentBlockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
 		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
 	} else {
 		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
@@ -536,7 +536,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 			delete(validatorsDepositMap, val)
 			continue
 		}
-		if blockNumber >= DefaultConfig.OfflineValidatorDeferStartBlock {
+		if blockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock {
 			valDetailsMap := *validatorDetailsMap
 			canVal, _ := canValidate(valDetailsMap[val], blockNumber)
 			if canVal == false {
@@ -583,9 +583,9 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	}
 
 	var minPercentage *big.Int
-	if blockNumber >= DefaultConfig.SixtySevenVoteStartBlock {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V3
-	} else if blockNumber >= DefaultConfig.SixtyVoteStartBlock {
+	} else if blockNumber >= defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2
 	} else {
 		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE
@@ -711,7 +711,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	preFilterValidatorCount := len(validators)
 
 	//Consensus Context
-	if blockNumber >= DefaultConfig.CONTEXT_BASED_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
 		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
 		if err != nil {
 			return err
@@ -726,7 +726,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	}
 
 	var validatorDetailsMap map[common.Address]*ValidatorDetailsV2
-	if blockNumber >= DefaultConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		validatorDetailsMap, err = cph.listValidatorsFn(parentHash)
 		if err != nil {
 			log.Error("listValidatorsFn", "err", err)
@@ -741,7 +741,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		return err
 	}
 
-	if blockNumber >= DefaultConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		for valAddr, valDetails := range validatorDetailsMap {
 			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidators
 				delete(validatorDetailsMap, valAddr)
@@ -898,7 +898,7 @@ func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, 
 }
 
 func shouldSignFull(blockNumber uint64) bool {
-	if blockNumber >= DefaultConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK && blockNumber%DefaultConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS == 0 {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK && blockNumber%defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS == 0 {
 		return true
 	}
 	if defaults.IsCryptoBreakglassMode(blockNumber) {
@@ -973,7 +973,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 		return cph.handlePrecommitPacket(validator, packet, false)
 	} else if packetType == CONSENSUS_PACKET_TYPE_COMMIT_BLOCK {
 		return cph.handleCommitPacket(validator, packet, false)
-	} else if cph.GetLatestBlockNumber() >= DefaultConfig.PACKET_PROTOCOL_START_BLOCK && packetType >= CONSENSUS_PACKET_TYPE_CAPABILITY {
+	} else if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK && packetType >= CONSENSUS_PACKET_TYPE_CAPABILITY {
 		return nil
 	}
 
@@ -1336,7 +1336,7 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 	}
 
 	var proposalHash common.Hash
-	if blockStateDetails.blockNumber >= DefaultConfig.PROPOSAL_TIME_HASH_START_BLOCK {
+	if blockStateDetails.blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
 		proposalHash = GetCombinedTxnHashWithTime(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns, proposalDetails.BlockTime)
 	} else {
 		proposalHash = GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
@@ -1971,7 +1971,7 @@ func Elapsed(startTime time.Time) int64 {
 }
 
 func GetProposalTime(blockNumber uint64) uint64 {
-	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK {
+	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK {
 		blockTime := uint64(time.Now().UTC().Unix())
 		if blockTime%60 != 0 {
 			blockTime = blockTime - (blockTime % 60)
@@ -1984,7 +1984,7 @@ func GetProposalTime(blockNumber uint64) uint64 {
 }
 
 func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64) bool {
-	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK {
+	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK {
 		if proposedTime == 0 {
 			return false
 		}
@@ -2051,7 +2051,7 @@ func (cph *ConsensusHandler) proposeBlock(parentHash common.Hash, txns []common.
 
 	var dataToSend []byte
 
-	if cph.GetLatestBlockNumber() >= DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
+	if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 		dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK)}, data...)...)
 	} else {
 		dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK)}, data...)
@@ -2116,7 +2116,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 
 		var dataToSend []byte
 
-		if cph.GetLatestBlockNumber() >= DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
+		if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 			dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)...)
 		} else {
 			dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)
@@ -2300,7 +2300,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 
 		var dataToSend []byte
 
-		if cph.GetLatestBlockNumber() >= DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
+		if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 			dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)...)
 		} else {
 			dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)
@@ -2433,7 +2433,7 @@ func (cph *ConsensusHandler) precommitBlock(parentHash common.Hash) error {
 
 	var dataToSend []byte
 
-	if cph.GetLatestBlockNumber() >= DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
+	if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 		dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_PRECOMMIT_BLOCK)}, data...)...)
 	} else {
 		dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_PRECOMMIT_BLOCK)}, data...)
@@ -2487,7 +2487,7 @@ func (cph *ConsensusHandler) commitBlock(parentHash common.Hash) error {
 
 	var dataToSend []byte
 
-	if cph.GetLatestBlockNumber() >= DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
+	if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 		dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_COMMIT_BLOCK)}, data...)...)
 	} else {
 		dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_COMMIT_BLOCK)}, data...)
@@ -2803,7 +2803,7 @@ func (cph *ConsensusHandler) broadCast(packet *eth.ConsensusPacket) error {
 		return errors.New("packet is nil")
 	}
 
-	if cph.latestBlockNumber >= DefaultConfig.PACKET_PROTOCOL_START_BLOCK {
+	if cph.latestBlockNumber >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 		sendCount := cph.peerHandler.BroadcastLocalPacket(packet)
 		if sendCount > 8 {
 			return nil

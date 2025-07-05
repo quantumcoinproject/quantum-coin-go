@@ -378,7 +378,7 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 	var proposalHash common.Hash
 	if voteType == VOTE_TYPE_OK {
 		log.Trace("GetCombinedTxnHash a", "parentHash", parentHash, "round", round, "count", len(txns))
-		if blockNumber >= DefaultConfig.PROPOSAL_TIME_HASH_START_BLOCK {
+		if blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
 			proposalHash = GetCombinedTxnHashWithTime(parentHash, round, txns, proposedBlockTime)
 		} else {
 			proposalHash = GetCombinedTxnHash(parentHash, round, txns)
@@ -540,7 +540,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		filteredValidatorDepositMap[v] = valMap[v]
 	}
 
-	if blockNumber >= DefaultConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		for valAddr, valDetails := range *valDetailsMap {
 			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidatorDepositMap
 				delete(*valDetailsMap, valAddr)
@@ -684,7 +684,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 // In this function, absolute time cannot be validated, since this function can get called at a different time, for example when new node is created and is reading old blocks
 // Hence only basic checks are allowed
 func ValidateBlockProposalTime(blockNumber uint64, proposedTime uint64) bool {
-	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= DefaultConfig.BLOCK_TIME_ORIG_START_BLOCK {
+	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK {
 		if proposedTime == 0 {
 			return true
 		}
@@ -751,7 +751,7 @@ func ValidateBlockConsensusData(block *types.Block, validatorDepositMap *map[com
 	//Consensus Context
 	var consensusContext common.Hash
 	blockNumber := header.Number.Uint64()
-	if blockNumber >= DefaultConfig.CONTEXT_BASED_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
 		validators, err := getValidatorsFn(header.ParentHash)
 		if err != nil {
 			return err

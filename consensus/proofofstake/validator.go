@@ -8,6 +8,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core/state"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
@@ -668,7 +669,7 @@ func (p *ProofOfStake) AddDepositorSlashing(blockHash common.Hash,
 func (p *ProofOfStake) GetStakingContractAbi() (abi.ABI, error) {
 	blockNumber := p.blockchain.CurrentBlock().NumberU64()
 
-	if blockNumber < DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		return staking.GetStakingContract_ABI()
 	} else {
 		return staking.GetStakingContractV2_ABI()
@@ -1045,7 +1046,7 @@ func (p *ProofOfStake) ListValidators(blockHash common.Hash, blockNumber uint64)
 	for _, val := range *out {
 		var validatorDetails *ValidatorDetails
 
-		if blockNumber < DefaultConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+		if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 			validatorDetails, err = p.GetStakingDetailsByValidatorAddress(val, blockHash)
 			if err != nil {
 				return nil, err

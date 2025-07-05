@@ -3,6 +3,7 @@ package proofofstake
 import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"math/big"
@@ -10,7 +11,7 @@ import (
 	"time"
 )
 
-var TestFilterValidatorsBlockNumber = DefaultConfig.SixtyVoteStartBlock
+var TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
 
 func testFilterValidatorsTest(t *testing.T, consensusContext common.Hash, validatorsDepositMap map[common.Address]*big.Int, shouldPass bool) *big.Int {
 	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, TestFilterValidatorsBlockNumber, nil)
@@ -139,7 +140,7 @@ func TestFilterValidators_positive(t *testing.T) {
 }
 
 func TestFilterValidators_offline_validator(t *testing.T) {
-	TestFilterValidatorsBlockNumber = DefaultConfig.OfflineValidatorDeferStartBlock
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock
 	consensusContext := common.BytesToHash([]byte{100})
 	validatorsDepositMap := make(map[common.Address]*big.Int)
 
@@ -152,17 +153,17 @@ func TestFilterValidators_offline_validator(t *testing.T) {
 
 	validatorsDDetailsMap[val1] = &ValidatorDetailsV2{
 		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD)),
-		LastNiLBlock:  big.NewInt(int64(DefaultConfig.OfflineValidatorDeferStartBlock) + int64(10)),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock) + int64(10)),
 	}
 
 	validatorsDDetailsMap[val2] = &ValidatorDetailsV2{
 		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD) - 1),
-		LastNiLBlock:  big.NewInt(int64(DefaultConfig.OfflineValidatorDeferStartBlock) - 10),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock) - 10),
 	}
 
 	validatorsDDetailsMap[val3] = &ValidatorDetailsV2{
 		NilBlockCount: big.NewInt(1),
-		LastNiLBlock:  big.NewInt(int64(DefaultConfig.OfflineValidatorDeferStartBlock) - 100),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock) - 100),
 	}
 
 	validatorsDDetailsMap[val4] = &ValidatorDetailsV2{
@@ -175,7 +176,7 @@ func TestFilterValidators_offline_validator(t *testing.T) {
 	validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(400000000000))
 	validatorsDepositMap[val4] = params.EtherToWei(big.NewInt(500000000000))
 
-	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, DefaultConfig.OfflineValidatorDeferStartBlock, &validatorsDDetailsMap)
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock, &validatorsDDetailsMap)
 	if err != nil {
 		log.Error("error", "msg", err)
 		t.Fatalf("failed1")
@@ -194,7 +195,7 @@ func TestFilterValidators_offline_validator(t *testing.T) {
 		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue)
 		t.Fatalf("failed4")
 	}
-	TestFilterValidatorsBlockNumber = DefaultConfig.SixtyVoteStartBlock
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
 }
 
 func TestFilterValidators_positive_Extended(t *testing.T) {
@@ -422,7 +423,7 @@ func TestFilterValidators_positive_large(t *testing.T) {
 }
 
 func TestFilterValidators_offline_validator_sixty_seven(t *testing.T) {
-	TestFilterValidatorsBlockNumber = DefaultConfig.SixtySevenVoteStartBlock
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock
 	consensusContext := common.BytesToHash([]byte{100})
 	validatorsDepositMap := make(map[common.Address]*big.Int)
 
@@ -435,17 +436,17 @@ func TestFilterValidators_offline_validator_sixty_seven(t *testing.T) {
 
 	validatorsDDetailsMap[val1] = &ValidatorDetailsV2{
 		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD)),
-		LastNiLBlock:  big.NewInt(int64(DefaultConfig.SixtySevenVoteStartBlock) + int64(10)),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock) + int64(10)),
 	}
 
 	validatorsDDetailsMap[val2] = &ValidatorDetailsV2{
 		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD) - 1),
-		LastNiLBlock:  big.NewInt(int64(DefaultConfig.SixtySevenVoteStartBlock) - 10),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock) - 10),
 	}
 
 	validatorsDDetailsMap[val3] = &ValidatorDetailsV2{
 		NilBlockCount: big.NewInt(1),
-		LastNiLBlock:  big.NewInt(int64(DefaultConfig.SixtySevenVoteStartBlock) - 100),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock) - 100),
 	}
 
 	validatorsDDetailsMap[val4] = &ValidatorDetailsV2{
@@ -458,7 +459,7 @@ func TestFilterValidators_offline_validator_sixty_seven(t *testing.T) {
 	validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(400000000000))
 	validatorsDepositMap[val4] = params.EtherToWei(big.NewInt(500000000000))
 
-	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, DefaultConfig.SixtySevenVoteStartBlock, &validatorsDDetailsMap)
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock, &validatorsDDetailsMap)
 	if err != nil {
 		log.Error("error", "msg", err)
 		t.Fatalf("failed1")
@@ -477,5 +478,5 @@ func TestFilterValidators_offline_validator_sixty_seven(t *testing.T) {
 		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue)
 		t.Fatalf("failed4")
 	}
-	TestFilterValidatorsBlockNumber = DefaultConfig.SixtyVoteStartBlock
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/state"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"math"
 	"math/big"
@@ -19,7 +20,7 @@ var (
 	blockSecond = 6
 	blockYearly = big.NewInt(int64((((60 * 60) * 24) / blockSecond) * 365))
 
-	rewardStartBlock = big.NewInt(int64(DefaultConfig.RewardStartBlockNumber))
+	rewardStartBlock = big.NewInt(int64(defaults.DefaultConfig.PosConfig.RewardStartBlockNumber))
 )
 
 func GetReward(blockNumber *big.Int) *big.Int {
@@ -82,10 +83,10 @@ func GetRewardsSlashingsByVote(blockNumber *big.Int, voteType VoteType, rounds b
 		return
 	} else if voteType == VOTE_TYPE_NIL {
 		if rounds == 1 {
-			if blockNumber.Uint64() >= DefaultConfig.SlashStartBlockNumber {
-				slashedCoins = DefaultConfig.SLASH_AMOUNT
-			} else if blockNumber.Uint64() >= DefaultConfig.SlashV2StartBlock {
-				slashedCoins = DefaultConfig.SLASH_AMOUNT_V2
+			if blockNumber.Uint64() >= defaults.DefaultConfig.PosConfig.SlashStartBlockNumber {
+				slashedCoins = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT
+			} else if blockNumber.Uint64() >= defaults.DefaultConfig.PosConfig.SlashV2StartBlock {
+				slashedCoins = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT_V2
 			}
 		}
 	}

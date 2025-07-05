@@ -3,6 +3,7 @@ package proofofstake
 import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -225,8 +226,8 @@ func TestRewardVerifyYearly(t *testing.T) {
 }
 
 func TestRewardVerifyBlocks(t *testing.T) {
-	startBlockNumber := big.NewInt(int64(DefaultConfig.RewardStartBlockNumber) - 1000)
-	endBlockNumber := big.NewInt(int64(DefaultConfig.RewardStartBlockNumber - 500))
+	startBlockNumber := big.NewInt(int64(defaults.DefaultConfig.PosConfig.RewardStartBlockNumber) - 1000)
+	endBlockNumber := big.NewInt(int64(defaults.DefaultConfig.PosConfig.RewardStartBlockNumber - 500))
 	incrementBlock := big.NewInt(1)
 
 	for startBlockNumber.Int64() <= endBlockNumber.Int64() {

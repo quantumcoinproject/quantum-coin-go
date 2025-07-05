@@ -7,6 +7,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core/state"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
@@ -136,7 +137,7 @@ func (p *ProofOfStake) GetConsensusContext(key string, blockHash common.Hash) ([
 
 func GetConsensusContextKey(blockNumber uint64) (string, error) {
 	var key string
-	if blockNumber <= DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK {
+	if blockNumber <= defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK {
 		return key, errors.New("GetBlockConsensusContextFn blockNumber below CONSENSUS_CONTEXT_START_BLOCK")
 	}
 
@@ -148,13 +149,13 @@ func GetConsensusContextKey(blockNumber uint64) (string, error) {
 
 func GetBlockConsensusContextKeyForBlock(currrentBlockNumber uint64) (string, error) {
 	var key string
-	if currrentBlockNumber < DefaultConfig.CONTEXT_BASED_START_BLOCK {
+	if currrentBlockNumber < defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
 		return key, errors.New("GetBlockConsensusContextFn blockNumber below CONTEXT_BASED_START_BLOCK")
 	}
 
-	if currrentBlockNumber > DefaultConfig.CONSENSUS_CONTEXT_START_BLOCK+DefaultConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT {
-		return GetConsensusContextKey(currrentBlockNumber - DefaultConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
+	if currrentBlockNumber > defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK+defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT {
+		return GetConsensusContextKey(currrentBlockNumber - defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
 	} else {
-		return GetConsensusContextKey(currrentBlockNumber - DefaultConfig.CONTEXT_BASED_BLOCK_THRESHOLD)
+		return GetConsensusContextKey(currrentBlockNumber - defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD)
 	}
 }
