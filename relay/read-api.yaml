@@ -1,0 +1,883 @@
+openapi: 3.0.1
+info:
+  title: Quantum Coin Read API
+  version: v1
+servers:
+  - url: https://sdk.readrelay.quantumcoinapi.com
+paths:
+  '/latestblock':
+    get:
+      tags:
+        - Read
+      summary: Get latest block details
+      operationId: GetLatestBlockDetails
+      parameters:
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
+  '/blockchaindetails':
+    get:
+      tags:
+        - Read
+      summary: Get blockchain details
+      operationId: GetBlockchainDetails
+      parameters:
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BlockchainDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+
+  '/account/{address}':
+    get:
+      tags:
+        - Read
+      summary: Get account details
+      operationId: GetAccountDetails
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: the string representing the account address
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+  '/account/{address}/tokens/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List account tokens
+      operationId: ListAccountTokens
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: the string representing the account address
+          schema:
+            type: string
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAccountTokensResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+  '/account/{address}/token/{contractAddress}':
+    get:
+      tags:
+        - Read
+      summary: Get account token details
+      operationId: GetAccountTokenDetails
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: the string representing the account address
+          schema:
+            type: string
+        - name: contractAddress
+          in: path
+          required: true
+          description: the string representing the token's contract address
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountTokenDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+  '/account/{address}/transactions/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List transactions by address
+      operationId: ListAccountTransactions
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: The address of the account
+          schema:
+            type: string
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAccountTransactionsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+  '/account/{address}/transactions/pending/{pageNumber}':
+    get:
+      tags:
+        - Read
+      summary: List pending transactions by address.
+      operationId: ListAccountPendingTransactions
+      parameters:
+        - name: address
+          in: path
+          required: true
+          description: The address of the account
+          schema:
+            type: string
+        - name: pageNumber
+          in: path
+          required: true
+          description: The page number
+          schema:
+            type: number
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListAccountPendingTransactionsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+  '/transaction/{hash}':
+    get:
+      tags:
+        - Read
+      summary: Get Transaction
+      operationId: GetTransactionDetails
+      parameters:
+        - name: hash
+          in: path
+          required: true
+          description: The transaction hash
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+  '/token/{contractAddress}':
+    get:
+      tags:
+        - Read
+      summary: Get token details
+      operationId: GetTokenDetails
+      parameters:
+        - name: contractAddress
+          in: path
+          required: true
+          description: the string representing the token's contract address
+          schema:
+            type: string
+        - name: x-request-id
+          in: header
+          required: false
+          description: request id
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenDetailsResponse'
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '429':
+          description: Request was throttled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+        '503':
+          description: Server Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+components:
+  schemas:
+    BlockDetails:
+      type: object
+      properties:
+        blockNumber:
+          type: integer
+          format: int64
+          nullable: true
+          description: The block number as of which the details were retrieved
+      additionalProperties: false
+    BlockDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/BlockDetails'
+    AccountDetails:
+      type: object
+      properties:
+        balance:
+          type: string
+          nullable: true
+        nonce:
+          type: integer
+          format: int64
+          nullable: true
+        blockNumber:
+          type: integer
+          format: int64
+          nullable: true
+          description: The block number as of which the details were retrieved
+      additionalProperties: false
+    AccountDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/AccountDetails'
+      additionalProperties: false
+    TokenDetails:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+          description: The name of the token
+        owner:
+          type: string
+          nullable: true
+          description: The account owner of the token. Not all token's implement this interface, in which case the value will be zero address
+        symbol:
+          type: string
+          nullable: true
+          description: The symbol of the token
+        totalSupply:
+          type: string
+          nullable: true
+          description: The totalSupply of the token in hex
+        decimals:
+          type: string
+          nullable: true
+          description: The decimals of the token in hex
+      additionalProperties: false
+    TokenDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/TokenDetails'
+    AccountTokenDetails:
+      type: object
+      properties:
+        tokenBalance:
+          type: string
+          nullable: true
+        contractAddress:
+          type: string
+          nullable: false
+        name:
+          type: string
+          nullable: true
+          description: The name of the token
+        symbol:
+          type: string
+          nullable: true
+          description: The symbol of the token
+      additionalProperties: false
+    AccountTokenDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/AccountTokenDetails'
+      additionalProperties: false
+    ListAccountTokensResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountTokenDetails'
+      additionalProperties: false
+    TransactionType:
+      enum:
+        - CoinTransfer
+        - NewToken
+        - TokenTransfer
+        - NewSmartContract
+        - SmartContract
+      type: string
+    TransactionDetails:
+      type: object
+      properties:
+        blockHash:
+          type: string
+          nullable: true
+          description: The hash of the block in which the transaction was executed. If this transaction is pending or was discarded, this will be null.
+        blockNumber:
+          type: integer
+          format: int64
+          nullable: true
+          description: The number of the block in which the transaction was executed. If this transaction is pending or was discarded, this will be null.
+        from:
+          type: string
+          nullable: false
+        gas:
+          type: string
+          nullable: false
+        gasPrice:
+          type: string
+          nullable: false
+        hash:
+          type: string
+          nullable: false
+        input:
+          type: string
+          nullable: false
+        isDiscarded:
+          type: boolean
+          nullable: true
+        discardReason:
+          type: string
+          nullable: true
+        nonce:
+          type: integer
+          format: int64
+          nullable: false
+        to:
+          type: string
+          nullable: true
+        value:
+          type: string
+          nullable: false
+        receipt:
+          $ref: '#/components/schemas/TransactionReceipt'
+        createdAt:
+          type: string
+          format: date-time
+        txnFee:
+          type: string
+          nullable: true
+        transactionType:
+          $ref: '#/components/schemas/TransactionType'
+        tokenTransaction:
+          $ref: '#/components/schemas/TokenTransactionCompact'
+      additionalProperties: false
+    TransactionResponse:
+      type: object
+      properties:
+        result:
+          $ref: '#/components/schemas/TransactionDetails'
+      additionalProperties: false
+    TransactionReceipt:
+      type: object
+      properties:
+        cumulativeGasUsed:
+          type: string
+          nullable: false
+        effectiveGasPrice:
+          type: string
+          nullable: false
+        gasUsed:
+          type: string
+          nullable: false
+        status:
+          type: string
+          nullable: false
+        hash:
+          type: string
+          nullable: false
+        type:
+          type: string
+          nullable: false
+        contractAddress:
+          type: string
+          nullable: false
+      additionalProperties: false
+    TokenTransactionCompact:
+      type: object
+      properties:
+        tokenFromAddress:
+          type: string
+          nullable: false
+        tokenToAddress:
+          type: string
+          nullable: false
+        contractAddress:
+          type: string
+          nullable: false
+        tokenCount:
+          type: string
+          nullable: false
+        tokenSymbol:
+          type: string
+          nullable: false
+        tokenName:
+          type: string
+          nullable: false
+    AccountTransactionCompact:
+      type: object
+      properties:
+        hash:
+          type: string
+          nullable: false
+        blockNumber:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        from:
+          type: string
+          nullable: true
+        to:
+          type: string
+          nullable: true
+        value:
+          type: string
+          nullable: true
+        txnFee:
+          type: string
+          nullable: true
+        status:
+          type: string
+          nullable: true
+        transactionType:
+          $ref: '#/components/schemas/TransactionType'
+        errorReason:
+          type: string
+          nullable: true
+        tokenTransaction:
+          $ref: '#/components/schemas/TokenTransactionCompact'
+      additionalProperties: false
+    ListAccountTransactionsResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountTransactionCompact'
+      additionalProperties: false
+    AccountPendingTransactionCompact:
+      type: object
+      properties:
+        hash:
+          type: string
+          nullable: false
+        from:
+          type: string
+          nullable: true
+        to:
+          type: string
+          nullable: true
+        value:
+          type: string
+          nullable: true
+        nonce:
+          type: integer
+          format: int64
+          nullable: false
+        errorReason:
+          type: string
+          nullable: true
+      additionalProperties: false
+    ListAccountPendingTransactionsResponse:
+      type: object
+      properties:
+        pageCount:
+          type: integer
+          format: int64
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AccountPendingTransactionCompact'
+      additionalProperties: false
+    BlockchainDetails:
+      type: object
+      properties:
+        blockNumber:
+          type: string
+          nullable: false
+        maxSupply:
+          type: string
+          nullable: false
+        totalSupply:
+          type: string
+          nullable: false
+        circulatingSupply:
+          type: string
+          nullable: false
+        burntCoins:
+          type: string
+          nullable: false
+        blockRewardsCoins:
+          type: string
+          nullable: false
+        baseBlockRewardsCoins:
+          type: string
+          nullable: false
+        txnFeeRewardsCoins:
+          type: string
+          nullable: false
+        txnFeeBurntCoins:
+          type: string
+          nullable: false
+        slashedCoins:
+          type: string
+          nullable: false
+    BlockchainDetailsResponse:
+      type: object
+      properties:
+        result:
+          allOf:
+            - $ref: '#/components/schemas/BlockchainDetails'
+    ErrorResponseModel:
+      type: object
+      properties:
+        message:
+          type: string
+          nullable: true
+        status:
+          type: integer
+          format: int32
+      additionalProperties: false
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-KEY
+security:
+  - ApiKeyAuth: [] # use the same name as under securitySchemes

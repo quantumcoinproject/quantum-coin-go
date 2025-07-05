@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"math/big"
 	"reflect"
 	"testing"
@@ -376,6 +377,7 @@ func TestTransactionSortDecreasing(t *testing.T) {
 }
 
 func TestTransactionSortIncreaseDecrease(t *testing.T) {
+	defaults.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	for tcount := 0; tcount < 100; tcount++ {
 		// Generate a batch of accounts to start with
 		keys := make([]*signaturealgorithm.PrivateKey, 6)
@@ -400,6 +402,7 @@ func TestTransactionSortIncreaseDecrease(t *testing.T) {
 				txnCount = txnCount + 1
 			}
 			for i := 0; i < txnCount; i++ {
+				fmt.Println("txnCount", txnCount)
 				tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
 				if err != nil {
 					t.Fatalf(err.Error())
