@@ -5,7 +5,7 @@ import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/cachemanager"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"github.com/quantumcoinproject/quantum-coin-go/relay"
+	relay "github.com/quantumcoinproject/quantum-coin-go/relayv2"
 	"net/http"
 	"time"
 )

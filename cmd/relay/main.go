@@ -19,10 +19,10 @@ import (
 	"net"
 	"net/http"
 	"os"
-	qcreadapi "github.com/quantumcoinproject/quantum-coin-go/relay/qcreadapi"
-	qcwriteapi "github.com/quantumcoinproject/quantum-coin-go/relay/qcwriteapi"
+	qcreadapi "github.com/quantumcoinproject/quantum-coin-go/relayv2/qcreadapi"
+	qcwriteapi "github.com/quantumcoinproject/quantum-coin-go/relayv2/qcwriteapi"
 	cachemanager "github.com/quantumcoinproject/quantum-coin-go/cachemanager"
-	"github.com/quantumcoinproject/quantum-coin-go/relay"
+	relay "github.com/quantumcoinproject/quantum-coin-go/relayv2"
 	"strconv"
 	"strings"
 )

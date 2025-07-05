@@ -6,7 +6,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
-	"github.com/quantumcoinproject/quantum-coin-go/relay"
+	relay "github.com/quantumcoinproject/quantum-coin-go/relayv2"
 	"net/http"
 	"strconv"
 	"strings"

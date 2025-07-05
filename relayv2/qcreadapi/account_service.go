@@ -8,7 +8,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"github.com/quantumcoinproject/quantum-coin-go/relay"
+	relay "github.com/quantumcoinproject/quantum-coin-go/relayv2"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"math/big"
 	"net/http"
@@ -93,7 +93,7 @@ func (s *ReadApiAPIService) GetAccountDetails(ctx context.Context, address strin
 	duration := time.Now().Sub(startTime)
 
 	log.Info(relay.InfoTitleAccountDetails, relay.MsgAddress, address, relay.MsgTimeDuration, duration, relay.MsgStatus, http.StatusOK)
-	
+
 	return Response(http.StatusOK, accDetailsResponse), nil
 }
 

@@ -1,4 +1,4 @@
-package relay
+package relayv2
 
 import "errors"
 
