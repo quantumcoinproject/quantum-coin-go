@@ -15,12 +15,18 @@ func canValidateTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint6
 		NilBlockCount: big.NewInt(nilBlockCount),
 	}
 
-	result, _ := canValidate(valDetails, currentBlock)
+	result, nextValidationBlock := canValidate(valDetails, currentBlock)
+	fmt.Println("lastNilBlock", lastNilBlock, "nilBlockCount", nilBlockCount, "currentBlock", currentBlock, "nextValidationBlock", nextValidationBlock, "blocks remaining", nextValidationBlock-currentBlock)
 	if result != expected {
 		return false
 	}
-
 	return true
+}
+
+func TestPacketHandler_canValidate_single(t *testing.T) {
+	if canValidateTest(int64(2543878), 37, uint64(2548263), true) == false {
+		t.Fatalf("failed4")
+	}
 }
 
 func TestPacketHandler_canValidate(t *testing.T) {
@@ -30,22 +36,44 @@ func TestPacketHandler_canValidate(t *testing.T) {
 	if canValidateTest(0, 10, 100, true) == false {
 		t.Fatalf("failed2")
 	}
-	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1000), 127, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+100), true) == false {
+	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1), 32, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+32+1), true) == false {
 		t.Fatalf("failed3")
 	}
-	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1000), 128, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+100), false) == false {
+	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1), 127, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+127+1), true) == false {
+		t.Fatalf("failed3")
+	}
+	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1), 128, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+128+1), false) == false {
 		t.Fatalf("failed4")
 	}
 }
 
-func TestPropose(t *testing.T) {
-	valDetails := &ValidatorDetailsV2{
-		LastNiLBlock:  big.NewInt(2131746),
-		NilBlockCount: big.NewInt(32),
-	}
+func TestProposeValidate(t *testing.T) {
+	lastNiLBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock)
+	lastNiLBlockStart := lastNiLBlock
+	totalSteps := 128
+	step := 1
+	nilBlockCount := int64(1)
+	currentBlock := uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock) + 1
+	for {
+		valDetails := &ValidatorDetailsV2{
+			LastNiLBlock:  big.NewInt(lastNiLBlock),
+			NilBlockCount: big.NewInt(nilBlockCount),
+		}
 
-	a, b := canPropose(valDetails, 112)
-	fmt.Println(a, b)
+		canP, nextProposalBlock := canPropose(valDetails, currentBlock)
+		canV, nextValidationBlock := canValidate(valDetails, currentBlock)
+
+		fmt.Println("currentBlock", currentBlock, "NilBlockCount", valDetails.NilBlockCount, "canPropose", canP, "canValidate", canV,
+			"lastNiLBlock", lastNiLBlock, "nextProposalBlock", nextProposalBlock, "nextValidationBlock", nextValidationBlock,
+			"diff", nextProposalBlock-valDetails.LastNiLBlock.Uint64(), "blocksSinceStart", currentBlock-uint64(lastNiLBlockStart))
+		lastNiLBlock = int64(currentBlock)
+		nilBlockCount = nilBlockCount + 1
+		if step >= totalSteps {
+			break
+		}
+		step = step + 1
+		currentBlock = nextProposalBlock
+	}
 }
 
 func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64, expected bool) bool {
