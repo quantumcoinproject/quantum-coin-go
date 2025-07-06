@@ -80,6 +80,8 @@ type Config struct {
 	GasPriceStartBlock      uint64
 	DefaultGasLimit         uint64
 	ValidateSigPubStartTime int64
+	TxnStartAllowedTime     int64
+	ConversionTxnLastTime   int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -162,6 +164,8 @@ var MainnetConfig = &Config{
 	GasPriceStartBlock:      uint64(3000001),
 	DefaultGasLimit:         300000000,
 	ValidateSigPubStartTime: int64(1761955200),
+	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
 }
 
 var DevnetConfig = &Config{
@@ -170,6 +174,8 @@ var DevnetConfig = &Config{
 	GasPriceStartBlock:      uint64(3000001),
 	DefaultGasLimit:         300000000,
 	ValidateSigPubStartTime: int64(1761955200),
+	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
 }
 
 var DefaultConfig = MainnetConfig
