@@ -377,7 +377,7 @@ func TestTransactionSortDecreasing(t *testing.T) {
 }
 
 func TestTransactionSortIncreaseDecrease(t *testing.T) {
-	defaults.ValidateSigPubStartTime = time.Now().UTC().Unix()
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	for tcount := 0; tcount < 100; tcount++ {
 		// Generate a batch of accounts to start with
 		keys := make([]*signaturealgorithm.PrivateKey, 6)

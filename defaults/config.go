@@ -6,21 +6,15 @@ import (
 	"math/big"
 )
 
-const DeepCheckStartBlock = uint64(3000000)
-const GasPriceStartBlock = uint64(3000001)
-const DefaultGasLimit = 300000000
-
 var DEFAULT_PRICE = int64(47619047619047600)
 var cryptoBreakglassBlock uint64 = 0
 var signingMode byte = 1 //crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
 
-var ValidateSigPubStartTime = int64(1761955200) //November 1st, 2025
-
 func GetGasLimit(blockNumber uint64) uint64 {
-	if blockNumber < GasPriceStartBlock {
-		return DefaultGasLimit
+	if blockNumber < DefaultConfig.GasPriceStartBlock {
+		return DefaultConfig.DefaultGasLimit
 	} else {
-		return DefaultGasLimit
+		return DefaultConfig.DefaultGasLimit
 	}
 }
 
@@ -81,7 +75,11 @@ type ProofOfStakeConfig struct {
 }
 
 type Config struct {
-	PosConfig *ProofOfStakeConfig
+	PosConfig               *ProofOfStakeConfig
+	DeepCheckStartBlock     uint64
+	GasPriceStartBlock      uint64
+	DefaultGasLimit         uint64
+	ValidateSigPubStartTime int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -159,11 +157,19 @@ var devnetPosConfig = ProofOfStakeConfig{
 }
 
 var MainnetConfig = &Config{
-	PosConfig: &mainnetPosConfig,
+	PosConfig:               &mainnetPosConfig,
+	DeepCheckStartBlock:     uint64(3000000),
+	GasPriceStartBlock:      uint64(3000001),
+	DefaultGasLimit:         300000000,
+	ValidateSigPubStartTime: int64(1761955200),
 }
 
 var DevnetConfig = &Config{
-	PosConfig: &devnetPosConfig,
+	PosConfig:               &devnetPosConfig,
+	DeepCheckStartBlock:     uint64(3000000),
+	GasPriceStartBlock:      uint64(3000001),
+	DefaultGasLimit:         300000000,
+	ValidateSigPubStartTime: int64(1761955200),
 }
 
 var DefaultConfig = MainnetConfig

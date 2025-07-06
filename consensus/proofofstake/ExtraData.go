@@ -20,7 +20,7 @@ type BlockExtraData struct {
 }
 
 func EncodeBlockExtraData(errorTransactions types.Transactions, currentExtraData []byte, blockNumber uint64) ([]byte, error) {
-	if blockNumber < defaults.DeepCheckStartBlock {
+	if blockNumber < defaults.DefaultConfig.DeepCheckStartBlock {
 		if len(currentExtraData) != len(DefaultExtraData) {
 			log.Error("EncodeBlockExtraData a", "extraData length invalid", len(currentExtraData), "blockNumber", blockNumber)
 			return nil, errors.New("invalid ExtraData")
@@ -47,7 +47,7 @@ func EncodeBlockExtraData(errorTransactions types.Transactions, currentExtraData
 }
 
 func DecodeBlockExtraData(extraData []byte, blockNumber uint64) (*BlockExtraData, []byte, error) {
-	if blockNumber < defaults.DeepCheckStartBlock {
+	if blockNumber < defaults.DefaultConfig.DeepCheckStartBlock {
 		return nil, extraData, nil
 	}
 	if len(extraData) < len(DefaultExtraData)+1 {
@@ -70,7 +70,7 @@ func DecodeBlockExtraData(extraData []byte, blockNumber uint64) (*BlockExtraData
 }
 
 func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, error) {
-	if blockNumber < defaults.DeepCheckStartBlock {
+	if blockNumber < defaults.DefaultConfig.DeepCheckStartBlock {
 		if bytes.Compare(extraData, DefaultExtraData) != 0 {
 			log.Error("VerifyExtraData a", "number", blockNumber, "actual", common.Bytes2Hex(extraData), "expected", common.Bytes2Hex(DefaultExtraData))
 			return nil, errors.New("invalid ExtraData a")

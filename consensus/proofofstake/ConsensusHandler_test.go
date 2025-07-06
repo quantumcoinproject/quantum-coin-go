@@ -1930,7 +1930,7 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 		defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK, defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD, defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK,
 		defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock,
 		defaults.DefaultConfig.PosConfig.SlashV2StartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock,
-		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock, defaults.DeepCheckStartBlock,
+		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock, defaults.DefaultConfig.DeepCheckStartBlock,
 	}
 
 	for _, b := range blockNumbers {

@@ -90,7 +90,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 	}
 
 	var processMode ProcessMode
-	if header.Number.Uint64() < defaults.DeepCheckStartBlock {
+	if header.Number.Uint64() < defaults.DefaultConfig.DeepCheckStartBlock {
 		processMode = ProcessModeInsertChainReturnOnError
 	} else {
 		processMode = ProcessModeInsertChainNoReturnOnError

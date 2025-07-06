@@ -20,7 +20,7 @@ func TestExtraData_basic(t *testing.T) {
 
 func TestExtraData_encode_decode(t *testing.T) {
 	var errorTransactions types.Transactions
-	blockNumber := defaults.DeepCheckStartBlock
+	blockNumber := defaults.DefaultConfig.DeepCheckStartBlock
 
 	encoded, err := EncodeBlockExtraData(errorTransactions, DefaultExtraData, blockNumber)
 	if err != nil {
@@ -62,7 +62,7 @@ func TestExtraData_encode_decode(t *testing.T) {
 
 func TestExtraData_encode_decode_negative(t *testing.T) {
 	var errorTransactions types.Transactions
-	blockNumber := defaults.DeepCheckStartBlock
+	blockNumber := defaults.DefaultConfig.DeepCheckStartBlock
 
 	extraDataDummy := []byte{1, 2, 3}
 

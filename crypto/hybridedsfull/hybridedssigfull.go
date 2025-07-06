@@ -470,7 +470,7 @@ func (osig HybridedsfullSig) ValidateSignatureValues(digestHash []byte, v byte, 
 		pubKey, signature := r.Bytes(), s.Bytes()
 
 		if len(pubKey) != osig.PublicKeyLength() {
-			if time.Now().UTC().Unix() < defaults.ValidateSigPubStartTime { //remove check after time has elapsed
+			if time.Now().UTC().Unix() < defaults.DefaultConfig.ValidateSigPubStartTime { //remove check after time has elapsed
 				return false, nil, nil
 			}
 
