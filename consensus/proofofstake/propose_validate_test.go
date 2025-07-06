@@ -54,6 +54,7 @@ func TestProposeValidate(t *testing.T) {
 	step := 1
 	nilBlockCount := int64(1)
 	currentBlock := uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock) + 1
+	validatorCount := 128
 	for {
 		valDetails := &ValidatorDetailsV2{
 			LastNiLBlock:  big.NewInt(lastNiLBlock),
@@ -72,7 +73,7 @@ func TestProposeValidate(t *testing.T) {
 			break
 		}
 		step = step + 1
-		currentBlock = nextProposalBlock
+		currentBlock = nextProposalBlock + uint64(validatorCount)
 	}
 }
 
