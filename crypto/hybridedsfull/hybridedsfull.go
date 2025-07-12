@@ -125,32 +125,6 @@ func Sign(secretKey []byte, message []byte) ([]byte, error) {
 	return signature, nil
 }
 
-// Verify verifies the validity of a signed message, returning true if the
-// signature is valid, and false otherwise.
-func Verify(message []byte, signature []byte, publicKey []byte) error {
-	if len(message) != CRYPTO_MESSAGE_LEN || len(signature) == 0 || len(publicKey) == 0 {
-		return ErrInvalidLen
-	}
-	if len(publicKey) != CRYPTO_PUBLICKEY_BYTES {
-		return ErrInvalidPublicKeyLen
-	}
-	if len(signature) != CRYPTO_SIGNATURE_BYTES {
-		return ErrInvalidSignatureLen
-	}
-
-	rv := C.crypto_verify_dilithium_ed25519_sphincs((*C.uchar)(unsafe.Pointer(&message[0])),
-		(C.ulonglong)(uint64(len(message))),
-		(*C.uchar)(unsafe.Pointer(&signature[0])),
-		(C.ulonglong)(uint64(len(signature))),
-		(*C.uchar)(unsafe.Pointer(&publicKey[0])))
-
-	if rv != OK {
-		return ErrVerifyFailed
-	}
-
-	return nil
-}
-
 func PrivateAndPublicFromPrivateKey(compositePrivateKey []byte) (privateBytes []byte, publicBytes []byte, err error) {
 
 	if len(compositePrivateKey) != CRYPTO_SECRETKEY_BYTES {

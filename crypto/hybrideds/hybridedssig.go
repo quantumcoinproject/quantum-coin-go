@@ -19,7 +19,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
-	"runtime/debug"
 	"time"
 )
 
@@ -316,33 +315,7 @@ func (s HybridedsSig) VerifyWithContext(pubKey []byte, digestHash []byte, signat
 }
 
 func (s HybridedsSig) Verify(pubKey []byte, digestHash []byte, signature []byte) bool {
-
-	if s.NativeGolangVerify {
-		return s.VerifyNative(pubKey, digestHash, signature)
-	}
-
-	sigBytes, pubKeyBytes, err := common.ExtractTwoParts(signature)
-	if err != nil {
-		return false
-	}
-
-	if !bytes.Equal(pubKey, pubKeyBytes) {
-		return false
-	}
-
-	err = Verify(digestHash, sigBytes, pubKey)
-	if err != nil {
-		return false
-	}
-
-	//Important! Verify the original message
-	for i := 0; i < len(digestHash); i++ {
-		if sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES+CRYPTO_DILITHIUM_SIGNATURE_BYTES+NONCE_SIZE+i] != digestHash[i] {
-			return false
-		}
-	}
-
-	return true
+	return s.VerifyNative(pubKey, digestHash, signature)
 }
 
 // Verify with GoLang's native ED25519 implementation, while using hybrid-pqc for Falcon verification
@@ -407,11 +380,6 @@ func (s HybridedsSig) VerifyNative(pubKey []byte, digestHash []byte, signature [
 		return false
 	}
 
-	/*err = VerifyDilithium(hybridDigest, sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES:2+CRYPTO_ED25519_SIGNATURE_BYTES+CRYPTO_DILITHIUM_SIGNATURE_BYTES], pubKey[CRYPTO_ED25519_PUBLICKEY_BYTES:CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES])
-	if err != nil {
-		return false
-	}*/
-
 	dilithiumSignature := sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES : 2+CRYPTO_ED25519_SIGNATURE_BYTES+CRYPTO_DILITHIUM_SIGNATURE_BYTES]
 	dilithiumPubKey := pubKey[CRYPTO_ED25519_PUBLICKEY_BYTES : CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES]
 
@@ -429,10 +397,10 @@ func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []by
 		return nil, nil, err
 	}
 
-	err = Verify(digestHash, signature, pubKey)
+	ok := s.VerifyNative(pubKey, digestHash, sig)
 
-	if err != nil {
-		return nil, nil, err
+	if ok == false {
+		return nil, nil, ErrVerifyFailed
 	}
 
 	return signature, pubKey, nil
@@ -444,8 +412,6 @@ func (s HybridedsSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []b
 	}
 
 	if len(pubKeyBytes) != s.publicKeyLength {
-		fmt.Println("combine")
-		debug.PrintStack()
 		return nil, errors.New("invalid public key length")
 	}
 
@@ -453,14 +419,14 @@ func (s HybridedsSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []b
 }
 
 func (s HybridedsSig) PublicKeyBytesFromSignature(digestHash []byte, sig []byte) ([]byte, error) {
-	sigBytes, pubKeyBytes, err := common.ExtractTwoParts(sig)
+	_, pubKeyBytes, err := common.ExtractTwoParts(sig)
 	if err != nil {
 		return nil, err
 	}
 
-	err = Verify(digestHash, sigBytes, pubKeyBytes)
-	if err != nil {
-		return nil, err
+	ok := s.VerifyNative(pubKeyBytes, digestHash, sig)
+	if ok == false {
+		return nil, ErrVerifyFailed
 	}
 
 	return pubKeyBytes, nil

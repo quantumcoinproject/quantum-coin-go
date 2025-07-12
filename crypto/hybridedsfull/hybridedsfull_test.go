@@ -2,6 +2,7 @@ package hybridedsfull
 
 import (
 	"bytes"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"math/rand"
 	"testing"
@@ -40,24 +41,29 @@ func TestHybridedsfull_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = Verify(digestHash1, signature, pubKey)
-	if err != nil {
-		t.Fatal(err)
+	sigAlg := CreateHybridedsfullSig()
+	sig := common.CombineTwoParts(signature, pubKey)
+
+	ok := sigAlg.Verify(pubKey, digestHash1, sig)
+	if ok == false {
+		t.Fatal("verify failed")
 	}
 
 	digestHash1[0] = digestHash1[0] + 1
-	err = Verify(digestHash1, signature, pubKey)
-	if err == nil {
-		t.Fatal(err)
+	sig = common.CombineTwoParts(signature, pubKey)
+	ok = sigAlg.Verify(pubKey, digestHash1, signature)
+	if ok == true {
+		t.Fatal("verify passed unexpectedly")
 	}
 
 	signature2, err := Sign(priKey, digestHash1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = Verify(digestHash1, signature2, pubKey)
-	if err != nil {
-		t.Fatal(err)
+	sig2 := common.CombineTwoParts(signature2, pubKey)
+	ok = sigAlg.Verify(pubKey, digestHash1, sig2)
+	if ok == false {
+		t.Fatal("verify failed")
 	}
 
 }
@@ -87,9 +93,12 @@ func TestHybridedsfull_Random(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = Verify(digestHash1, signature1, pubKey)
-		if err != nil {
-			t.Fatal(err)
+		sigAlg := CreateHybridedsfullSig()
+		sig1 := common.CombineTwoParts(signature1, pubKey)
+
+		ok := sigAlg.Verify(pubKey, digestHash1, sig1)
+		if ok == false {
+			t.Fatal("verify failed")
 		}
 
 		digestHash2 := make([]byte, 32)
@@ -100,18 +109,21 @@ func TestHybridedsfull_Random(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		err = Verify(digestHash2, signature2, pubKey)
-		if err != nil {
-			t.Fatal(err)
+		sig2 := common.CombineTwoParts(signature2, pubKey)
+		ok = sigAlg.Verify(pubKey, digestHash2, sig2)
+		if ok == false {
+			t.Fatal("verify failed")
 		}
 
-		err = Verify(digestHash2, signature1, pubKey)
-		if err == nil {
+		sig2a := common.CombineTwoParts(signature1, pubKey)
+		ok = sigAlg.Verify(pubKey, digestHash2, sig2a)
+		if ok == true {
 			t.Fatal("verify passed while it should have failed")
 		}
 
-		err = Verify(digestHash1, signature2, pubKey)
-		if err == nil {
+		sig2b := common.CombineTwoParts(signature2, pubKey)
+		ok = sigAlg.Verify(pubKey, digestHash1, sig2b)
+		if ok == true {
 			t.Fatal("verify passed while it should have failed")
 		}
 	}
