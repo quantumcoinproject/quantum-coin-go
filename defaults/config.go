@@ -72,6 +72,10 @@ type ProofOfStakeConfig struct {
 	OfflineValidatorDeferStartBlock uint64
 
 	SixtySevenVoteStartBlock uint64
+
+	OfflineValidatorV4StartBlock uint64
+
+	MinOfflineProposerBlockDelay uint64
 }
 
 type Config struct {
@@ -119,6 +123,10 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	OfflineValidatorDeferStartBlock: 2082171 + 10,
 
 	SixtySevenVoteStartBlock: uint64(2082171 + 10 + 10),
+
+	OfflineValidatorV4StartBlock: 3000030,
+
+	MinOfflineProposerBlockDelay: 3600,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -156,6 +164,10 @@ var devnetPosConfig = ProofOfStakeConfig{
 	OfflineValidatorDeferStartBlock: 90 + 10,
 
 	SixtySevenVoteStartBlock: uint64(90 + 10 + 10),
+
+	OfflineValidatorV4StartBlock: 90 + 10 + 10 + 10,
+
+	MinOfflineProposerBlockDelay: 3600,
 }
 
 var MainnetConfig = &Config{

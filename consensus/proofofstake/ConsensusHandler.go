@@ -473,6 +473,10 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool
 		blockDelay = maxBlockDelay
 	}
 
+	if valDetails.NilBlockCount.Uint64() > 1 && currentBlockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+		blockDelay = blockDelay + defaults.DefaultConfig.PosConfig.MinOfflineProposerBlockDelay
+	}
+
 	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
 	result := currentBlockNumber >= nextProposalBlock
 	log.Debug("canPropose", "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount,

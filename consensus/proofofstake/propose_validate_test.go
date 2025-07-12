@@ -83,12 +83,40 @@ func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64
 		NilBlockCount: big.NewInt(nilBlockCount),
 	}
 
-	result, _ := canPropose(valDetails, currentBlock)
+	result, nextProposalBlock := canPropose(valDetails, currentBlock)
+	fmt.Println("currentBlock", currentBlock, "NilBlockCount", valDetails.NilBlockCount, "canPropose", result,
+		"lastNiLBlock", valDetails.LastNiLBlock, "nextProposalBlock", nextProposalBlock)
 	if result != expected {
 		return false
 	}
 
 	return true
+}
+
+func TestCanPropose_v4(t *testing.T) {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 0, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+1, true) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 1, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+1, true) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 2, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+1, false) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 2, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+defaults.DefaultConfig.PosConfig.MinOfflineProposerBlockDelay+1, false) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 2, 3003632, true) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 32, 3069166, true) == false {
+		t.Fatalf("failed")
+	}
 }
 
 func TestPacketHandler_canPropose(t *testing.T) {
@@ -147,6 +175,7 @@ func TestPacketHandler_canPropose(t *testing.T) {
 		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), true) == false {
 		t.Fatalf("failed")
 	}
+
 }
 
 func testGetBlockProposerV2(validatorMap *map[common.Address]*ValidatorDetailsV2, expected common.Address, blockNumber uint64) bool {
