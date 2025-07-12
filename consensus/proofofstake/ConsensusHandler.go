@@ -433,6 +433,22 @@ func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[c
 	return proposer, nil
 }
 
+func getOfflineValidatorDepositAfterPenalty(valDetails *ValidatorDetailsV2, currentBlockNumber uint64, depositValue *big.Int) *big.Int {
+	if currentBlockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock || valDetails.NilBlockCount.Uint64() <= 2 {
+		return depositValue
+	}
+	penaltyPercent := int64(valDetails.NilBlockCount.Uint64() * 2)
+	if penaltyPercent >= 100 {
+		return big.NewInt(0)
+	}
+
+	penalty := common.SafeRelativePercentageBigInt(big.NewInt(penaltyPercent), depositValue)
+	newDepositValue := common.SafeSubBigInt(depositValue, penalty)
+	log.Debug("getOfflineValidatorDepositAfterPenalty", "val", valDetails.Validator, "penalty", penalty, "penaltyPercent", penaltyPercent,
+		"NilBlockCount", valDetails.NilBlockCount.Uint64(), "newDepositValue", newDepositValue)
+	return newDepositValue
+}
+
 func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
 	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
 		return true, currentBlockNumber
@@ -547,6 +563,16 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 				log.Trace("Skipping offline validator", "val", val, "depositValue", depositValue)
 				delete(validatorsDepositMap, val)
 				continue
+			}
+			if blockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+				origDepositValue := depositValue
+				depositValue = getOfflineValidatorDepositAfterPenalty(valDetailsMap[val], blockNumber, depositValue)
+				if depositValue.Cmp(MIN_VALIDATOR_DEPOSIT) == -1 {
+					log.Debug("Skipping validator with low balance AfterPenalty", "val", val, "afterPenalty depositValue", depositValue, "origDepositValue", origDepositValue)
+					delete(validatorsDepositMap, val)
+					continue
+				}
+				validatorsDepositMap[val] = depositValue
 			}
 		}
 		totalDepositValue = common.SafeAddBigInt(totalDepositValue, depositValue)

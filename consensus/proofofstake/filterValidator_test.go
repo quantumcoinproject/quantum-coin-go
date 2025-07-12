@@ -480,3 +480,113 @@ func TestFilterValidators_offline_validator_sixty_seven(t *testing.T) {
 	}
 	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
 }
+
+func TestFilterValidators_offline_validator_penalty_error(t *testing.T) {
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	consensusContext := common.BytesToHash([]byte{100})
+	validatorsDepositMap := make(map[common.Address]*big.Int)
+
+	validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+
+	val1 := common.BytesToAddress([]byte{1})
+	val2 := common.BytesToAddress([]byte{2})
+	val3 := common.BytesToAddress([]byte{3})
+	val4 := common.BytesToAddress([]byte{4})
+
+	validatorsDDetailsMap[val1] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD)),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock) + int64(10)),
+	}
+
+	validatorsDDetailsMap[val2] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD) - 1),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock) - 10),
+	}
+
+	validatorsDDetailsMap[val3] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(1),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock) - 100),
+	}
+
+	validatorsDDetailsMap[val4] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(0),
+		LastNiLBlock:  big.NewInt(0),
+	}
+
+	validatorsDepositMap[val1] = params.EtherToWei(big.NewInt(100000000000))
+	validatorsDepositMap[val2] = params.EtherToWei(big.NewInt(200000000000))
+	validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(400000000000))
+	validatorsDepositMap[val4] = params.EtherToWei(big.NewInt(500000000000))
+
+	_, _, _, err := filterValidators(consensusContext, &validatorsDepositMap, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, &validatorsDDetailsMap)
+	if err == nil {
+		log.Error("error nil when it should have failed")
+		t.Fatalf("failed1")
+	}
+}
+
+func TestFilterValidators_offline_validator_penalty(t *testing.T) {
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	consensusContext := common.BytesToHash([]byte{100})
+	validatorsDepositMap := make(map[common.Address]*big.Int)
+
+	validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+
+	val1 := common.BytesToAddress([]byte{1})
+	val2 := common.BytesToAddress([]byte{2})
+	val3 := common.BytesToAddress([]byte{3})
+	val4 := common.BytesToAddress([]byte{4})
+	val5 := common.BytesToAddress([]byte{5})
+
+	validatorsDDetailsMap[val1] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(50),
+		LastNiLBlock:  big.NewInt(50),
+	}
+
+	validatorsDDetailsMap[val2] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(0),
+		LastNiLBlock:  big.NewInt(0),
+	}
+
+	validatorsDDetailsMap[val3] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(0),
+		LastNiLBlock:  big.NewInt(0),
+	}
+
+	validatorsDDetailsMap[val4] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(0),
+		LastNiLBlock:  big.NewInt(0),
+	}
+
+	validatorsDDetailsMap[val5] = &ValidatorDetailsV2{
+		NilBlockCount: big.NewInt(4),
+		LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock)),
+	}
+
+	validatorsDepositMap[val1] = params.EtherToWei(big.NewInt(5000000))
+	validatorsDepositMap[val2] = params.EtherToWei(big.NewInt(5000000))
+	validatorsDepositMap[val3] = params.EtherToWei(big.NewInt(5000000))
+	validatorsDepositMap[val4] = params.EtherToWei(big.NewInt(5000000))
+	validatorsDepositMap[val5] = params.EtherToWei(big.NewInt(900000000000))
+
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, &validatorsDDetailsMap)
+	if err != nil {
+		log.Error("error", "msg", err)
+		t.Fatalf("failed1")
+	}
+
+	_, ok := resultMap[val1]
+	if ok == true {
+		t.Fatalf("failed2")
+	}
+
+	if len(resultMap) != 4 {
+		t.Fatalf("failed3")
+	}
+
+	if filteredDepositValue.String() != "828015000000000000000000000000" {
+		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue.String())
+		t.Fatalf("failed4")
+	}
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
+}
