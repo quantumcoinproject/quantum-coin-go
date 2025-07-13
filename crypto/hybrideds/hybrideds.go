@@ -125,25 +125,3 @@ func Sign(secretKey []byte, message []byte) ([]byte, error) {
 
 	return signature, nil
 }
-
-func PrivateAndPublicFromPrivateKey(compositePrivateKey []byte) (privateBytes []byte, publicBytes []byte, err error) {
-
-	if len(compositePrivateKey) != CRYPTO_SECRETKEY_BYTES {
-		return nil, nil, ErrInvalidPrivateKeyLen
-	}
-
-	pub1 := make([]byte, len(compositePrivateKey[32:64]))
-	copy(pub1, compositePrivateKey[32:64])
-
-	pub2 := make([]byte, len(compositePrivateKey[64+2560:64+2560+1312]))
-	copy(pub2, compositePrivateKey[64+2560:64+2560+1312])
-
-	pub3 := make([]byte, len(compositePrivateKey[64+2560+1312+64:]))
-	copy(pub3, compositePrivateKey[64+2560+1312+64:])
-
-	pubKeyBytes := make([]byte, CRYPTO_PUBLICKEY_BYTES)
-	pubKeyBytes = append(pub1, pub2...)
-	pubKeyBytes = append(pubKeyBytes, pub3...)
-
-	return compositePrivateKey, pubKeyBytes, nil
-}

@@ -2,8 +2,6 @@ package hybrideds
 
 import (
 	"bufio"
-	"bytes"
-	"crypto/ed25519"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,7 +12,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"golang.org/x/crypto/sha3"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -152,7 +149,7 @@ func (s HybridedsSig) SerializePrivateKey(priv *signaturealgorithm.PrivateKey) (
 
 func (s HybridedsSig) DeserializePrivateKey(priv []byte) (*signaturealgorithm.PrivateKey, error) {
 
-	privKeyBytes, pubKeyBytes, err := PrivateAndPublicFromPrivateKey(priv)
+	privKeyBytes, pubKeyBytes, err := hybridpqc.PrivateAndPublicFromPrivateKey(priv)
 	if err != nil {
 		return nil, err
 	}
@@ -315,80 +312,7 @@ func (s HybridedsSig) VerifyWithContext(pubKey []byte, digestHash []byte, signat
 }
 
 func (s HybridedsSig) Verify(pubKey []byte, digestHash []byte, signature []byte) bool {
-	return s.VerifyNative(pubKey, digestHash, signature)
-}
-
-// Verify with GoLang's native ED25519 implementation, while using hybrid-pqc for Falcon verification
-func (s HybridedsSig) VerifyNative(pubKey []byte, digestHash []byte, signature []byte) bool {
-	sigBytes, pubKeyBytes, err := common.ExtractTwoParts(signature)
-	if err != nil {
-		return false
-	}
-
-	if !bytes.Equal(pubKey, pubKeyBytes) {
-		return false
-	}
-
-	msgLen := len(digestHash)
-	if msgLen <= 0 || msgLen > 255 {
-		return false
-	}
-
-	if len(sigBytes) != CRYPTO_HYBRID_SIGNATURE_BYTES+msgLen {
-		return false
-	}
-
-	if sigBytes[0] != SIGNATURE_ID {
-		return false
-	}
-
-	if int(sigBytes[1]) != msgLen {
-		return false
-	}
-
-	//Form the hybrid signature
-	var hybridMsg [40 + 64 + 64]byte
-
-	//Copy the nonce
-	for i := 0; i < NONCE_SIZE; i++ {
-		hybridMsg[i] = sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES+CRYPTO_DILITHIUM_SIGNATURE_BYTES+i]
-	}
-
-	//Copy the original message
-	for i := 0; i < msgLen; i++ {
-		//This is an important check
-		if sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES+CRYPTO_DILITHIUM_SIGNATURE_BYTES+NONCE_SIZE+i] != digestHash[i] {
-			return false
-		}
-		hybridMsg[NONCE_SIZE+i] = digestHash[i]
-	}
-	//Copy the SPHINCS public key
-	for i := 0; i < CRYPTO_SPHINCS_PUBLICKEY_BYTES; i++ {
-		hybridMsg[NONCE_SIZE+msgLen+i] = pubKey[CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES+i]
-	}
-
-	//Hash the hybrid message
-	hasher := sha3.New512()
-	hasher.Write(hybridMsg[:NONCE_SIZE+msgLen+CRYPTO_SPHINCS_PUBLICKEY_BYTES])
-	hybridDigest := hasher.Sum(nil)
-
-	ed25519Signature := sigBytes[2 : 2+CRYPTO_ED25519_SIGNATURE_BYTES]
-	ed25519PubKey := pubKey[:CRYPTO_ED25519_PUBLICKEY_BYTES]
-
-	ok := ed25519.Verify(ed25519PubKey, hybridDigest, ed25519Signature)
-	if ok == false {
-		return false
-	}
-
-	dilithiumSignature := sigBytes[2+CRYPTO_ED25519_SIGNATURE_BYTES : 2+CRYPTO_ED25519_SIGNATURE_BYTES+CRYPTO_DILITHIUM_SIGNATURE_BYTES]
-	dilithiumPubKey := pubKey[CRYPTO_ED25519_PUBLICKEY_BYTES : CRYPTO_ED25519_PUBLICKEY_BYTES+CRYPTO_DILITHIUM_PUBLICKEY_BYTES]
-
-	err = hybridpqc.VerifyDilithium(hybridDigest, dilithiumSignature, dilithiumPubKey)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return hybridpqc.VerifyHybridEds(pubKey, digestHash, signature)
 }
 
 func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []byte, sig []byte) (signature []byte, pubKey []byte, err error) {
@@ -397,7 +321,7 @@ func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []by
 		return nil, nil, err
 	}
 
-	ok := s.VerifyNative(pubKey, digestHash, sig)
+	ok := hybridpqc.VerifyHybridEds(pubKey, digestHash, sig)
 
 	if ok == false {
 		return nil, nil, ErrVerifyFailed
@@ -419,17 +343,7 @@ func (s HybridedsSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []b
 }
 
 func (s HybridedsSig) PublicKeyBytesFromSignature(digestHash []byte, sig []byte) ([]byte, error) {
-	_, pubKeyBytes, err := common.ExtractTwoParts(sig)
-	if err != nil {
-		return nil, err
-	}
-
-	ok := s.VerifyNative(pubKeyBytes, digestHash, sig)
-	if ok == false {
-		return nil, ErrVerifyFailed
-	}
-
-	return pubKeyBytes, nil
+	return hybridpqc.PublicKeyBytesFromSignature(digestHash, sig)
 }
 
 func (s HybridedsSig) PublicKeyFromSignature(digestHash []byte, sig []byte) (*signaturealgorithm.PublicKey, error) {

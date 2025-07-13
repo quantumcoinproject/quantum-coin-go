@@ -10,6 +10,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridpqc"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/keystore"
@@ -50,6 +51,8 @@ func main() {
 	js.Global().Set("SingleAddressArgumentMethod", js.FuncOf(SingleAddressArgumentMethod))
 	js.Global().Set("SingleAmountArgumentMethod", js.FuncOf(SingleAmountArgumentMethod))
 	js.Global().Set("NoArgumentMethod", js.FuncOf(NoArgumentMethod))
+	js.Global().Set("PublicKeyBytesFromSignature", js.FuncOf(PublicKeyBytesFromSignature))
+	js.Global().Set("ComputePublicKeyFromPrivateKey", js.FuncOf(ComputePublicKeyFromPrivateKey))
 	<-done
 }
 
@@ -451,4 +454,45 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 	}
 
 	return d.String()
+}
+
+func PublicKeyBytesFromSignature(this js.Value, args []js.Value) interface{} {
+	if len(args) != 2 {
+		return nil
+	}
+	digestBase64 := args[0].String()
+	digestBytes, err := base64.StdEncoding.DecodeString(digestBase64)
+	if err != nil {
+		return nil
+	}
+
+	signatureBase64 := args[1].String()
+	signatureBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
+	if err != nil {
+		return nil
+	}
+
+	publicKeyBytes, err := hybridpqc.PublicKeyBytesFromSignature(digestBytes, signatureBytes)
+	if err != nil {
+		return nil
+	}
+
+	return base64.StdEncoding.EncodeToString(publicKeyBytes)
+}
+
+func ComputePublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
+	if len(args) != 1 {
+		return nil
+	}
+	compositePrivateKeyBase64 := args[0].String()
+	compositePrivateKeyBytes, err := base64.StdEncoding.DecodeString(compositePrivateKeyBase64)
+	if err != nil {
+		return nil
+	}
+	_, publicKeyBytes, err := hybridpqc.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
+	if err != nil {
+		return nil
+	}
+
+	return base64.StdEncoding.EncodeToString(publicKeyBytes)
 }
