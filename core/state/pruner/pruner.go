@@ -344,14 +344,17 @@ func (p *Pruner) Prune(root common.Hash) error {
 // pruning **has to be resumed**. Otherwise a lot of dangling nodes may be left
 // in the disk.
 func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) error {
+	log.Debug("RecoverPruning before findBloomFilter", "datadir", datadir)
 	stateBloomPath, stateBloomRoot, err := findBloomFilter(datadir)
 	if err != nil {
 		return err
 	}
+	log.Debug("RecoverPruning after findBloomFilter")
 	if stateBloomPath == "" {
 		return nil // nothing to recover
 	}
 	headBlock := rawdb.ReadHeadBlock(db)
+	log.Debug("RecoverPruning after ReadHeadBlock")
 	if headBlock == nil {
 		return errors.New("RecoverPruning: Failed to load head block")
 	}
@@ -364,10 +367,12 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	// In this case, even the state HEAD is not exactly matched with snapshot, it
 	// still feasible to recover the pruning correctly.
 	snaptree, err := snapshot.New(db, trie.NewDatabase(db), 256, headBlock.Root(), false, false, true)
+	log.Debug("RecoverPruning after snapshot.New")
 	if err != nil {
 		return err // The relevant snapshot(s) might not exist
 	}
 	stateBloom, err := NewStateBloomFromDisk(stateBloomPath)
+	log.Debug("RecoverPruning after NewStateBloomFromDisk")
 	if err != nil {
 		return err
 	}
@@ -378,6 +383,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 	// deleted state root in the "clean cache" so that the incomplete
 	// state is picked for usage.
 	deleteCleanTrieCache(trieCachePath)
+	log.Debug("RecoverPruning after deleteCleanTrieCache")
 
 	// All the state roots of the middle layers should be forcibly pruned,
 	// otherwise the dangling state will be left.
@@ -397,6 +403,7 @@ func RecoverPruning(datadir string, db ethdb.Database, trieCachePath string) err
 		log.Error("Pruning target state is not existent")
 		return errors.New("non-existent target state")
 	}
+	log.Debug("RecoverPruning before prune")
 	return prune(snaptree, stateBloomRoot, db, stateBloom, stateBloomPath, middleRoots, time.Now())
 }
 
@@ -471,18 +478,22 @@ func findBloomFilter(datadir string) (string, common.Hash, error) {
 		stateBloomPath string
 		stateBloomRoot common.Hash
 	)
+	log.Debug("findBloomFilter before filepath.Walk")
 	if err := filepath.Walk(datadir, func(path string, info os.FileInfo, err error) error {
 		if info != nil && !info.IsDir() {
+			log.Trace("isBloomFilter before", "path", path)
 			ok, root := isBloomFilter(path)
 			if ok {
 				stateBloomPath = path
 				stateBloomRoot = root
 			}
+			log.Trace("isBloomFilter after", "path", path)
 		}
 		return nil
 	}); err != nil {
 		return "", common.Hash{}, err
 	}
+	log.Debug("findBloomFilter after filepath.Walk")
 	return stateBloomPath, stateBloomRoot, nil
 }
 
