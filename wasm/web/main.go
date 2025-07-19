@@ -51,8 +51,8 @@ func main() {
 	js.Global().Set("SingleAddressArgumentMethod", js.FuncOf(SingleAddressArgumentMethod))
 	js.Global().Set("SingleAmountArgumentMethod", js.FuncOf(SingleAmountArgumentMethod))
 	js.Global().Set("NoArgumentMethod", js.FuncOf(NoArgumentMethod))
-	js.Global().Set("PublicKeyBytesFromSignature", js.FuncOf(PublicKeyBytesFromSignature))
-	js.Global().Set("ComputePublicKeyFromPrivateKey", js.FuncOf(ComputePublicKeyFromPrivateKey))
+	js.Global().Set("PublicKeyFromSignature", js.FuncOf(PublicKeyFromSignature))
+	js.Global().Set("PublicKeyFromPrivateKey", js.FuncOf(PublicKeyFromPrivateKey))
 	<-done
 }
 
@@ -456,7 +456,7 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 	return d.String()
 }
 
-func PublicKeyBytesFromSignature(this js.Value, args []js.Value) interface{} {
+func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
 	if len(args) != 2 {
 		return nil
 	}
@@ -480,7 +480,7 @@ func PublicKeyBytesFromSignature(this js.Value, args []js.Value) interface{} {
 	return base64.StdEncoding.EncodeToString(publicKeyBytes)
 }
 
-func ComputePublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
+func PublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
 	if len(args) != 1 {
 		return nil
 	}
