@@ -30,6 +30,18 @@ var (
 	ErrInvalidPrivateKeyLen = errors.New("invalid private key length")
 )
 
+const (
+	AbsorbSize         = 64
+	SqueezeSize        = 128
+	SeedSizeSlhDsda    = 96
+	SeedSize           = ed25519.SeedSize + mldsa44.SeedSize + SeedSizeSlhDsda
+	BaseSeedSizeV1     = 96
+	SeedExpanderDomain = byte(2)
+
+	BaseSeedSizeV2               = 80
+	InternalSeedExpanderDomainV2 = byte(200)
+)
+
 func VerifyDilithium(digestHash []byte, signature []byte, publicKey []byte) error {
 
 	var pubKey mldsa44.PublicKey
@@ -172,4 +184,86 @@ func PrivateAndPublicFromPrivateKey(compositePrivateKey []byte) (privateBytes []
 	pubKeyBytes = append(pubKeyBytes, pub3...)
 
 	return compositePrivateKey, pubKeyBytes, nil
+}
+
+func expandSeedBasic(inputSeed []byte, squeezeSize int) (*[]byte, error) {
+	h := sha3.NewShake256()
+
+	tempSeed := make([]byte, len(inputSeed))
+	copy(tempSeed, inputSeed)
+
+	absorb := append(tempSeed[:], []byte{SeedExpanderDomain}...)
+
+	_, err := h.Write(absorb[:])
+	if err != nil {
+		return nil, err
+	}
+
+	squeezed := make([]byte, squeezeSize)
+	_, err = h.Read(squeezed)
+	if err != nil {
+		return nil, err
+	}
+
+	return &squeezed, nil
+}
+
+func ExpandSeedV1(baseSeed *[BaseSeedSizeV1]byte) (*[SeedSize]byte, error) {
+	/*
+	 * @brief Implementation of seed expander that expands a seed specific to dilithium_ed25519_sphincs for purpose of key generation.
+	 * Use this function only for specific cases like blockchain seed mnemonics where less number of seed bytes are required for human readability and mangeability.
+	 * All other cases should directly generate all the 160 bytes at random using a CSPRNG.
+	 * The input seed should be created from a CSPRNG.
+	 * 64 bytes of the input seed is first expanded to 128 bytes (32 bytes for ed25519 and 96 bytes for SPHINCS+)
+	 * The remaining 32 bytes of the input is copied as-is in the expanded seed.
+	 * An alternative scheme is we just take 64 bytes input seed and return 160 bytes output expanded seed, instead of this complicated scheme.
+	 * The rationale for doing complicated expansion instead is that;
+	 * Some of the expanded seed bytes are copied as is to the SPHINCS+ public key when this expanded seed is subsequently used for generating the keypair (as part of SPHINCS+ internal implementation).
+	 * While it shouldn’t matter if we expose some parts of the csprng output (it is computationally infeasible to recover the remaining unexposed part),
+	 * as a long term hedge for using this XOF, we choose to have atleast one part of the hybrid signature scheme use the original seed material directly, than from the XOF.
+	 * On why ed25519 and SPHINCS+ specifically instead of a different combination from the 3 schemes;  during the normal course of signing using the compact scheme, the SPHINCS+ key isn't used at all.
+	 * To maintain quantum resistance in case there is an issue with this XOF, Dilithium is used (instead of Dilithium + SPHINCS+), so that we have atleast one quantum resistance scheme that isn't relying on this expansion XOF.
+	 */
+
+	var expandedSeed [SeedSize]byte
+
+	var seedInput [AbsorbSize]byte
+	for i := 0; i < AbsorbSize; i++ {
+		seedInput[i] = baseSeed[i]
+		i++ //known bug, to maintain compat
+	}
+
+	s, err := expandSeedBasic(seedInput[:], SqueezeSize)
+	if err != nil {
+		return nil, err
+	}
+	squeezed := *s
+	if len(squeezed) != SqueezeSize {
+		return nil, errors.New("invalid seed size")
+	}
+
+	copy(expandedSeed[:ed25519.SeedSize], squeezed[:ed25519.SeedSize])                  //Copy over first 32 bytes of expandedSeed used for ed25519
+	copy(expandedSeed[ed25519.SeedSize:], baseSeed[AbsorbSize:])                        //Copy over last 32 bytes of original input seed to be used for Dilithium
+	copy(expandedSeed[ed25519.SeedSize+mldsa44.SeedSize:], squeezed[ed25519.SeedSize:]) //Copy last 96 bytes of expandedSeed for use for SPHINCS+
+
+	return &expandedSeed, nil
+}
+
+func ExpandSeedV2(baseSeed *[BaseSeedSizeV2]byte) (*[SeedSize]byte, error) {
+	var seedInput [BaseSeedSizeV2 + 1]byte
+	copy(seedInput[:], baseSeed[:])
+	seedInput[BaseSeedSizeV2] = InternalSeedExpanderDomainV2
+
+	var squeezed [SeedSize]byte
+	tmp, err := expandSeedBasic(seedInput[:], SeedSize)
+	if err != nil {
+		return nil, err
+	}
+	s := *tmp
+	if len(s) != SeedSize {
+		return nil, errors.New("invalid seed size")
+	}
+	copy(squeezed[:], s)
+
+	return &squeezed, nil
 }
