@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridpqc"
 	"math/rand"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestHybrideds_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	priBytes, pubBytes, err := PrivateAndPublicFromPrivateKey(priKey)
+	priBytes, pubBytes, err := hybridpqc.PrivateAndPublicFromPrivateKey(priKey)
 	if err != nil {
 		t.Fatal(err)
 	}
