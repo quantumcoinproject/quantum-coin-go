@@ -53,6 +53,7 @@ func main() {
 	js.Global().Set("NoArgumentMethod", js.FuncOf(NoArgumentMethod))
 	js.Global().Set("PublicKeyFromSignature", js.FuncOf(PublicKeyFromSignature))
 	js.Global().Set("PublicKeyFromPrivateKey", js.FuncOf(PublicKeyFromPrivateKey))
+	js.Global().Set("CombinePublicKeySignature", js.FuncOf(CombinePublicKeySignature))
 	<-done
 }
 
@@ -495,4 +496,25 @@ func PublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
 	}
 
 	return base64.StdEncoding.EncodeToString(publicKeyBytes)
+}
+
+func CombinePublicKeySignature(this js.Value, args []js.Value) interface{} {
+	if len(args) != 2 {
+		return nil
+	}
+
+	pubData := js.Global().Get("Uint8Array").New(args[0])
+	pubBytes := make([]byte, pubData.Get("length").Int())
+	js.CopyBytesToGo(pubBytes, pubData)
+
+	sigData := js.Global().Get("Uint8Array").New(args[1])
+	sigBytes := make([]byte, sigData.Get("length").Int())
+	js.CopyBytesToGo(sigBytes, sigData)
+
+	combinedSignatureBytes, err := hybridpqc.CombinePublicKeySignature(sigBytes, pubBytes)
+	if err != nil {
+		return nil
+	}
+
+	return base64.StdEncoding.EncodeToString(combinedSignatureBytes)
 }

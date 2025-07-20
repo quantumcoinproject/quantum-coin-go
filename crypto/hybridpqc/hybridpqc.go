@@ -24,6 +24,8 @@ const SIGNATURE_ID = 1
 
 const CRYPTO_SECRETKEY_BYTES = 64 + 2560 + 1312 + 128
 const CRYPTO_PUBLICKEY_BYTES = 32 + 1312 + 64
+const CRYPTO_MESSAGE_LEN = 32
+const CRYPTO_SIGNATURE_BYTES = 2 + 64 + 2420 + 40 + CRYPTO_MESSAGE_LEN //2558
 
 var (
 	ErrVerifyFailed         = errors.New("verify failed")
@@ -266,4 +268,16 @@ func ExpandSeedV2(baseSeed *[BaseSeedSizeV2]byte) (*[SeedSize]byte, error) {
 	copy(squeezed[:], s)
 
 	return &squeezed, nil
+}
+
+func CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {
+	if len(sigBytes) < CRYPTO_SIGNATURE_BYTES {
+		return nil, errors.New("invalid signature length")
+	}
+
+	if len(pubKeyBytes) != CRYPTO_PUBLICKEY_BYTES {
+		return nil, errors.New("invalid public key length")
+	}
+
+	return common.CombineTwoParts(sigBytes, pubKeyBytes), nil
 }
