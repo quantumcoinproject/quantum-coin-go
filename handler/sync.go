@@ -248,6 +248,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		minPeers = cs.handler.maxPeers
 	}
 	if cs.handler.peers.len() < minPeers {
+		log.Debug("nextSyncOp less than minPeers connected", "minPeers", minPeers, "cs.handler.peers.len()", cs.handler.peers.len())
 		return nil
 	}
 	// We have enough peers, check TD
