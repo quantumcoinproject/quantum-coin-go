@@ -469,7 +469,7 @@ func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
-	publicKeyBytes, err := hybridpqc.PublicKeyBytesFromSignature(digestBytes, signatureBytes)
+	publicKeyBytes, err := hybridpqc.PublicKeyBytesFromSignature(digestBytes, sigBytes)
 	if err != nil {
 		return nil
 	}
