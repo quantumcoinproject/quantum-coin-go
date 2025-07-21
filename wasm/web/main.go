@@ -461,41 +461,37 @@ func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
 	if len(args) != 2 {
 		return nil
 	}
-	digestBase64 := args[0].String()
-	digestBytes, err := base64.StdEncoding.DecodeString(digestBase64)
-	if err != nil {
-		return nil
-	}
+	digestData := js.Global().Get("Uint8Array").New(args[0])
+	digestBytes := make([]byte, digestData.Get("length").Int())
+	js.CopyBytesToGo(digestBytes, digestData)
 
-	signatureBase64 := args[1].String()
-	signatureBytes, err := base64.StdEncoding.DecodeString(signatureBase64)
-	if err != nil {
-		return nil
-	}
+	sigData := js.Global().Get("Uint8Array").New(args[1])
+	sigBytes := make([]byte, sigData.Get("length").Int())
+	js.CopyBytesToGo(sigBytes, sigData)
 
 	publicKeyBytes, err := hybridpqc.PublicKeyBytesFromSignature(digestBytes, signatureBytes)
 	if err != nil {
 		return nil
 	}
 
-	return base64.StdEncoding.EncodeToString(publicKeyBytes)
+	return common.Bytes2Hex(publicKeyBytes)
 }
 
 func PublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
 	if len(args) != 1 {
 		return nil
 	}
-	compositePrivateKeyBase64 := args[0].String()
-	compositePrivateKeyBytes, err := base64.StdEncoding.DecodeString(compositePrivateKeyBase64)
-	if err != nil {
-		return nil
-	}
+
+	compositePrivateKeyData := js.Global().Get("Uint8Array").New(args[0])
+	compositePrivateKeyBytes := make([]byte, compositePrivateKeyData.Get("length").Int())
+	js.CopyBytesToGo(compositePrivateKeyBytes, compositePrivateKeyData)
+
 	_, publicKeyBytes, err := hybridpqc.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
 	if err != nil {
 		return nil
 	}
 
-	return base64.StdEncoding.EncodeToString(publicKeyBytes)
+	return common.Bytes2Hex(publicKeyBytes)
 }
 
 func CombinePublicKeySignature(this js.Value, args []js.Value) interface{} {
@@ -516,5 +512,5 @@ func CombinePublicKeySignature(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	return base64.StdEncoding.EncodeToString(combinedSignatureBytes)
+	return common.Bytes2Hex(combinedSignatureBytes)
 }
