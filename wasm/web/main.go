@@ -469,7 +469,7 @@ func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
-	publicKeyBytes, err := hybridpqc.PublicKeyBytesFromSignature(digestBytes, sigBytes)
+	publicKeyBytes, err := pqchelper.PublicKeyBytesFromSignature(digestBytes, sigBytes)
 	if err != nil {
 		return nil
 	}
@@ -486,7 +486,7 @@ func PublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
 	compositePrivateKeyBytes := make([]byte, compositePrivateKeyData.Get("length").Int())
 	js.CopyBytesToGo(compositePrivateKeyBytes, compositePrivateKeyData)
 
-	_, publicKeyBytes, err := hybridpqc.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
+	_, publicKeyBytes, err := pqchelper.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
 	if err != nil {
 		return nil
 	}
@@ -507,7 +507,7 @@ func CombinePublicKeySignature(this js.Value, args []js.Value) interface{} {
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
-	combinedSignatureBytes, err := hybridpqc.CombinePublicKeySignature(sigBytes, pubBytes)
+	combinedSignatureBytes, err := pqchelper.CombinePublicKeySignature(sigBytes, pubBytes)
 	if err != nil {
 		return nil
 	}

@@ -17,7 +17,7 @@ func TestCompactAndFullInterop(t *testing.T) {
 	sigFull = hybridedsfull.CreateHybridedsfullSig()
 
 	var sigCompact signaturealgorithm.SignatureAlgorithm
-	sigCompact = hybrideds.CreateHybridedsSig(true)
+	sigCompact = hybrideds.CreateHybridedsSig()
 
 	keyCompact, err := sigCompact.GenerateKey()
 	if err != nil {

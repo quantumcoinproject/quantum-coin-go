@@ -11,9 +11,9 @@ import (
 	"math/big"
 )
 
-var SigAlg = hybrideds.CreateHybridedsSig(true)
+var SigAlg = hybrideds.CreateHybridedsSig()
 
-var SigAlgHybridEds = hybrideds.CreateHybridedsSig(true)
+var SigAlgHybridEds = hybrideds.CreateHybridedsSig()
 var SigAlgHybridEdsFull = hybridedsfull.CreateHybridedsfullSig()
 
 type DynamicSigner struct {

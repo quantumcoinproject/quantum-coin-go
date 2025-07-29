@@ -14,8 +14,7 @@ import (
 )
 
 func main() {
-	sig1 := hybrideds.CreateHybridedsSig(true)
-	sig2 := hybrideds.CreateHybridedsSig(false)
+	sig1 := hybrideds.CreateHybridedsSig()
 	sig3 := hybridedsfull.CreateHybridedsfullSig()
 
 	if len(os.Args) > 2 {
@@ -27,18 +26,11 @@ func main() {
 			go SigPerf("hybrideds native", sig1, &wg)
 		}
 		wg.Wait()
-
-		for i := 0; i <= 32; i++ {
-			wg.Add(1)
-			go SigPerf("hybrideds default", sig2, &wg)
-		}
-		wg.Wait()
 	}
 
 	fmt.Println("Multi routine test done")
 
 	SigPerf("hybrideds native verify", sig1, nil)
-	SigPerf("hybrideds non native verify", sig2, nil)
 	SigPerf("hybrideds full", sig3, nil)
 }
 

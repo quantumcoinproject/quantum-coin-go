@@ -1963,8 +1963,13 @@ func TestPacketHandler_breakglass(t *testing.T) {
 		testPacketHandler_basic(4, t)
 	}
 
+	time.Sleep(10 * time.Second) //to allow for leftover packets to be processed, if any
+
 	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
-	defaults.SetCryptoBreakGlassBlock(0)
+	err := defaults.SetCryptoBreakGlassBlock(0)
+	if err != nil {
+		t.Fatalf("failed")
+	}
 	defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID))
 	fmt.Println("TestPacketHandler_breakglass done")
 

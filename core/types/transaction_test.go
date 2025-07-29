@@ -93,6 +93,7 @@ var (
 )
 
 func TestDecodeEmptyTypedTx(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	input := []byte{0x80}
 	var tx Transaction
 	err := rlp.DecodeBytes(input, &tx)
@@ -102,6 +103,7 @@ func TestDecodeEmptyTypedTx(t *testing.T) {
 }
 
 func TestTransactionSigHash(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	homestead := NewLondonSignerDefaultChain()
 	hash, err := homestead.Hash(emptyTx)
 	if err != nil {
@@ -120,6 +122,7 @@ func TestTransactionSigHash(t *testing.T) {
 }
 
 func TestTransactionEncode(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	txb, err := rlp.EncodeToBytes(rightvrsTx)
 	if err != nil {
 		t.Fatalf("encode error: %v", err)
@@ -157,6 +160,7 @@ func defaultTestKey() (*signaturealgorithm.PrivateKey, common.Address, error) {
 }
 
 func TestRecipientEmpty(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	signer := NewLondonSignerDefaultChain()
 	key, addr, err := defaultTestKey()
 	if err != nil {
@@ -193,6 +197,7 @@ func TestRecipientEmpty(t *testing.T) {
 }
 
 func TestRecipientNormal(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	_, addr, err := defaultTestKey()
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -216,59 +221,63 @@ func TestRecipientNormal(t *testing.T) {
 // Tests that if multiple transactions have the same price, the ones seen earlier
 // are prioritized to avoid network spam attacks aiming for a specific ordering.
 func TestTransactionSort(t *testing.T) {
-	// Generate a batch of accounts to start with
-	keys := make([]*signaturealgorithm.PrivateKey, 5)
-	for i := 0; i < len(keys); i++ {
-		keys[i], err = cryptobase.SigAlg.GenerateKey()
-		if err != nil {
-			t.Fatalf(err.Error())
-			return
-		}
-	}
-	signer := NewLondonSignerDefaultChain()
-
-	// Generate a batch of transactions with overlapping prices, but different creation times
-	groups := map[common.Address]Transactions{}
-	overallCount := 0
-	for start, key := range keys {
-		addr := cryptobase.SigAlg.PublicKeyToAddressNoError(&key.PublicKey)
-
-		for i := 0; i < 5; i++ {
-			tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
+	for testCount := 0; testCount < 100; testCount++ {
+		// Generate a batch of accounts to start with
+		keys := make([]*signaturealgorithm.PrivateKey, 5)
+		for i := 0; i < len(keys); i++ {
+			keys[i], err = cryptobase.SigAlg.GenerateKey()
 			if err != nil {
 				t.Fatalf(err.Error())
 				return
 			}
-			tx.time = time.Unix(0, int64(len(keys)-start))
-			overallCount = overallCount + 1
-			groups[addr] = append(groups[addr], tx)
-			fmt.Println("txhash", tx.Hash(), addr)
 		}
-	}
-	// Sort the transactions and cross check the nonce ordering
-	parentHash := common.BytesToHash([]byte("test parent hash"))
-	txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
+		signer := NewLondonSignerDefaultChain()
 
-	count := 0
-	ok := txset.NextCursor()
-	for ok == true {
-		txn := txset.PeekCursor()
-		from, err := Sender(signer, txn)
-		if err != nil {
-			t.Fatalf(err.Error())
-			return
+		// Generate a batch of transactions with overlapping prices, but different creation times
+		groups := map[common.Address]Transactions{}
+		overallCount := 0
+		for start, key := range keys {
+			addr := cryptobase.SigAlg.PublicKeyToAddressNoError(&key.PublicKey)
+
+			for i := 0; i < 5; i++ {
+				tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+				if err != nil {
+					t.Fatalf(err.Error())
+					return
+				}
+				tx.time = time.Unix(0, int64(len(keys)-start))
+				overallCount = overallCount + 1
+				groups[addr] = append(groups[addr], tx)
+				fmt.Println("txhash", tx.Hash(), addr)
+			}
 		}
-		fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
-		ok = txset.NextCursor()
-		count = count + 1
+		// Sort the transactions and cross check the nonce ordering
+		parentHash := common.BytesToHash([]byte("test parent hash"))
+		txset, _, _ := NewTransactionsByNonce(signer, groups, parentHash)
+
+		count := 0
+		ok := txset.NextCursor()
+		for ok == true {
+			txn := txset.PeekCursor()
+			from, err := Sender(signer, txn)
+			if err != nil {
+				t.Fatalf(err.Error())
+				return
+			}
+			fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
+			ok = txset.NextCursor()
+			count = count + 1
+		}
+		if count != overallCount {
+			t.Errorf("test count failed")
+		}
+		fmt.Println("count", count)
 	}
-	if count != overallCount {
-		t.Errorf("test count failed")
-	}
-	fmt.Println("count", count)
 }
 
 func TestTransactionSortIncreasing(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	// Generate a batch of accounts to start with
 	keys := make([]*signaturealgorithm.PrivateKey, 4)
 	for i := 0; i < len(keys); i++ {
@@ -323,6 +332,7 @@ func TestTransactionSortIncreasing(t *testing.T) {
 }
 
 func TestTransactionSortDecreasing(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	// Generate a batch of accounts to start with
 	keys := make([]*signaturealgorithm.PrivateKey, 4)
 	for i := 0; i < len(keys); i++ {
@@ -439,6 +449,7 @@ func TestTransactionSortIncreaseDecrease(t *testing.T) {
 }
 
 func TestTransactionSortSingle(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	// Generate a batch of accounts to start with
 	keys := make([]*signaturealgorithm.PrivateKey, 1)
 	for i := 0; i < len(keys); i++ {
@@ -491,6 +502,7 @@ func TestTransactionSortSingle(t *testing.T) {
 }
 
 func TestTransactionSortSingleAccount(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	// Generate a batch of accounts to start with
 	keys := make([]*signaturealgorithm.PrivateKey, 1)
 	for i := 0; i < len(keys); i++ {
@@ -544,6 +556,7 @@ func TestTransactionSortSingleAccount(t *testing.T) {
 }
 
 func TestTransactionSortNoTxns(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	signer := NewLondonSignerDefaultChain()
 
 	// Generate a batch of transactions with overlapping prices, but different creation times
@@ -574,6 +587,7 @@ func TestTransactionSortNoTxns(t *testing.T) {
 }
 
 func testTransactionNonceOrder_byCount(txnCount int, t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	// Generate a batch of accounts to start with
 	keys := make([]*signaturealgorithm.PrivateKey, 1)
 	for i := 0; i < len(keys); i++ {
@@ -639,12 +653,14 @@ func testTransactionNonceOrder_byCount(txnCount int, t *testing.T) {
 }
 
 func TestTransactionNonceOrder(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	testTransactionNonceOrder_byCount(10, t)
 	testTransactionNonceOrder_byCount(1, t)
 	testTransactionNonceOrder_byCount(2, t)
 }
 
 func testTransactionNonceOrder_skip_byCount(txnCount int, skipMap map[int]bool, outputCount int, t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	// Generate a batch of accounts to start with
 	keys := make([]*signaturealgorithm.PrivateKey, 1)
 	for i := 0; i < len(keys); i++ {
@@ -714,6 +730,7 @@ func testTransactionNonceOrder_skip_byCount(txnCount int, skipMap map[int]bool, 
 }
 
 func TestTransactionNonceOrderSkip(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	testTransactionNonceOrder_skip_byCount(10, map[int]bool{1: true}, 1, t)
 	testTransactionNonceOrder_skip_byCount(10, map[int]bool{5: true}, 5, t)
 	testTransactionNonceOrder_skip_byCount(10, map[int]bool{0: true}, 9, t)
@@ -724,6 +741,7 @@ func TestTransactionNonceOrderSkip(t *testing.T) {
 
 // TestTransactionCoding tests serializing/de-serializing to/from rlp and JSON.
 func TestTransactionCoding(t *testing.T) {
+	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	key, err := cryptobase.SigAlg.GenerateKey()
 	if err != nil {
 		t.Fatalf("could not generate key: %v", err)
