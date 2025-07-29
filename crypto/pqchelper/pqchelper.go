@@ -3,7 +3,6 @@ package pqchelper
 import (
 	"crypto/rand"
 	"errors"
-	"fmt"
 	"github.com/quantumcoinproject/circl/sign/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -28,8 +27,6 @@ func GenerateKeyWithSeed(seed []byte) (publicKey []byte, secretKey []byte, err e
 	}
 	var seedAlt [hybrideds.SeedSize]byte
 	copy(seedAlt[:], seed)
-	fmt.Println("seedAlt", seedAlt)
-	fmt.Println("seed", seed)
 
 	pub, pri, err := hybrideds.NewKeyFromSeed(&seedAlt)
 	if err != nil {
@@ -110,7 +107,7 @@ func PublicKeyBytesFromSignatureCompact(digestHash []byte, sig []byte) ([]byte, 
 		return nil, err
 	}
 	if len(signature) != CRYPTO_COMPACT_SIGNATURE_BYTES {
-		log.Error("PublicKeyBytesFromSignatureCompact", "len signature", len(signature), "CRYPTO_COMPACT_SIGNATURE_BYTES", CRYPTO_COMPACT_SIGNATURE_BYTES)
+		log.Debug("PublicKeyBytesFromSignatureCompact", "len signature", len(signature), "CRYPTO_COMPACT_SIGNATURE_BYTES", CRYPTO_COMPACT_SIGNATURE_BYTES)
 		return nil, ErrInvalidSignatureLen
 	}
 
