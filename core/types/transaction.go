@@ -191,42 +191,6 @@ func (tx *Transaction) setDecoded(inner TxData, size int) {
 	}
 }
 
-func sanityCheckSignature(digestHash []byte, v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {
-	if isProtectedV(v) && !maybeProtected {
-		return ErrUnexpectedProtection
-	}
-
-	var plainV byte
-	if isProtectedV(v) {
-		chainID := deriveChainId(v).Uint64()
-		plainV = byte(v.Uint64() - 35 - 2*chainID)
-	} else if maybeProtected {
-		// Only EIP-155 signatures can be optionally protected. Since
-		// we determined this v value is not protected, it must be a
-		// raw 27 or 28.
-		plainV = byte(v.Uint64() - 27)
-	} else {
-		// If the signature is not optionally protected, we assume it
-		// must already be equal to the recovery id.
-		plainV = byte(v.Uint64())
-	}
-	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, plainV, r, s)
-	if isOk == false {
-		return ErrInvalidSig
-	}
-
-	return nil
-}
-
-func isProtectedV(V *big.Int) bool {
-	if V.BitLen() <= 8 {
-		v := V.Uint64()
-		return v != 27 && v != 28 && v != 1 && v != 0
-	}
-	// anything not 27 or 28 is considered protected
-	return true
-}
-
 // Protected says whether the transaction is replay-protected.
 func (tx *Transaction) Protected() bool {
 	return true
@@ -338,8 +302,11 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 }
 
 func (tx *Transaction) Verify(digestHash []byte) bool {
-	_, r, s := tx.RawSignatureValues()
-	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, 1, r, s)
+	v, r, s := tx.RawSignatureValues()
+	if v.Uint64() != 1 {
+		return false
+	}
+	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, byte(v.Uint64()), r, s)
 	return isOk
 }
 

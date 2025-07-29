@@ -172,9 +172,6 @@ func (s londonSigner) ChainID() *big.Int {
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
-	// DynamicFee txns are defined to use 0 and 1 as their recovery
-	// id, add 27 to become equivalent to unprotected Homestead signatures.
-	V = new(big.Int).Add(V, big.NewInt(27))
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, ErrInvalidChainId
 	}
@@ -202,13 +199,15 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		R, S, _, err = decodeSignature(sigHash.Bytes(), sig)
+		R, S, v, err := decodeSignature(sigHash.Bytes(), sig)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-
+		if v.Uint64() != 1 {
+			return nil, nil, nil, ErrInvalidSig
+		}
 		V = big.NewInt(1)
-		return R, S, V, nil
+		return R, S, v, nil
 	}
 
 	return nil, nil, nil, errors.New("signature error")
@@ -251,7 +250,7 @@ func decodeSignature(digestHash []byte, sig []byte) (r, s, v *big.Int, err error
 
 	r = new(big.Int).SetBytes(publicKey)
 	s = new(big.Int).SetBytes(signature)
-	v = new(big.Int).SetBytes([]byte{1 + 27})
+	v = big.NewInt(1)
 
 	return r, s, v, nil
 }
@@ -260,7 +259,7 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 	if Vb.BitLen() > 8 {
 		return common.Address{}, ErrInvalidSig
 	}
-	V := byte(Vb.Uint64() - 27)
+	V := byte(1)
 	isOk, pub, sig := cryptobase.DynamicSigVerifier.ValidateSignatureValues(sighash[:], V, R, S)
 	if isOk == false {
 		log.Debug("recoverPlain failed, ErrInvalidSig", "hash", sighash)
@@ -279,17 +278,4 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 	}
 
 	return addr, nil
-}
-
-// deriveChainId derives the chain id from the given v parameter
-func deriveChainId(v *big.Int) *big.Int {
-	if v.BitLen() <= 64 {
-		v := v.Uint64()
-		if v == 27 || v == 28 {
-			return new(big.Int)
-		}
-		return new(big.Int).SetUint64((v - 35) / 2)
-	}
-	v = new(big.Int).Sub(v, big.NewInt(35))
-	return v.Div(v, big.NewInt(2))
 }
