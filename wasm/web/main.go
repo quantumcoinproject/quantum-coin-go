@@ -10,7 +10,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridpqc"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelper"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/keystore"
@@ -469,7 +469,7 @@ func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
-	publicKeyBytes, err := pqchelper.PublicKeyBytesFromSignature(digestBytes, sigBytes)
+	publicKeyBytes, err := pqchelper.PublicKeyBytesFromSignatureCompact(digestBytes, sigBytes)
 	if err != nil {
 		return nil
 	}

@@ -33,7 +33,7 @@ jobs:
         ls  /usr/local/lib/android/sdk/ndk 
     - name: Build Android library
       env:
-        LIB_PATH: /usr/local/lib/android/sdk/ndk/27.2.12479018/toolchains/llvm/prebuilt/linux-x86_64/bin
+        LIB_PATH: /usr/local/lib/android/sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin
       run: |                
         export CGO_ENABLED=1
         export GOOS=android
