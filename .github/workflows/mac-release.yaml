@@ -45,7 +45,6 @@ jobs:
          cp ${{ github.workspace }}/build/relay ${{ github.workspace }}/build/dp-release/relay
          cp ${{ github.workspace }}/cmd/relay/config.json ${{ github.workspace }}/build/dp-release/config.json        
          cp ${{ github.workspace }}/templibs/liboqs/liboqs.5.dylib ${{ github.workspace }}/build/dp-release/liboqs.5.dylib
-         cp ${{ github.workspace }}/templibs/hybrid-pqc/libhybridpqc.2.dylib ${{ github.workspace }}/build/dp-release/libhybridpqc.2.dylib
          cp ${{ github.workspace }}/consensus/proofofstake/genesis/genesis.json ${{ github.workspace }}/build/dp-release/genesis.json
          cp ${{ github.workspace }}/resources/*.* ${{ github.workspace }}/build/dp-release/
          rm ${{ github.workspace }}/build/dp-release/connect.cmd

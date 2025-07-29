@@ -28,7 +28,6 @@ jobs:
         run: |
           dir ${{ github.workspace }}\templibs
           echo "${{ github.workspace }}\templibs\liboqs" >> $GITHUB_PATH
-          echo "${{ github.workspace }}\templibs\hybrid-pqc" >> $GITHUB_PATH
           echo "${{ github.workspace }}\templibs\pkg-config\bin" >> $GITHUB_PATH
           echo "${{ github.workspace }}\templibs\mingw\mingw64\bin" >> $GITHUB_PATH
 
@@ -53,7 +52,6 @@ jobs:
           copy ${{ github.workspace }}\build\relay.exe ${{ github.workspace }}\build\dp\relay.exe
           copy ${{ github.workspace }}\cmd\relay\config.json ${{ github.workspace }}\build\dp\config.json         
           copy ${{ github.workspace }}\templibs\liboqs\oqs.dll ${{ github.workspace }}\build\dp\oqs.dll
-          copy ${{ github.workspace }}\templibs\hybrid-pqc\hybridpqc.dll ${{ github.workspace }}\build\dp\hybridpqc.dll
           copy ${{ github.workspace }}\consensus\proofofstake\genesis\genesis.json ${{ github.workspace }}\build\dp\genesis.json
           copy ${{ github.workspace }}\resources\*.* ${{ github.workspace }}\build\dp\
           del ${{ github.workspace }}\build\dp\connect.sh

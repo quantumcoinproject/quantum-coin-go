@@ -7,32 +7,6 @@ if (test-path templibs) {
 mkdir templibs
 mkdir templibs\pkg-config
 
-mkdir templibs\hybrid-pqc
-$hybridConfig = Get-Content -Path '.config\template\libhybridpqc-template.pc'
-$hybridConfig = $hybridConfig.Replace('[INCLUDE_DIR]', $PWD.Path + '\templibs\hybrid-pqc\build\include')
-$hybridConfig = $hybridConfig.Replace('[LIB_DIR]', $PWD.Path + '\templibs\hybrid-pqc')
-$hybridConfig = $hybridConfig.Replace('\','/')
-Set-Content -Path 'templibs\pkg-config\libhybridpqc.pc' -Value $hybridConfig
-
-$hybridpqcincludeszipfile = $PWD.Path + '\templibs\hybrid-pqc\includes.zip'
-Invoke-WebRequest -Uri "https://github.com/DogeProtocol/hybrid-pqc/releases/download/v0.1.12/includes.zip" -OutFile $hybridpqcincludeszipfile
-$FileHash = Get-FileHash $hybridpqcincludeszipfile
-if ($FileHash.Hash -ne 'DD3001667A7199D2D3FAA2BBF1B848A832C71CAF04B61C023B34545A142C08F7') {
-  Write-Host "Hash check failed! Warning! File might be tampered!   " + $hybridpqcincludeszipfile
-  [Environment]::Exit(-1)
-}
-
-$dest = $PWD.Path + '\templibs\hybrid-pqc\'
-Expand-Archive $hybridpqcincludeszipfile -DestinationPath $dest
-
-$hybridpqcdll = $PWD.Path + '\templibs\hybrid-pqc\hybridpqc.dll'
-Invoke-WebRequest -Uri "https://github.com/DogeProtocol/hybrid-pqc/releases/download/v0.1.12/hybridpqc.dll" -OutFile $hybridpqcdll
-$FileHash = Get-FileHash $hybridpqcdll
-if ($FileHash.Hash -ne 'E5015CE6360F55F61DFCF4EFB105932BA8E716D5A669E262A4A46D3769A6B402') {
-  Write-Host "Hash check failed! Warning! File might be tampered!   " + $hybridpqcdll
-  [Environment]::Exit(-1)
-}
-
 mkdir templibs\liboqs
 $oqsConfig = Get-Content -Path '.config\template\liboqs-template.pc'
 $oqsConfig = $oqsConfig.Replace('[INCLUDE_DIR]', $PWD.Path + '\templibs\liboqs\build\include')
@@ -100,7 +74,7 @@ if ($FileHash.Hash -ne '30AA368DE90A5143557F3B5CF2FC811BFFAA9CA81FF16B4A73B90F5C
 $dest = $PWD.Path + '\templibs\mingw\'
 Expand-Archive $mingwfile -DestinationPath $dest -Force
 
-$setenv = 'set PATH=' + $PWD.Path + '\templibs\liboqs;' + $PWD.Path + '\templibs\hybrid-pqc;' + $PWD.Path + '\templibs\pkg-config\bin;' + $PWD.Path + "\templibs\mingw\mingw64\bin;%PATH%"
+$setenv = 'set PATH=' + $PWD.Path + '\templibs\liboqs;' + $PWD.Path + '\templibs\pkg-config\bin;' + $PWD.Path + "\templibs\mingw\mingw64\bin;%PATH%"
 $setenv = $setenv + "`r`n" + 'set PKG_CONFIG_PATH=' + $PWD.Path + '\templibs\pkg-config'
 Set-Content -Path 'templibs\setenv.cmd' -Value $setenv
 
