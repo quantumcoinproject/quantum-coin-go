@@ -8,7 +8,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/oqs"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"io"
@@ -102,16 +101,11 @@ func (s *Server) PerformHandshake() error {
 		return errors.New("Handshake already done")
 	}
 
-	//Initialize KEM
-	var kem keyestablishmentalgorithm.KeyEncapsulation
-	oqsKem := oqs.KeyEncapsulation{}
-	kem = &oqsKem
-
-	err := kem.Init(oqs.KemName, nil)
+	var err error
+	s.kem, err = NewKem()
 	if err != nil {
 		return err
 	}
-	s.kem = &kem
 
 	//Receive client hello message
 	clientHelloMessage := new(clientHelloMessage)

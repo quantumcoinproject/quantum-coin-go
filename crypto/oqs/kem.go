@@ -11,6 +11,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"math/big"
 	"unsafe"
@@ -49,13 +50,21 @@ func (kem *KeyEncapsulation) Init(algName string, secretKey []byte) error {
 	kem.kem = C.OQS_KEM_new(C.CString(algName))
 	kem.secretKey = secretKey
 	kem.AlgDetails.Name = C.GoString(kem.kem.method_name)
-	kem.AlgDetails.Version = C.GoString(kem.kem.alg_version)
-	kem.AlgDetails.ClaimedNISTLevel = int(kem.kem.claimed_nist_level)
-	kem.AlgDetails.IsINDCCA = bool(kem.kem.ind_cca)
+	//kem.AlgDetails.Version = C.GoString(kem.kem.alg_version)
+	//kem.AlgDetails.ClaimedNISTLevel = int(kem.kem.claimed_nist_level)
+	//kem.AlgDetails.IsINDCCA = bool(kem.kem.ind_cca)
 	kem.AlgDetails.LengthPublicKey = int(kem.kem.length_public_key)
 	kem.AlgDetails.LengthSecretKey = int(kem.kem.length_secret_key)
 	kem.AlgDetails.LengthCiphertext = int(kem.kem.length_ciphertext)
 	kem.AlgDetails.LengthSharedSecret = int(kem.kem.length_shared_secret)
+
+	fmt.Println(kem.AlgDetails.Name)
+	//fmt.Println(kem.AlgDetails.Version)
+	//fmt.Println(kem.AlgDetails.ClaimedNISTLevel)
+	fmt.Println(kem.AlgDetails.LengthPublicKey)
+	fmt.Println(kem.AlgDetails.LengthSecretKey)
+	fmt.Println(kem.AlgDetails.LengthCiphertext)
+	fmt.Println(kem.AlgDetails.LengthSharedSecret)
 	return nil
 }
 

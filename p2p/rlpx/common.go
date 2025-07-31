@@ -4,6 +4,9 @@ import (
 	"crypto/cipher"
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/kyber"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/oqs"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"time"
 )
@@ -129,4 +132,25 @@ func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, p
 	dataPacket.seqNum = seqNum
 
 	return dataPacket, nil
+}
+
+func NewKem() (*keyestablishmentalgorithm.KeyEncapsulation, error) {
+	var kem keyestablishmentalgorithm.KeyEncapsulation
+	k, err := kyber.NewKeyEncapsulation()
+	if err != nil {
+		return nil, err
+	}
+	kem = k
+	return &kem, err
+
+	//Initialize KEM
+
+	oqsKem := oqs.KeyEncapsulation{}
+	kem = &oqsKem
+
+	err = kem.Init(oqs.KemName, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &kem, nil
 }

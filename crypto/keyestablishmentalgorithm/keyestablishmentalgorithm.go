@@ -5,14 +5,14 @@ import (
 )
 
 type KeyEncapsulationDetails struct {
-	ClaimedNISTLevel   int
-	IsINDCCA           bool
+	//ClaimedNISTLevel   int
+	//IsINDCCA           bool
+	Name               string
 	LengthCiphertext   int
 	LengthPublicKey    int
 	LengthSecretKey    int
 	LengthSharedSecret int
-	Name               string
-	Version            string
+	//Version            string
 }
 
 type PublicKey struct {
