@@ -14,14 +14,14 @@ import (
 	"sync"
 )
 
-type serverHelloMessage struct {
+type ServerHelloMessage struct {
 	CipherText            []byte //kemCipherTextLength
 	ServerHelloRandomData [shaLen]byte
 	Version               uint
 	Rest                  []rlp.RawValue `rlp:"tail"`
 }
 
-type serverVerifyMessage struct {
+type ServerVerifyMessage struct {
 	Signature    []byte //SignPublicKeyLen
 	SignatureLen uint
 	Rest         []rlp.RawValue `rlp:"tail"`
@@ -36,10 +36,10 @@ type Server struct {
 	rbuf ReadBuffer
 	wbuf WriteBuffer
 
-	cliHelloMessage  *clientHelloMessage
-	srvHelloMessage  *serverHelloMessage
-	srvVerifyMessage *serverVerifyMessage
-	cliVerifyMessage *clientVerifyMessage
+	cliHelloMessage  *ClientHelloMessage
+	srvHelloMessage  *ServerHelloMessage
+	srvVerifyMessage *ServerVerifyMessage
+	cliVerifyMessage *ClientVerifyMessage
 
 	kemCipherText   []byte //kemCipherTextLength
 	kemSharedSecret []byte //kemSecretLength
@@ -108,7 +108,7 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	//Receive client hello message
-	clientHelloMessage := new(clientHelloMessage)
+	clientHelloMessage := new(ClientHelloMessage)
 	_, err = s.serializer.Deserialize(clientHelloMessage, s.conn)
 	if err != nil {
 		return err
@@ -161,7 +161,7 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	//Serialize the server verify message
-	serverVerifyMessage := new(serverVerifyMessage)
+	serverVerifyMessage := new(ServerVerifyMessage)
 	serverVerifyMessage.Signature = make([]byte, cryptobase.SigAlg.SignatureWithPublicKeyLength())
 	copy(serverVerifyMessage.Signature[:], signature)
 	serverVerifyMessage.SignatureLen = uint(len(signature))
@@ -207,7 +207,7 @@ func (s *Server) Read() error {
 }
 
 func (s *Server) makeServerHello() error {
-	serverHelloMessage := new(serverHelloMessage)
+	serverHelloMessage := new(ServerHelloMessage)
 	serverHelloMessage.Version = 1
 
 	// Generate ServerRandomData
@@ -246,7 +246,7 @@ func (s *Server) handleClientHello() error {
 func (s *Server) handleClientVerify() error {
 
 	//Receive the client verify message
-	clientVerifyMessage := new(clientVerifyMessage)
+	clientVerifyMessage := new(ClientVerifyMessage)
 	err := s.ReadAndDecryptMessage(clientVerifyMessage, PacketTypeHandshake)
 
 	if err != nil {

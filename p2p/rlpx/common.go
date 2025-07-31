@@ -134,19 +134,18 @@ func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, p
 }
 
 func NewKem() (*keyestablishmentalgorithm.KeyEncapsulation, error) {
-	var kem keyestablishmentalgorithm.KeyEncapsulation
+	/*var kem keyestablishmentalgorithm.KeyEncapsulation
 	var err error
 
-	/*
-		k, err := keyestablishmentalgorithm.NewKeyEncap()
-		if err != nil {
-			return nil, err
-		}
-		kem = k
-		return &kem, err*/
+	k, err := keyestablishmentalgorithm.NewKeyEncap()
+	if err != nil {
+		return nil, err
+	}
+	kem = k
+	return &kem, err*/
 
-	//Initialize KEM
-
+	var kem keyestablishmentalgorithm.KeyEncapsulation
+	var err error
 	oqsKem := oqs.KeyEncapsulation{}
 	kem = &oqsKem
 

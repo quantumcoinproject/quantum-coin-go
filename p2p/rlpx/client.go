@@ -16,14 +16,14 @@ import (
 	"sync"
 )
 
-type clientHelloMessage struct {
+type ClientHelloMessage struct {
 	ClientKemPublicKey    []byte //kemPublicKeyLen
 	ClientHelloRandomData [shaLen]byte
 	Version               uint
 	Rest                  []rlp.RawValue `rlp:"tail"`
 }
 
-type clientVerifyMessage struct {
+type ClientVerifyMessage struct {
 	Signature    []byte //SignPublicKeyLen
 	SignatureLen uint
 	Rest         []rlp.RawValue `rlp:"tail"`
@@ -38,10 +38,10 @@ type Client struct {
 	clientSigningPrivateKey *signaturealgorithm.PrivateKey
 	serverSigningPublicKey  *signaturealgorithm.PublicKey
 
-	cliHelloMessage  *clientHelloMessage
-	srvHelloMessage  *serverHelloMessage
-	srvVerifyMessage *serverVerifyMessage
-	cliVerifyMessage *clientVerifyMessage
+	cliHelloMessage  *ClientHelloMessage
+	srvHelloMessage  *ServerHelloMessage
+	srvVerifyMessage *ServerVerifyMessage
+	cliVerifyMessage *ClientVerifyMessage
 
 	rbuf        ReadBuffer
 	wbuf        WriteBuffer
@@ -132,7 +132,7 @@ func (c *Client) PerformHandshake() error {
 	}
 
 	//Receive server hello message
-	serverHelloMessage := new(serverHelloMessage)
+	serverHelloMessage := new(ServerHelloMessage)
 	_, err = c.serializer.Deserialize(serverHelloMessage, c.conn)
 	if err != nil {
 		return err
@@ -164,7 +164,7 @@ func (c *Client) PerformHandshake() error {
 	c.secret = *secret
 
 	//Receive the server verify message
-	serverVerifyMessage := new(serverVerifyMessage)
+	serverVerifyMessage := new(ServerVerifyMessage)
 	err = c.ReadAndDecryptMessage(serverVerifyMessage, PacketTypeHandshake)
 
 	if err != nil {
@@ -214,7 +214,7 @@ func (c *Client) PerformHandshake() error {
 	}
 
 	//Serialize the server verify message
-	clientVerifyMessage := new(clientVerifyMessage)
+	clientVerifyMessage := new(ClientVerifyMessage)
 	clientVerifyMessage.Signature = make([]byte, cryptobase.SigAlg.SignatureWithPublicKeyLength())
 	copy(clientVerifyMessage.Signature[:], signature)
 	clientVerifyMessage.SignatureLen = uint(len(signature))
@@ -250,7 +250,7 @@ func (c *Client) PerformHandshake() error {
 }
 
 func (c *Client) makeClientHello() error {
-	clientHelloMessage := new(clientHelloMessage)
+	clientHelloMessage := new(ClientHelloMessage)
 	clientHelloMessage.Version = 1
 
 	//Generate an ephemeral kem keypair
