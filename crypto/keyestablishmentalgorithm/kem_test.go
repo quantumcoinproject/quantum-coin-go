@@ -1,4 +1,4 @@
-package kyber
+package keyestablishmentalgorithm
 
 import (
 	"bytes"
@@ -15,10 +15,10 @@ var wgKEMCorrectness sync.WaitGroup
 // wgKEMWrongCiphertext groups goroutines and blocks the caller until all goroutines finish.
 var wgKEMWrongCiphertext sync.WaitGroup
 
-const KemName = "Kyber512"
+var KemName = Scheme.Name()
 
 func EncapSecret(publicKey []byte) (ciphertext, sharedSecret []byte, err error) {
-	kem := KeyEncapsulation{}
+	kem := KeyEncap{}
 	defer kem.Clean() // clean up even in case of panic
 	err = kem.Init(KemName, nil)
 	if err != nil {
@@ -29,7 +29,7 @@ func EncapSecret(publicKey []byte) (ciphertext, sharedSecret []byte, err error) 
 }
 
 func DecapSecret(seckey, ciphertext []byte) ([]byte, error) {
-	kem := KeyEncapsulation{}
+	kem := KeyEncap{}
 	defer kem.Clean() // clean up even in case of panic
 	err := kem.Init(KemName, seckey)
 	if err != nil {
