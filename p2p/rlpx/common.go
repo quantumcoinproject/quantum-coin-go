@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/oqs"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"time"
 )
@@ -146,26 +145,13 @@ func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, p
 }
 
 func NewKem(context string) (*keyestablishmentalgorithm.KeyEncapsulation, error) {
-	if context == "client" {
-		var kem keyestablishmentalgorithm.KeyEncapsulation
-		var err error
-
-		k, err := keyestablishmentalgorithm.NewKeyEncap()
-		if err != nil {
-			return nil, err
-		}
-		kem = k
-		return &kem, err
-	}
-	
 	var kem keyestablishmentalgorithm.KeyEncapsulation
 	var err error
-	oqsKem := oqs.KeyEncapsulation{}
-	kem = &oqsKem
 
-	err = kem.Init(oqs.KemName, nil)
+	k, err := keyestablishmentalgorithm.NewKeyEncap()
 	if err != nil {
 		return nil, err
 	}
-	return &kem, nil
+	kem = k
+	return &kem, err
 }
