@@ -5,7 +5,6 @@ package oqs
 import (
 	"bytes"
 	"crypto/rand"
-	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -22,8 +21,6 @@ var wgKEMWrongCiphertext sync.WaitGroup
 func testKEMCorrectness(threading bool, t *testing.T) {
 	InitOqs()
 
-	fmt.Println(EnabledKEMs())
-
 	log.Println("Correctness - ", KemName) // thread-safe
 	if threading == true {
 		defer wgKEMCorrectness.Done()
@@ -34,19 +31,17 @@ func testKEMCorrectness(threading bool, t *testing.T) {
 		t.Errorf(KemName + ": GenerateKemKeyPair failed")
 	}
 
-	fmt.Println("clientKey.Key", clientKey.Key)
-	fmt.Println("clientKey.Public.Key", clientKey.Public.Key)
-	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.Public.Key)
+	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.N.Bytes())
 	if err != nil {
 		t.Errorf(KemName + ": EncapSecret sharedSecretServer failed")
 	}
 
-	if bytes.Equal(clientKey.Public.Key, ciphertext) {
+	if bytes.Equal(clientKey.N.Bytes(), ciphertext) {
 		// t.Errorf is thread-safe
 		t.Errorf(KemName + ": publicKey ciphertext coincides")
 	}
 
-	ciphertext1, sharedSecretServer1, err := EncapSecret(clientKey.Public.Key)
+	ciphertext1, sharedSecretServer1, err := EncapSecret(clientKey.N.Bytes())
 	if err != nil {
 		t.Errorf(KemName + ": EncapSecret sharedSecretServer1 failed")
 	}
@@ -56,7 +51,7 @@ func testKEMCorrectness(threading bool, t *testing.T) {
 		t.Errorf(KemName + ": ciphertext coincides")
 	}
 
-	sharedSecretClient, err := DecapSecret(clientKey.Key, ciphertext)
+	sharedSecretClient, err := DecapSecret(clientKey.D.Bytes(), ciphertext)
 	if err != nil {
 		t.Errorf(KemName + ": DecapSecret sharedSecretClient failed")
 	}
@@ -66,10 +61,11 @@ func testKEMCorrectness(threading bool, t *testing.T) {
 		t.Errorf(KemName + ": shared secrets do not coincide")
 	}
 
-	sharedSecretClient1, err := DecapSecret(clientKey.Key, ciphertext1)
+	sharedSecretClient1, err := DecapSecret(clientKey.D.Bytes(), ciphertext1)
 	if err != nil {
 		t.Errorf(KemName + ": DecapSecret sharedSecretClient1 failed")
 	}
+
 	if !bytes.Equal(sharedSecretClient1, sharedSecretServer1) {
 		// t.Errorf is thread-safe
 		t.Errorf(KemName + ": shared secrets do not coincide")
@@ -87,13 +83,13 @@ func testKEMWrongCiphertext(threading bool, t *testing.T) {
 		t.Errorf(KemName + ": GenerateKemKeyPair failed")
 	}
 
-	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.Public.Key)
+	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.N.Bytes())
 	if err != nil {
 		t.Errorf(KemName + ": EncapSecret sharedSecretServer failed")
 	}
 
 	wrongCiphertext := csprngEntropy(len(ciphertext))
-	sharedSecretClient, err := DecapSecret(clientKey.Key, wrongCiphertext)
+	sharedSecretClient, err := DecapSecret(clientKey.D.Bytes(), wrongCiphertext)
 	if err != nil {
 		t.Errorf(KemName + ": DecapSecret sharedSecretClient failed")
 	}
