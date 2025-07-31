@@ -74,10 +74,10 @@ func CalculateNonce(recordCount uint, input []byte) []byte {
 	return output
 }
 
-func Encrypt(cipher1 cipher.AEAD, fragment []byte, additionalData []byte, packetType PacketType, handshakeIv []byte, seqNum uint) (encrypted []byte, err error) {
+func Encrypt(cipher1 cipher.AEAD, fragment []byte, additionalData []byte, packetType PacketType, iv []byte, seqNum uint) (encrypted []byte, err error) {
 	dataLen := len(fragment)
 
-	nonce := CalculateNonce(seqNum, handshakeIv)
+	nonce := CalculateNonce(seqNum, iv)
 
 	//Calculate packet overhead
 	beforeEncryptLen := dataLen + 1 + padLen
@@ -92,6 +92,9 @@ func Encrypt(cipher1 cipher.AEAD, fragment []byte, additionalData []byte, packet
 	}
 
 	//Encrypt the data
+	if len(buffer) < beforeEncryptLen {
+		return nil, errors.New("buffer too short")
+	}
 	payload := buffer[:beforeEncryptLen]
 	encryptedData := cipher1.Seal(payload[:0], nonce, payload, additionalData)
 
@@ -120,11 +123,20 @@ func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, p
 
 	// Find the padding boundary
 	padLen1 := padLen
+
+	if len(dataPacket.fragment) < dataLen-padLen1-1 {
+		return nil, errors.New("data length malformed (a)")
+	}
+
 	for ; padLen1 < dataLen+1 && dataPacket.fragment[dataLen-padLen1-1] == 0; padLen1++ {
+
 	}
 
 	// Transfer the content type
 	newLen := dataLen - padLen1 - 1
+	if newLen > len(dataPacket.fragment) {
+		return nil, errors.New("data length malformed (c)")
+	}
 	dataPacket.packetType = PacketType(dataPacket.fragment[newLen])
 
 	dataPacket.fragment = dataPacket.fragment[:newLen]
@@ -133,17 +145,19 @@ func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, p
 	return dataPacket, nil
 }
 
-func NewKem() (*keyestablishmentalgorithm.KeyEncapsulation, error) {
-	/*var kem keyestablishmentalgorithm.KeyEncapsulation
-	var err error
+func NewKem(context string) (*keyestablishmentalgorithm.KeyEncapsulation, error) {
+	if context == "client" {
+		var kem keyestablishmentalgorithm.KeyEncapsulation
+		var err error
 
-	k, err := keyestablishmentalgorithm.NewKeyEncap()
-	if err != nil {
-		return nil, err
+		k, err := keyestablishmentalgorithm.NewKeyEncap()
+		if err != nil {
+			return nil, err
+		}
+		kem = k
+		return &kem, err
 	}
-	kem = k
-	return &kem, err*/
-
+	
 	var kem keyestablishmentalgorithm.KeyEncapsulation
 	var err error
 	oqsKem := oqs.KeyEncapsulation{}

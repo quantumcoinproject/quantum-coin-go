@@ -102,7 +102,7 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	var err error
-	s.kem, err = NewKem()
+	s.kem, err = NewKem("server")
 	if err != nil {
 		return err
 	}

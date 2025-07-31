@@ -110,7 +110,7 @@ func (c *Client) PerformHandshake() error {
 	}
 
 	var err error
-	c.kem, err = NewKem()
+	c.kem, err = NewKem("client")
 	if err != nil {
 		return err
 	}

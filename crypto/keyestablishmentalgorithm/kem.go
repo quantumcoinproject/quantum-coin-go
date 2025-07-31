@@ -1,32 +1,22 @@
 package keyestablishmentalgorithm
 
 import (
+	"github.com/quantumcoinproject/circl/kem/kyber/kyber512"
 	"github.com/quantumcoinproject/circl/kem/mlkem/mlkem512"
 	"math/big"
 )
 
-var Scheme = mlkem512.Scheme()
+var Scheme = kyber512.Scheme()
 
 type KeyEncap struct {
 	PriKey *PrivateKey
 }
 
 func NewKeyEncap() (*KeyEncap, error) {
-	pri, err := GenerateKemKeyPair()
-	if err != nil {
-		return nil, err
-	}
-
-	return &KeyEncap{
-		PriKey: pri,
-	}, nil
+	return &KeyEncap{}, nil
 }
 
 func (kem *KeyEncap) Init(algName string, secretKey []byte) error {
-
-	if secretKey != nil && secretKey[0] == 0 {
-		panic("failde init")
-	}
 	kem.PriKey = &PrivateKey{
 		D: new(big.Int).SetBytes(secretKey),
 	}
@@ -58,10 +48,6 @@ func GenerateKemKeyPair() (*PrivateKey, error) {
 		return nil, err
 	}
 
-	if priBytes[0] == byte(0) || pubBytes[0] == byte(0) {
-		panic("failed")
-	}
-
 	privy := new(PrivateKey)
 	privy.D = new(big.Int).SetBytes(priBytes)
 	privy.PublicKey.N = new(big.Int).SetBytes(pubBytes)
@@ -70,7 +56,12 @@ func GenerateKemKeyPair() (*PrivateKey, error) {
 }
 
 func (kem *KeyEncap) GenerateKemKeyPair() (*PrivateKey, error) {
-	return GenerateKemKeyPair()
+	k, err := GenerateKemKeyPair()
+	if err != nil {
+		return nil, err
+	}
+	kem.PriKey = k
+	return k, nil
 }
 
 func (kem *KeyEncap) EncapsulateSecret(publicKey []byte) (ciphertext, sharedSecret []byte, err error) {

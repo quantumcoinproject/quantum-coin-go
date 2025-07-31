@@ -120,6 +120,39 @@ func testKEMWrongCiphertext(threading bool, t *testing.T) {
 	}
 }
 
+func TestEncapBasic(t *testing.T) {
+	pub1, pri1, err := Scheme.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("failed")
+	}
+
+	_, pri2, err := Scheme.GenerateKeyPair()
+	if err != nil {
+		t.Fatalf("failed")
+	}
+
+	cipher1, ss1, err := Scheme.Encapsulate(pub1)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+	ss2, err := Scheme.Decapsulate(pri1, cipher1)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+
+	if bytes.Equal(ss1, ss2) == false {
+		t.Fatalf("failed")
+	}
+
+	ss3, err := Scheme.Decapsulate(pri2, cipher1)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+	if bytes.Equal(ss1, ss3) == true {
+		t.Fatalf("failed")
+	}
+}
+
 // TestKeyEncapsulationCorrectness tests the correctness of all enabled KEMs.
 func TestKeyEncapsulationCorrectness(t *testing.T) {
 	testKEMCorrectness(false, t)
