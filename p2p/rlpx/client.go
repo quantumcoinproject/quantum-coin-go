@@ -32,7 +32,7 @@ type clientVerifyMessage struct {
 
 type Client struct {
 	ephemeralKemPrivateKey  *keyestablishmentalgorithm.PrivateKey
-	kem                     *oqs.KeyEncapsulation
+	kem                     *keyestablishmentalgorithm.KeyEncapsulation
 	kemCipherText           []byte //kemCipherTextLength
 	kemSharedSecret         []byte //kemSecretLength
 	Nonce                   uint
@@ -111,7 +111,9 @@ func (c *Client) PerformHandshake() error {
 	}
 
 	//Initialize KEM
-	kem := oqs.KeyEncapsulation{}
+	var kem keyestablishmentalgorithm.KeyEncapsulation
+	oqsKem := oqs.KeyEncapsulation{}
+	kem = &oqsKem
 
 	err := kem.Init(oqs.KemName, nil)
 	if err != nil {
@@ -258,12 +260,14 @@ func (c *Client) makeClientHello() error {
 	clientHelloMessage.Version = 1
 
 	//Generate an ephemeral kem keypair
-	kemPrivateKey, err := c.kem.GenerateKemKeyPair()
+	k := *c.kem
+
+	kemPrivateKey, err := k.GenerateKemKeyPair()
 	if err != nil {
 		return err
 	}
 	c.ephemeralKemPrivateKey = kemPrivateKey
-	clientHelloMessage.ClientKemPublicKey = make([]byte, c.kem.AlgDetails.LengthPublicKey)
+	clientHelloMessage.ClientKemPublicKey = make([]byte, k.Details().LengthPublicKey)
 	copy(clientHelloMessage.ClientKemPublicKey[:], c.ephemeralKemPrivateKey.N.Bytes())
 
 	// Generate ClientRandomData
@@ -281,18 +285,19 @@ func (c *Client) makeClientHello() error {
 
 func (c *Client) Cleanup() {
 	if c.kem != nil {
-		c.kem.Clean()
+		k := *c.kem
+		k.Clean()
 	}
 }
 
 func (c *Client) handleServerHello() error {
-
-	sharedSecret, err := c.kem.DecapsulateSecret(c.srvHelloMessage.CipherText[:])
+	k := *c.kem
+	sharedSecret, err := k.DecapsulateSecret(c.srvHelloMessage.CipherText[:])
 	if err != nil {
 		return err
 	}
 
-	c.kemSharedSecret = make([]byte, c.kem.AlgDetails.LengthSharedSecret)
+	c.kemSharedSecret = make([]byte, k.Details().LengthSharedSecret)
 	copy(c.kemSharedSecret[:], sharedSecret[:])
 
 	return nil

@@ -39,19 +39,7 @@ func IsKEMEnabled(algName string) bool {
 type KeyEncapsulation struct {
 	kem        *C.OQS_KEM
 	secretKey  []byte
-	AlgDetails KeyEncapsulationDetails
-}
-
-// KeyEncapsulationDetails defines the KEM algorithm details.
-type KeyEncapsulationDetails struct {
-	ClaimedNISTLevel   int
-	IsINDCCA           bool
-	LengthCiphertext   int
-	LengthPublicKey    int
-	LengthSecretKey    int
-	LengthSharedSecret int
-	Name               string
-	Version            string
+	AlgDetails keyestablishmentalgorithm.KeyEncapsulationDetails
 }
 
 func (kem *KeyEncapsulation) Init(algName string, secretKey []byte) error {
@@ -72,7 +60,7 @@ func (kem *KeyEncapsulation) Init(algName string, secretKey []byte) error {
 }
 
 // Details returns the KEM algorithm details.
-func (kem *KeyEncapsulation) Details() KeyEncapsulationDetails {
+func (kem *KeyEncapsulation) Details() keyestablishmentalgorithm.KeyEncapsulationDetails {
 	return kem.AlgDetails
 }
 

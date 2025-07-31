@@ -1,6 +1,8 @@
 package keyestablishmentalgorithm
 
-import "math/big"
+import (
+	"math/big"
+)
 
 type KeyEncapsulationDetails struct {
 	ClaimedNISTLevel   int
@@ -25,9 +27,8 @@ type PrivateKey struct {
 type KeyEncapsulation interface {
 	Init(algName string, secretKey []byte) error
 	Details() KeyEncapsulationDetails
-	EncapSecret(publicKey []byte) (ciphertext, sharedSecret []byte, err error)
-	DecapSecret(seckey, ciphertext []byte) ([]byte, error)
 	GenerateKemKeyPair() (*PrivateKey, error)
 	EncapsulateSecret(publicKey []byte) (ciphertext, sharedSecret []byte, err error)
 	DecapsulateSecret(ciphertext []byte) ([]byte, error)
+	Clean()
 }
