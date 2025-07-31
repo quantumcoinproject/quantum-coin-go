@@ -12,7 +12,6 @@ import "C"
 import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
-	"math/big"
 	"unsafe"
 )
 
@@ -68,6 +67,7 @@ func (kem *KeyEncapsulation) Init(algName string, secretKey []byte) error {
 	kem.AlgDetails.LengthSecretKey = int(kem.kem.length_secret_key)
 	kem.AlgDetails.LengthCiphertext = int(kem.kem.length_ciphertext)
 	kem.AlgDetails.LengthSharedSecret = int(kem.kem.length_shared_secret)
+
 	return nil
 }
 
@@ -122,8 +122,12 @@ func (kem *KeyEncapsulation) GenerateKemKeyPair() (*keyestablishmentalgorithm.Pr
 	}
 
 	privy := new(keyestablishmentalgorithm.PrivateKey)
-	privy.D = new(big.Int).SetBytes(kem.secretKey)
-	privy.PublicKey.N = new(big.Int).SetBytes(publicKey)
+	privy.Key = make([]byte, len(kem.secretKey))
+	copy(privy.Key, kem.secretKey)
+	privy.Public = &keyestablishmentalgorithm.PublicKey{
+		Key: make([]byte, len(publicKey)),
+	}
+	copy(privy.Public.Key, publicKey)
 
 	return privy, nil
 }
