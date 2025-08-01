@@ -25,6 +25,7 @@ jobs:
         
     - name: Build
       run: |
+         brew install coreutils --debug --verbose
          mkdir ${{ github.workspace }}/build && go build -o ${{ github.workspace }}/build ./...
 
     - name: Create Release
