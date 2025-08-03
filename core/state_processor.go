@@ -342,5 +342,9 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 		return nil, nil, nil, nil, errors.New("gas limit exceeded")
 	}
 
+	log.Debug("ProcessTransactions()", "block", header.Number.Uint64(), "blockGasLimit", blockGasLimit,
+		"gasUsed", gasUsed, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas(), "block txn count", len(*txList),
+		"passed txn count", len(passedTransactions), "error txn count", len(errorTransactions), "processMode", processMode)
+
 	return receipts, logs, passedTransactions, errorTransactions, nil
 }

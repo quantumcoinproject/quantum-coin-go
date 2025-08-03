@@ -18,6 +18,7 @@ package tracetest
 
 import (
 	"encoding/json"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -33,7 +34,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/tracers"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -270,7 +270,7 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 		b.Fatalf("failed to parse testcase input: %v", err)
 	}
 	signer := types.MakeSigner(test.Genesis.Config, new(big.Int).SetUint64(uint64(test.Context.Number)))
-	msg, err := tx.AsMessage(signer, nil)
+	msg, err := tx.AsMessage(signer)
 	if err != nil {
 		b.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
@@ -314,16 +314,16 @@ func benchTracer(tracerName string, test *callTracerTest, b *testing.B) {
 // Tx to A, A calls B with zero value. B does not already exist.
 // Expected: that enter/exit is invoked and the inner call is shown in the result
 func TestZeroValueToNotExitCall(t *testing.T) {
-	var to = common.HexToAddress("0x00000000000000000000000000000000deadbeef")
-	privkey, err := crypto.HexToECDSA("0000000000000000deadbeef00000000000000000000000000000000deadbeef")
+	var to = common.BytesToAddress([]byte{1})
+	privkey, err := cryptobase.SigAlg.GenerateKey()
 	if err != nil {
 		t.Fatalf("err %v", err)
 	}
-	signer := types.NewEIP155Signer(big.NewInt(1))
-	tx, err := types.SignNewTx(privkey, signer, &types.LegacyTx{
-		GasPrice: big.NewInt(0),
-		Gas:      50000,
-		To:       &to,
+	signer := types.NewLondonSignerDefaultChain()
+	tx, err := types.SignNewTx(privkey, signer, &types.DefaultFeeTx{
+		ChainID: big.NewInt(123123),
+		Gas:     50000,
+		To:      &to,
 	})
 	if err != nil {
 		t.Fatalf("err %v", err)
@@ -364,7 +364,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 		t.Fatalf("failed to create call tracer: %v", err)
 	}
 	evm := vm.NewEVM(context, txContext, statedb, params.MainnetChainConfig, vm.Config{Debug: true, Tracer: tracer})
-	msg, err := tx.AsMessage(signer, nil)
+	msg, err := tx.AsMessage(signer)
 	if err != nil {
 		t.Fatalf("failed to prepare transaction for tracing: %v", err)
 	}
@@ -385,6 +385,7 @@ func TestZeroValueToNotExitCall(t *testing.T) {
 	want := new(callTrace)
 	json.Unmarshal([]byte(wantStr), want)
 	if !jsonEqual(have, want) {
+		t.Errorf("result mismatch, have\n%v\n, want\n%v\n", have, want)
 		t.Error("have != want")
 	}
 }

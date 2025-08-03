@@ -775,10 +775,11 @@ func containsTx(block *types.Block, hash common.Hash) bool {
 // TraceTransaction returns the structured logs created during the execution of EVM
 // and returns them as a JSON object.
 func (api *API) TraceTransaction(ctx context.Context, hash common.Hash, config *TraceConfig) (interface{}, error) {
-	_, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
+	tx, blockHash, blockNumber, index, err := api.backend.GetTransaction(ctx, hash)
 	if err != nil {
 		return nil, err
 	}
+	log.Trace("TraceTransaction", "tx", tx.Hash())
 	// It shouldn't happen in practice.
 	if blockNumber == 0 {
 		return nil, errors.New("genesis is not traceable")
@@ -894,7 +895,7 @@ func (api *API) traceTx(ctx context.Context, message core.Message, txctx *Contex
 	defer cancel()
 
 	// Run the transaction with tracing enabled.
-	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer, NoBaseFee: true})
+	vmenv := vm.NewEVM(vmctx, txContext, statedb, api.backend.ChainConfig(), vm.Config{Debug: true, Tracer: tracer})
 	// Call Prepare to clear out the statedb access list
 	statedb.Prepare(txctx.TxHash, txctx.TxIndex)
 	if _, err = core.ApplyMessage(vmenv, message, new(core.GasPool).AddGas(message.Gas())); err != nil {

@@ -1,6 +1,5 @@
 package mocksignaturealgorithm
 
-import "C"
 import (
 	"bytes"
 	"errors"

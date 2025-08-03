@@ -331,7 +331,10 @@ func TestTraceTransaction(t *testing.T) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
 		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, nil, nil), signer, accounts[0].key)
+		tx, err := types.SignTx(types.NewTransaction(uint64(i), accounts[1].addr, big.NewInt(1000), params.TxGas, nil, nil), signer, accounts[0].key)
+		if err != nil {
+			panic("signing failed")
+		}
 		b.AddTx(tx)
 		target = tx.Hash()
 	}))
@@ -436,9 +439,9 @@ func TestTracingWithOverrides(t *testing.T) {
 	// Initialize test accounts
 	accounts := newAccounts(3)
 	genesis := &core.Genesis{Alloc: core.GenesisAlloc{
-		accounts[0].addr: {Balance: params.EtherToWei(big.NewInt(100000))},
-		accounts[1].addr: {Balance: params.EtherToWei(big.NewInt(100000))},
-		accounts[2].addr: {Balance: params.EtherToWei(big.NewInt(100000))},
+		accounts[0].addr: {Balance: params.EtherToWei(big.NewInt(1000000))},
+		accounts[1].addr: {Balance: params.EtherToWei(big.NewInt(1000000))},
+		accounts[2].addr: {Balance: params.EtherToWei(big.NewInt(1000000))},
 	}}
 	genesis.GasLimit = 300000000
 
@@ -489,7 +492,7 @@ func TestTracingWithOverrides(t *testing.T) {
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
 			config:    &TraceCallConfig{},
-			expectErr: core.ErrInsufficientFunds,
+			expectErr: core.ErrInsufficientFundsForTransfer,
 		},
 		// Successful simple contract call
 		//

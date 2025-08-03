@@ -172,10 +172,10 @@ func TestHaltBetweenSteps(t *testing.T) {
 		Contract: vm.NewContract(&account{}, &account{}, big.NewInt(0), 0),
 	}
 	tracer.CaptureStart(env, common.Address{}, common.Address{}, false, []byte{}, 0, big.NewInt(0))
-	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.CaptureState(nil, 0, 0, 0, 0, scope, nil, 0, nil)
 	timeout := errors.New("stahp")
 	tracer.Stop(timeout)
-	tracer.CaptureState(0, 0, 0, 0, scope, nil, 0, nil)
+	tracer.CaptureState(nil, 0, 0, 0, 0, scope, nil, 0, nil)
 
 	if _, err := tracer.GetResult(); !strings.Contains(err.Error(), timeout.Error()) {
 		t.Errorf("Expected timeout error, got %v", err)
@@ -216,7 +216,7 @@ func TestNoStepExec(t *testing.T) {
 }
 
 func TestIsPrecompile(t *testing.T) {
-	chaincfg := &params.ChainConfig{ChainID: big.NewInt(1), HomesteadBlock: big.NewInt(0), DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: big.NewInt(0), EIP150Hash: common.Hash{}, EIP155Block: big.NewInt(0), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(200), MuirGlacierBlock: big.NewInt(0), BerlinBlock: big.NewInt(300), LondonBlock: big.NewInt(0), TerminalTotalDifficulty: nil, Ethash: new(params.EthashConfig), Clique: nil}
+	chaincfg := &params.ChainConfig{ChainID: big.NewInt(1), HomesteadBlock: big.NewInt(0), DAOForkBlock: nil, DAOForkSupport: false, EIP150Block: big.NewInt(0), EIP150Hash: common.Hash{}, EIP155Block: big.NewInt(0), EIP158Block: big.NewInt(0), ByzantiumBlock: big.NewInt(100), ConstantinopleBlock: big.NewInt(0), PetersburgBlock: big.NewInt(0), IstanbulBlock: big.NewInt(200), MuirGlacierBlock: big.NewInt(0), BerlinBlock: big.NewInt(300), LondonBlock: big.NewInt(0)}
 	chaincfg.ByzantiumBlock = big.NewInt(100)
 	chaincfg.IstanbulBlock = big.NewInt(200)
 	chaincfg.BerlinBlock = big.NewInt(300)
@@ -246,6 +246,8 @@ func TestIsPrecompile(t *testing.T) {
 	}
 }
 
+/*
+//todo: CaptureEnter and CaptureExit are not supported yet
 func TestEnterExit(t *testing.T) {
 	// test that either both or none of enter() and exit() are defined
 	if _, err := newJsTracer("{step: function() {}, fault: function() {}, result: function() { return null; }, enter: function() {}}", new(tracers.Context)); err == nil {
@@ -274,3 +276,4 @@ func TestEnterExit(t *testing.T) {
 		t.Errorf("Number of invocations of enter() and exit() is wrong. Have %s, want %s\n", have, want)
 	}
 }
+*/

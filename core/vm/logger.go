@@ -104,10 +104,17 @@ func (s *StructLog) ErrorString() string {
 // Note that reference types are actual VM data structures; make copies
 // if you need to retain them beyond the current call.
 type Tracer interface {
+	// Transaction level
+	CaptureTxStart(gasLimit uint64)
+	CaptureTxEnd(restGas uint64)
+
+	// Top call frame
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
+	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
+
+	// Opcode level
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
-	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
 }
 
 // StructLogger is an EVM state logger and implements Tracer.
@@ -141,6 +148,14 @@ func (l *StructLogger) Reset() {
 	l.output = make([]byte, 0)
 	l.logs = l.logs[:0]
 	l.err = nil
+}
+
+func (a *StructLogger) CaptureTxStart(gasLimit uint64) {
+
+}
+
+func (a *StructLogger) CaptureTxEnd(restGas uint64) {
+
 }
 
 // CaptureStart implements the Tracer interface to initialize the tracing operation.
@@ -294,6 +309,14 @@ func NewMarkdownLogger(cfg *LogConfig, writer io.Writer) *mdLogger {
 		l.cfg = &LogConfig{}
 	}
 	return l
+}
+
+func (a *mdLogger) CaptureTxStart(gasLimit uint64) {
+
+}
+
+func (a *mdLogger) CaptureTxEnd(restGas uint64) {
+
 }
 
 func (t *mdLogger) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
