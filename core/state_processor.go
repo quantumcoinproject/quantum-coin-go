@@ -236,6 +236,8 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 	receipts = make([]*types.Receipt, 0)
 	logs = make([]*types.Log, 0)
 
+	log.Debug("ProcessTransactions", "gp Gas", gp.Gas())
+
 	if len(*txList) == 0 {
 		if header.GasUsed != 0 {
 			return nil, nil, nil, nil, errors.New("GasUsed is invalid")
@@ -285,6 +287,8 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 
 		statedb.Prepare(tx.Hash(), count)
 		snap := statedb.Snapshot()
+		log.Debug("ProcessTransactions before ApplyTransaction", "tx", tx.Hash().Hex(), "gp Gas", gp.Gas(), "header.GasUsed", header.GasUsed)
+
 		receipt, err := ApplyTransaction(config, bc, gp, statedb, header, tx, usedGas, cfg, signer)
 
 		if err != nil {
@@ -321,7 +325,7 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 			}
 			continue
 		}
-		log.Debug("ProcessTransactions", "tx", tx.Hash().Hex(), "gp Gas", gp.Gas())
+		log.Debug("ProcessTransactions after ApplyTransaction", "tx", tx.Hash().Hex(), "gp Gas", gp.Gas(), "receipt.GasUsed", receipt.GasUsed, "header.GasUsed", header.GasUsed)
 		count = count + 1
 		receipts = append(receipts, receipt)
 		logs = append(logs, receipt.Logs...)
@@ -334,7 +338,7 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 	if header.GasUsed != gasUsed {
 		log.Error("ProcessTransactions() gas limit exceeded", "block", header.Number.Uint64(), "blockGasLimit", blockGasLimit,
 			"gasUsed", gasUsed, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas(), "block txn count", len(*txList),
-			"passed txn count", len(passedTransactions), "error txn count", len(errorTransactions))
+			"passed txn count", len(passedTransactions), "error txn count", len(errorTransactions), "processMode", processMode)
 		return nil, nil, nil, nil, errors.New("gas limit exceeded")
 	}
 

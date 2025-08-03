@@ -18,6 +18,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -104,6 +105,7 @@ func (b *BlockGen) AddTxWithChain(bc *BlockChain, tx *types.Transaction) {
 	signer := types.MakeSigner(b.config, b.header.Number)
 	receipt, err := ApplyTransaction(b.config, bc, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed, vm.Config{}, &signer)
 	if err != nil {
+		log.Error("AddTxWithChain", "error", err)
 		panic(err)
 	}
 	b.txs = append(b.txs, tx)
