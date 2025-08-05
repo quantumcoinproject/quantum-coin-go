@@ -51,12 +51,13 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	from, _ := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
 	gas := uint64(1000000) // 1M gas
 	to := common.HexToAddress("0x00000000000000000000000000000000deadbeef")
-	signer := types.LatestSignerForChainID(big.NewInt(1337))
+	signer := types.LatestSignerForChainID(big.NewInt(123123))
 	tx, err := types.SignNewTx(key, signer,
 		&types.DefaultFeeTx{
-			Nonce: 1,
-			Gas:   gas,
-			To:    &to,
+			ChainID: big.NewInt(123123),
+			Nonce:   1,
+			Gas:     gas,
+			To:      &to,
 		})
 	if err != nil {
 		b.Fatal(err)
@@ -91,7 +92,7 @@ func BenchmarkTransactionTrace(b *testing.B) {
 	alloc[from] = core.GenesisAccount{
 		Nonce:   1,
 		Code:    []byte{},
-		Balance: big.NewInt(500000000000000),
+		Balance: params.EtherToWei(big.NewInt(500000000000000)),
 	}
 	_, statedb := tests.MakePreState(rawdb.NewMemoryDatabase(), alloc, false)
 	// Create the tracer, the EVM environment and run it
