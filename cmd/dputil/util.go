@@ -12,6 +12,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
 	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
@@ -1985,4 +1986,19 @@ func renounceTokenOwnership(contractAddr string, key *signaturealgorithm.Private
 	time.Sleep(1000 * time.Millisecond)
 
 	return nil
+}
+
+func listConversionDetails() (*proofofstake.ConversionSummary, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	summary, err := client.ListConversionDetails(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return summary, nil
 }

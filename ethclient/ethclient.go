@@ -186,6 +186,15 @@ func (ec *Client) ListValidators(ctx context.Context, number *big.Int) ([]*proof
 	return validatorList, err
 }
 
+func (ec *Client) ListConversionDetails(ctx context.Context) (*proofofstake.ConversionSummary, error) {
+	var summary *proofofstake.ConversionSummary
+	err := ec.c.CallContext(ctx, &summary, "proofofstake_ListConversionDetails")
+	if err == nil && summary == nil {
+		err = ethereum.NotFound
+	}
+	return summary, err
+}
+
 type rpcTransaction struct {
 	tx *types.Transaction
 	TxExtraInfo
