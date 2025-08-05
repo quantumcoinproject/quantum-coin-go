@@ -188,7 +188,7 @@ func (ec *Client) ListValidators(ctx context.Context, number *big.Int) ([]*proof
 
 func (ec *Client) ListConversionDetails(ctx context.Context) (*proofofstake.ConversionSummary, error) {
 	var summary *proofofstake.ConversionSummary
-	err := ec.c.CallContext(ctx, &summary, "proofofstake_ListConversionDetails")
+	err := ec.c.CallContext(ctx, &summary, "proofofstake_listConversionDetails")
 	if err == nil && summary == nil {
 		err = ethereum.NotFound
 	}
