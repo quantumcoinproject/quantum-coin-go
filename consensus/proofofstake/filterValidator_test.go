@@ -590,3 +590,41 @@ func TestFilterValidators_offline_validator_penalty(t *testing.T) {
 	}
 	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
 }
+
+func testNormalizeDeposit(items []int64, offline []bool, expected []int64) bool {
+	valDepMap := make(map[common.Address]*big.Int)
+	validatorDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+
+	for i := 0; i < len(items); i++ {
+		val := common.BytesToAddress([]byte{byte(i)})
+		valDepMap[val] = big.NewInt(items[i])
+		valDetails := &ValidatorDetailsV2{
+			NilBlockCount: big.NewInt(0),
+		}
+		if offline[i] == true {
+			valDetails.NilBlockCount = big.NewInt(1)
+		}
+		validatorDetailsMap[val] = valDetails
+	}
+
+	normalizeDeposit(&valDepMap, &validatorDetailsMap)
+	for i := 0; i < len(items); i++ {
+		val := common.BytesToAddress([]byte{byte(i)})
+		if valDepMap[val].Cmp(big.NewInt(expected[i])) != 0 {
+			fmt.Println("failed val", val, "actual", valDepMap[val], "want", expected[i])
+			return false
+		}
+	}
+
+	return true
+}
+
+func TestNormalizeDeposit(t *testing.T) {
+	items := []int64{250, 130, 120, 110, 100, 100, 100, 50, 10, 10, 10, 5, 5}
+	offline := []bool{false, true, false, false, false, false, false, true, true, true, true, false, false}
+	expected := []int64{134, 100, 134, 134, 134, 134, 134, 50, 10, 10, 10, 6, 6}
+
+	if testNormalizeDeposit(items, offline, expected) == false {
+		t.Fatalf("failed")
+	}
+}

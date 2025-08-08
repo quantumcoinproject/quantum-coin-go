@@ -180,3 +180,51 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 
 	return &filteredValidators, nil
 }
+
+func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
+	if len(*valDepMap) < MIN_VALIDATORS_NORMALIZATION {
+		return
+	}
+
+	totalDeposit := big.NewInt(int64(0))
+	maxPercentage := big.NewInt(MAX_DEPOSIT_PERCENTAGE)
+	valDetailsMap := *validatorDetailsMap
+	depMap := *valDepMap
+
+	//Find total deposit
+	for _, amt := range *valDepMap {
+		totalDeposit = common.SafeAddBigInt(totalDeposit, amt)
+	}
+	coinsReduced := big.NewInt(0)
+	nonOfflineCoinsAfterReduction := big.NewInt(0)
+
+	//First round, normalize deposit
+	hasChanges := false
+	for val, amt := range *valDepMap {
+		maxCoins := common.SafeRelativePercentageBigInt(totalDeposit, maxPercentage)
+		if amt.Cmp(maxCoins) > 0 {
+			reduction := common.SafeSubBigInt(amt, maxCoins)
+			coinsReduced = common.SafeAddBigInt(coinsReduced, reduction)
+			depMap[val] = maxCoins
+			hasChanges = true
+		}
+		if valDetailsMap[val].NilBlockCount.Uint64() == 0 {
+			nonOfflineCoinsAfterReduction = common.SafeAddBigInt(nonOfflineCoinsAfterReduction, depMap[val])
+		}
+	}
+
+	if hasChanges == false {
+		return
+	}
+
+	//Second round, normalize deposit to make 100% again
+	for val, amt := range *valDepMap {
+		if valDetailsMap[val].NilBlockCount.Uint64() > 0 {
+			continue
+		}
+		amountToIncrease := common.SafeDivBigInt(common.SafeMulBigInt(coinsReduced, amt), nonOfflineCoinsAfterReduction)
+		depMap[val] = common.SafeAddBigInt(depMap[val], amountToIncrease)
+	}
+
+	return
+}
