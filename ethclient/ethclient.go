@@ -186,6 +186,15 @@ func (ec *Client) ListValidators(ctx context.Context, number *big.Int) ([]*proof
 	return validatorList, err
 }
 
+func (ec *Client) ListConversionDetails(ctx context.Context) (*proofofstake.ConversionSummary, error) {
+	var summary *proofofstake.ConversionSummary
+	err := ec.c.CallContext(ctx, &summary, "proofofstake_listConversionDetails")
+	if err == nil && summary == nil {
+		err = ethereum.NotFound
+	}
+	return summary, err
+}
+
 type rpcTransaction struct {
 	tx *types.Transaction
 	TxExtraInfo
@@ -581,10 +590,34 @@ func toCallArg(msg ethereum.CallMsg) interface{} {
 type AccountType string
 
 const (
-	ACCOUNT_TYPE_REGULAR  AccountType = "REGULAR"
-	ACCOUNT_TYPE_CONTRACT AccountType = "CONTRACT"
-	ACCOUNT_TYPE_TOKEN    AccountType = "TOKEN"
+	ACCOUNT_TYPE_REGULAR  AccountType = "Regular"
+	ACCOUNT_TYPE_CONTRACT AccountType = "Contract"
+	ACCOUNT_TYPE_TOKEN    AccountType = "Token"
 )
+
+func (ec *Client) GetAccountTypeV1(address common.Address, blockNumber *big.Int) (AccountType, error) {
+	log.Debug("GetAccountType", "address", address, "blockNumber", blockNumber)
+	byteCode, err := ec.CodeAt(context.Background(), address, blockNumber)
+	if err != nil {
+		log.Debug("GetAccountType", "address", address, "error", err)
+		if errors.Is(err, bind.ErrNoCode) {
+			return ACCOUNT_TYPE_REGULAR, nil
+		}
+		return "", err
+	}
+	if len(byteCode) == 0 {
+		return ACCOUNT_TYPE_REGULAR, nil
+	}
+
+	//Verify token is a smart contract
+	byteCodeHex := hexutil.Encode(byteCode)
+	if asm.IsErc20(byteCodeHex) {
+		log.Debug("GetAccountType IsErc20 fail", "contactAddress", address)
+		return ACCOUNT_TYPE_TOKEN, nil
+	}
+
+	return ACCOUNT_TYPE_CONTRACT, err
+}
 
 func (ec *Client) GetAccountType(address common.Address, blockNumber *big.Int) (AccountType, []byte, error) {
 	log.Debug("GetAccountType", "address", address, "blockNumber", blockNumber)

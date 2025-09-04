@@ -983,7 +983,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 // EstimateGas returns an estimate of the amount of gas needed to execute the
 // given transaction against the current pending block.
 func (s *PublicBlockChainAPI) EstimateGas(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (hexutil.Uint64, error) {
-	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
 		bNrOrHash = *blockNrOrHash
 	}
@@ -1260,9 +1260,12 @@ type accessListResult struct {
 // CreateAccessList creates a EIP-2930 type AccessList for the given transaction.
 // Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
 func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash) (*accessListResult, error) {
-	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.PendingBlockNumber)
+	bNrOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 	if blockNrOrHash != nil {
+		log.Debug("CreateAccessList", "blockNrOrHash", blockNrOrHash)
 		bNrOrHash = *blockNrOrHash
+	} else {
+		log.Debug("CreateAccessList using default for bNrOrHash")
 	}
 	acl, gasUsed, vmerr, err := AccessList(ctx, s.b, bNrOrHash, args)
 	if err != nil {
@@ -1280,6 +1283,7 @@ func (s *PublicBlockChainAPI) CreateAccessList(ctx context.Context, args Transac
 // If the transaction itself fails, an vmErr is returned.
 func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrHash, args TransactionArgs) (acl types.AccessList, gasUsed uint64, vmErr error, err error) {
 	// Retrieve the execution context
+
 	db, header, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if db == nil || err != nil {
 		return nil, 0, nil, err
@@ -1328,7 +1332,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, err
 		}
-
+		log.Warn("AccessList4")
 		// Apply the transaction with the access list tracer
 		tracer := vm.NewAccessListTracer(accessList, args.from(), to, precompiles)
 		config := vm.Config{Tracer: tracer, Debug: true}
@@ -1340,6 +1344,7 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		if err != nil {
 			return nil, 0, nil, fmt.Errorf("failed to apply transaction: %v err: %v", args.toTransaction().Hash(), err)
 		}
+		log.Warn("AccessList5")
 		if tracer.Equal(prevTracer) {
 			return accessList, res.UsedGas, res.Err, nil
 		}
@@ -1590,7 +1595,7 @@ func (s *PublicTransactionPoolAPI) SendTransaction(ctx context.Context, args Tra
 
 	if args.GasPrice == nil {
 		log.Info("GasPrice is nil. Setting GasPrice to GAS_TIER_DEFAULT_PRICE")
-		args.GasPrice = (*hexutil.Big)(types.GAS_TIER_DEFAULT_PRICE)
+		args.GasPrice = types.GetDefaultGasPriceHexBig()
 	}
 	// Set some sanity defaults and terminate on failure
 	if err := args.setDefaults(ctx, s.b); err != nil {

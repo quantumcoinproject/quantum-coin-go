@@ -269,7 +269,7 @@ func (ks *KeyStore) SignHash(a accounts.Account, hash []byte) ([]byte, error) {
 	if !found {
 		return nil, ErrLocked
 	}
-	return cryptobase.SigAlg.Sign(hash, unlockedKey.PrivateKey)
+	return cryptobase.DynamicSign.Sign(hash, unlockedKey.PrivateKey)
 }
 
 func (ks *KeyStore) SignHashWithContext(a accounts.Account, hash []byte, context []byte) ([]byte, error) {
@@ -308,7 +308,7 @@ func (ks *KeyStore) SignHashWithPassphrase(a accounts.Account, passphrase string
 		return nil, err
 	}
 	defer zeroKey(key.PrivateKey)
-	return cryptobase.SigAlg.Sign(hash, key.PrivateKey)
+	return cryptobase.DynamicSign.Sign(hash, key.PrivateKey)
 }
 
 // SignTxWithPassphrase signs the transaction if the private key matching the

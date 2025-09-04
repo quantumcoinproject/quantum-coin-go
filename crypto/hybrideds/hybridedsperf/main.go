@@ -20,7 +20,7 @@ func main() {
 	fmt.Println("Perf starting 2")
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
-	sig := hybrideds.CreateHybridedsSig(true)
+	sig := hybrideds.CreateHybridedsSig()
 	keypair, err := sig.GenerateKey()
 	if err != nil {
 		fmt.Println("GenerateKey failed", err)
@@ -61,5 +61,5 @@ func main() {
 		}
 	}
 	duration := time.Since(start)
-	fmt.Println("Verify Time Taken", duration)
+	fmt.Println("Verify Time Taken", duration, "average ms", float64(duration.Milliseconds())/float64(count))
 }

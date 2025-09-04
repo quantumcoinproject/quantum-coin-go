@@ -22,9 +22,11 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
-const DILITHIUM_ED25519_SPHINCS_COMPACT_ID = 1
+type SignatureAlgorithmType byte
 
-const DILITHIUM_ED25519_SPHINCS_FULL_ID = 2
+const DILITHIUM_ED25519_SPHINCS_COMPACT_ID SignatureAlgorithmType = 1
+
+const DILITHIUM_ED25519_SPHINCS_FULL_ID SignatureAlgorithmType = 2
 
 func Sha256(data ...[]byte) []byte {
 	h1 := sha3.NewLegacyKeccak256()

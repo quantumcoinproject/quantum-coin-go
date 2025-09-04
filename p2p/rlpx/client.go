@@ -9,7 +9,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/oqs"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -17,14 +16,14 @@ import (
 	"sync"
 )
 
-type clientHelloMessage struct {
+type ClientHelloMessage struct {
 	ClientKemPublicKey    []byte //kemPublicKeyLen
 	ClientHelloRandomData [shaLen]byte
 	Version               uint
 	Rest                  []rlp.RawValue `rlp:"tail"`
 }
 
-type clientVerifyMessage struct {
+type ClientVerifyMessage struct {
 	Signature    []byte //SignPublicKeyLen
 	SignatureLen uint
 	Rest         []rlp.RawValue `rlp:"tail"`
@@ -32,17 +31,17 @@ type clientVerifyMessage struct {
 
 type Client struct {
 	ephemeralKemPrivateKey  *keyestablishmentalgorithm.PrivateKey
-	kem                     *oqs.KeyEncapsulation
+	kem                     *keyestablishmentalgorithm.KeyEncapsulation
 	kemCipherText           []byte //kemCipherTextLength
 	kemSharedSecret         []byte //kemSecretLength
 	Nonce                   uint
 	clientSigningPrivateKey *signaturealgorithm.PrivateKey
 	serverSigningPublicKey  *signaturealgorithm.PublicKey
 
-	clientHelloMessage  *clientHelloMessage
-	serverHelloMessage  *serverHelloMessage
-	serverVerifyMessage *serverVerifyMessage
-	clientVerifyMessage *clientVerifyMessage
+	cliHelloMessage  *ClientHelloMessage
+	srvHelloMessage  *ServerHelloMessage
+	srvVerifyMessage *ServerVerifyMessage
+	cliVerifyMessage *ClientVerifyMessage
 
 	rbuf        ReadBuffer
 	wbuf        WriteBuffer
@@ -110,14 +109,11 @@ func (c *Client) PerformHandshake() error {
 		return errors.New("Handshake already done")
 	}
 
-	//Initialize KEM
-	kem := oqs.KeyEncapsulation{}
-
-	err := kem.Init(oqs.KemName, nil)
+	var err error
+	c.kem, err = NewKem("client")
 	if err != nil {
 		return err
 	}
-	c.kem = &kem
 
 	//Make client hello message
 	err = c.makeClientHello()
@@ -125,7 +121,7 @@ func (c *Client) PerformHandshake() error {
 		return err
 	}
 
-	clientHelloPacket, err := c.serializer.Serialize(c.clientHelloMessage)
+	clientHelloPacket, err := c.serializer.Serialize(c.cliHelloMessage)
 	if err != nil {
 		return err
 	}
@@ -136,26 +132,26 @@ func (c *Client) PerformHandshake() error {
 	}
 
 	//Receive server hello message
-	serverHelloMessage := new(serverHelloMessage)
+	serverHelloMessage := new(ServerHelloMessage)
 	_, err = c.serializer.Deserialize(serverHelloMessage, c.conn)
 	if err != nil {
 		return err
 	}
 
 	//Handle server hello message
-	c.serverHelloMessage = serverHelloMessage
+	c.srvHelloMessage = serverHelloMessage
 	err = c.handleServerHello()
 	if err != nil {
 		return err
 	}
 
 	//Find the transcript of the session
-	clientHelloTranscript, err := c.serializer.SerializeDeterministic(c.clientHelloMessage, 0)
+	clientHelloTranscript, err := c.serializer.SerializeDeterministic(c.cliHelloMessage, 0)
 	if err != nil {
 		return err
 	}
 
-	serverHelloTranscript, err := c.serializer.SerializeDeterministic(c.serverHelloMessage, 0)
+	serverHelloTranscript, err := c.serializer.SerializeDeterministic(c.srvHelloMessage, 0)
 	if err != nil {
 		return err
 	}
@@ -168,7 +164,7 @@ func (c *Client) PerformHandshake() error {
 	c.secret = *secret
 
 	//Receive the server verify message
-	serverVerifyMessage := new(serverVerifyMessage)
+	serverVerifyMessage := new(ServerVerifyMessage)
 	err = c.ReadAndDecryptMessage(serverVerifyMessage, PacketTypeHandshake)
 
 	if err != nil {
@@ -196,7 +192,7 @@ func (c *Client) PerformHandshake() error {
 		return errors.New("Public key mismatch")
 	}
 
-	if !cryptobase.SigAlg.Verify(serverPubKeyDataLocal, transcriptHash, serverVerifyMessage.Signature[:serverVerifyMessage.SignatureLen]) {
+	if !cryptobase.DynamicSigVerifier.Verify(serverPubKeyDataLocal, transcriptHash, serverVerifyMessage.Signature[:serverVerifyMessage.SignatureLen]) {
 		return errors.New("server's signature verification failed")
 	}
 
@@ -209,7 +205,7 @@ func (c *Client) PerformHandshake() error {
 	transcript = append(transcript, serverVerifyTranscript...)
 	transcriptHash = crypto.Keccak256(transcript)
 	c.transcript = transcript
-	c.serverVerifyMessage = serverVerifyMessage
+	c.srvVerifyMessage = serverVerifyMessage
 
 	//Sign the transcript hash
 	signature, err := cryptobase.SigAlg.Sign(transcriptHash, c.clientSigningPrivateKey)
@@ -218,11 +214,11 @@ func (c *Client) PerformHandshake() error {
 	}
 
 	//Serialize the server verify message
-	clientVerifyMessage := new(clientVerifyMessage)
+	clientVerifyMessage := new(ClientVerifyMessage)
 	clientVerifyMessage.Signature = make([]byte, cryptobase.SigAlg.SignatureWithPublicKeyLength())
 	copy(clientVerifyMessage.Signature[:], signature)
 	clientVerifyMessage.SignatureLen = uint(len(signature))
-	c.clientVerifyMessage = clientVerifyMessage
+	c.cliVerifyMessage = clientVerifyMessage
 
 	clientVerifyPacket, err := c.serializer.Serialize(clientVerifyMessage)
 	if err != nil {
@@ -254,16 +250,18 @@ func (c *Client) PerformHandshake() error {
 }
 
 func (c *Client) makeClientHello() error {
-	clientHelloMessage := new(clientHelloMessage)
+	clientHelloMessage := new(ClientHelloMessage)
 	clientHelloMessage.Version = 1
 
 	//Generate an ephemeral kem keypair
-	kemPrivateKey, err := c.kem.GenerateKemKeyPair()
+	k := *c.kem
+
+	kemPrivateKey, err := k.GenerateKemKeyPair()
 	if err != nil {
 		return err
 	}
 	c.ephemeralKemPrivateKey = kemPrivateKey
-	clientHelloMessage.ClientKemPublicKey = make([]byte, c.kem.AlgDetails.LengthPublicKey)
+	clientHelloMessage.ClientKemPublicKey = make([]byte, k.Details().LengthPublicKey)
 	copy(clientHelloMessage.ClientKemPublicKey[:], c.ephemeralKemPrivateKey.N.Bytes())
 
 	// Generate ClientRandomData
@@ -274,25 +272,26 @@ func (c *Client) makeClientHello() error {
 	}
 	copy(clientHelloMessage.ClientHelloRandomData[:], randomData)
 	c.Nonce = 1
-	c.clientHelloMessage = clientHelloMessage
+	c.cliHelloMessage = clientHelloMessage
 
 	return nil
 }
 
 func (c *Client) Cleanup() {
 	if c.kem != nil {
-		c.kem.Clean()
+		k := *c.kem
+		k.Clean()
 	}
 }
 
 func (c *Client) handleServerHello() error {
-
-	sharedSecret, err := c.kem.DecapsulateSecret(c.serverHelloMessage.CipherText[:])
+	k := *c.kem
+	sharedSecret, err := k.DecapsulateSecret(c.srvHelloMessage.CipherText[:])
 	if err != nil {
 		return err
 	}
 
-	c.kemSharedSecret = make([]byte, c.kem.AlgDetails.LengthSharedSecret)
+	c.kemSharedSecret = make([]byte, k.Details().LengthSharedSecret)
 	copy(c.kemSharedSecret[:], sharedSecret[:])
 
 	return nil

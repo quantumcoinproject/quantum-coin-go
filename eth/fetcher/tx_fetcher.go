@@ -565,7 +565,7 @@ func (f *TxFetcher) loop() {
 				// Make sure something was pending, nuke it
 				req := f.requests[delivery.origin]
 				if req == nil {
-					log.Warn("Unexpected transaction delivery", "peer", delivery.origin)
+					log.Debug("Unexpected transaction delivery", "peer", delivery.origin)
 					break
 				}
 				delete(f.requests, delivery.origin)

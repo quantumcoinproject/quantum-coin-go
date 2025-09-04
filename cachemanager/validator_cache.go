@@ -3,6 +3,7 @@ package cachemanager
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -140,6 +141,21 @@ func (c *CacheManager) processValidators(validators []*proofofstake.ValidatorDet
 	return nil
 }
 
+func (c *CacheManager) GetValidator(address string) (ValidatorDetails, error) {
+	listResponse, err := c.ListValidators(1)
+	if err != nil {
+		return ValidatorDetails{}, err
+	}
+
+	for _, validator := range listResponse.Items {
+		if validator.Validator == address || validator.Depositor == address {
+			val := fromValidatorCompact(&validator)
+			return *val, nil
+		}
+	}
+	return ValidatorDetails{}, errors.New(NotFoundErrMsg)
+}
+
 func (c *CacheManager) ListValidators(pageNumberInput int64) (ListValidatorsResponse, error) {
 	listResponse := ListValidatorsResponse{}
 
@@ -197,19 +213,19 @@ func getDailyValidatorReportKey(date string) (key string, blob []byte) {
 	return key, blob
 }
 
-func (c *CacheManager) getDailyValidatorReport(reportTime time.Time) (*ValidatorReport, error) {
+func (c *CacheManager) GetDailyValidatorReport(reportTime time.Time) (*ValidatorReport, error) {
 	key, keyBlob := getDailyValidatorReportKey(reportTime.Format("2006-02-01"))
-	log.Debug("getDailyValidatorReport", "key", key, "reportTime", reportTime)
+	log.Debug("GetDailyValidatorReport", "key", key, "reportTime", reportTime)
 
 	itemBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
-		log.Error("getDailyValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime)
+		log.Error("GetDailyValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime)
 		return nil, err
 	}
 	var item ValidatorReport
 	err = json.Unmarshal(itemBlob, &item)
 	if err != nil {
-		log.Error("getDailyValidatorReport json.Unmarshal", "error", err, "reportTime", reportTime)
+		log.Error("GetDailyValidatorReport json.Unmarshal", "error", err, "reportTime", reportTime)
 		return nil, err
 	}
 
@@ -241,23 +257,23 @@ func getDailySpecificValidatorReportKey(date string, address string) (key string
 	return key, blob
 }
 
-func (c *CacheManager) getDailySpecificValidatorReport(reportTime time.Time, address string) (*SpecificValidatorReport, error) {
+func (c *CacheManager) GetDailySpecificValidatorReport(reportTime time.Time, address string) (*SpecificValidatorReport, error) {
 	key, keyBlob := getDailySpecificValidatorReportKey(reportTime.Format("2006-02-01"), address)
-	log.Debug("getDailySpecificValidatorReport", "key", key, "reportTime", reportTime, "address", address)
+	log.Debug("GetDailySpecificValidatorReport", "key", key, "reportTime", reportTime, "address", address)
 
 	itemBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
-			log.Info("getDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
+			log.Info("GetDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
 		} else {
-			log.Error("getDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
+			log.Error("GetDailySpecificValidatorReport cacheDb.Get", "error", err, "reportTime", reportTime, "address", address)
 		}
 		return nil, err
 	}
 	var item SpecificValidatorReport
 	err = json.Unmarshal(itemBlob, &item)
 	if err != nil {
-		log.Error("getDailySpecificValidatorReport json.Unmarshal", "error", err, "reportTime", reportTime, "address", address)
+		log.Error("GetDailySpecificValidatorReport json.Unmarshal", "error", err, "reportTime", reportTime, "address", address)
 		return nil, err
 	}
 
@@ -270,16 +286,16 @@ func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, 
 	var proposer string
 	var err error
 
-	if block.ConsensusDetails.VoteType == OK_VOTE {
+	if block.ConsensusDetails.VoteType == string(OK_VOTE) {
 		proposer = block.ConsensusDetails.BlockProposer
 	} else {
-		if len(block.ConsensusDetails.SlashedValidators) == 0 {
+		if len(block.ConsensusDetails.Slashings) == 0 {
 			return nil
 		}
-		proposer = block.ConsensusDetails.SlashedValidators[0].SlashedAccount
+		proposer = block.ConsensusDetails.Slashings[0].SlashedAccount
 	}
 
-	item, err = c.getDailySpecificValidatorReport(reportTime, proposer)
+	item, err = c.GetDailySpecificValidatorReport(reportTime, proposer)
 	if err != nil {
 		if err.Error() == LevelDbNoTFoundErrMsg {
 			item = &SpecificValidatorReport{
@@ -288,13 +304,13 @@ func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, 
 				ReportDate:             reportTime.Unix(),
 			}
 		} else {
-			log.Error("putDailySpecificValidatorDetailsInDb getDailySpecificValidatorReport", "error", err, "reportTime", reportTime)
+			log.Error("putDailySpecificValidatorDetailsInDb GetDailySpecificValidatorReport", "error", err, "reportTime", reportTime)
 			return err
 		}
 	}
 
 	var voteType proofofstake.VoteType
-	if block.ConsensusDetails.VoteType == OK_VOTE {
+	if block.ConsensusDetails.VoteType == string(OK_VOTE) {
 		voteType = proofofstake.VOTE_TYPE_OK
 		item.TotalOkBlocks = item.TotalOkBlocks + 1
 	} else {
@@ -305,7 +321,7 @@ func (c *CacheManager) incrementDailySpecificValidatorDetailsInDb(block *Block, 
 			item.TotalNilBlocksOther = item.TotalNilBlocksOther + 1
 		}
 	}
-	rewards, slashings := proofofstake.GetRewardsSlashingsByVote(big.NewInt(int64(block.Number)), voteType, block.ConsensusDetails.Rounds)
+	rewards, slashings := proofofstake.GetRewardsSlashingsByVote(big.NewInt(block.BlockNumber), voteType, block.ConsensusDetails.Rounds)
 	currentRewards, err := hexutil.DecodeBig(item.TotalBlockRewardsCoins)
 	if err != nil {
 		return err

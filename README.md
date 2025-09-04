@@ -6,64 +6,20 @@ quantum-coin-go is a Golang implementation of the Quantum Coin blockchain node c
 
 ### Prerequisites
 
-Requires GO version 1.21 or later.
-
-#### Linux (Ubuntu)
-
-Has only been tested on Ubuntu version 22. Lower Ubuntu versions might need openssl library installation (libcrypto).
-
-##### Setup
-```
-- 1) Open a new bash window and navigate to the quantum-coin-go folder.
-- 2) Run ./install-ubuntu.sh
-- 3) Make sure you add the environment variables to your bash profile as described at the end of the output of the previous command.
-```
+Requires GO version 1.24.5 or later.
 
 ##### Building
 - 1) Open a new terminal and navigate to the quantum-coin-go folder.
-- 2) Run go build -o YOUR_BUILD_FOLDER ./...
-
-#### Windows
-Ensure you have allowed Powershell local script execution. You can enable this by running the following command in Powershell window that is opened as an administrator:
-
-```
-Set-ExecutionPolicy RemoteSigned
-```
-
-##### Setup 
-- 1) Open a new terminal and navigate to the quantum-coin-go folder.
-- 2) Run ./install.ps1
- 
-#### Building     
-
-- 1) Open a new command prompt and navigate to the quantum-coin-go folder. Note that this method doesn't work in Powershell or Terminal, hence use command prompt.
-- 2) Run templibs/setenv.cmd 
-- 3) Run go build -o YOUR_BUILD_FOLDER ./...
-
-#### Mac
-
-Has only been tested on Apple M1.
-
-##### Setup
-```
-- 1) Ensure brew is installed. To install brew, follow the instructions at https://brew.sh
-- 2) Open a new Terminal window and navigate to the quantum-coin-go folder.
-- 3) Run ./install-mac.sh
-- 4) Make sure you add the environment variables to your shell profile as described at the end of the output of the previous command.
-```
-
-##### Building
-- 1) Open a new terminal and navigate to the quantum-coin-go folder. Ensure that appropriate environment variables from the prerequisites section have been set.
 - 2) Run go build -o YOUR_BUILD_FOLDER ./...
 
 ### Running geth
-Check the [documentation](https://dpdocs.org) portal for information on running the blockchain node client.
+Check the [documentation](https://QuantumCoin.org) portal for information on running the blockchain node client.
 
 ## Major changes from [go-ethereum](https://github.com/ethereum/go-ethereum)
 
 quantum-coin-go is a fork of the Go Ethereum Client (go-ethereum) with the following changes:
 
-1) [Hybrid-PQC](https://github.com/DogeProtocol/hybrid-pqc) that uses a combiner of Dilithium, ed25519 and SPHINCS+ in breakglass mode, is used to secure accounts. This is a change from Ethereum which is vulnerable to quantum computers (Shor's algorithm).
+1) QuantumCoin uses hybrid post quantum cryptography, that uses a combiner of ML-DSA (Dilithium), ed25519 with SLH-DSA (SPHINCS+) in breakglass mode, is used to secure accounts. This is a change from Ethereum which is vulnerable to quantum computers (Shor's algorithm).
 
 2) Kyber, which is a post-quantum KEM scheme, is used to secure inter-node communication.
 
@@ -78,7 +34,7 @@ is used as input to HMAC HKDF functions (RFC 5869). However, unlike TLS, instead
 the key of the other node is instead trusted. The private key corresponds to the hybrid pqc key-pair used to secure the account 
 using digital signatures. These changes are at (https://github.com/quantumcoinproject/quantum-coin-go/tree/dogep/p2p/rlpx)
 
-6) A new consensus engine (Proof-of-Stake) has been added.  It uses 3 phase BFT consensus, for deterministic finality. The timeout values are adjusted to improve liveness, within the bounds of FLP theorm.
+6) A new consensus engine (Proof-of-Stake) has been added.  It uses 3 phase BFT consensus, for immediate deterministic finality. The timeout values are adjusted to improve liveness, within the bounds of FLP theorm.
 
 ## Known Issues
 
@@ -87,7 +43,7 @@ using digital signatures. These changes are at (https://github.com/quantumcoinpr
 These values can be used for public key recovery from the transaction metadata in Ethereum. 
 
 ## Addendum
-“Quantum Coin” and “Quantum Coin Community” were previously known under the monikers “Doge Protocol” and “Doge Protocol Community” respectively.
+“Quantum Coin” ("QuantumCoin") and “Quantum Coin Community” were previously known under the monikers “Doge Protocol” and “Doge Protocol Community” respectively.
 
 ## Contributing
 
@@ -96,7 +52,7 @@ from anyone on the internet, and are grateful for even the smallest of fixes!
 
 If you'd like to contribute to quantum-coin-go, please fork, fix, commit and send a pull request
  to review and merge into the main code base. If you wish to submit
-more complex changes though, please check up first in [our Discord Server](https://discord.gg/bbbMPyzJTM)
+more complex changes though, please check up first in [our community Discord Server](https://discord.gg/bbbMPyzJTM)
 to ensure those changes are in line with the general philosophy of the project and/or get
 some early feedback which can make both your efforts much lighter as well as our review
 and merge procedures quick and simple.

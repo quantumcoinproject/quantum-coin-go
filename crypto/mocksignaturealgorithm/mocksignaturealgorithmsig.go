@@ -314,7 +314,7 @@ func (s MockSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []byte, s
 
 func (s MockSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {
 	if len(sigBytes) < s.signatureLength {
-		return nil, errors.New("invalid signature length")
+		return nil, ErrInvalidSignatureLen
 	}
 
 	if len(pubKeyBytes) != s.publicKeyLength {
@@ -346,32 +346,45 @@ func (s MockSig) PublicKeyFromSignature(digestHash []byte, sig []byte) (*signatu
 	return s.DeserializePublicKey(b)
 }
 
+func (s MockSig) GetAddress(digestHash []byte, sig []byte) (common.Address, error) {
+	pubKeyBytes, err := s.PublicKeyBytesFromSignature(digestHash[:], sig)
+	if err != nil {
+		return common.Address{}, err
+	}
+	if len(pubKeyBytes) != 0 && len(pubKeyBytes) != s.PublicKeyLength() {
+		return common.Address{}, errors.New("invalid public key")
+	}
+	var addr common.Address
+	addr.CopyFrom(crypto.PublicKeyBytesToAddress(pubKeyBytes[:]))
+	return addr, nil
+}
+
 func (s MockSig) PublicKeyFromSignatureWithContext(digestHash []byte, sig []byte, context []byte) (*signaturealgorithm.PublicKey, error) {
 	return nil, errors.New("not implemented")
 }
 
 // ValidateSignatureValues verifies whether the signature values are valid with
 // the given chain rules. The v value is assumed to be either 0 or 1.
-func (osig MockSig) ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) bool {
+func (osig MockSig) ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) (isOk bool, pub []byte, sig []byte) {
 	if v == 0 || v == 1 {
 		pubKey, signature := r.Bytes(), s.Bytes()
 
 		if len(pubKey) != osig.PublicKeyLength() {
-			return false
+			return false, nil, nil
 		}
 
 		if len(signature) < osig.SignatureLength() {
-			return false
+			return false, nil, nil
 		}
 
 		combinedSignature := common.CombineTwoParts(signature, pubKey)
 		if !osig.Verify(pubKey, digestHash, combinedSignature) {
-			return false
+			return false, nil, nil
 		}
 
-		return true
+		return true, nil, nil
 	}
-	return false
+	return false, nil, nil
 }
 
 func (s MockSig) PublicKeyStartValue() byte {

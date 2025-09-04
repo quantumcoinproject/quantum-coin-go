@@ -22,14 +22,13 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus"
-	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/state"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/event"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
-	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
 	"math/big"
 	"sync"
@@ -90,6 +89,8 @@ type environment struct {
 	header    *types.Header
 	txs       []*types.Transaction
 	receipts  []*types.Receipt
+	passedTxs []*types.Transaction
+	errorTxs  []*types.Transaction
 	committed bool
 }
 
@@ -194,7 +195,7 @@ type worker struct {
 
 	currentBlockPhase int32
 
-	selectedTransactions                *types.TransactionsByNonce
+	selectedTransactions                types.Transactions
 	contextParentHash                   common.Hash
 	frozenTransactionsContextParentHash common.Hash
 	frozenTransactions                  *map[common.Address]types.Transactions
@@ -293,6 +294,7 @@ func (w *worker) pending() (*types.Block, *state.StateDB) {
 	w.snapshotMu.RLock()
 	defer w.snapshotMu.RUnlock()
 	if w.snapshotState == nil {
+		log.Warn("worker pending snapshotState is nil")
 		return nil, nil
 	}
 	return w.snapshotBlock, w.snapshotState.Copy()
@@ -639,44 +641,29 @@ func (w *worker) updateSnapshot() {
 	w.current.committed = true
 }
 
-func (w *worker) commitTransaction(tx *types.Transaction, coinbase common.Address) ([]*types.Log, error) {
-	snap := w.current.state.Snapshot()
-
-	log.Trace("state 4", "IntermediateRoot", w.current.state.IntermediateRoot(w.chain.Config().IsEIP158(w.current.header.Number)), "coinbase", coinbase.Hash())
-
-	isGasExemptTxn := false
-
-	if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) == true {
-		isGasExempt, err := conversionutil.IsGasExemptTxn(tx, w.current.signer)
-		if err == nil && isGasExempt {
-			log.Info("commitTransaction GasExemptTxn", "txn", tx.Hash())
-			isGasExemptTxn = true
+func createTransactionList(txs *types.TransactionsByNonce) types.Transactions {
+	var txnList types.Transactions
+	for {
+		hasRecords := txs.NextCursor()
+		if hasRecords == false {
+			log.Trace("createTransactionArray break")
+			break
 		}
+		txnList = append(txnList, txs.PeekCursor())
 	}
 
-	receipt, err := core.ApplyTransaction(w.chainConfig, w.chain, &coinbase, w.current.gasPool, w.current.state, w.current.header, tx, &w.current.header.GasUsed, *w.chain.GetVMConfig(), isGasExemptTxn)
-	log.Trace("state 5", "IntermediateRoot", w.current.state.IntermediateRoot(w.chain.Config().IsEIP158(w.current.header.Number)), "receipt", receipt, "err", err)
-
-	if err != nil {
-		log.Debug("state commit", "err", err, "tx", tx.Hash().Hex())
-		w.current.state.RevertToSnapshot(snap)
-		return nil, err
-	}
-	w.current.txs = append(w.current.txs, tx)
-	w.current.receipts = append(w.current.receipts, receipt)
-
-	return receipt.Logs, nil
+	return txnList
 }
 
-func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase common.Address, interrupt *int32) bool {
+func (w *worker) commitTransactions(coinbase common.Address, interrupt *int32) (bool, error) {
 	log.Trace("commitTransactions1")
 	// Short circuit if current is nil
 	if w.current == nil {
 		log.Trace("commitTransactions2")
-		return true
+		return true, nil
 	}
 
-	w.current.header.GasLimit = 300000000
+	w.current.header.GasLimit = defaults.GetGasLimit(w.current.header.Number.Uint64())
 	gasLimit := w.current.header.GasLimit
 
 	if w.current.gasPool == nil {
@@ -684,97 +671,17 @@ func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase com
 	}
 
 	var coalescedLogs []*types.Log
-	hasRecords := txs.NextCursor()
-	for {
-		log.Trace("commitTransactions5")
-		// If we don't have enough gas for any further transactions then we're done
-		if w.current.gasPool.Gas() < params.TxGas {
-			log.Info("Not enough gas for further transactions", "have", w.current.gasPool, "want", params.TxGas)
-			break
-		}
-		// Retrieve the next transaction and abort if all done
-
-		if hasRecords == false {
-			log.Trace("commitTransactions6")
-			break
-		}
-		tx := txs.PeekCursor()
-		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
-		//
-		// We use the eip155 signer regardless of the current hf.
-		from, err := types.Sender(w.current.signer, tx)
-		if err != nil {
-			return false
-		}
-		// Check whether the tx is replay protected. If we're not in the EIP155 hf
-		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !w.chainConfig.IsEIP155(w.current.header.Number) {
-			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", w.chainConfig.EIP155Block)
-
-			hasRecords = txs.NextCursor()
-			if hasRecords == false {
-				break
-			}
-			continue
-		}
-
-		// Start executing the transaction
-		w.current.state.Prepare(tx.Hash(), w.current.tcount)
-
-		logs, err := w.commitTransaction(tx, coinbase)
-		switch {
-		case errors.Is(err, core.ErrGasLimitReached):
-			// Pop the current out-of-gas transaction without shifting in the next from the account
-			log.Trace("Gas limit exceeded for current block", "sender", from)
-			hasRecords = txs.NextCursor()
-			if hasRecords == false {
-				break
-			}
-
-		case errors.Is(err, core.ErrNonceTooLow):
-			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
-			hasRecords = txs.NextCursor()
-			if hasRecords == false {
-				break
-			}
-
-		case errors.Is(err, core.ErrNonceTooHigh):
-			// Reorg notification data race between the transaction pool and miner, skip account =
-			log.Trace("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
-			hasRecords = txs.NextCursor()
-			if hasRecords == false {
-				break
-			}
-
-		case errors.Is(err, nil):
-			// Everything ok, collect the logs and shift in the next transaction from the same account
-			coalescedLogs = append(coalescedLogs, logs...)
-			w.current.tcount++
-			hasRecords = txs.NextCursor()
-			if hasRecords == false {
-				break
-			}
-
-		case errors.Is(err, core.ErrTxTypeNotSupported):
-			// Pop the unsupported transaction without shifting in the next from the account
-			log.Trace("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
-			hasRecords = txs.NextCursor()
-			if hasRecords == false {
-				break
-			}
-
-		default:
-			// Strange error, discard the transaction and get the next in line (note, the
-			// nonce-too-high clause will prevent us from executing in vain).
-			log.Trace("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
-			hasRecords = txs.NextCursor()
-			if hasRecords == false {
-				break
-			}
-		}
+	receipts, coalescedLogs, passedTransactions, errorTransactions, err := core.ProcessTransactions(w.chainConfig, w.chain, w.current.gasPool, w.current.state, w.current.header,
+		&w.selectedTransactions, &w.current.header.GasUsed, *w.chain.GetVMConfig(), &w.current.signer, core.ProcessModeWorker)
+	if err != nil {
+		log.Error("ProcessTransactions", "error", err)
+		return false, err
 	}
+	w.current.tcount = len(passedTransactions)
+	w.current.txs = append(w.current.txs, passedTransactions...)
+	w.current.receipts = append(w.current.receipts, receipts...)
+	w.current.passedTxs = passedTransactions
+	w.current.errorTxs = errorTransactions
 
 	log.Trace("commitTransactions7")
 	if !w.isRunning() && len(coalescedLogs) > 0 {
@@ -794,7 +701,7 @@ func (w *worker) commitTransactions(txs *types.TransactionsByNonce, coinbase com
 	}
 	log.Trace("commitTransactions8")
 
-	return false
+	return false, nil
 }
 
 func (w *worker) freezeTransactionsIfNeeded(txnFilteredMap *map[common.Address]types.Transactions, s *state.StateDB) error {
@@ -825,7 +732,7 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 
 	tstart := time.Now()
 	if w.selectedTransactions == nil || w.contextParentHash.IsEqualTo(parent.Hash()) == false {
-		log.Trace("proposePhase", "ParentHash", parent.ParentHash(), "number", parent.NumberU64())
+		log.Debug("proposePhase", "ParentHash", parent.ParentHash(), "number", parent.NumberU64())
 
 		if parent.Time() >= uint64(timestamp) {
 			timestamp = int64(parent.Time() + 1)
@@ -837,7 +744,6 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 			Number:     num.Add(num, common.Big1),
 			GasLimit:   w.config.GasFloor,
 			Extra:      w.extra,
-			//Time:       uint64(timestamp),
 		}
 		log.Trace("proposePhase", "Number", header.Number, "parent", parent.ParentHash())
 
@@ -891,7 +797,10 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 		}
 
 		//Filter further (remove invalid nonces)
-		txsByNoncePreCheck := types.NewTransactionsByNonce(w.current.signer, pendingTxns, w.current.header.ParentHash)
+		txsByNoncePreCheck, _, err := types.NewTransactionsByNonce(w.current.signer, pendingTxns, w.current.header.ParentHash)
+		if err != nil {
+			return err
+		}
 		txnFilteredMap := txsByNoncePreCheck.GetMap()
 		if w.frozenTransactionsContextParentHash.IsEqualTo(w.current.header.ParentHash) == false {
 			w.frozenTransactions = nil
@@ -927,25 +836,37 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 			return errors.New("block not ready to be sealed")
 		}
 
-		log.Trace("HandleTransactions ok 1", "Number", w.current.header.Number)
-		if selectedTxns == nil {
-			selectedTxns = make(map[common.Address]types.Transactions)
+		if header.Number.Uint64() < defaults.DefaultConfig.DeepCheckStartBlock {
+			txsByNonce, _, err := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
+			if err != nil {
+				return err
+			}
+			w.selectedTransactions = createTransactionList(txsByNonce)
+		} else {
+			log.Trace("updating selectedTransactions", "Number", w.current.header.Number)
+			w.selectedTransactions = make([]*types.Transaction, 0)
+
+			for _, txs := range selectedTxns {
+				for _, v := range txs {
+					w.selectedTransactions = append(w.selectedTransactions, v)
+				}
+			}
 		}
-
-		//log.Trace("pendingTxns txn address count", len(pendingTxns), "block", header.Number.Uint64())
-		txsByNonce := types.NewTransactionsByNonce(w.current.signer, selectedTxns, w.current.header.ParentHash)
-
-		w.selectedTransactions = txsByNonce
+		log.Debug("proposePhase if", "parentHash", parent.Hash(), "number", parent.NumberU64(), "selectedTransactions count", len(w.selectedTransactions))
 	} else {
-		log.Info("proposePhase else", "parentHash", parent.Hash(), "number", parent.NumberU64())
+		log.Debug("proposePhase else", "parentHash", parent.Hash(), "number", parent.NumberU64())
 	}
 
-	log.Trace("HandleTransactions ok 3")
-	if w.commitTransactions(w.selectedTransactions, w.coinbase, interrupt) {
+	log.Debug("HandleTransactions ok 3", "time taken", time.Since(tstart))
+	commitResult, err := w.commitTransactions(w.coinbase, interrupt)
+	if err != nil {
+		return err
+	}
+	if commitResult {
 		log.Trace("commitTransactions nil", "ParentHash", w.current.header.ParentHash)
 	}
 
-	log.Trace("HandleTransactions ok 4")
+	log.Debug("HandleTransactions ok 4", "time taken", time.Since(tstart))
 	return w.commit(w.fullTaskHook, true, tstart)
 }
 
@@ -957,7 +878,7 @@ func (w *worker) commit(interval func(), update bool, start time.Time) error {
 	// Deep copy receipts here to avoid interaction between different tasks.
 	receipts := copyReceipts(w.current.receipts)
 	s := w.current.state.Copy()
-	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts)
+	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts, w.current.passedTxs, w.current.errorTxs)
 	if err != nil {
 		log.Trace("commit2", "err", err)
 		return err

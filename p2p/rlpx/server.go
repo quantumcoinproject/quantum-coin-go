@@ -8,21 +8,20 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/oqs"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"io"
 	"sync"
 )
 
-type serverHelloMessage struct {
+type ServerHelloMessage struct {
 	CipherText            []byte //kemCipherTextLength
 	ServerHelloRandomData [shaLen]byte
 	Version               uint
 	Rest                  []rlp.RawValue `rlp:"tail"`
 }
 
-type serverVerifyMessage struct {
+type ServerVerifyMessage struct {
 	Signature    []byte //SignPublicKeyLen
 	SignatureLen uint
 	Rest         []rlp.RawValue `rlp:"tail"`
@@ -30,17 +29,17 @@ type serverVerifyMessage struct {
 
 type Server struct {
 	ephemeralKemPrivateKey  *keyestablishmentalgorithm.PrivateKey
-	kem                     *oqs.KeyEncapsulation
+	kem                     *keyestablishmentalgorithm.KeyEncapsulation
 	serverSigningPrivateKey *signaturealgorithm.PrivateKey
 	clientSigningPublicKey  *signaturealgorithm.PublicKey
 
 	rbuf ReadBuffer
 	wbuf WriteBuffer
 
-	clientHelloMessage  *clientHelloMessage
-	serverHelloMessage  *serverHelloMessage
-	serverVerifyMessage *serverVerifyMessage
-	clientVerifyMessage *clientVerifyMessage
+	cliHelloMessage  *ClientHelloMessage
+	srvHelloMessage  *ServerHelloMessage
+	srvVerifyMessage *ServerVerifyMessage
+	cliVerifyMessage *ClientVerifyMessage
 
 	kemCipherText   []byte //kemCipherTextLength
 	kemSharedSecret []byte //kemSecretLength
@@ -102,24 +101,21 @@ func (s *Server) PerformHandshake() error {
 		return errors.New("Handshake already done")
 	}
 
-	//Initialize KEM
-	kem := oqs.KeyEncapsulation{}
-
-	err := kem.Init(oqs.KemName, nil)
+	var err error
+	s.kem, err = NewKem("server")
 	if err != nil {
 		return err
 	}
-	s.kem = &kem
 
 	//Receive client hello message
-	clientHelloMessage := new(clientHelloMessage)
+	clientHelloMessage := new(ClientHelloMessage)
 	_, err = s.serializer.Deserialize(clientHelloMessage, s.conn)
 	if err != nil {
 		return err
 	}
 
 	//Handle client hello message
-	s.clientHelloMessage = clientHelloMessage
+	s.cliHelloMessage = clientHelloMessage
 	err = s.handleClientHello()
 	if err != nil {
 		return err
@@ -131,7 +127,7 @@ func (s *Server) PerformHandshake() error {
 		return err
 	}
 
-	serverHelloPacket, err := s.serializer.Serialize(s.serverHelloMessage)
+	serverHelloPacket, err := s.serializer.Serialize(s.srvHelloMessage)
 	if err != nil {
 		return err
 	}
@@ -142,12 +138,12 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	//Find the transcript of the session
-	clientHelloTranscript, err := s.serializer.SerializeDeterministic(s.clientHelloMessage, 0)
+	clientHelloTranscript, err := s.serializer.SerializeDeterministic(s.cliHelloMessage, 0)
 	if err != nil {
 		return err
 	}
 
-	serverHelloTranscript, err := s.serializer.SerializeDeterministic(s.serverHelloMessage, 0)
+	serverHelloTranscript, err := s.serializer.SerializeDeterministic(s.srvHelloMessage, 0)
 	if err != nil {
 		return err
 	}
@@ -165,11 +161,11 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	//Serialize the server verify message
-	serverVerifyMessage := new(serverVerifyMessage)
+	serverVerifyMessage := new(ServerVerifyMessage)
 	serverVerifyMessage.Signature = make([]byte, cryptobase.SigAlg.SignatureWithPublicKeyLength())
 	copy(serverVerifyMessage.Signature[:], signature)
 	serverVerifyMessage.SignatureLen = uint(len(signature))
-	s.serverVerifyMessage = serverVerifyMessage
+	s.srvVerifyMessage = serverVerifyMessage
 
 	serverVerifyPacket, err := s.serializer.Serialize(serverVerifyMessage)
 	if err != nil {
@@ -182,7 +178,7 @@ func (s *Server) PerformHandshake() error {
 	}
 
 	//Create the transcript
-	serverVerifyTranscript, err := s.serializer.SerializeDeterministic(s.serverVerifyMessage, 0)
+	serverVerifyTranscript, err := s.serializer.SerializeDeterministic(s.srvVerifyMessage, 0)
 	if err != nil {
 		return err
 	}
@@ -211,7 +207,7 @@ func (s *Server) Read() error {
 }
 
 func (s *Server) makeServerHello() error {
-	serverHelloMessage := new(serverHelloMessage)
+	serverHelloMessage := new(ServerHelloMessage)
 	serverHelloMessage.Version = 1
 
 	// Generate ServerRandomData
@@ -222,24 +218,26 @@ func (s *Server) makeServerHello() error {
 	}
 	copy(serverHelloMessage.ServerHelloRandomData[:], randomData)
 
-	serverHelloMessage.CipherText = make([]byte, s.kem.AlgDetails.LengthCiphertext)
+	k := *s.kem
+	serverHelloMessage.CipherText = make([]byte, k.Details().LengthCiphertext)
 	copy(serverHelloMessage.CipherText[:], s.kemCipherText[:])
-	s.serverHelloMessage = serverHelloMessage
+	s.srvHelloMessage = serverHelloMessage
 
 	return nil
 }
 
 func (s *Server) handleClientHello() error {
 
-	ciphertext, sharedSecret, err := s.kem.EncapsulateSecret(s.clientHelloMessage.ClientKemPublicKey[:])
+	k := *s.kem
+	ciphertext, sharedSecret, err := k.EncapsulateSecret(s.cliHelloMessage.ClientKemPublicKey[:])
 	if err != nil {
 		return err
 	}
 
-	s.kemCipherText = make([]byte, s.kem.AlgDetails.LengthCiphertext)
+	s.kemCipherText = make([]byte, k.Details().LengthCiphertext)
 	copy(s.kemCipherText[:], ciphertext[:])
 
-	s.kemSharedSecret = make([]byte, s.kem.AlgDetails.LengthSharedSecret)
+	s.kemSharedSecret = make([]byte, k.Details().LengthSharedSecret)
 	copy(s.kemSharedSecret[:], sharedSecret[:])
 
 	return nil
@@ -248,17 +246,17 @@ func (s *Server) handleClientHello() error {
 func (s *Server) handleClientVerify() error {
 
 	//Receive the client verify message
-	clientVerifyMessage := new(clientVerifyMessage)
+	clientVerifyMessage := new(ClientVerifyMessage)
 	err := s.ReadAndDecryptMessage(clientVerifyMessage, PacketTypeHandshake)
 
 	if err != nil {
 		return err
 	}
 
-	s.clientVerifyMessage = clientVerifyMessage
+	s.cliVerifyMessage = clientVerifyMessage
 
 	//Find the transcript of the session
-	clientVerifyTranscript, err := s.serializer.SerializeDeterministic(s.clientVerifyMessage, 0)
+	clientVerifyTranscript, err := s.serializer.SerializeDeterministic(s.cliVerifyMessage, 0)
 	if err != nil {
 		return err
 	}
@@ -272,7 +270,7 @@ func (s *Server) handleClientVerify() error {
 		return err
 	}
 
-	if !cryptobase.SigAlg.Verify(clientPubKeyDataRemote, transcriptHash, clientVerifyMessage.Signature[:clientVerifyMessage.SignatureLen]) {
+	if !cryptobase.DynamicSigVerifier.Verify(clientPubKeyDataRemote, transcriptHash, clientVerifyMessage.Signature[:clientVerifyMessage.SignatureLen]) {
 		return errors.New("client's signature verification failed")
 	}
 
@@ -431,7 +429,8 @@ func (s *Server) ReadAndDecryptMessage(msg interface{}, packetType PacketType) e
 
 func (s *Server) Cleanup() {
 	if s.kem != nil {
-		s.kem.Clean()
+		k := *s.kem
+		k.Clean()
 	}
 }
 

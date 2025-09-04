@@ -147,7 +147,7 @@ func VerifyGenesis(details *GenesisCrossSignDetails) ([]byte, error) {
 		return nil, err
 	}
 
-	if cryptobase.SigAlg.Verify(depPubKey.PubData, messageDigest, depSig) == false {
+	if cryptobase.DynamicSigVerifier.Verify(depPubKey.PubData, messageDigest, depSig) == false {
 		return nil, errors.New("depositor signature verify failed")
 	}
 
@@ -156,7 +156,7 @@ func VerifyGenesis(details *GenesisCrossSignDetails) ([]byte, error) {
 		return nil, err
 	}
 
-	if cryptobase.SigAlg.Verify(valPubKey.PubData, messageDigest, valSig) == false {
+	if cryptobase.DynamicSigVerifier.Verify(valPubKey.PubData, messageDigest, valSig) == false {
 		return nil, errors.New("validator signature verify failed")
 	}
 

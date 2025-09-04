@@ -2,8 +2,6 @@ package rlpx
 
 import (
 	"bytes"
-	"encoding/binary"
-	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/pipes"
 	"math/rand"
@@ -152,17 +150,7 @@ func Test_SinglePingPong(t *testing.T) {
 
 }
 
-func Test_temp(t *testing.T) {
-	prefix := []byte{28, 4}
-	size := binary.BigEndian.Uint16(prefix)
-	fmt.Println("size = ", size, prefix, int(size))
-}
-
 func Test_e2eHandshake(t *testing.T) {
-
-	maxUint24 := int(^uint32(0) >> 8)
-	fmt.Println("maxUint24==", maxUint24)
-
 	waitTime := 5 * time.Second
 	clientConn, serverConn, err := pipes.TCPPipe()
 	if err != nil {
@@ -238,9 +226,9 @@ func Test_e2eHandshake(t *testing.T) {
 	count := 15
 	for i := 1; i <= count; i++ {
 
-		min := 1
-		max := 100
-		size := rand.Intn(max-min) + min
+		minVal := 1
+		maxVal := 100
+		size := rand.Intn(maxVal-minVal) + minVal
 		randomData := make([]byte, size)
 
 		_, err := rand.Read(randomData)

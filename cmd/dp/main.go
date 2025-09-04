@@ -152,6 +152,7 @@ var (
 		utils.RebroadcastCountFlag,
 		utils.ProfPortFlag,
 		utils.FreezerModeFlag,
+		utils.CryptoBreakglassBlockFlag,
 	}
 
 	rpcFlags = []cli.Flag{

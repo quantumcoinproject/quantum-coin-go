@@ -10,6 +10,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelper"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/keystore"
@@ -50,6 +51,9 @@ func main() {
 	js.Global().Set("SingleAddressArgumentMethod", js.FuncOf(SingleAddressArgumentMethod))
 	js.Global().Set("SingleAmountArgumentMethod", js.FuncOf(SingleAmountArgumentMethod))
 	js.Global().Set("NoArgumentMethod", js.FuncOf(NoArgumentMethod))
+	js.Global().Set("PublicKeyFromSignature", js.FuncOf(PublicKeyFromSignature))
+	js.Global().Set("PublicKeyFromPrivateKey", js.FuncOf(PublicKeyFromPrivateKey))
+	js.Global().Set("CombinePublicKeySignature", js.FuncOf(CombinePublicKeySignature))
 	<-done
 }
 
@@ -451,4 +455,62 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 	}
 
 	return d.String()
+}
+
+func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
+	if len(args) != 2 {
+		return nil
+	}
+	digestData := js.Global().Get("Uint8Array").New(args[0])
+	digestBytes := make([]byte, digestData.Get("length").Int())
+	js.CopyBytesToGo(digestBytes, digestData)
+
+	sigData := js.Global().Get("Uint8Array").New(args[1])
+	sigBytes := make([]byte, sigData.Get("length").Int())
+	js.CopyBytesToGo(sigBytes, sigData)
+
+	publicKeyBytes, err := pqchelper.PublicKeyBytesFromSignatureCompact(digestBytes, sigBytes)
+	if err != nil {
+		return nil
+	}
+
+	return common.Bytes2Hex(publicKeyBytes)
+}
+
+func PublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
+	if len(args) != 1 {
+		return nil
+	}
+
+	compositePrivateKeyData := js.Global().Get("Uint8Array").New(args[0])
+	compositePrivateKeyBytes := make([]byte, compositePrivateKeyData.Get("length").Int())
+	js.CopyBytesToGo(compositePrivateKeyBytes, compositePrivateKeyData)
+
+	_, publicKeyBytes, err := pqchelper.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
+	if err != nil {
+		return nil
+	}
+
+	return common.Bytes2Hex(publicKeyBytes)
+}
+
+func CombinePublicKeySignature(this js.Value, args []js.Value) interface{} {
+	if len(args) != 2 {
+		return nil
+	}
+
+	pubData := js.Global().Get("Uint8Array").New(args[0])
+	pubBytes := make([]byte, pubData.Get("length").Int())
+	js.CopyBytesToGo(pubBytes, pubData)
+
+	sigData := js.Global().Get("Uint8Array").New(args[1])
+	sigBytes := make([]byte, sigData.Get("length").Int())
+	js.CopyBytesToGo(sigBytes, sigData)
+
+	combinedSignatureBytes, err := pqchelper.CombinePublicKeySignature(sigBytes, pubBytes)
+	if err != nil {
+		return nil
+	}
+
+	return common.Bytes2Hex(combinedSignatureBytes)
 }

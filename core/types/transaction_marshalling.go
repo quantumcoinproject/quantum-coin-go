@@ -171,7 +171,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		maxGasTier := int64(*dec.MaxGasTier)
 
-		if big.NewInt(maxGasTier).Cmp(GAS_TIER_DEFAULT_PRICE) == 0 {
+		if big.NewInt(maxGasTier).Cmp(GetDefaultGasPrice()) == 0 {
 			itx.MaxGasTier = GAS_TIER_DEFAULT
 		} else if maxGasTier == int64(GAS_TIER_DEFAULT) {
 			itx.MaxGasTier = GAS_TIER_DEFAULT

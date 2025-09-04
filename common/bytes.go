@@ -172,7 +172,7 @@ func CombineTwoParts(part1 []byte, part2 []byte) []byte {
 func ExtractTwoParts(data []byte) (part1 []byte, part2 []byte, err error) {
 
 	if len(data) < LengthByteSize+LengthByteSize {
-		return nil, nil, errors.New("nvalid length 1")
+		return nil, nil, errors.New("invalid length 1")
 	}
 
 	totalLen := BytesToLen(data[:LengthByteSize])

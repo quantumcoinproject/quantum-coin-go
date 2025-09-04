@@ -27,6 +27,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core/state"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/handler"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/consensuscontext"
@@ -42,7 +43,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
@@ -60,53 +60,8 @@ const (
 
 // ProofOfStake proof-of-authority protocol constants.
 var (
-	maxSystemBalance = new(big.Int).Mul(big.NewInt(100), big.NewInt(params.Ether))
-
-	epochLength = uint64(30000) // Default number of blocks after which to checkpoint and reset the pending votes
-
 	extraVanity = 32                                               // Fixed number of extra-data prefix bytes reserved for validator vanity
 	extraSeal   = cryptobase.SigAlg.SignatureWithPublicKeyLength() // Fixed number of extra-data suffix bytes reserved for validator seal
-
-	nonceAuthVote = hexutil.MustDecode("0xffffffffffffffff") // Magic nonce number to vote on adding a new validator
-	nonceDropVote = hexutil.MustDecode("0x0000000000000000") // Magic nonce number to vote on removing a validator.
-
-	diffInTurn = big.NewInt(2) // Block difficulty for in-turn signatures
-	diffNoTurn = big.NewInt(1) // Block difficulty for out-of-turn signatures
-
-	SLASH_AMOUNT = params.EtherToWei(big.NewInt(10))
-
-	SLASH_AMOUNT_V2 = params.EtherToWei(big.NewInt(100))
-
-	rewardStartBlockNumber = uint64(277204)
-	slashStartBlockNumber  = uint64(1497600)
-
-	FULL_SIGN_PROPOSAL_CUTOFF_BLOCK     = uint64(421888)
-	FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS = uint64(4096)
-
-	STAKING_CONTRACT_V2_CUTOFF_BLOCK  = FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
-	CONSENSUS_CONTEXT_START_BLOCK     = FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
-	CONSENSUS_CONTEXT_MAX_BLOCK_COUNT = uint64(512000)
-
-	VALIDATOR_NIL_BLOCK_START_BLOCK      = STAKING_CONTRACT_V2_CUTOFF_BLOCK + 1
-	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK = VALIDATOR_NIL_BLOCK_START_BLOCK + 16
-
-	CONTEXT_BASED_START_BLOCK     = uint64(536000)
-	CONTEXT_BASED_BLOCK_THRESHOLD = uint64(64000)
-	BLOCK_TIME_ORIG_START_BLOCK   = uint64(CONTEXT_BASED_START_BLOCK + 1)
-	PACKET_PROTOCOL_START_BLOCK   = uint64(BLOCK_TIME_ORIG_START_BLOCK + 32)
-
-	PROPOSAL_TIME_HASH_START_BLOCK        = uint64(1507600)
-	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK = uint64(1597600)
-
-	//Note: both of the below should add upto 100
-	TxnFeeRewardsPercentage = int64(50)
-
-	SixtyVoteStartBlock = uint64(1386825)
-
-	SlashV2StartBlock               = uint64(2082171)
-	OfflineValidatorDeferStartBlock = SlashV2StartBlock + 10
-
-	SixtySevenVoteStartBlock = uint64(OfflineValidatorDeferStartBlock + 10)
 )
 
 // Various error messages to mark blocks invalid. These should be private to
@@ -118,69 +73,21 @@ var (
 	// that is not part of the local blockchain.
 	errUnknownBlock = errors.New("unknown block")
 
-	// errInvalidCheckpointBeneficiary is returned if a checkpoint/epoch transition
-	// block has a beneficiary set to non-zeroes.
-	errInvalidCheckpointBeneficiary = errors.New("beneficiary in checkpoint block non-zero")
-
-	// errInvalidVote is returned if a nonce value is something else that the two
-	// allowed constants of 0x00..0 or 0xff..f.
-	errInvalidVote = errors.New("vote nonce not 0x00..0 or 0xff..f")
-
-	// errInvalidCheckpointVote is returned if a checkpoint/epoch transition block
-	// has a vote nonce set to non-zeroes.
-	errInvalidCheckpointVote = errors.New("vote nonce in checkpoint block non-zero")
-
 	// errMissingVanity is returned if a block's extra-data section is shorter than
 	// 32 bytes, which is required to store the signer vanity.
 	errMissingVanity = errors.New("extra-data 32 byte vanity prefix missing")
 
-	// errMissingSignature is returned if a block's extra-data section doesn't seem
-	// to contain a signature.
-	errMissingSignature = errors.New("extra-data signature suffix missing")
-
-	// errMismatchingEpochValidators is returned if a sprint block contains a
-	// list of filteredValidatorsDepositMap different than the one the local node calculated.
-	errMismatchingEpochValidators = errors.New("mismatching validator list on epoch block")
-
-	// errExtraSigners is returned if non-checkpoint block contain signer data in
-	// their extra-data fields.
-	errExtraSigners = errors.New("non-checkpoint block contains extra signer list")
-
-	// errInvalidCheckpointSigners is returned if a checkpoint block contains an
-	// invalid list of signers (i.e. non divisible by 20 bytes).
-	errInvalidCheckpointSigners = errors.New("invalid signer list on checkpoint block")
-
-	// errMismatchingCheckpointSigners is returned if a checkpoint block contains a
-	// list of signers different than the one the local node calculated.
-	errMismatchingCheckpointSigners = errors.New("mismatching signer list on checkpoint block")
-
 	// errInvalidMixDigest is returned if a block's mix digest is non-zero.
 	errInvalidMixDigest = errors.New("non-zero mix digest")
 
-	// errInvalidDifficulty is returned if the difficulty of a block neither 1 or 2.
+	// errInvalidDifficulty is returned if the difficulty of a block is not the blockNumber
 	errInvalidDifficulty = errors.New("invalid difficulty")
 
-	// errWrongDifficulty is returned if the difficulty of a block doesn't match the
-	// turn of the signer.
-	errWrongDifficulty = errors.New("wrong difficulty")
+	errInvalidCoinbase = errors.New("invalid coinbase")
 
-	// errInvalidTimestamp is returned if the timestamp of a block is lower than
-	// the previous block's timestamp + the minimum block period.
-	errInvalidTimestamp = errors.New("invalid timestamp")
+	errInvalidNonce = errors.New("invalid nonce")
 
-	// errInvalidVotingChain is returned if an authorization list is attempted to
-	// be modified via out-of-range or non-contiguous headers.
-	errInvalidVotingChain = errors.New("invalid voting chain")
-
-	// errUnauthorizedSigner is returned if a header is signed by a non-authorized entity.
-	errUnauthorizedSigner = errors.New("unauthorized signer")
-
-	// errRecentlySigned is returned if a header is signed by an authorized entity
-	// that already signed a header recently, thus is temporarily not allowed to.
-	errRecentlySigned = errors.New("recently signed")
-
-	// errCoinBaseMisMatch is returned if a header's coinbase do not match with signature
-	errCoinBaseMisMatch = errors.New("coinbase do not match with signature")
+	errInvalidGasLimit = errors.New("invalid gas limit")
 )
 
 // SignerFn hashes and signs the data to be signed by a backing account.
@@ -227,9 +134,6 @@ func New(chainConfig *params.ChainConfig, db ethdb.Database,
 	// Set any missing consensus parameters to their defaults
 	conf := *chainConfig
 
-	if conf.ProofOfStake.Epoch == 0 {
-		conf.ProofOfStake.Epoch = epochLength
-	}
 	// Allocate the snapshot caches and c.ProofOfStakereate the engine
 	recents, _ := lru.NewARC(inmemorySnapshots)
 	signatures, _ := lru.NewARC(inmemorySignatures)
@@ -468,14 +372,14 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 	if header.Time > uint64(time.Now().Unix()) {
 		return consensus.ErrFutureBlock
 	}
-	// Checkpoint blocks need to enforce zero beneficiary
 
-	// Check that the extra-data contains both the vanity and signature
-	if len(header.Extra) < extraVanity {
-		return errMissingVanity
+	if header.Coinbase.IsEqualTo(ZERO_ADDRESS) == false {
+		return errInvalidCoinbase
 	}
 
-	// Ensure that the extra-data contains a signer list on checkpoint, but none otherwise
+	if header.Nonce.Uint64() != 0 {
+		return errInvalidNonce
+	}
 
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
@@ -488,11 +392,27 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 			return errInvalidDifficulty
 		}
 	}
-	// Verify that the gas limit is <= 2^63-1
-	cap := uint64(0x7fffffffffffffff)
-	if header.GasLimit > cap {
-		return fmt.Errorf("invalid gasLimit: have %v, max %v", header.GasLimit, cap)
-	} // If all checks passed, validate any special fields for hard forks
+	blockGasLimit := defaults.GetGasLimit(number)
+	if header.GasLimit != blockGasLimit {
+		return errInvalidGasLimit
+	}
+
+	//GasUsed is checked in state_processor
+
+	_, err := VerifyExtraData(number, header.Extra)
+	if err != nil {
+		return err
+	}
+
+	/*//Extra data
+	if header.Number.Uint64() >= core.DeepCheckStartBlock {
+		blockExtraData, err := DecodeBlockExtraData(header.Extra)
+		if err != nil {
+			return err
+		}
+		//todo: verify blockExtraData
+		log.Debug("blockExtraData", "decoded", len(blockExtraData.ExtraData))
+	}*/
 
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
@@ -543,13 +463,13 @@ func (c *ProofOfStake) verifySeal(chain consensus.ChainHeaderReader, header *typ
 	}
 
 	blockConsensusData := &BlockConsensusData{}
-	err := rlp.DecodeBytes(header.ConsensusData, &blockConsensusData)
+	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
 		return err
 	}
 
 	blockAdditionalConsensusData := &BlockAdditionalConsensusData{}
-	err = rlp.DecodeBytes(header.UnhashedConsensusData, &blockAdditionalConsensusData)
+	err = rlp.DecodeBytes(header.UnhashedConsensusData, blockAdditionalConsensusData)
 	if err != nil {
 		return err
 	}
@@ -645,7 +565,7 @@ func (c *ProofOfStake) VerifyBlock(chain consensus.ChainHeaderReader, block *typ
 	}
 
 	var valDetailsMap map[common.Address]*ValidatorDetailsV2
-	if number >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if number >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		valDetailsMap, err = c.ListValidatorsAsMap(header.ParentHash)
 		if err != nil {
 			return err
@@ -710,7 +630,8 @@ func (c *ProofOfStake) Convert(header *types.Header, state *state.StateDB, txn *
 }
 
 // Finalize implements consensus.Engine
-func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt, source string) error {
+func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
+	passedTransactions types.Transactions, errorTransactions types.Transactions, source string) error {
 	if txs == nil {
 		txs = make([]*types.Transaction, 0)
 	} else {
@@ -721,6 +642,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			}
 			signerHash, err := c.signer.Hash(tx)
 			if err != nil {
+				log.Trace("Finalize Hash failed", "Hash", tx.Hash(), "error", err)
 				return err
 			}
 			if !tx.Verify(signerHash.Bytes()) {
@@ -740,7 +662,12 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	}
 
 	blockConsensusData := &BlockConsensusData{}
-	err := rlp.DecodeBytes(header.ConsensusData, &blockConsensusData)
+	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
+	if err != nil {
+		return err
+	}
+
+	err = c.verifyTransactions(header, txs, blockConsensusData, passedTransactions, errorTransactions, source)
 	if err != nil {
 		return err
 	}
@@ -760,13 +687,13 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	//Block Slashing
 	//If Round = 1, then it means PROPOSER was likely offline, as opposed to Round = 2 which means validators were not able to get consensus on time
-	if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= slashStartBlockNumber {
+	if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= defaults.DefaultConfig.PosConfig.SlashStartBlockNumber {
 
 		var slashAmount *big.Int
-		if blockNumber < SlashV2StartBlock {
-			slashAmount = SLASH_AMOUNT
+		if blockNumber < defaults.DefaultConfig.PosConfig.SlashV2StartBlock {
+			slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT
 		} else {
-			slashAmount = SLASH_AMOUNT_V2
+			slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT_V2
 		}
 
 		for _, val := range blockConsensusData.SlashedBlockProposers {
@@ -791,18 +718,18 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	//Validator nil block
 	//If Round = 1, then it means PROPOSER was likely offline, as opposed to Round = 2 which means validators were not able to get consensus on time
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL && blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil &&
-		len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= VALIDATOR_NIL_BLOCK_START_BLOCK {
+		len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK {
 		for _, val := range blockConsensusData.SlashedBlockProposers {
 			err = c.SetNilBlock(val, state, header)
 			if err != nil {
-				log.Error("SetNilBlock err", "err", err)
+				log.Error("SetNilBlock err", "err", err, "blockNumber", header.Number.Uint64())
 				return err
 			}
 		}
 	}
 
 	//Block Rewards
-	if blockConsensusData.VoteType == VOTE_TYPE_OK && blockNumber >= rewardStartBlockNumber {
+	if blockConsensusData.VoteType == VOTE_TYPE_OK && blockNumber >= defaults.DefaultConfig.PosConfig.RewardStartBlockNumber {
 		blockProposerRewardAmount := GetReward(header.Number)
 
 		//Add same amount of reward to Staking Contract, so that it is available for withdrawal later on
@@ -853,7 +780,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 
 		//Validator nil block reset
-		if blockNumber > VALIDATOR_NIL_BLOCK_START_BLOCK {
+		if blockNumber > defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK {
 			err = c.ResetNilBlock(blockConsensusData.BlockProposer, state, header)
 			if err != nil {
 				log.Error("ResetNilBlock err", "err", err)
@@ -863,20 +790,20 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	}
 
 	//Staking V2
-	if blockNumber == STAKING_CONTRACT_V2_CUTOFF_BLOCK {
-		log.Info("Setting stakingv2 contract code", "blockNumber", STAKING_CONTRACT_V2_CUTOFF_BLOCK)
+	if blockNumber == defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+		log.Info("Setting stakingv2 contract code", "blockNumber", defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK)
 		stakingContractCode := common.FromHex(stakingv2.STAKING_RUNTIME_BIN)
 		state.SetCode(staking.STAKING_CONTRACT_ADDRESS, stakingContractCode)
 	}
 
 	//Consensus Context
-	if blockNumber == CONSENSUS_CONTEXT_START_BLOCK {
-		log.Info("Setting consensus context contract code", "blockNumber", CONSENSUS_CONTEXT_START_BLOCK)
+	if blockNumber == defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK {
+		log.Info("Setting consensus context contract code", "blockNumber", defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK)
 		consensuscontextContractCode := common.FromHex(consensuscontext.CONSENSUS_CONTEXT_RUNTIME_BIN)
 		state.SetCode(consensuscontext.CONSENSUS_CONTEXT_CONTRACT_ADDRESS, consensuscontextContractCode)
 	}
 
-	if blockNumber > CONSENSUS_CONTEXT_START_BLOCK {
+	if blockNumber > defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK {
 		key, err := GetConsensusContextKey(blockNumber)
 		if err != nil {
 			log.Error("GetBlockConsensusContextFn err", "err", err)
@@ -891,8 +818,8 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 
 		//Remove the oldest key
-		if blockNumber > (CONSENSUS_CONTEXT_START_BLOCK + CONSENSUS_CONTEXT_MAX_BLOCK_COUNT) {
-			oldKey, err := GetConsensusContextKey(blockNumber - CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
+		if blockNumber > (defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK + defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT) {
+			oldKey, err := GetConsensusContextKey(blockNumber - defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT)
 			if err != nil {
 				log.Error("GetBlockConsensusContextKey oldKey err", "err", err)
 				return err
@@ -908,7 +835,8 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	//Fix blocktime
 	parent := chain.GetHeader(header.ParentHash, blockNumber-1)
-	if (blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= BLOCK_TIME_ORIG_START_BLOCK) && blockConsensusData.VoteType == VOTE_TYPE_OK && parent.Time < blockConsensusData.BlockTime {
+	if (blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK) &&
+		blockConsensusData.VoteType == VOTE_TYPE_OK && parent.Time < blockConsensusData.BlockTime {
 		header.Time = blockConsensusData.BlockTime
 	} else {
 		header.Time = parent.Time + c.config.Period
@@ -916,7 +844,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
-	log.Info("Finalize Block", "root", header.Root, "hash", header.Hash(), "number", header.Number, "txn count", len(txs), "source", source)
+	log.Info("Finalize Block", "root", header.Root, "hash", header.Hash(), "number", header.Number, "txn count", len(txs), "source", source, "extraDataLen", len(header.Extra))
 
 	return nil
 }
@@ -954,7 +882,7 @@ func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transactio
 }
 
 func calculateTxnFeeSplitCoins(txnFeeTotal *big.Int) (burnAmount *big.Int, txnFeeRewardsAmount *big.Int) {
-	txnFeeRewardsAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(TxnFeeRewardsPercentage))
+	txnFeeRewardsAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(defaults.DefaultConfig.PosConfig.TxnFeeRewardsPercentage))
 	burnAmount = common.SafeSubBigInt(txnFeeTotal, txnFeeRewardsAmount)
 	return burnAmount, txnFeeRewardsAmount
 }
@@ -964,7 +892,7 @@ func burn(state *state.StateDB, burnAmount *big.Int) {
 }
 
 func (c *ProofOfStake) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssemble")
+	err := c.Finalize(chain, header, state, txs, receipts, nil, nil, "FinalizeAndAssemble")
 	if err != nil {
 		return nil, err
 	}
@@ -973,7 +901,8 @@ func (c *ProofOfStake) FinalizeAndAssemble(chain consensus.ChainHeaderReader, he
 	return types.NewBlock(header, txs, receipts, trie.NewStackTrie(nil)), nil
 }
 
-func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
+func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
+	passedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
@@ -1012,7 +941,17 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	header.UnhashedConsensusData = make([]byte, len(data))
 	copy(header.UnhashedConsensusData, data)
 
-	err = c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssembleWithConsensus")
+	//Extra data
+	if header.Number.Uint64() >= defaults.DefaultConfig.DeepCheckStartBlock {
+		extraData, err := EncodeBlockExtraData(errorTransactions, header.Extra, header.Number.Uint64())
+		if err != nil {
+			return nil, err
+		}
+		header.Extra = make([]byte, len(extraData))
+		copy(header.Extra, extraData)
+	}
+
+	err = c.Finalize(chain, header, state, txs, receipts, passedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
 	if err != nil {
 		return nil, err
 	}
@@ -1093,6 +1032,137 @@ func (c *ProofOfStake) APIs(chain consensus.ChainHeaderReader) []rpc.API {
 
 func (c *ProofOfStake) GetConsensusPacketHandler() *ConsensusHandler {
 	return c.consensusHandler
+}
+
+func MakeMap(transactions types.Transactions) (map[common.Hash]bool, error) {
+	m := make(map[common.Hash]bool)
+	for _, tx := range transactions {
+		_, ok := m[tx.Hash()]
+		if ok {
+			log.Error("MakeMap Duplicate transaction", "hash", tx.Hash())
+			return nil, errors.New("duplicate transaction")
+		}
+		m[tx.Hash()] = true
+	}
+	return m, nil
+}
+
+func (c *ProofOfStake) verifyTransactions(header *types.Header, transactions []*types.Transaction, blockConsensusData *BlockConsensusData, passedTransactions types.Transactions,
+	errorTransactions types.Transactions, source string) error {
+	if header.Number.Uint64() < defaults.DefaultConfig.DeepCheckStartBlock {
+		//todo: verify
+		return nil
+	}
+
+	actualTxnCount := len(passedTransactions) + len(errorTransactions)
+	if len(blockConsensusData.SelectedTransactions) != actualTxnCount {
+		log.Error("verifyTransactions wrong number of transactions", "blockNumber", header.Number.Uint64(),
+			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
+			"len(passedTransactions)", len(passedTransactions), "len(errorTransactions)", len(errorTransactions), "source", source)
+		return errors.New("wrong number of transactions")
+	}
+
+	blockTransactions := types.Transactions(transactions)
+
+	if blockTransactions.IsEqualTo(passedTransactions) == false {
+		log.Error("verifyTransactions passedTransactions IsEqualTo fail", "blockNumber", header.Number.Uint64(),
+			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
+			"len(passedTransactions)", len(passedTransactions), "len(errorTransactions)", len(errorTransactions), "source", source)
+		return errors.New("wrong number of passed transactions")
+	}
+
+	blockExtraData, _, err := DecodeBlockExtraData(header.Extra, header.Number.Uint64())
+	if err != nil {
+		return err
+	}
+
+	if errorTransactions.IsEqualTo(blockExtraData.ErrorTransactions) == false {
+		log.Error("verifyTransactions errorTransactions IsEqualTo fail",
+			"expected", len(blockConsensusData.SelectedTransactions), "actual", actualTxnCount, "len(blockConsensusData.SelectedTransactions)", len(blockConsensusData.SelectedTransactions),
+			"len(passedTransactions)", len(passedTransactions), "len(errorTransactions)", len(errorTransactions),
+			"blockExtraData.ErrorTransactions", len(blockExtraData.ErrorTransactions))
+		return errors.New("wrong number of error transactions")
+	}
+
+	if blockConsensusData.VoteType == VOTE_TYPE_NIL {
+		if len(errorTransactions) > 0 || len(passedTransactions) > 0 || len(blockConsensusData.SelectedTransactions) > 0 {
+			return errors.New("verifyTransactions skippedTransactions errorTransactions is present in NIL BLOCK")
+		}
+	} else {
+		for _, tx := range errorTransactions {
+			if tx.VerifyFields() == false {
+				log.Trace("errorTransactions Txn VerifyFields failed", "Hash", tx.Hash())
+				return errors.New("Transaction VerifyFields failed")
+			}
+			signerHash, err := c.signer.Hash(tx)
+			if err != nil {
+				log.Trace("errorTransactionssignerHash failed", "Hash", tx.Hash(), "error", err)
+				return err
+			}
+			if !tx.Verify(signerHash.Bytes()) {
+				log.Trace("errorTransactions Txn Verify failed", "Hash", tx.Hash())
+				return errors.New("Transaction verify failed")
+			} else {
+				log.Trace("errorTransactions Txn Verify ok", "Hash", tx.Hash())
+			}
+		}
+
+		selectTxnMap := make(map[common.Hash]bool)
+		for _, t := range blockConsensusData.SelectedTransactions {
+			_, ok := selectTxnMap[t]
+			if ok {
+				log.Error("verifyTransactions selected txn duplicate", "txn", t)
+				return errors.New("duplicated transaction found")
+			}
+			selectTxnMap[t] = true
+		}
+
+		passedTxnMap, err := MakeMap(blockTransactions)
+		if err != nil {
+			log.Error("verifyTransactions passedTxnMap error")
+			return err
+		}
+
+		errorTxnMap, err := MakeMap(errorTransactions)
+		if err != nil {
+			log.Error("verifyTransactions errorTxnMap error")
+			return err
+		}
+
+		for k, _ := range selectTxnMap {
+			foundCount := 0
+			_, ok1 := passedTxnMap[k]
+			if ok1 {
+				foundCount = foundCount + 1
+			}
+
+			_, ok2 := errorTxnMap[k]
+			if ok2 {
+				foundCount = foundCount + 1
+			}
+
+			if foundCount == 0 {
+				log.Error("verifyTransactions couldn't find txn in passed or skipped or error txn list", "txn", k)
+				return errors.New("couldn't find txn in passed or skipped or error txn list")
+			} else if foundCount != 1 {
+				log.Error("verifyTransactions found multiple occurrences of txn", "txn", k, "foundCount", foundCount, "ok1", ok1, "ok2", ok2)
+				return errors.New("verifyTransactions found multiple occurrences of txn")
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *ProofOfStake) ParseHeaderDetails(chain consensus.ChainHeaderReader, header *types.Header) (errorTransactions types.Transactions, err error) {
+	if header.Number.Uint64() < defaults.DefaultConfig.DeepCheckStartBlock {
+		return errorTransactions, nil
+	}
+	blockExtraInfo, _, err := DecodeBlockExtraData(header.Extra, header.Number.Uint64())
+	if err != nil {
+		return nil, err
+	}
+	return blockExtraInfo.ErrorTransactions, nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

@@ -17,6 +17,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
@@ -630,7 +631,7 @@ func newDeposit(validatorAddress string, depositAmount string, key *signaturealg
 	}
 
 	var tx *types.Transaction
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contract, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
 			return err
@@ -694,7 +695,7 @@ func initiateWithdrawal(key *signaturealgorithm.PrivateKey) error {
 
 	var tx *types.Transaction
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contract, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
 			return err
@@ -770,7 +771,7 @@ func completeWithdrawal(key *signaturealgorithm.PrivateKey) error {
 
 	var tx *types.Transaction
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contract, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
 			return err
@@ -811,7 +812,7 @@ func getBalanceOfDepositor(dep string) (*big.Int, error) {
 
 	var depositorBalance *big.Int
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 
 		instance, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
@@ -853,7 +854,7 @@ func getNetBalanceOfDepositor(dep string) (*big.Int, error) {
 
 	var depositorBalance *big.Int
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contractAddress := common.HexToAddress(staking.STAKING_CONTRACT)
 		instance, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
@@ -897,7 +898,7 @@ func getDepositorOfValidator(val string) (common.Address, error) {
 	var depositor common.Address
 	var validator common.Address
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contractAddress := common.HexToAddress(staking.STAKING_CONTRACT)
 		instance, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
@@ -939,7 +940,7 @@ func getDepositorBlockRewards(dep string) (*big.Int, error) {
 
 	var depositorBalance *big.Int
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contractAddress := common.HexToAddress(staking.STAKING_CONTRACT)
 		instance, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
@@ -981,7 +982,7 @@ func getDepositorSlashings(dep string) (*big.Int, error) {
 
 	var depositorSlashing *big.Int
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contractAddress := common.HexToAddress(staking.STAKING_CONTRACT)
 		instance, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
@@ -1047,7 +1048,7 @@ func listValidators() error {
 		return err
 	}
 
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		instance, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
 			return err
@@ -1361,7 +1362,7 @@ func getStakingDetails(validatorAddress common.Address) error {
 		return err
 	}
 
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		fmt.Println(nil)
 	} else {
 		instance, err := stakingv2.NewStaking(contractAddress, client)
@@ -1426,7 +1427,7 @@ func pauseValidation(key *signaturealgorithm.PrivateKey) error {
 
 	var tx *types.Transaction
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contract, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
 			return err
@@ -1491,7 +1492,7 @@ func resumeValidation(key *signaturealgorithm.PrivateKey) error {
 
 	var tx *types.Transaction
 	var blockNumber uint64
-	if blockNumber < proofofstake.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		contract, err := stakingv1.NewStaking(contractAddress, client)
 		if err != nil {
 			return err
@@ -1985,4 +1986,19 @@ func renounceTokenOwnership(contractAddr string, key *signaturealgorithm.Private
 	time.Sleep(1000 * time.Millisecond)
 
 	return nil
+}
+
+func listConversionDetails() (*proofofstake.ConversionSummary, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	summary, err := client.ListConversionDetails(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return summary, nil
 }

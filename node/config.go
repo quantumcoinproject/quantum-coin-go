@@ -196,6 +196,8 @@ type Config struct {
 
 	RebroadcastCount int
 
+	CryptoBreakglassBlock uint64 `toml:",omitempty"`
+
 	ProfPort int `toml:",omitempty"`
 }
 

@@ -2,6 +2,9 @@ package types
 
 import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
 )
 
@@ -31,8 +34,13 @@ func (al AccessList) StorageKeys() int {
 	return sum
 }
 
-var DEFAULT_PRICE = int64(47619047619047600)
-var GAS_TIER_DEFAULT_PRICE = big.NewInt(DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
+func GetDefaultGasPrice() *big.Int {
+	return big.NewInt(defaults.DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
+}
+
+func GetDefaultGasPriceHexBig() *hexutil.Big {
+	return (*hexutil.Big)(GetDefaultGasPrice())
+}
 
 type DefaultFeeTx struct {
 	ChainID    *big.Int
@@ -94,19 +102,20 @@ func (tx *DefaultFeeTx) protected() bool        { return true }
 func (tx *DefaultFeeTx) accessList() AccessList { return tx.AccessList }
 func (tx *DefaultFeeTx) data() []byte           { return tx.Data }
 func (tx *DefaultFeeTx) gas() uint64            { return tx.Gas }
-func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GAS_TIER_DEFAULT_PRICE }
+func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GetDefaultGasPrice() }
 func (tx *DefaultFeeTx) gasPrice() *big.Int {
 	if tx.MaxGasTier == GAS_TIER_DEFAULT {
-		return GAS_TIER_DEFAULT_PRICE
+		return GetDefaultGasPrice()
 	}
-	return GAS_TIER_DEFAULT_PRICE
+	return GetDefaultGasPrice()
 }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
 func (tx *DefaultFeeTx) verifyFields() bool {
-	if tx.gasPrice() != GAS_TIER_DEFAULT_PRICE {
+	if tx.gasPrice().Cmp(GetDefaultGasPrice()) != 0 {
+		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "GetDefaultGasPrice()", GetDefaultGasPrice())
 		return false
 	}
 	return len(tx.Remarks) <= MAX_REMARKS_LENGTH

@@ -22,6 +22,7 @@ import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"io"
 	"math/big"
 	"runtime/debug"
@@ -106,6 +107,16 @@ func (tx *Transaction) encodeTyped(w *bytes.Buffer) error {
 	return rlp.Encode(w, tx.inner)
 }
 
+// RawHash outputs the raw hash
+func (tx *Transaction) RawHash() (common.Hash, error) {
+	var buff bytes.Buffer
+	err := tx.encodeTyped(&buff)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return common.BytesToHash(buff.Bytes()), nil
+}
+
 // MarshalBinary returns the canonical encoding of the transaction.
 // For legacy transactions, it returns the RLP encoding. For EIP-2718 typed
 // transactions, it returns the type and payload.
@@ -178,41 +189,6 @@ func (tx *Transaction) setDecoded(inner TxData, size int) {
 	if size > 0 {
 		tx.size.Store(common.StorageSize(size))
 	}
-}
-
-func sanityCheckSignature(digestHash []byte, v *big.Int, r *big.Int, s *big.Int, maybeProtected bool) error {
-	if isProtectedV(v) && !maybeProtected {
-		return ErrUnexpectedProtection
-	}
-
-	var plainV byte
-	if isProtectedV(v) {
-		chainID := deriveChainId(v).Uint64()
-		plainV = byte(v.Uint64() - 35 - 2*chainID)
-	} else if maybeProtected {
-		// Only EIP-155 signatures can be optionally protected. Since
-		// we determined this v value is not protected, it must be a
-		// raw 27 or 28.
-		plainV = byte(v.Uint64() - 27)
-	} else {
-		// If the signature is not optionally protected, we assume it
-		// must already be equal to the recovery id.
-		plainV = byte(v.Uint64())
-	}
-	if !cryptobase.SigAlg.ValidateSignatureValues(digestHash, plainV, r, s) {
-		return ErrInvalidSig
-	}
-
-	return nil
-}
-
-func isProtectedV(V *big.Int) bool {
-	if V.BitLen() <= 8 {
-		v := V.Uint64()
-		return v != 27 && v != 28 && v != 1 && v != 0
-	}
-	// anything not 27 or 28 is considered protected
-	return true
 }
 
 // Protected says whether the transaction is replay-protected.
@@ -326,8 +302,12 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 }
 
 func (tx *Transaction) Verify(digestHash []byte) bool {
-	_, r, s := tx.RawSignatureValues()
-	return cryptobase.SigAlg.ValidateSignatureValues(digestHash, 1, r, s)
+	v, r, s := tx.RawSignatureValues()
+	if v.Uint64() != 1 {
+		return false
+	}
+	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, byte(v.Uint64()), r, s)
+	return isOk
 }
 
 // Transactions implements DerivableList for transactions.
@@ -345,6 +325,24 @@ func (s Transactions) Len() int { return len(s) }
 func (s Transactions) EncodeIndex(i int, w *bytes.Buffer) {
 	tx := s[i]
 	tx.encodeTyped(w)
+}
+
+func (s Transactions) IsEqualTo(other Transactions) bool {
+	if len(s) != len(other) {
+		log.Warn("transactions are not equal", "s len", len(s), "other len", len(other))
+		return false
+	}
+
+	for i, _ := range other {
+		hashA := s[i].Hash()
+		hashB := other[i].Hash()
+		if hashA.IsEqualTo(hashB) == false {
+			log.Warn("transactions are not equal", "i", i, "hashA", hashA.Hex(), "hashB", hashB.Hex())
+			return false
+		}
+	}
+
+	return true
 }
 
 // TxDifference returns a new set which is the difference between a and b.
@@ -425,10 +423,48 @@ type TransactionsByNonce struct {
 	round            int
 }
 
+func flatten(txs map[common.Address]Transactions) Transactions {
+	var transactions Transactions
+	for _, txnList := range txs {
+		for i := 0; i < len(txnList); i++ {
+			transactions = append(transactions, txnList[i])
+		}
+	}
+
+	return transactions
+}
+
+func NewTransactionsByNonceFromList(signer Signer, txnList *Transactions, parentHash common.Hash) (*TransactionsByNonce, Transactions, error) {
+	var skippedTransactions Transactions
+	txs := make(map[common.Address]Transactions)
+	for _, txn := range *txnList {
+		from, err := Sender(signer, txn)
+		if err != nil {
+			skippedTransactions = append(skippedTransactions, txn)
+			log.Debug("NewTransactionsByNonceFromList", "error", err, "txn", txn.Hash().Hex(), "len skip", len(skippedTransactions))
+			continue
+		}
+		_, ok := txs[from]
+		if ok == false {
+			txs[from] = make(Transactions, 0)
+		}
+		txs[from] = append(txs[from], txn)
+	}
+	txnByNonce, skipped, err := NewTransactionsByNonce(signer, txs, parentHash)
+	if err != nil {
+		log.Debug("NewTransactionsByNonceFromList NewTransactionsByNonce", "error", err, "skip count", len(skipped))
+		return nil, nil, err
+	}
+	skippedTransactions = append(skippedTransactions, skipped...)
+	return txnByNonce, skippedTransactions, nil
+}
+
 // NewTransactionsByNonce creates a transaction set that can retrieve transactions in a nonce-honouring way.
 // Note, the input map is reowned so the caller should not interact any more with
 // if after providing it to the constructor.
-func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, parentHash common.Hash) *TransactionsByNonce {
+func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, parentHash common.Hash) (*TransactionsByNonce, Transactions, error) {
+	before := flatten(txs)
+
 	// Initialize a time based heap with the head transactions
 	heads := make(TxBySortPrefix, 0, len(txs))
 	for from, accTxs := range txs {
@@ -456,7 +492,10 @@ func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, 
 			delete(txs, from)
 			continue
 		}
-		acc, _ := Sender(signer, accTxs[0])
+		acc, err := Sender(signer, accTxs[0])
+		if err != nil {
+			return nil, nil, err
+		}
 		sortPrefix := crypto.Keccak256(parentHash.Bytes(), acc.Bytes())
 		wrapped, err := NewWrapperTxn(accTxs[0], sortPrefix)
 		// Remove transaction if sender doesn't match from, or if wrapping fails.
@@ -478,7 +517,13 @@ func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, 
 	}
 	output.internalSort()
 	output.ResetCursor()
-	return output
+
+	after := flatten(txs)
+	skippedTransactions := TxDifference(before, after)
+
+	log.Trace("NewTransactionsByNonce", "before txn count", len(before), "after txn count", len(after))
+
+	return output, skippedTransactions, nil
 }
 
 func (t *TransactionsByNonce) GetList() []common.Hash {

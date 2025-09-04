@@ -20,6 +20,8 @@ import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"math"
@@ -124,9 +126,6 @@ var (
 	slotsGauge   = metrics.NewRegisteredGauge("txpool/slots", nil)
 
 	reheapTimer = metrics.NewRegisteredTimer("txpool/reheap", nil)
-
-	txnStartAllowedTime   = int64(1713052800) //April 14th, 2024
-	conversionTxnLastTime = int64(1744675199) //April 14th, 2025, 11:59:59 PM UTC
 )
 
 // TxStatus is the current status of a transaction as seen by the pool.
@@ -564,7 +563,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return InvalidTx
 	}
 
-	if time.Now().UTC().Unix() < txnStartAllowedTime {
+	if time.Now().UTC().Unix() < defaults.DefaultConfig.TxnStartAllowedTime {
 		if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) || tx.To().IsEqualTo(staking.STAKING_CONTRACT_ADDRESS) {
 			log.Debug("txn in allowed date range", "txn", tx.Hash())
 		} else {
@@ -573,9 +572,21 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		}
 	}
 
-	if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) && time.Now().UTC().Unix() > conversionTxnLastTime {
+	if tx.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) && time.Now().UTC().Unix() > defaults.DefaultConfig.ConversionTxnLastTime {
 		log.Debug("conversion txn is not in allowed date range, dropping it", "txn", tx.Hash())
 		return errors.New("conversion txn not in allowed time range")
+	}
+
+	//Check breakglass compatibility
+	blockNumber := pool.chain.CurrentBlock().NumberU64()
+	_, _, s := tx.RawSignatureValues()
+	compatible, err := cryptobase.DynamicSigVerifier.IsSignatureTypeAllowed(blockNumber, s.Bytes())
+	if err != nil {
+		log.Debug("validateTx IsSignatureTypeAllowed", "error", err, "tx", tx.Hash().Hex(), "currentBlockNumber", blockNumber)
+		return err
+	} else if compatible == false {
+		log.Warn("validateTx compatible false", "error", err, "currentBlockNumber", blockNumber)
+		return errors.New("tx signature type is not allowed")
 	}
 
 	// Reject transactions over defined size to prevent DOS attacks

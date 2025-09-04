@@ -3,6 +3,7 @@ package proofofstake
 import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"math/big"
 	"strconv"
 	"testing"
@@ -14,12 +15,18 @@ func canValidateTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint6
 		NilBlockCount: big.NewInt(nilBlockCount),
 	}
 
-	result, _ := canValidate(valDetails, currentBlock)
+	result, nextValidationBlock := canValidate(valDetails, currentBlock)
+	fmt.Println("lastNilBlock", lastNilBlock, "nilBlockCount", nilBlockCount, "currentBlock", currentBlock, "nextValidationBlock", nextValidationBlock, "blocks remaining", nextValidationBlock-currentBlock)
 	if result != expected {
 		return false
 	}
-
 	return true
+}
+
+func TestPacketHandler_canValidate_single(t *testing.T) {
+	if canValidateTest(int64(2543878), 37, uint64(2548263), true) == false {
+		t.Fatalf("failed4")
+	}
 }
 
 func TestPacketHandler_canValidate(t *testing.T) {
@@ -29,22 +36,103 @@ func TestPacketHandler_canValidate(t *testing.T) {
 	if canValidateTest(0, 10, 100, true) == false {
 		t.Fatalf("failed2")
 	}
-	if canValidateTest(int64(OfflineValidatorDeferStartBlock+1000), 127, uint64(OfflineValidatorDeferStartBlock+100), true) == false {
+	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1), 32, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+32+1), true) == false {
 		t.Fatalf("failed3")
 	}
-	if canValidateTest(int64(OfflineValidatorDeferStartBlock+1000), 128, uint64(OfflineValidatorDeferStartBlock+100), false) == false {
+	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1), 127, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+127+1), true) == false {
+		t.Fatalf("failed3")
+	}
+	if canValidateTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+1), 128, uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock+128+1), false) == false {
 		t.Fatalf("failed4")
 	}
 }
 
-func TestPropose(t *testing.T) {
+func testOfflineValidatorDepositAfterPenalty(nilBlockCount int64, currentBlock uint64, depositValue *big.Int, expectedDepositValue *big.Int) bool {
 	valDetails := &ValidatorDetailsV2{
-		LastNiLBlock:  big.NewInt(2131746),
-		NilBlockCount: big.NewInt(32),
+		NilBlockCount: big.NewInt(nilBlockCount),
 	}
+	result := getOfflineValidatorDepositAfterPenalty(valDetails, currentBlock, depositValue)
+	fmt.Println("depositValue", depositValue, "result", result, "expectedDepositValue", expectedDepositValue)
+	if result.Cmp(expectedDepositValue) == 0 {
+		return true
+	}
+	return false
+}
 
-	a, b := canPropose(valDetails, 112)
-	fmt.Println(a, b)
+func TestConsensusHandler_offlineValidatorDepositAfterPenalty(t *testing.T) {
+	if (testOfflineValidatorDepositAfterPenalty(0, 1, big.NewInt(100000000000), big.NewInt(100000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(10000, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock-1, big.NewInt(100000000000), big.NewInt(100000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(0, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(100000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(1, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(100000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(2, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(100000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(3, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(94000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(12, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(76000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(32, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(36000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(49, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(2000000000))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(49, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000001), big.NewInt(2000000001))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(49, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000002), big.NewInt(2000000001))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(50, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(0))) == false {
+		t.Fatalf("failed")
+	}
+	if (testOfflineValidatorDepositAfterPenalty(10000, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, big.NewInt(100000000000), big.NewInt(0))) == false {
+		t.Fatalf("failed")
+	}
+}
+
+func TestProposeValidate(t *testing.T) {
+	lastNiLBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock)
+	lastNiLBlockStart := lastNiLBlock
+	totalSteps := 128
+	step := 1
+	nilBlockCount := int64(0)
+	currentBlock := uint64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock) + 1
+	validatorCount := 128
+	for {
+		valDetails := &ValidatorDetailsV2{
+			LastNiLBlock:  big.NewInt(lastNiLBlock),
+			NilBlockCount: big.NewInt(nilBlockCount),
+		}
+
+		canP, nextProposalBlock := canPropose(valDetails, currentBlock)
+		canV, nextValidationBlock := canValidate(valDetails, currentBlock)
+		blocksSinceStart := currentBlock - uint64(lastNiLBlockStart)
+		blocksPerDayExample := uint64(4000)
+		days := blocksSinceStart / blocksPerDayExample
+		newDepositValue := getOfflineValidatorDepositAfterPenalty(valDetails, currentBlock, big.NewInt(100000000000))
+
+		fmt.Println("currentBlock", currentBlock, "NilBlockCount", valDetails.NilBlockCount, "canPropose", canP, "canValidate", canV,
+			"lastNiLBlock", lastNiLBlock, "nextProposalBlock", nextProposalBlock, "nextValidationBlock", nextValidationBlock,
+			"diff", nextProposalBlock-valDetails.LastNiLBlock.Uint64(), "blocksSinceStart", blocksSinceStart, "days", days, "newDepositValue", newDepositValue)
+		lastNiLBlock = int64(currentBlock)
+		nilBlockCount = nilBlockCount + 1
+		if step >= totalSteps {
+			break
+		}
+		step = step + 1
+		currentBlock = nextProposalBlock + uint64(validatorCount)
+	}
 }
 
 func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64, expected bool) bool {
@@ -53,12 +141,40 @@ func canProposeTest(lastNilBlock int64, nilBlockCount int64, currentBlock uint64
 		NilBlockCount: big.NewInt(nilBlockCount),
 	}
 
-	result, _ := canPropose(valDetails, currentBlock)
+	result, nextProposalBlock := canPropose(valDetails, currentBlock)
+	fmt.Println("currentBlock", currentBlock, "NilBlockCount", valDetails.NilBlockCount, "canPropose", result,
+		"lastNiLBlock", valDetails.LastNiLBlock, "nextProposalBlock", nextProposalBlock)
 	if result != expected {
 		return false
 	}
 
 	return true
+}
+
+func TestCanPropose_v4(t *testing.T) {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 0, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+1, true) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 1, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+1, true) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 2, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+1, false) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 2, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+defaults.DefaultConfig.PosConfig.MinOfflineProposerBlockDelay+1, false) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 2, 3003632, true) == false {
+		t.Fatalf("failed")
+	}
+
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 32, 3069166, true) == false {
+		t.Fatalf("failed")
+	}
 }
 
 func TestPacketHandler_canPropose(t *testing.T) {
@@ -88,35 +204,36 @@ func TestPacketHandler_canPropose(t *testing.T) {
 			t.Fatalf("failed")
 		}
 
-		if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER), BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, false) == false {
+		if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER), defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, false) == false {
 			t.Fatalf("failed")
 		}
 
-		if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER),
-			uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+50), true) == false {
+		if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+50), int64(i*BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER),
+			uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+50), true) == false {
 			t.Fatalf("failed")
 		}
 	}
 
-	if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK), 1024,
-		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2-1), false) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK), 1024,
+		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2-1), false) == false {
 		t.Fatalf("failed")
 	}
 
-	if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 1024,
-		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+1), true) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 1024,
+		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2+1), true) == false {
 		t.Fatalf("failed")
 	}
 
-	if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 28,
-		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), false) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 28,
+		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), false) == false {
 		t.Fatalf("failed")
 	}
 
-	if canProposeTest(int64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 27,
-		uint64(BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), true) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+1), 27,
+		uint64(defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK+BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2), true) == false {
 		t.Fatalf("failed")
 	}
+
 }
 
 func testGetBlockProposerV2(validatorMap *map[common.Address]*ValidatorDetailsV2, expected common.Address, blockNumber uint64) bool {
@@ -257,7 +374,7 @@ func TestPacketHandler_getBlockProposerV3(t *testing.T) {
 }
 
 func TestPacketHandler_canPropose_v3_positive(t *testing.T) {
-	lastNilBlock := int64(OfflineValidatorDeferStartBlock + 1000)
+	lastNilBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000)
 	currentBlock := uint64(2083437)
 	if canProposeTest(lastNilBlock, 17, currentBlock, true) == false {
 		t.Fatalf("failed")
@@ -266,7 +383,7 @@ func TestPacketHandler_canPropose_v3_positive(t *testing.T) {
 }
 
 func TestPacketHandler_canPropose_v3_positive_max_block_delay_equal(t *testing.T) {
-	lastNilBlock := int64(OfflineValidatorDeferStartBlock + 1000)
+	lastNilBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000)
 	currentBlock := uint64(2148717)
 	if canProposeTest(lastNilBlock, 32, currentBlock, true) == false {
 		t.Fatalf("failed")
@@ -275,7 +392,7 @@ func TestPacketHandler_canPropose_v3_positive_max_block_delay_equal(t *testing.T
 }
 
 func TestPacketHandler_canPropose_v3_positive_max_block_delay_greater(t *testing.T) {
-	lastNilBlock := int64(OfflineValidatorDeferStartBlock + 1000)
+	lastNilBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000)
 	currentBlock := uint64(2148717)
 	if canProposeTest(lastNilBlock, 33, currentBlock, true) == false {
 		t.Fatalf("failed")
@@ -284,7 +401,7 @@ func TestPacketHandler_canPropose_v3_positive_max_block_delay_greater(t *testing
 }
 
 func TestPacketHandler_canPropose_v3_negative_max_block_delay_greater(t *testing.T) {
-	lastNilBlock := int64(OfflineValidatorDeferStartBlock + 1000)
+	lastNilBlock := int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000)
 	currentBlock := uint64(2148717 - 1)
 	if canProposeTest(lastNilBlock, 33, currentBlock, false) == false {
 		t.Fatalf("failed")

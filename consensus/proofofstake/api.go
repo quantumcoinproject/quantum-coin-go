@@ -27,6 +27,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -110,7 +111,7 @@ func (api *API) GetStakingDetailsByValidatorAddress(validator common.Address, bl
 		return nil, errUnknownBlock
 	}
 
-	if blockNumber < STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		return api.proofofstake.GetStakingDetailsByValidatorAddress(validator, header.Hash())
 	} else {
 		validatorDetailsV2, err := api.proofofstake.GetStakingDetailsByValidatorAddressV2(validator, header.Hash())
@@ -171,7 +172,7 @@ func (api *API) GetStakingDetailsByDepositorAddress(depositor common.Address, bl
 		return nil, err
 	}
 
-	if blockNumber < STAKING_CONTRACT_V2_CUTOFF_BLOCK {
+	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		return api.proofofstake.GetStakingDetailsByValidatorAddress(validator, header.Hash())
 	} else {
 		validatorDetailsV2, err := api.proofofstake.GetStakingDetailsByValidatorAddressV2(validator, header.Hash())
@@ -265,6 +266,7 @@ type ConsensusData struct {
 	AdditionalData           *BlockAdditionalConsensusData `json:"additionalData"     gencodec:"required"`
 	ExtendedConsensusPackets []*ExtendedConsensusPacket    `json:"extendedConsensusPackets"     gencodec:"required"`
 	BlockRewardsInfo         *BlockRewardsInfo             `json:"blockRewardsInfo"     gencodec:"required"`
+	BlockExtraData           *BlockExtraData               `json:"blockExtraData"     gencodec:"required"`
 }
 
 type ProposalExtendedDetails struct {
@@ -319,7 +321,7 @@ func (api *API) GetBlockProposalDetails(blockNumberHex string) (*ProposalExtende
 			}
 
 			var proposalHash common.Hash
-			if blockNumber >= PROPOSAL_TIME_HASH_START_BLOCK {
+			if blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
 				proposalHash = GetCombinedTxnHashWithTime(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns, proposalDetails.BlockTime)
 			} else {
 				proposalHash = GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
@@ -343,7 +345,7 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 
 	header := block.Header()
 
-	err := rlp.DecodeBytes(header.ConsensusData, &blockConsensusData)
+	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
 		log.Error("pos ParseRewardsInfo", "error", err, "len", len(header.ConsensusData))
 		return nil, err
@@ -375,14 +377,14 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 		blockRewardsInfo.BlockProposerRewards = hexutil.EncodeUint64(0)
 
 		totalSlashings := big.NewInt(0)
-		if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= slashStartBlockNumber {
+		if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= defaults.DefaultConfig.PosConfig.SlashStartBlockNumber {
 			blockRewardsInfo.SlashedValidators = make([]*Slashing, len(blockConsensusData.SlashedBlockProposers))
 
 			var slashAmount *big.Int
-			if header.Number.Uint64() >= SlashV2StartBlock {
-				slashAmount = SLASH_AMOUNT
+			if header.Number.Uint64() >= defaults.DefaultConfig.PosConfig.SlashV2StartBlock {
+				slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT
 			} else {
-				slashAmount = SLASH_AMOUNT_V2
+				slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT_V2
 			}
 
 			for i, val := range blockConsensusData.SlashedBlockProposers {
@@ -419,7 +421,7 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 		return nil, errUnknownBlock
 	}
 
-	err = rlp.DecodeBytes(header.ConsensusData, &blockConsensusData)
+	err = rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +445,7 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 	consensusData.ExtendedConsensusPackets = make([]*ExtendedConsensusPacket, 0)
 	for i := 0; i < len(blockAdditionalConsensusData.ConsensusPackets); i++ {
 		packet := blockAdditionalConsensusData.ConsensusPackets[i]
-		round, signer, err := parsePacket(&packet)
+		round, signer, err := parsePacket(&packet, blockNumber)
 		if err != nil {
 			consensusData.ExtendedConsensusPackets = append(consensusData.ExtendedConsensusPackets, &ExtendedConsensusPacket{})
 			continue
@@ -473,6 +475,11 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 	}
 
 	consensusData.BlockRewardsInfo, err = ParseRewardsInfo(block, receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	consensusData.BlockExtraData, _, err = DecodeBlockExtraData(block.Extra(), blockNumber)
 	if err != nil {
 		return nil, err
 	}

@@ -36,19 +36,19 @@ func getDailyStakingReportKey(date string) (key string, blob []byte) {
 	return key, blob
 }
 
-func (c *CacheManager) getDailyStakingReport(reportTime time.Time) (*StakingReport, error) {
+func (c *CacheManager) GetDailyStakingReport(reportTime time.Time) (*StakingReport, error) {
 	key, keyBlob := getDailyStakingReportKey(reportTime.Format("2006-02-01"))
 	log.Debug("getDailyStakingReportKey", "key", key, "reportTime", reportTime)
 
 	itemBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {
-		log.Error("getDailyStakingReport cacheDb.Get", "error", err, "reportTime", reportTime)
+		log.Error("GetDailyStakingReport cacheDb.Get", "error", err, "reportTime", reportTime)
 		return nil, err
 	}
 	var item StakingReport
 	err = json.Unmarshal(itemBlob, &item)
 	if err != nil {
-		log.Error("getDailyStakingReport", "error", err, "reportTime", reportTime)
+		log.Error("GetDailyStakingReport", "error", err, "reportTime", reportTime)
 		return nil, err
 	}
 

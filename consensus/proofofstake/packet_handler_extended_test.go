@@ -3,6 +3,7 @@ package proofofstake
 import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"os"
 	"testing"
@@ -13,7 +14,7 @@ func TestPacketHandler_min_basic_time_hash(t *testing.T) {
 	if os.Getenv("EXTENDED_TESTS") == "" {
 		t.Skip("skipped")
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = PROPOSAL_TIME_HASH_START_BLOCK
+	TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK
 	numKeys := 4
 	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
 

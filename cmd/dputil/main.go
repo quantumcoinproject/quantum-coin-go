@@ -13,14 +13,17 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/crosssign"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"net/http"
 	"os"
 	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -155,17 +158,26 @@ func main() {
 		printHelp()
 		return
 	}
+	signMode := os.Getenv("SIGN_MODE")
+	if signMode == "2" {
+		defaults.SetCryptoSigningMode(2)
+	} else if signMode == "1" {
+		defaults.SetCryptoSigningMode(1)
+	} else if len(signMode) > 0 {
+		fmt.Println("Unknown value for environment variable SIGN_MODE")
+		return
+	}
+
 	rawURL = os.Getenv("DP_RAW_URL")
-	/*
-		if len(rawURL) == 0 {
-			os := runtime.GOOS
-			if os == "windows" {
-				rawURL = "//./pipe/geth.ipc"
-			} else {
-				rawURL = "~/.ethereum/geth.ipc"
-			}
+	if len(rawURL) == 0 {
+		runtimeOS := strings.ToLower(runtime.GOOS)
+		if runtimeOS == "windows" {
+			rawURL = "\\\\.\\pipe\\geth.ipc"
+		} else {
+			rawURL = "data/geth.ipc"
 		}
-	*/
+	}
+
 	if os.Args[1] == "balance" {
 		balance()
 	} else if os.Args[1] == "transfercoins" {
@@ -313,6 +325,11 @@ func main() {
 		}
 	} else if os.Args[1] == "sethead" {
 		err := SetHead()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "listcoinconversions" {
+		err := ListCoinConversions()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -504,6 +521,7 @@ func sendTxn() {
 	from := os.Args[2]
 	to := os.Args[3]
 	quantity := os.Args[4]
+	shouldConfirm := os.Getenv("SHOULD_CONFIRM")
 
 	if common.IsHexAddress(from) == false {
 		fmt.Println("Invalid address", from)
@@ -526,14 +544,16 @@ func sendTxn() {
 
 	fmt.Println("Send", "from", from, "to", to, "quantity", quantity, "coins", coins)
 
-	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to send %v coins from address %s to address %s?", coins, from, to))
-	if err != nil {
-		log.Error("error", err)
-		return
-	}
-	if ethConfirm != true {
-		log.Error("confirmation not made")
-		return
+	if shouldConfirm != "no" {
+		ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to send %v coins from address %s to address %s?", coins, from, to))
+		if err != nil {
+			log.Error("error", err)
+			return
+		}
+		if ethConfirm != true {
+			log.Error("confirmation not made")
+			return
+		}
 	}
 	fmt.Println()
 
@@ -1951,6 +1971,58 @@ func SubmitTokenBurnProof() error {
 	}
 
 	return submitBurnProof(contractAddr, string(fileBytes), fromKey)
+}
+
+func ListCoinConversions() error {
+	if len(os.Args) < 3 {
+		printHelp()
+		return errors.New("incorrect usage. enter the output folder")
+	}
+
+	outputFolder := os.Args[2]
+	_, err := os.Stat(outputFolder)
+	if err != nil {
+		if os.IsNotExist(err) {
+			fmt.Println("folder doesn't exist")
+		} else {
+			fmt.Println(err)
+		}
+		return err
+	}
+
+	summary, err := listConversionDetails()
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	outputR := "QuantumAddress,EthAddress,IsConverted,Coins, Wei\n"
+	for _, r := range summary.ConversionList {
+		outputR = outputR + fmt.Sprintf("%s,%s,%v,%v,%v\n", r.QuantumAddress, r.EthAddress, r.IsConverted, params.WeiToEther(r.Coins), r.Coins)
+	}
+	err = os.WriteFile(path.Join(outputFolder, "coin-conversions.csv"), []byte(outputR), 0644)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	totalConvertedCoins, err := hexutil.DecodeBig(summary.ConvertedCoins)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	totalCoins, err := hexutil.DecodeBig(summary.TotalCoins)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	fmt.Println("Coin Conversion Summary", "Total", summary.Total, "TotalConverted", summary.TotalConverted,
+		"TotalNotConverted", summary.TotalNotConverted, "ConvertedCoins", params.WeiToEther(totalConvertedCoins), "TotalCoins", params.WeiToEther(totalCoins))
+	fmt.Println("finished writing", "output folder", outputFolder)
+	fmt.Println("!!!!!!!!!!!!!!!!!!!Warning: none of the burn proofs or conversion are verified by this tool!!!!!!!!!!!!!!!!!!!")
+
+	return nil
 }
 
 func ListTokenConversions() error {

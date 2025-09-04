@@ -26,16 +26,16 @@ func getBlockTransactionPageKey(blockNumber uint64, pageCount uint64) []byte {
 }
 
 func (c *CacheManager) processBlockTransactions(block *Block, txnList *[]*TransactionDetails, batch *ethdb.Batch) error {
-	log.Debug("CacheManager address", "blockNumber", block.Number)
+	log.Debug("CacheManager address", "blockNumber", block.BlockNumber)
 	txnBatch := *batch
 	var blockTransactionList BlockTransactionList
 
 	blockTransactionList.Transactions = make([]TransactionCompact, 0)
-	blockTransactionList.BlockNumber = block.Number
-	log.Debug("CacheManager processBlockTransactions", "BlockNumber", block.Number, "txnCount", len(*txnList))
+	blockTransactionList.BlockNumber = uint64(block.BlockNumber)
+	log.Debug("CacheManager processBlockTransactions", "BlockNumber", block.BlockNumber, "txnCount", len(*txnList))
 
 	for i, txn := range *txnList {
-		log.Trace("CacheManager processBlockTransactions", "BlockNumber", block.Number, "txn", txn.Hash)
+		log.Trace("CacheManager processBlockTransactions", "BlockNumber", block.BlockNumber, "txn", txn.Hash)
 		blockTxn := transactionCompactFromTransaction(txn)
 		blockTransactionList.Transactions = append([]TransactionCompact{blockTxn}, blockTransactionList.Transactions...) //prepend for backward compat
 
@@ -48,7 +48,7 @@ func (c *CacheManager) processBlockTransactions(block *Block, txnList *[]*Transa
 
 			runningTxnCount := uint64(i) + 1
 			txnPageCount := getPageCount(runningTxnCount)
-			txnPageKey := getBlockTransactionPageKey(block.Number, txnPageCount)
+			txnPageKey := getBlockTransactionPageKey(uint64(block.BlockNumber), txnPageCount)
 
 			err = txnBatch.Put(txnPageKey, transactionListBlob)
 			if err != nil {
@@ -60,17 +60,17 @@ func (c *CacheManager) processBlockTransactions(block *Block, txnList *[]*Transa
 		}
 	}
 
-	log.Trace("CacheManager processBlockTransactions done", "BlockNumber", block.Number, "txnCount", len(*txnList))
+	log.Trace("CacheManager processBlockTransactions done", "BlockNumber", block.BlockNumber, "txnCount", len(*txnList))
 
 	return nil
 }
 
 func (c *CacheManager) getBlockTxnCount(blockNumber uint64) (uint64, error) {
-	block, err := c.getBlockFromDb(blockNumber)
+	block, err := c.GetBlockDetails(blockNumber)
 	if err != nil {
 		return 0, err
 	}
-	return block.Number, nil
+	return uint64(block.BlockNumber), nil
 }
 
 func (c *CacheManager) ListTransactionsByBlock(blockNumber uint64, pageNumberInput int64) (ListBlockTransactionsResponse, error) {

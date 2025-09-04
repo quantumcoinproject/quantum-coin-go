@@ -9,6 +9,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/handler"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -120,6 +121,8 @@ var OFFLINE_VALIDATOR_DEFER_THRESHOLD = uint64(128)
 var OFFLINE_VALIDATOR_DEFER_COUNT = uint64(16384)
 
 var MIN_VALIDATORS int = 3
+var MAX_DEPOSIT_PERCENTAGE = int64(10)
+var MIN_VALIDATORS_NORMALIZATION = 12
 
 type BlockRoundState byte
 type VoteType byte
@@ -183,7 +186,7 @@ const (
 var (
 	//Use genesis block as context, so that cryptographic state-proof using full-signature-mode can be verified using the genesis file itself (if signatures from proposal blocks of genesis validators are available as well).
 	//Eventually when 70% (staked coins) of genesis proposers have full-signed proposal blocks that also contain genesis hash as part of the message, it means that the first state-proof is achieved for the chain.
-	FULL_SIGN_CONTEXT = append(common.Hex2Bytes(GENESIS_BLOCK_HASH), []byte{crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID}...)
+	FULL_SIGN_CONTEXT = append(common.Hex2Bytes(GENESIS_BLOCK_HASH), []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}...)
 )
 
 var (
@@ -399,11 +402,11 @@ func (cph *ConsensusHandler) isValidator(parentHash common.Hash) (bool, error) {
 
 func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[common.Address]*big.Int, round byte,
 	validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, blockNumber uint64, contextHash common.Hash) (common.Address, error) {
-	if blockNumber >= CONTEXT_BASED_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
 		return getBlockProposerV2(contextHash, validatorDetailsMap, round, blockNumber) //passing contextHash instead of parentHash
 	}
 
-	if blockNumber >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		return getBlockProposerV2(parentHash, validatorDetailsMap, round, blockNumber)
 	}
 	var proposer common.Address
@@ -432,6 +435,22 @@ func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[c
 	return proposer, nil
 }
 
+func getOfflineValidatorDepositAfterPenalty(valDetails *ValidatorDetailsV2, currentBlockNumber uint64, depositValue *big.Int) *big.Int {
+	if currentBlockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock || valDetails.NilBlockCount.Uint64() <= 2 {
+		return depositValue
+	}
+	penaltyPercent := int64(valDetails.NilBlockCount.Uint64() * 2)
+	if penaltyPercent >= 100 {
+		return big.NewInt(0)
+	}
+
+	penalty := common.SafeRelativePercentageBigInt(big.NewInt(penaltyPercent), depositValue)
+	newDepositValue := common.SafeSubBigInt(depositValue, penalty)
+	log.Debug("getOfflineValidatorDepositAfterPenalty", "val", valDetails.Validator, "penalty", penalty, "penaltyPercent", penaltyPercent,
+		"NilBlockCount", valDetails.NilBlockCount.Uint64(), "newDepositValue", newDepositValue)
+	return newDepositValue
+}
+
 func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
 	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
 		return true, currentBlockNumber
@@ -455,9 +474,9 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool
 	}
 
 	var maxBlockDelay uint64
-	if currentBlockNumber >= OfflineValidatorDeferStartBlock {
+	if currentBlockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock {
 		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V3
-	} else if currentBlockNumber >= BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
+	} else if currentBlockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
 		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
 	} else {
 		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
@@ -470,6 +489,10 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool
 	blockDelay := uint64(math.Pow(2.0, slotsMissed))
 	if blockDelay > maxBlockDelay {
 		blockDelay = maxBlockDelay
+	}
+
+	if valDetails.NilBlockCount.Uint64() > 1 && currentBlockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+		blockDelay = blockDelay + defaults.DefaultConfig.PosConfig.MinOfflineProposerBlockDelay
 	}
 
 	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
@@ -522,166 +545,6 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	return proposer, nil
 }
 
-func filterValidators(consensusContext common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) (filteredValidators map[common.Address]bool,
-	filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
-
-	validatorsDepositMap := *valDepMap
-
-	totalDepositValue := big.NewInt(0)
-	valCount := 0
-	for val, depositValue := range validatorsDepositMap {
-		if depositValue.Cmp(MIN_VALIDATOR_DEPOSIT) == -1 {
-			log.Trace("Skipping validator with low balance", "val", val, "depositValue", depositValue)
-			delete(validatorsDepositMap, val)
-			continue
-		}
-		if blockNumber >= OfflineValidatorDeferStartBlock {
-			valDetailsMap := *validatorDetailsMap
-			canVal, _ := canValidate(valDetailsMap[val], blockNumber)
-			if canVal == false {
-				log.Trace("Skipping offline validator", "val", val, "depositValue", depositValue)
-				delete(validatorsDepositMap, val)
-				continue
-			}
-		}
-		totalDepositValue = common.SafeAddBigInt(totalDepositValue, depositValue)
-		valCount = valCount + 1
-	}
-
-	if valCount < MIN_VALIDATORS {
-		log.Warn("Validator count", "count", valCount, "MIN_VALIDATORS", MIN_VALIDATORS)
-		return nil, nil, nil, errors.New("number of validators less than minimum")
-	}
-
-	if totalDepositValue.Cmp(MIN_BLOCK_DEPOSIT) == -1 {
-		return nil, nil, nil, errors.New("min block deposit not met")
-	}
-
-	filteredValidators = make(map[common.Address]bool)
-
-	if len(validatorsDepositMap) <= MAX_VALIDATORS {
-		for validator := range validatorsDepositMap {
-			filteredValidators[validator] = true
-		}
-	} else {
-		filteredValidatorsRet, err := getMaxFilteredValidators(consensusContext, totalDepositValue, valDepMap)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		filteredValidators = *filteredValidatorsRet
-	}
-
-	filteredDepositValue = big.NewInt(0)
-	for val, _ := range filteredValidators {
-		depositValue := validatorsDepositMap[val]
-		filteredDepositValue = common.SafeAddBigInt(filteredDepositValue, depositValue)
-	}
-
-	if filteredDepositValue.Cmp(MIN_BLOCK_DEPOSIT) == -1 {
-		return nil, nil, nil, errors.New("min block deposit not met for filteredDepositValue")
-	}
-
-	var minPercentage *big.Int
-	if blockNumber >= SixtySevenVoteStartBlock {
-		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V3
-	} else if blockNumber >= SixtyVoteStartBlock {
-		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE_V2
-	} else {
-		minPercentage = MIN_BLOCK_TRANSACTION_WEIGHTED_PROPOSALS_PERCENTAGE
-	}
-
-	blockMinWeightedProposalsRequired = common.SafeRelativePercentageBigInt(filteredDepositValue, minPercentage)
-
-	return filteredValidators, filteredDepositValue, blockMinWeightedProposalsRequired, nil
-}
-
-/*
-For security of the network, the goal is to select validators in a way that at-least 51% of staked coins are selected,
-while at the same time allowing even validators will lesser amount of staked coins (relative to others), to get selected for validation.
-It might not always be possible to select validators in a way that 51% of staked coins are selected, but the algorithm tries to establish a balance.
-*/
-func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *big.Int, valDepMap *map[common.Address]*big.Int) (*map[common.Address]bool, error) {
-	validatorsDepositMap := *valDepMap
-
-	depositValueSoFar := big.NewInt(0)
-	blockMinWeightedStake := common.SafeRelativePercentageBigInt(totalDepositValue, MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE)
-	log.Debug("getMaxFilteredValidators", "blockMinWeightedStake", blockMinWeightedStake, "totalDepositValue", totalDepositValue)
-	filteredValidators := make(map[common.Address]bool)
-
-	validatorList := make([]common.Address, len(validatorsDepositMap))
-	ctr := 0
-	for validator, _ := range validatorsDepositMap {
-		validatorList[ctr] = validator
-		ctr = ctr + 1
-	}
-
-	//First pass, fill weighted at-least blockMinWeightedStake percentage of coins
-	sort.SliceStable(validatorList, func(i, j int) bool { //SliceStable needed since values can be equal
-		valDepI := validatorsDepositMap[validatorList[i]]
-		valDepJ := validatorsDepositMap[validatorList[j]]
-		cmpResult := valDepI.Cmp(valDepJ)
-		if cmpResult == 0 { //equal deposit, sort by consensus context + validator address combo
-			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
-			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
-			return bytes.Compare(vi, vj) == -1
-		}
-		return cmpResult > 0
-	})
-	for _, validator := range validatorList {
-		filteredValidators[validator] = true
-		depositValue := validatorsDepositMap[validator]
-		depositValueSoFar = common.SafeAddBigInt(depositValueSoFar, depositValue)
-		if len(filteredValidators) == MAX_VALIDATORS_FIRST_PASS_VALIDATOR_SELECTION_CUTOFF || depositValueSoFar.Cmp(blockMinWeightedStake) > 0 {
-			log.Trace("getMaxFilteredValidators first pass", "len(filteredValidators)", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
-			break
-		}
-	}
-
-	log.Trace("validator count after first pass", "filteredValidators", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
-
-	//Second pass, fill based no weighted sort order, but randomness based on consensus context. This ensures those with higher stake have a greater probability of being selected for validation.
-	for _, validator := range validatorList {
-		_, ok := filteredValidators[validator]
-		if ok == true {
-			continue
-		}
-		//Note, we do Keccak256Hash to reduce risk from generation of validator address that are more likely to be lower than just comparing with consensus-context
-		leftHash := crypto.Keccak256Hash(consensusContext.Bytes(), validator.Bytes()).Bytes()
-		rightHash := crypto.Keccak256Hash(validator.Bytes(), consensusContext.Bytes()).Bytes()
-		if bytes.Compare(leftHash, rightHash) > 0 {
-			filteredValidators[validator] = true
-			if len(filteredValidators) == MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
-				break
-			}
-		} else {
-			log.Trace("validator skip second pass", "validator", validator)
-		}
-	}
-
-	log.Trace("validator count after second pass", "filteredValidators", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
-
-	//Third pass, fill by consensus context sort order, if the buffer is not full even after second pass. This is to ensure fairness even for validators with lower number of staked coins
-	//Sort based on consensus context
-	sort.Slice(validatorList, func(i, j int) bool {
-		vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
-		vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
-		return bytes.Compare(vi, vj) == -1
-	})
-
-	for _, validator := range validatorList {
-		_, ok := filteredValidators[validator]
-		if ok == true {
-			continue
-		}
-		filteredValidators[validator] = true
-		if len(filteredValidators) == MAX_VALIDATORS {
-			break
-		}
-	}
-
-	return &filteredValidators, nil
-}
-
 func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Hash, blockNumber uint64) error {
 	_, ok := cph.blockStateDetailsMap[parentHash]
 
@@ -710,7 +573,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	preFilterValidatorCount := len(validators)
 
 	//Consensus Context
-	if blockNumber >= CONTEXT_BASED_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
 		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
 		if err != nil {
 			return err
@@ -725,7 +588,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	}
 
 	var validatorDetailsMap map[common.Address]*ValidatorDetailsV2
-	if blockNumber >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		validatorDetailsMap, err = cph.listValidatorsFn(parentHash)
 		if err != nil {
 			log.Error("listValidatorsFn", "err", err)
@@ -740,7 +603,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		return err
 	}
 
-	if blockNumber >= BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		for valAddr, valDetails := range validatorDetailsMap {
 			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidators
 				delete(validatorDetailsMap, valAddr)
@@ -857,7 +720,7 @@ func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, 
 	}
 
 	cph.LogIncomingPacketStats()
-	err := cph.processPacket(packet)
+	err := cph.processPacket(packet, cph.latestBlockNumber)
 	if errors.Is(err, OutOfOrderPackerErr) {
 		pkt := eth.NewConsensusPacket(packet)
 		packetMap, ok := cph.outOfOrderPacketsMap[packet.ParentHash]
@@ -897,13 +760,18 @@ func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, 
 }
 
 func shouldSignFull(blockNumber uint64) bool {
-	if blockNumber >= FULL_SIGN_PROPOSAL_CUTOFF_BLOCK && blockNumber%FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS == 0 {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK && blockNumber%defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS == 0 {
 		return true
+	}
+	if defaults.IsCryptoBreakglassMode(blockNumber) {
+		{
+			return true
+		}
 	}
 	return false
 }
 
-func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
+func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNumber uint64) error {
 	if packet == nil || packet.ConsensusData == nil || len(packet.ConsensusData) < 1 || packet.Signature == nil || len(packet.Signature) < hybrideds.CRYPTO_SIGNATURE_BYTES {
 		log.Debug("processPacket nil")
 		return errors.New("nil packet")
@@ -923,30 +791,36 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
 	var pubKey *signaturealgorithm.PublicKey
 	var err error
 
+	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != cryptobase.SigAlgHybridEdsFull.SignatureWithPublicKeyLength() {
+		return errors.New("invalid breakglass signature length")
+	}
+
+	sigAlg := cryptobase.GetSigAlg(blockNumber)
+
 	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength() { //for verify, it is ok not to check the blockNumber for full
-		pubKey, err = cryptobase.SigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
+		pubKey, err = sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
 		if err != nil {
 			log.Debug("processPacket invalid 1")
 			return InvalidPacketErr
 		}
 
-		if cryptobase.SigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
+		if sigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
 			return InvalidPacketErr
 		}
 	} else {
-		pubKey, err = cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+		pubKey, err = sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
 			log.Debug("processPacket invalid 2")
 			return InvalidPacketErr
 		}
 
-		if cryptobase.SigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+		if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 			log.Debug("processPacket invalid 3")
 			return InvalidPacketErr
 		}
 	}
 
-	validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+	validator, err := sigAlg.PublicKeyToAddress(pubKey)
 	if err != nil {
 		log.Debug("processPacket invalid 4")
 		return InvalidPacketErr
@@ -961,7 +835,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
 		return cph.handlePrecommitPacket(validator, packet, false)
 	} else if packetType == CONSENSUS_PACKET_TYPE_COMMIT_BLOCK {
 		return cph.handleCommitPacket(validator, packet, false)
-	} else if cph.GetLatestBlockNumber() >= PACKET_PROTOCOL_START_BLOCK && packetType >= CONSENSUS_PACKET_TYPE_CAPABILITY {
+	} else if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK && packetType >= CONSENSUS_PACKET_TYPE_CAPABILITY {
 		return nil
 	}
 
@@ -969,13 +843,13 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket) error {
 	return errors.New("unknown packet type")
 }
 
-func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash) error {
+func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash, blockNumber uint64) error {
 	unprocessedPackets := make([]*OutOfOrderPacket, 0)
 
 	for key, pktList := range cph.outOfOrderPacketsMap {
 		for _, pkt := range pktList {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				err := cph.processPacket(pkt.Packet)
+				err := cph.processPacket(pkt.Packet, blockNumber)
 				if err != nil {
 					unprocessedPackets = append(unprocessedPackets, &OutOfOrderPacket{
 						Packet:       pkt.Packet,
@@ -1324,7 +1198,7 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 	}
 
 	var proposalHash common.Hash
-	if blockStateDetails.blockNumber >= PROPOSAL_TIME_HASH_START_BLOCK {
+	if blockStateDetails.blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
 		proposalHash = GetCombinedTxnHashWithTime(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns, proposalDetails.BlockTime)
 	} else {
 		proposalHash = GetCombinedTxnHash(packet.ParentHash, proposalDetails.Round, proposalDetails.Txns)
@@ -1479,20 +1353,21 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 	return nil
 }
 
-func parsePacket(packet *eth.ConsensusPacket) (byte, common.Address, error) {
+func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.Address, error) {
 	dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
 	digestHash := crypto.Keccak256(dataToVerify)
-	pubKey, err := cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+	sigAlg := cryptobase.GetSigAlg(blockNumber)
+	pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 	if err != nil {
 		log.Trace("invalid 1", "err", err)
 		return 0, ZERO_ADDRESS, err
 	}
-	if cryptobase.SigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+	if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 		log.Trace("invalid 2")
 		return 0, ZERO_ADDRESS, InvalidPacketErr
 	}
 
-	validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+	validator, err := sigAlg.PublicKeyToAddress(pubKey)
 	if err != nil {
 		log.Trace("invalid 3", "err", err)
 		return 0, ZERO_ADDRESS, err
@@ -1553,44 +1428,7 @@ func parsePacket(packet *eth.ConsensusPacket) (byte, common.Address, error) {
 	return 0, ZERO_ADDRESS, InvalidPacketErr
 }
 
-func (cph *ConsensusHandler) findTotalDepositsInGreaterRound(parentHash common.Hash) *big.Int {
-	blockStateDetails := cph.blockStateDetailsMap[parentHash]
-	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
-
-	//Find deposit in greater rounds
-	valMap := make(map[common.Address]bool)
-	for _, pktList := range cph.outOfOrderPacketsMap {
-		for _, pkt := range pktList {
-			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				round, validator, err := parsePacket(pkt.Packet)
-				if err != nil {
-					continue
-				}
-				if round <= blockStateDetails.currentRound {
-					continue
-				}
-				_, ok := blockRoundDetails.validatorPrecommits[validator]
-				if ok { //if precommit from this validator, skip counting it
-					continue
-				}
-				valMap[validator] = true
-			}
-		}
-	}
-
-	totalGreaterRoundDepositCount := big.NewInt(0)
-	for val, depositAmount := range blockStateDetails.filteredValidatorsDepositMap {
-		exists, ok := valMap[val]
-		if ok == false || exists == false {
-			continue
-		}
-		totalGreaterRoundDepositCount = common.SafeAddBigInt(depositAmount, totalGreaterRoundDepositCount)
-	}
-
-	return totalGreaterRoundDepositCount
-}
-
-func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common.Hash) (bool, error) {
+func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common.Hash, blockNumber uint64) (bool, error) {
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
@@ -1599,7 +1437,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 	for _, pktList := range cph.outOfOrderPacketsMap {
 		for _, pkt := range pktList {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				round, validator, err := parsePacket(pkt.Packet)
+				round, validator, err := parsePacket(pkt.Packet, blockNumber)
 				if err != nil {
 					log.Trace("parsePacket", "err", err)
 					continue
@@ -1666,7 +1504,7 @@ func getPacketType(packet *eth.ConsensusPacket) ConsensusPacketType {
 	return packetType
 }
 
-func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Hash) (bool, error) {
+func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Hash, blockNumber uint64) (bool, error) {
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
@@ -1681,7 +1519,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 	for _, pktList := range cph.outOfOrderPacketsMap {
 		for _, pkt := range pktList {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				round, validator, err := parsePacket(pkt.Packet)
+				round, validator, err := parsePacket(pkt.Packet, blockNumber)
 				if err != nil {
 					log.Trace("parsePacket", "err", err)
 					continue
@@ -1995,7 +1833,7 @@ func Elapsed(startTime time.Time) int64 {
 }
 
 func GetProposalTime(blockNumber uint64) uint64 {
-	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= BLOCK_TIME_ORIG_START_BLOCK {
+	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK {
 		blockTime := uint64(time.Now().UTC().Unix())
 		if blockTime%60 != 0 {
 			blockTime = blockTime - (blockTime % 60)
@@ -2008,7 +1846,7 @@ func GetProposalTime(blockNumber uint64) uint64 {
 }
 
 func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64) bool {
-	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= BLOCK_TIME_ORIG_START_BLOCK {
+	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK {
 		if proposedTime == 0 {
 			return false
 		}
@@ -2075,7 +1913,7 @@ func (cph *ConsensusHandler) proposeBlock(parentHash common.Hash, txns []common.
 
 	var dataToSend []byte
 
-	if cph.GetLatestBlockNumber() >= PACKET_PROTOCOL_START_BLOCK {
+	if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 		dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK)}, data...)...)
 	} else {
 		dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK)}, data...)
@@ -2140,7 +1978,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 
 		var dataToSend []byte
 
-		if cph.GetLatestBlockNumber() >= PACKET_PROTOCOL_START_BLOCK {
+		if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 			dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)...)
 		} else {
 			dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)
@@ -2211,7 +2049,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 				}
 				return nil
 			} else {
-				ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash)
+				ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash, blockStateDetails.blockNumber)
 				if err != nil {
 					return err
 				}
@@ -2324,7 +2162,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 
 		var dataToSend []byte
 
-		if cph.GetLatestBlockNumber() >= PACKET_PROTOCOL_START_BLOCK {
+		if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 			dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)...)
 		} else {
 			dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)
@@ -2398,7 +2236,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 			log.Trace("blockVoteType a3", "parentHash", parentHash)
 			return nil
 		} else {
-			ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash)
+			ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash, blockStateDetails.blockNumber)
 			if err != nil {
 				return err
 			}
@@ -2457,7 +2295,7 @@ func (cph *ConsensusHandler) precommitBlock(parentHash common.Hash) error {
 
 	var dataToSend []byte
 
-	if cph.GetLatestBlockNumber() >= PACKET_PROTOCOL_START_BLOCK {
+	if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 		dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_PRECOMMIT_BLOCK)}, data...)...)
 	} else {
 		dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_PRECOMMIT_BLOCK)}, data...)
@@ -2511,7 +2349,7 @@ func (cph *ConsensusHandler) commitBlock(parentHash common.Hash) error {
 
 	var dataToSend []byte
 
-	if cph.GetLatestBlockNumber() >= PACKET_PROTOCOL_START_BLOCK {
+	if cph.GetLatestBlockNumber() >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 		dataToSend = append([]byte{ConsensusNetworkProtocolVersion}, append([]byte{byte(CONSENSUS_PACKET_TYPE_COMMIT_BLOCK)}, data...)...)
 	} else {
 		dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_COMMIT_BLOCK)}, data...)
@@ -2639,6 +2477,10 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	}
 
 	cph.SetLatestBlockNumber(blockNumber)
+	if defaults.IsCryptoBreakglassMode(blockNumber) {
+		log.Trace("IsCryptoBreakglassMode mode is set")
+		defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID))
+	}
 
 	if cph.initialized == false {
 
@@ -2695,7 +2537,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		return err
 	}
 
-	cph.processOutOfOrderPackets(parentHash)
+	cph.processOutOfOrderPackets(parentHash, blockNumber)
 
 	err = errors.New("not ready yet")
 
@@ -2756,7 +2598,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 			cph.ackBlockProposal(parentHash)
 		}
 	} else if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PRECOMMITS {
-		shouldMove, err := cph.shouldMoveToNextRoundPrecommit(parentHash)
+		shouldMove, err := cph.shouldMoveToNextRoundPrecommit(parentHash, blockNumber)
 		if err == nil && shouldMove {
 			return cph.initializeNewBlockRound(NEW_ROUND_REASON_WAIT_PRECOMMIT_TIMEOUT)
 		} else {
@@ -2823,7 +2665,7 @@ func (cph *ConsensusHandler) broadCast(packet *eth.ConsensusPacket) error {
 		return errors.New("packet is nil")
 	}
 
-	if cph.latestBlockNumber >= PACKET_PROTOCOL_START_BLOCK {
+	if cph.latestBlockNumber >= defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK {
 		sendCount := cph.peerHandler.BroadcastLocalPacket(packet)
 		if sendCount > 8 {
 			return nil

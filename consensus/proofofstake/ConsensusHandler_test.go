@@ -9,6 +9,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
@@ -164,15 +165,17 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 	} else {
 		startIndex = 1
 	}
+	sigAlg := cryptobase.GetSigAlg(TEST_CONSENSUS_BLOCK_NUMBER)
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
 	if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) && packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && packet.ParentHash.IsEqualTo(getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER)) {
+		log.Info("getSigner shouldSignFull")
 		pubKey, err := cryptobase.SigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
 		if err != nil {
 			log.Info("a1")
 			return ZERO_ADDRESS, err
 		}
-		if cryptobase.SigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
+		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
 			log.Info("a2")
 			return ZERO_ADDRESS, InvalidPacketErr
 		}
@@ -185,17 +188,18 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 
 		return validator, nil
 	} else {
-		pubKey, err := cryptobase.SigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+		log.Info("getSigner other")
+		pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
 			log.Info("a4", "len", len(packet.Signature), "packetType", packetType, "packet.ParentHash", packet.ParentHash, "getTestParentHash", getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER), "startIndex", startIndex)
 			return ZERO_ADDRESS, err
 		}
-		if cryptobase.SigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+		if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
 			log.Info("a5")
 			return ZERO_ADDRESS, InvalidPacketErr
 		}
 
-		validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+		validator, err := sigAlg.PublicKeyToAddress(pubKey)
 		if err != nil {
 			log.Info("a6")
 			return ZERO_ADDRESS, err
@@ -231,8 +235,11 @@ func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) err
 			}
 			signer, err := getSigner(packet)
 			if err != nil {
-				log.Error("getSigner error", "error", err)
-				panic("unexpected")
+				log.Error("getSigner error", "error", err, "TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+				if defaults.IsCryptoBreakglassMode(TEST_CONSENSUS_BLOCK_NUMBER) == false { //stray packets due to timing mismatch
+					panic("unexpected")
+				}
+				continue
 			}
 			if p.mockP2pManager.IsValidatorPacketsBlocked(signer) {
 				continue
@@ -360,7 +367,7 @@ func (vm *ValidatorManager) SignData(account accounts.Account, mimeType string, 
 	}
 
 	hash := crypto.Keccak256(data)
-	return cryptobase.SigAlg.Sign(hash, val.key)
+	return cryptobase.DynamicSign.Sign(hash, val.key)
 }
 
 func (vm *ValidatorManager) SignDataWithContext(account accounts.Account, mimeType string, data []byte, context []byte) ([]byte, error) {
@@ -388,10 +395,11 @@ func (vm *ValidatorManager) ListValidatorsAsMap(blockHash common.Hash) (map[comm
 	valDetailsMap = make(map[common.Address]*ValidatorDetailsV2)
 	for k, v := range vm.valMap {
 		valDetails := &ValidatorDetailsV2{
-			Validator:    k,
-			Balance:      v.balance,
-			NetBalance:   v.balance,
-			LastNiLBlock: big.NewInt(0),
+			Validator:     k,
+			Balance:       v.balance,
+			NetBalance:    v.balance,
+			LastNiLBlock:  big.NewInt(0),
+			NilBlockCount: big.NewInt(0),
 		}
 		valDetailsMap[k] = valDetails
 	}
@@ -420,10 +428,11 @@ func Initialize(numKeys int) (vm *ValidatorManager, mockp2pManager *MockP2PManag
 
 	for k, v := range valMap {
 		valDetails := &ValidatorDetailsV2{
-			Validator:    k,
-			Balance:      v,
-			NetBalance:   v,
-			LastNiLBlock: big.NewInt(0),
+			Validator:     k,
+			Balance:       v,
+			NetBalance:    v,
+			LastNiLBlock:  big.NewInt(0),
+			NilBlockCount: big.NewInt(0),
 		}
 		valDetailsMap[k] = valDetails
 	}
@@ -1688,7 +1697,7 @@ func TestValidateBlockProposalTime(t *testing.T) {
 		t.Fatalf("failed 4")
 	}
 
-	if ValidateBlockProposalTime(BLOCK_TIME_ORIG_START_BLOCK, GetProposalTime(BLOCK_TIME_ORIG_START_BLOCK)) == false {
+	if ValidateBlockProposalTime(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, GetProposalTime(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK)) == false {
 		t.Fatalf("failed 5")
 	}
 }
@@ -1782,7 +1791,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(BLOCK_TIME_ORIG_START_BLOCK, uint64(tm)) == false {
+	if ValidateBlockProposalTimeConsensus(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, uint64(tm)) == false {
 		t.Fatalf("failed 14")
 	}
 }
@@ -1885,19 +1894,19 @@ func Test_requestconsensuspacket_negative(t *testing.T) {
 }
 
 func Test_shouldSignFull(t *testing.T) {
-	for i := uint64(0); i < FULL_SIGN_PROPOSAL_CUTOFF_BLOCK; i++ {
+	for i := uint64(0); i < defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK; i++ {
 		if shouldSignFull(uint64(i)) == true {
 			t.Fatalf("failed 1")
 		}
 	}
 
-	for i := FULL_SIGN_PROPOSAL_CUTOFF_BLOCK; i < FULL_SIGN_PROPOSAL_CUTOFF_BLOCK*100; i += FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS {
+	for i := defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK; i < defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK*100; i += defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS {
 		if shouldSignFull(uint64(i)) == false {
 			t.Fatalf("failed 2")
 		}
 	}
 
-	for i := FULL_SIGN_PROPOSAL_CUTOFF_BLOCK + 1; i < FULL_SIGN_PROPOSAL_CUTOFF_BLOCK+FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS-1; i++ {
+	for i := defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK + 1; i < defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK+defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS-1; i++ {
 		if shouldSignFull(uint64(i)) == true {
 			t.Fatalf("failed 3")
 		}
@@ -1906,7 +1915,7 @@ func Test_shouldSignFull(t *testing.T) {
 
 func TestPacketHandler_basic_fullsign(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_fullsign starting")
-	TEST_CONSENSUS_BLOCK_NUMBER = FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
+	TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
 	for i := 1; i <= TEST_ITERATIONS; i++ {
 		fmt.Println("iteration", i)
 		testPacketHandler_basic(4, t)
@@ -1917,12 +1926,13 @@ func TestPacketHandler_basic_fullsign(t *testing.T) {
 
 func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
-	var blockNumbers = []uint64{1, rewardStartBlockNumber, slashStartBlockNumber, FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
-		FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, STAKING_CONTRACT_V2_CUTOFF_BLOCK, CONSENSUS_CONTEXT_START_BLOCK, CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
-		VALIDATOR_NIL_BLOCK_START_BLOCK, BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
-		CONTEXT_BASED_START_BLOCK, CONTEXT_BASED_BLOCK_THRESHOLD, BLOCK_TIME_ORIG_START_BLOCK, PACKET_PROTOCOL_START_BLOCK,
-		PROPOSAL_TIME_HASH_START_BLOCK, BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, SixtyVoteStartBlock, SlashV2StartBlock, OfflineValidatorDeferStartBlock,
-		SixtySevenVoteStartBlock,
+	var blockNumbers = []uint64{1, defaults.DefaultConfig.PosConfig.RewardStartBlockNumber, defaults.DefaultConfig.PosConfig.SlashStartBlockNumber, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
+		defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
+		defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
+		defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK, defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD, defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK,
+		defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock,
+		defaults.DefaultConfig.PosConfig.SlashV2StartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock,
+		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock, defaults.DefaultConfig.DeepCheckStartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock,
 	}
 
 	for _, b := range blockNumbers {
@@ -1935,4 +1945,35 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	}
 	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 	fmt.Println("TestPacketHandler_basic_various_blocks done")
+}
+
+func TestPacketHandler_breakglass(t *testing.T) {
+	fmt.Println("TestPacketHandler_breakglass starting")
+
+	breakglassBlock := uint64(5000000)
+	defaults.SetCryptoBreakGlassBlock(breakglassBlock)
+	if defaults.IsCryptoBreakglassMode(breakglassBlock) == false {
+		t.Fatalf("failed IsCryptoBreakglassMode")
+		return
+	}
+	TEST_CONSENSUS_BLOCK_NUMBER = breakglassBlock
+	fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+	for i := 1; i <= TEST_ITERATIONS; i++ {
+		fmt.Println("iteration", i)
+		testPacketHandler_basic(4, t)
+	}
+
+	time.Sleep(10 * time.Second) //to allow for leftover packets to be processed, if any
+
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	err := defaults.SetCryptoBreakGlassBlock(0)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+	defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID))
+	fmt.Println("TestPacketHandler_breakglass done")
+
+	fmt.Println("testPacketHandler_basic sanity check starting")
+	testPacketHandler_basic(4, t)
+	fmt.Println("testPacketHandler_basic sanity check done")
 }

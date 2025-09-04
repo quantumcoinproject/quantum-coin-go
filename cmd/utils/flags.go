@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"io"
 	"io/ioutil"
 	"math"
@@ -750,6 +751,11 @@ var (
 		Name:  "rebroadcastcount",
 		Usage: "Rebroadcast packets to N number of peers.",
 	}
+
+	CryptoBreakglassBlockFlag = cli.IntFlag{
+		Name:  "crypto.breakglass.block",
+		Usage: "Block after which full sign mode is force required for new transactions and attestations.",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating
@@ -1233,6 +1239,16 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(RebroadcastCountFlag.Name) {
 		cfg.RebroadcastCount = ctx.GlobalInt(RebroadcastCountFlag.Name)
+	}
+
+	if ctx.GlobalIsSet(CryptoBreakglassBlockFlag.Name) {
+		cfg.CryptoBreakglassBlock = ctx.GlobalUint64(CryptoBreakglassBlockFlag.Name)
+		err := defaults.SetCryptoBreakGlassBlock(cfg.CryptoBreakglassBlock)
+		if err != nil {
+			log.Error("SetCryptoBreakGlassBlock failed", "err", err)
+		} else {
+			log.Warn("CryptoBreakGlassBlock mode", "blockNumber", cfg.CryptoBreakglassBlock)
+		}
 	}
 
 	if ctx.GlobalIsSet(ProfPortFlag.Name) {

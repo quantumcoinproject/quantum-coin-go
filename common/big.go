@@ -62,11 +62,13 @@ func SafeDivBigFloat(x, y *big.Float) *big.Float {
 	return result
 }
 
+// SafePercentageOfBigInt returns what percentage of Y is X. Example, if y=1000 and x=100, then 10 is returned
 func SafePercentageOfBigInt(x, y *big.Int) *big.Int {
 	hundred := big.NewInt(100)
 	return SafeDivBigInt(SafeMulBigInt(hundred, x), y)
 }
 
+// SafeRelativePercentageBigInt returns the proportionate percentage of the total value. For example, if total = 1000 and percentage = 10, then 100 is returned
 func SafeRelativePercentageBigInt(total, percentage *big.Int) *big.Int {
 	hundred := big.NewInt(100)
 	return SafeDivBigInt(SafeMulBigInt(total, percentage), hundred)

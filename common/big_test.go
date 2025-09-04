@@ -320,6 +320,10 @@ func Test_SafePercentageOfBigInt(t *testing.T) {
 	if testSafePercentageOfBigInt(70500, 100000, 70) == false {
 		t.Fatalf("failed")
 	}
+
+	if testSafePercentageOfBigInt(100, 1000, 10) == false {
+		t.Fatalf("failed")
+	}
 }
 
 func testSafeRelativePercentageBigInt(a int64, b int64, result int64) bool {
@@ -343,6 +347,10 @@ func testSafeRelativePercentageBigInt(a int64, b int64, result int64) bool {
 }
 
 func Test_SafeRelativePercentageBigInt(t *testing.T) {
+	if testSafeRelativePercentageBigInt(1000, 10, 100) == false {
+		t.Fatalf("failed")
+	}
+
 	if testSafeRelativePercentageBigInt(100, 70, 70) == false {
 		t.Fatalf("failed")
 	}

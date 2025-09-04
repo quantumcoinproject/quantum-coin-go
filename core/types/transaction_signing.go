@@ -19,7 +19,6 @@ package types
 import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -69,7 +68,7 @@ func SignTx(tx *Transaction, s Signer, prv *signaturealgorithm.PrivateKey) (*Tra
 	if err != nil {
 		return nil, err
 	}
-	sig, err := cryptobase.SigAlg.Sign(h[:], prv)
+	sig, err := cryptobase.DynamicSign.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +82,7 @@ func SignNewTx(prv *signaturealgorithm.PrivateKey, s Signer, txdata TxData) (*Tr
 	if err != nil {
 		return nil, err
 	}
-	sig, err := cryptobase.SigAlg.Sign(h[:], prv)
+	sig, err := cryptobase.DynamicSign.Sign(h[:], prv)
 	if err != nil {
 		return nil, err
 	}
@@ -173,9 +172,6 @@ func (s londonSigner) ChainID() *big.Int {
 
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
-	// DynamicFee txns are defined to use 0 and 1 as their recovery
-	// id, add 27 to become equivalent to unprotected Homestead signatures.
-	V = new(big.Int).Add(V, big.NewInt(27))
 	if tx.ChainId().Cmp(s.chainId) != 0 {
 		return common.Address{}, ErrInvalidChainId
 	}
@@ -203,13 +199,15 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 		if err != nil {
 			return nil, nil, nil, err
 		}
-		R, S, _, err = decodeSignature(sigHash.Bytes(), sig)
+		R, S, v, err := decodeSignature(sigHash.Bytes(), sig)
 		if err != nil {
 			return nil, nil, nil, err
 		}
-
+		if v.Uint64() != 1 {
+			return nil, nil, nil, ErrInvalidSig
+		}
 		V = big.NewInt(1)
-		return R, S, V, nil
+		return R, S, v, nil
 	}
 
 	return nil, nil, nil, errors.New("signature error")
@@ -245,14 +243,14 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 
 func decodeSignature(digestHash []byte, sig []byte) (r, s, v *big.Int, err error) {
 
-	signature, publicKey, err := cryptobase.SigAlg.PublicKeyAndSignatureFromCombinedSignature(digestHash, sig)
+	signature, publicKey, err := cryptobase.DynamicSigVerifier.PublicKeyAndSignatureFromCombinedSignature(digestHash, sig)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	r = new(big.Int).SetBytes(publicKey)
 	s = new(big.Int).SetBytes(signature)
-	v = new(big.Int).SetBytes([]byte{1 + 27})
+	v = big.NewInt(1)
 
 	return r, s, v, nil
 }
@@ -261,42 +259,23 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 	if Vb.BitLen() > 8 {
 		return common.Address{}, ErrInvalidSig
 	}
-	V := byte(Vb.Uint64() - 27)
-	if !cryptobase.SigAlg.ValidateSignatureValues(sighash[:], V, R, S) {
+	V := byte(1)
+	isOk, pub, sig := cryptobase.DynamicSigVerifier.ValidateSignatureValues(sighash[:], V, R, S)
+	if isOk == false {
 		log.Debug("recoverPlain failed, ErrInvalidSig", "hash", sighash)
 		return common.Address{}, ErrInvalidSig
 	}
-	// encode the signature in uncompressed format
-	r, s := R.Bytes(), S.Bytes()
 
-	combinedSignature, err := cryptobase.SigAlg.CombinePublicKeySignature(s, r)
+	combinedSignature, err := cryptobase.DynamicSigVerifier.CombinePublicKeySignature(sig, pub)
 	if err != nil {
 		return common.Address{}, err
 	}
 
-	// recover the public key from the signature
-	pub, err := cryptobase.SigAlg.PublicKeyBytesFromSignature(sighash[:], combinedSignature)
+	// recover the public key (address) from the signature
+	addr, err := cryptobase.DynamicSigVerifier.GetAddress(sighash[:], combinedSignature)
 	if err != nil {
 		return common.Address{}, err
 	}
-	if len(pub) != 0 && len(pub) != cryptobase.SigAlg.PublicKeyLength() {
-		return common.Address{}, errors.New("invalid public key")
-	}
-	var addr common.Address
-	addr.CopyFrom(crypto.PublicKeyBytesToAddress(pub[:]))
 
 	return addr, nil
-}
-
-// deriveChainId derives the chain id from the given v parameter
-func deriveChainId(v *big.Int) *big.Int {
-	if v.BitLen() <= 64 {
-		v := v.Uint64()
-		if v == 27 || v == 28 {
-			return new(big.Int)
-		}
-		return new(big.Int).SetUint64((v - 35) / 2)
-	}
-	v = new(big.Int).Sub(v, big.NewInt(35))
-	return v.Div(v, big.NewInt(2))
 }

@@ -21,7 +21,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
-	"github.com/quantumcoinproject/quantum-coin-go/cachemanager"
+	"github.com/quantumcoinproject/quantum-coin-go/relay/cachemanager"
 	"math/big"
 	"net/http"
 	"errors"

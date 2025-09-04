@@ -7,6 +7,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
+	"github.com/status-im/keycard-go/hexutils"
 	"math/big"
 	"strings"
 	"time"
@@ -30,7 +31,8 @@ func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *P
 			}
 			return "", err
 		}
-		if acc.AccType == ethclient.ACCOUNT_TYPE_REGULAR {
+		accType := strings.ToLower(string(acc.AccType))
+		if accType == strings.ToLower(string(ethclient.ACCOUNT_TYPE_REGULAR)) {
 			return COIN_TRANSFER, nil
 		} else {
 			isTokenTransfer, err := IsMainTransactionTokenTransfer(txn, receipt)
@@ -51,11 +53,13 @@ func (c *CacheManager) getTransactionType(txn *PrimordialTransaction, receipt *P
 		if err != nil {
 			return "", err
 		}
-		if acc.AccType == ethclient.ACCOUNT_TYPE_TOKEN {
+		accType := strings.ToLower(string(acc.AccType))
+		if accType == strings.ToLower(string(ethclient.ACCOUNT_TYPE_TOKEN)) {
 			return NEW_TOKEN, nil
-		} else if acc.AccType == ethclient.ACCOUNT_TYPE_CONTRACT {
+		} else if accType == strings.ToLower(string(ethclient.ACCOUNT_TYPE_CONTRACT)) {
 			return NEW_SMART_CONTRACT, nil
 		} else {
+			log.Error("getTransactionType", "acc.AccType", accType, "txHash", txHash)
 			return "", errors.New("unexpected account type")
 		}
 	}
@@ -120,8 +124,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *PrimordialBlockD
 		transaction.Gas = common.BigIntToHexString(big.NewInt(0).SetUint64(tx.Transaction.Gas))
 		transaction.GasPrice = common.BigIntToHexString(tx.Transaction.GasPrice)
 		if tx.Transaction.Data != nil {
-			transaction.Data = make([]byte, len(tx.Transaction.Data))
-			copy(transaction.Data, tx.Transaction.Data)
+			transaction.Input = hexutils.BytesToHex(tx.Transaction.Data)
 		}
 		transaction.Nonce = tx.Transaction.Nonce
 		transaction.Value = common.BigIntToHexString(tx.Transaction.Value)

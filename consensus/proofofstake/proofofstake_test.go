@@ -24,6 +24,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
@@ -33,7 +34,7 @@ import (
 
 func TestTxnFee(t *testing.T) {
 
-	txnFeeTotal := common.SafeMulBigInt(big.NewInt(types.DEFAULT_PRICE), new(big.Int).SetUint64(21000))
+	txnFeeTotal := common.SafeMulBigInt(big.NewInt(defaults.DEFAULT_PRICE), new(big.Int).SetUint64(21000))
 	burnAmount, txnFeeRewards := calculateTxnFeeSplitCoins(txnFeeTotal)
 	log.Info("TestTxnFee1", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
 
@@ -52,7 +53,7 @@ func TestTxnFee(t *testing.T) {
 		t.Fatalf("failed2.1")
 	}
 
-	txnFeeTotal = common.SafeMulBigInt(big.NewInt(21000*10), types.GAS_TIER_DEFAULT_PRICE)
+	txnFeeTotal = common.SafeMulBigInt(big.NewInt(21000*10), types.GetDefaultGasPrice())
 	burnAmount, txnFeeRewards = calculateTxnFeeSplitCoins(txnFeeTotal)
 	log.Info("TestTxnFee3", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
 
@@ -64,7 +65,7 @@ func TestTxnFee(t *testing.T) {
 		t.Fatalf("failed4")
 	}
 
-	txnFeeTotal = common.SafeMulBigInt(big.NewInt((21000*4)-1), types.GAS_TIER_DEFAULT_PRICE)
+	txnFeeTotal = common.SafeMulBigInt(big.NewInt((21000*4)-1), types.GetDefaultGasPrice())
 	burnAmount, txnFeeRewards = calculateTxnFeeSplitCoins(txnFeeTotal)
 	log.Info("TestTxnFee4", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
 
@@ -78,7 +79,7 @@ func TestTxnFee(t *testing.T) {
 }
 
 func TestTxnFee_Simple(t *testing.T) {
-	txnFeeTotal := common.SafeMulBigInt(big.NewInt(21000*10), types.GAS_TIER_DEFAULT_PRICE)
+	txnFeeTotal := common.SafeMulBigInt(big.NewInt(21000*10), types.GetDefaultGasPrice())
 	burnAmount, txnFeeRewards := calculateTxnFeeSplitCoins(txnFeeTotal)
 	log.Info("TestTxnFee", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal)
 
@@ -90,7 +91,7 @@ func TestTxnFee_Simple(t *testing.T) {
 		t.Fatalf("failed4")
 	}
 
-	txnFeeTotal = common.SafeMulBigInt(big.NewInt(221554), types.GAS_TIER_DEFAULT_PRICE)
+	txnFeeTotal = common.SafeMulBigInt(big.NewInt(221554), types.GetDefaultGasPrice())
 	burnAmount, txnFeeRewards = calculateTxnFeeSplitCoins(txnFeeTotal)
 	total := common.SafeAddBigInt(burnAmount, txnFeeRewards)
 	log.Info("TestTxnFee", "burnAmount", burnAmount, "txnFeeRewards", txnFeeRewards, "txnFeeTotal", txnFeeTotal, "total", total)

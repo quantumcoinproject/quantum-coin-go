@@ -79,7 +79,7 @@ type TransactionDetails struct {
 
 	GasPrice string `json:"gasPrice,omitempty"`
 
-	Data []byte `json:"data,omitempty"`
+	Input string `json:"data,omitempty"`
 
 	Nonce uint64 `json:"nonce,omitempty"`
 

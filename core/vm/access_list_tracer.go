@@ -137,6 +137,14 @@ func NewAccessListTracer(acl types.AccessList, from, to common.Address, precompi
 	}
 }
 
+func (a *AccessListTracer) CaptureTxStart(gasLimit uint64) {
+
+}
+
+func (a *AccessListTracer) CaptureTxEnd(restGas uint64) {
+
+}
+
 func (a *AccessListTracer) CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int) {
 }
 

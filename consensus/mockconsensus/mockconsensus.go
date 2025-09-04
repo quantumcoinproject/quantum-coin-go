@@ -27,12 +27,8 @@ import (
 )
 
 const (
-	checkpointInterval = 1024                   // Number of blocks after which to save the vote snapshot to the database
-	inmemorySnapshots  = 128                    // Number of recent vote snapshots to keep in memory
-	inmemorySignatures = 4096                   // Number of recent block signatures to keep in memory
-	wiggleTime         = 500 * time.Millisecond // Random delay (per validator) to allow concurrent signers
-
-	systemRewardPercent = 4 // it means 1/2^4 = 1/16 percentage of gas fee incoming will be distributed to system
+	inmemorySnapshots  = 128  // Number of recent vote snapshots to keep in memory
+	inmemorySignatures = 4096 // Number of recent block signatures to keep in memory
 )
 
 // Mock proof-of-authority protocol constants.
@@ -131,36 +127,6 @@ var (
 // SignerFn hashes and signs the data to be signed by a backing account.
 type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
 type SignerTxFn func(accounts.Account, *types.Transaction, *big.Int) (*types.Transaction, error)
-
-// ecrecover extracts the Ethereum account address from a signed header.
-func ecrecover(header *types.Header, sigcache *lru.ARCCache) (common.Address, error) {
-	// If the signature's already cached, return that
-	hash := header.Hash()
-	if address, known := sigcache.Get(hash); known {
-		return address.(common.Address), nil
-	}
-	// Retrieve the signature from the header extra-data
-	if len(header.Extra) < extraSeal {
-		return common.Address{}, errMissingSignature
-	}
-
-	signature := header.Extra[len(header.Extra)-extraSeal:]
-
-	// Recover the public key and the Ethereum address
-	if len(signature) == 0 {
-		panic("signature is empty")
-	}
-	pubkey, err := cryptobase.SigAlg.PublicKeyBytesFromSignature(SealHash(header).Bytes(), signature)
-	if err != nil {
-		return common.Address{}, err
-	}
-	var validator common.Address
-	validator.CopyFrom(crypto.PublicKeyBytesToAddress(pubkey[:]))
-
-	//fmt.Println("validator", validator, "block", header.Number)
-	sigcache.Add(hash, validator)
-	return validator, nil
-}
 
 // Mock is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
@@ -356,7 +322,8 @@ func (c *Mock) VerifyBlock(chain consensus.ChainHeaderReader, block *types.Block
 
 // Finalize implements consensus.Engine, ensuring no uncles are set, nor block
 // rewards given.
-func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt, source string) error {
+func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
+	passedTransactions types.Transactions, errorTransactions types.Transactions, source string) error {
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
@@ -364,7 +331,7 @@ func (c *Mock) Finalize(chain consensus.ChainHeaderReader, header *types.Header,
 }
 
 func (c *Mock) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
-	err := c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssemble")
+	err := c.Finalize(chain, header, state, txs, receipts, nil, nil, "FinalizeAndAssemble")
 	if err != nil {
 		return nil, err
 	}
@@ -377,14 +344,15 @@ func (c *Mock) ShouldFreezeTransactions(chain consensus.ChainHeaderReader, heade
 	return false, nil
 }
 
-func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt) (*types.Block, error) {
+func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, receipts []*types.Receipt,
+	passedTransactions types.Transactions, errorTransactions types.Transactions) (*types.Block, error) {
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
 		return nil, errUnknownBlock
 	}
 
-	err := c.Finalize(chain, header, state, txs, receipts, "FinalizeAndAssembleWithConsensus")
+	err := c.Finalize(chain, header, state, txs, receipts, passedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
 	if err != nil {
 		return nil, err
 	}
@@ -397,6 +365,10 @@ func (c *Mock) FinalizeAndAssembleWithConsensus(chain consensus.ChainHeaderReade
 // with.
 func (c *Mock) Authorize(validator common.Address, signFn SignerFn, signTxFn SignerTxFn, account accounts.Account) {
 
+}
+
+func (c *Mock) ParseHeaderDetails(chain consensus.ChainHeaderReader, header *types.Header) (errorTransactions types.Transactions, err error) {
+	return nil, nil
 }
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
