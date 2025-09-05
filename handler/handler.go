@@ -207,11 +207,15 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		consensusPacketHelper:      NewConsensusPacketHelper(config.Chain),
 	}
 	if h.rebroadcastCount == 0 {
-		log.Info("Rebroadcast count is 0, defaulting to 1")
+		log.Info("Rebroadcast count is 0, overriding to 1")
 		h.rebroadcastCount = 1
+	} else if h.rebroadcastCount == -1 {
+        log.Info("Rebroadcast count is -1, overriding to 0")
+        h.rebroadcastCount = 0
 	} else {
-		log.Info("Rebroadcast", "count", h.rebroadcastCount)
-	}
+	    log.Info("Rebroadcast", "count", h.rebroadcastCount)
+    }
+
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
 		// block is ahead, so fast sync was enabled for this node at a certain point.
