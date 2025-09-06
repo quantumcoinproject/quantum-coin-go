@@ -18,10 +18,14 @@ package p2p
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"io"
 	"io/ioutil"
+	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +33,11 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
+
+var EnableSendStats = os.Getenv("ENABLE_SEND_STATS")
+var SendStatsLock sync.Mutex
+var SendStatsMap map[uint64]uint64 = make(map[uint64]uint64)
+var currentSendDateWindow = time.Now().Format("2006-01-02")
 
 // Msg defines the structure of a p2p message.
 //
@@ -95,6 +104,25 @@ type MsgReadWriter interface {
 	MsgWriter
 }
 
+func updateSendStats(msgcode uint64, size int) {
+	if EnableSendStats != "1" {
+		return
+	}
+	SendStatsLock.Lock()
+	defer SendStatsLock.Unlock()
+	window := time.Now().Format("2006-01-02")
+	if window != currentSendDateWindow {
+		b, err := json.MarshalIndent(SendStatsMap, "", "  ")
+		if err != nil {
+			log.Warn("updateSendStats: ", "error", err)
+		} else {
+			log.Info("updateSendStats", "window", currentSendDateWindow, "stats", string(b))
+		}
+		currentSendDateWindow = window
+	}
+	SendStatsMap[msgcode] = SendStatsMap[msgcode] + uint64(size)
+}
+
 // Send writes an RLP-encoded message with the given code.
 // data should encode as an RLP list.
 func Send(w MsgWriter, msgcode uint64, data interface{}) error {
@@ -102,6 +130,7 @@ func Send(w MsgWriter, msgcode uint64, data interface{}) error {
 	if err != nil {
 		return err
 	}
+	updateSendStats(msgcode, size)
 	return w.WriteMsg(Msg{Code: msgcode, Size: uint32(size), Payload: r})
 }
 
