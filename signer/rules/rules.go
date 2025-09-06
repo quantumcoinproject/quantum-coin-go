@@ -24,9 +24,9 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
+	"github.com/quantumcoinproject/quantum-coin-go/internal/jsre/deps"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/signer/core"
-	"github.com/quantumcoinproject/quantum-coin-go/signer/rules/deps"
 	"github.com/quantumcoinproject/quantum-coin-go/signer/storage"
 )
 
