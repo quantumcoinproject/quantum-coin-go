@@ -53,6 +53,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	}
 
 	if totalDepositValue.Cmp(MIN_BLOCK_DEPOSIT) == -1 {
+		log.Error("min block deposit not met", "MIN_BLOCK_DEPOSIT", MIN_BLOCK_DEPOSIT, "totalDepositValue", totalDepositValue)
 		return nil, nil, nil, errors.New("min block deposit not met")
 	}
 
@@ -69,6 +70,9 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 		}
 		filteredValidators = *filteredValidatorsRet
 	}
+
+	//Normalize deposit
+	normalizeDeposit(blockNumber, &validatorsDepositMap, validatorDetailsMap)
 
 	filteredDepositValue = big.NewInt(0)
 	for val, _ := range filteredValidators {
@@ -181,8 +185,14 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 	return &filteredValidators, nil
 }
 
-func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
+func normalizeDeposit(blockNumber uint64, valDepMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
+	if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+		log.Debug("normalizeDeposit skipping block number", "blockNumber", blockNumber)
+		return
+	}
+
 	if len(*valDepMap) < MIN_VALIDATORS_NORMALIZATION {
+		log.Debug("normalizeDeposit skipping MIN_VALIDATORS_NORMALIZATION", "len(*valDepMap)", len(*valDepMap), "blockNumber", blockNumber)
 		return
 	}
 
@@ -207,6 +217,8 @@ func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMa
 			coinsReduced = common.SafeAddBigInt(coinsReduced, reduction)
 			depMap[val] = maxCoins
 			hasChanges = true
+			log.Debug("normalizeDeposit first round", "val", val, "amt", amt, "reduction", reduction, "coinsReduced", coinsReduced, "maxCoins", maxCoins)
+
 		}
 		if valDetailsMap[val].NilBlockCount.Uint64() == 0 {
 			nonOfflineCoinsAfterReduction = common.SafeAddBigInt(nonOfflineCoinsAfterReduction, depMap[val])
@@ -214,6 +226,7 @@ func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMa
 	}
 
 	if hasChanges == false {
+		log.Debug("normalizeDeposit skipping no changes", "blockNumber", blockNumber)
 		return
 	}
 
@@ -223,8 +236,12 @@ func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMa
 			continue
 		}
 		amountToIncrease := common.SafeDivBigInt(common.SafeMulBigInt(coinsReduced, amt), nonOfflineCoinsAfterReduction)
+		before := depMap[val]
 		depMap[val] = common.SafeAddBigInt(depMap[val], amountToIncrease)
+		log.Debug("normalizeDeposit second round", "val", val, "before", before, "after", depMap[val], "amountToIncrease", amountToIncrease, "nonOfflineCoinsAfterReduction", nonOfflineCoinsAfterReduction)
 	}
+
+	log.Debug("normalizeDeposit applied", "blockNumber", blockNumber, "nonOfflineCoinsAfterReduction", nonOfflineCoinsAfterReduction)
 
 	return
 }

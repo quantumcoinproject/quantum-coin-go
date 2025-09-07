@@ -607,7 +607,7 @@ func testNormalizeDeposit(items []int64, offline []bool, expected []int64) bool 
 		validatorDetailsMap[val] = valDetails
 	}
 
-	normalizeDeposit(&valDepMap, &validatorDetailsMap)
+	normalizeDeposit(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, &valDepMap, &validatorDetailsMap)
 	for i := 0; i < len(items); i++ {
 		val := common.BytesToAddress([]byte{byte(i)})
 		if valDepMap[val].Cmp(big.NewInt(expected[i])) != 0 {
@@ -627,4 +627,146 @@ func TestNormalizeDeposit(t *testing.T) {
 	if testNormalizeDeposit(items, offline, expected) == false {
 		t.Fatalf("failed")
 	}
+}
+
+func TestFilterValidators_normalizedeposit(t *testing.T) {
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	consensusContext := common.BytesToHash([]byte{100})
+	validatorsDepositMap := make(map[common.Address]*big.Int)
+
+	validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+
+	for i := byte(0); i < 128; i++ {
+		val := common.BytesToAddress([]byte{i})
+
+		if i < 3 {
+			validatorsDDetailsMap[val] = &ValidatorDetailsV2{
+				NilBlockCount: big.NewInt(1),
+				LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock) + int64(10)),
+			}
+		} else if i == 4 {
+			validatorsDDetailsMap[val] = &ValidatorDetailsV2{
+				NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD)),
+				LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock) + int64(10)),
+			}
+		} else {
+			validatorsDDetailsMap[val] = &ValidatorDetailsV2{
+				NilBlockCount: big.NewInt(0),
+				LastNiLBlock:  big.NewInt(0),
+			}
+		}
+		if i == 0 {
+			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(500000000000))
+		} else if i >= 5 && i <= 9 {
+			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(100000000000))
+		} else {
+			validatorsDepositMap[val] = params.EtherToWei(big.NewInt(6000000000))
+		}
+	}
+
+	//First test before OfflineValidatorV4StartBlock start block
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock, &validatorsDDetailsMap)
+	if err != nil {
+		log.Error("error", "msg", err)
+		t.Fatalf("failed1")
+	}
+
+	if len(resultMap) != 127 {
+		t.Fatalf("failed2")
+	}
+
+	log.Trace("filteredDepositValue", "value", filteredDepositValue)
+
+	if filteredDepositValue.Cmp(params.EtherToWei(big.NewInt(1726000000000))) != 0 {
+		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue)
+		t.Fatalf("failed4")
+	}
+
+	//Now test after OfflineValidatorV4StartBlock start block
+	resultMap, filteredDepositValue, _, err = filterValidators(consensusContext, &validatorsDepositMap, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, &validatorsDDetailsMap)
+	if err != nil {
+		log.Error("error", "msg", err)
+		t.Fatalf("failed5")
+	}
+
+	if len(resultMap) != 127 {
+		t.Fatalf("failed6")
+	}
+
+	log.Trace("filteredDepositValue", "value", filteredDepositValue)
+
+	if filteredDepositValue.String() != "1725999999999999999999999999953" {
+		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue.String())
+		t.Fatalf("failed7")
+	}
+
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
+}
+
+func TestFilterValidators_normalizedeposit_nochanges(t *testing.T) {
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	consensusContext := common.BytesToHash([]byte{100})
+	validatorsDepositMap := make(map[common.Address]*big.Int)
+
+	validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+
+	for i := byte(0); i < 128; i++ {
+		val := common.BytesToAddress([]byte{i})
+
+		if i < 3 {
+			validatorsDDetailsMap[val] = &ValidatorDetailsV2{
+				NilBlockCount: big.NewInt(1),
+				LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock) + int64(10)),
+			}
+		} else if i == 4 {
+			validatorsDDetailsMap[val] = &ValidatorDetailsV2{
+				NilBlockCount: big.NewInt(int64(OFFLINE_VALIDATOR_DEFER_THRESHOLD)),
+				LastNiLBlock:  big.NewInt(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock) + int64(10)),
+			}
+		} else {
+			validatorsDDetailsMap[val] = &ValidatorDetailsV2{
+				NilBlockCount: big.NewInt(0),
+				LastNiLBlock:  big.NewInt(0),
+			}
+		}
+		validatorsDepositMap[val] = params.EtherToWei(big.NewInt(6000000000))
+	}
+
+	//First test before OfflineValidatorV4StartBlock start block
+	resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock, &validatorsDDetailsMap)
+	if err != nil {
+		log.Error("error", "msg", err)
+		t.Fatalf("failed1")
+	}
+
+	if len(resultMap) != 127 {
+		t.Fatalf("failed2")
+	}
+
+	log.Trace("filteredDepositValue", "value", filteredDepositValue)
+
+	if filteredDepositValue.String() != "762000000000000000000000000000" {
+		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue)
+		t.Fatalf("failed4")
+	}
+
+	//Now test after OfflineValidatorV4StartBlock start block
+	resultMap, filteredDepositValue, _, err = filterValidators(consensusContext, &validatorsDepositMap, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, &validatorsDDetailsMap)
+	if err != nil {
+		log.Error("error", "msg", err)
+		t.Fatalf("failed5")
+	}
+
+	if len(resultMap) != 127 {
+		t.Fatalf("failed6")
+	}
+
+	log.Trace("filteredDepositValue", "value", filteredDepositValue)
+
+	if filteredDepositValue.String() != "762000000000000000000000000000" {
+		log.Info("filteredDepositValue", "filteredDepositValue", filteredDepositValue.String())
+		t.Fatalf("failed7")
+	}
+
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
 }
