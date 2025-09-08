@@ -35,6 +35,7 @@ import (
 )
 
 var EnableSendStats = os.Getenv("ENABLE_SEND_STATS")
+var SkipSendBlockMessages = os.Getenv("SKIP_SEND_BLOCKS")
 var SendStatsLock sync.Mutex
 var SendStatsMap map[uint64]uint64 = make(map[uint64]uint64)
 var currentSendDateWindow = time.Now().Format("2006-01-02")
@@ -126,6 +127,11 @@ func updateSendStats(msgcode uint64, size int) {
 // Send writes an RLP-encoded message with the given code.
 // data should encode as an RLP list.
 func Send(w MsgWriter, msgcode uint64, data interface{}) error {
+	if SkipSendBlockMessages == "1" {
+		if msgcode == 4 || msgcode == 7 { //BlockHeadersMsg, NewBlockMsg
+			return nil
+		}
+	}
 	size, r, err := rlp.EncodeToReader(data)
 	if err != nil {
 		return err
