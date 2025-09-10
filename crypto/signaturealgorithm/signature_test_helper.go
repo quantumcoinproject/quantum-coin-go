@@ -213,6 +213,7 @@ func SignatureAlgorithmTest(t *testing.T, sig SignatureAlgorithm) {
 	}
 
 	if len(sigExtracted) != sig.SignatureLength() {
+		fmt.Println("sigExtracted", len(sigExtracted), "sigExtracted", sig.SignatureLength())
 		t.Fatal("invalid signature length test")
 	}
 

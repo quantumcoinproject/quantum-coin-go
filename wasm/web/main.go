@@ -10,7 +10,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelper"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereds"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/keystore"
@@ -469,7 +469,7 @@ func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
-	publicKeyBytes, err := pqchelper.PublicKeyBytesFromSignatureCompact(digestBytes, sigBytes)
+	publicKeyBytes, err := pqchelpereds.PublicKeyBytesFromSignatureCompact(digestBytes, sigBytes)
 	if err != nil {
 		return nil
 	}
@@ -486,7 +486,7 @@ func PublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
 	compositePrivateKeyBytes := make([]byte, compositePrivateKeyData.Get("length").Int())
 	js.CopyBytesToGo(compositePrivateKeyBytes, compositePrivateKeyData)
 
-	_, publicKeyBytes, err := pqchelper.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
+	_, publicKeyBytes, err := pqchelpereds.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
 	if err != nil {
 		return nil
 	}
@@ -507,7 +507,7 @@ func CombinePublicKeySignature(this js.Value, args []js.Value) interface{} {
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
-	combinedSignatureBytes, err := pqchelper.CombinePublicKeySignature(sigBytes, pubBytes)
+	combinedSignatureBytes, err := pqchelpereds.CombinePublicKeySignature(sigBytes, pubBytes)
 	if err != nil {
 		return nil
 	}
