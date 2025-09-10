@@ -12,6 +12,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"math/big"
+	"os"
 	"strconv"
 	"sync"
 	"time"
@@ -36,6 +37,7 @@ type PacketParseResult struct {
 	err                error
 }
 
+var SKIP_BLOCK_DEEP_CHECK = os.Getenv("SKIP_BLOCK_DEEP_CHECK")
 var MAX_PACKETS_SAFETY_LIMIT = (MAX_VALIDATORS * 3 * int(MAX_ROUND+1)) + 2 //number 3 is the three phases of BFT, number 2 is proposals for each round and MAX_ROUND+1 is to account for any unknowns, instead of just using MAX_ROUND
 
 func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *eth.ConsensusPacket, filteredValidatorDepositMap map[common.Address]*big.Int,
@@ -746,6 +748,11 @@ func ValidateBlockConsensusData(block *types.Block, validatorDepositMap *map[com
 	if ValidateBlockProposalTime(block.Number().Uint64(), blockConsensusData.BlockTime) == false {
 		log.Warn("ValidateBlockProposalTime failed", "blockNumber", block.Number().Uint64(), "proposedTime", blockConsensusData.BlockTime)
 		return errors.New("ValidateBlockProposalTime failed")
+	}
+
+	if SKIP_BLOCK_DEEP_CHECK == "1" {
+		log.Info("SKIP_BLOCK_DEEP_CHECK is set, skipping deep check. Do not use this mode except for testing")
+		return nil
 	}
 
 	//Consensus Context
