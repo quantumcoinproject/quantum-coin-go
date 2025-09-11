@@ -256,6 +256,7 @@ type BlockStateDetails struct {
 	highestProposalRoundSeen          byte
 	consensusContext                  common.Hash
 	skipValidation                    bool
+	blocksSkippedValidation           uint64
 
 	//stats
 	proposalTime    int64
@@ -633,8 +634,9 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
 	if ok == false {
+		blockStateDetails.skipValidation = true
 		if isValPresentPreFilter {
-			blockStateDetails.skipValidation = true
+			blockStateDetails.blocksSkippedValidation = blockStateDetails.blocksSkippedValidation + 1 //don't have to update in else
 			log.Debug("Not selected as a validator in this block.")
 		} else {
 			log.Info("Not found to be a validator in this block. This is normal if your node hasn't yet downloaded all the blocks or if your validator is under offline penalty or validation is paused.",
@@ -2482,6 +2484,12 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	const minRand = 1
 
 	rndVal := rand.Intn(MaxRand-minRand) + minRand
+	var logLevel log.Lvl
+	if rndVal == 1 {
+		logLevel = log.LvlInfo
+	} else {
+		logLevel = log.LvlDebug
+	}
 
 	if blockNumber < cph.lastBlockNumber {
 		log.Warn("HandleConsensus", "blockNumber", blockNumber, "cph.lastBlockNumber", cph.lastBlockNumber)
@@ -2539,12 +2547,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
 	if blockStateDetails.skipValidation {
-		logMsg := "Waiting for block to be mined by other validators."
-		if rndVal == 1 {
-			log.Info(logMsg, "block", blockNumber, "parentHash", parentHash)
-		} else {
-			log.Debug(logMsg, "block", blockNumber, "parentHash", parentHash)
-		}
+		log.Write(logLevel, "Waiting for block to be mined by other validators.", "block", blockNumber, "parentHash", parentHash)
 		return errors.New("skipping validation")
 	}
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
@@ -2563,21 +2566,12 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 
 	err = errors.New("not ready yet")
 
-	if rndVal == 1 {
-		log.Info("HandleConsensus", "parentHash", parentHash, "blockNumber", blockNumber, "currentRound", blockStateDetails.currentRound, "state", blockRoundDetails.state, "blockVoteType", blockRoundDetails.blockVoteType,
-			"selfAckProposalVoteType", blockRoundDetails.selfAckProposalVoteType,
-			"shouldPropose", shouldPropose, "currTxns", len(txns), "okVoteBlocks", cph.okVoteBlocks, "nilVoteBlocks", cph.nilVoteBlocks,
-			"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
-			"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
-			"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime))
-	} else {
-		log.Debug("HandleConsensus", "parentHash", parentHash, "blockNumber", blockNumber, "currentRound", blockStateDetails.currentRound, "state", blockRoundDetails.state, "blockVoteType", blockRoundDetails.blockVoteType,
-			"selfAckProposalVoteType", blockRoundDetails.selfAckProposalVoteType,
-			"shouldPropose", shouldPropose, "currTxns", len(txns), "okVoteBlocks", cph.okVoteBlocks, "nilVoteBlocks", cph.nilVoteBlocks,
-			"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
-			"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
-			"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime))
-	}
+	log.Write(logLevel, "HandleConsensus", "parentHash", parentHash, "blockNumber", blockNumber, "currentRound", blockStateDetails.currentRound, "state", blockRoundDetails.state, "blockVoteType", blockRoundDetails.blockVoteType,
+		"selfAckProposalVoteType", blockRoundDetails.selfAckProposalVoteType,
+		"shouldPropose", shouldPropose, "currTxns", len(txns), "okVoteBlocks", cph.okVoteBlocks, "nilVoteBlocks", cph.nilVoteBlocks,
+		"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
+		"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
+		"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime), "session blocksSkippedValidation", blockStateDetails.blocksSkippedValidation)
 
 	if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
 		blockRoundDetails.selfKnownTransactions = make(map[common.Hash]bool) //reset, since txn list could have changed (added or removed)
