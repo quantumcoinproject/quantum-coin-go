@@ -70,7 +70,8 @@ type ConsensusHandler struct {
 	lastBlockNumber           uint64
 	lastBlockNumberChangeTime time.Time
 
-	packetStats PacketStats
+	packetStats      PacketStats
+	startBlockNumber uint64
 
 	latestBlockNumber uint64 //temporary variable
 	latestBlockMutex  sync.RWMutex
@@ -254,6 +255,7 @@ type BlockStateDetails struct {
 	parentHash                        common.Hash
 	highestProposalRoundSeen          byte
 	consensusContext                  common.Hash
+	skipValidation                    bool
 
 	//stats
 	proposalTime    int64
@@ -596,6 +598,8 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		}
 	}
 
+	_, isValPresentPreFilter := validators[cph.account.Address]
+
 	var filteredValidators map[common.Address]bool
 	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(blockStateDetails.consensusContext, &validators, blockNumber, &validatorDetailsMap)
 	if err != nil {
@@ -629,8 +633,13 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
 	if ok == false {
-		log.Info("Not a validator in this block. This is normal if your node hasn't yet downloaded all the blocks or if your validator is under offline penalty or validation is paused.",
-			"blockNumber", blockNumber, "validator address", cph.account.Address)
+		if isValPresentPreFilter {
+			blockStateDetails.skipValidation = true
+			log.Info("Not selected as a validator in this block.")
+		} else {
+			log.Info("Not found to be a validator in this block. This is normal if your node hasn't yet downloaded all the blocks or if your validator is under offline penalty or validation is paused.",
+				"blockNumber", blockNumber, "validator address", cph.account.Address)
+		}
 	}
 
 	cph.blockStateDetailsMap[parentHash] = blockStateDetails
@@ -1036,6 +1045,9 @@ func (cph *ConsensusHandler) getBlockState(parentHash common.Hash) (blockRoundSt
 
 	blockStateDetails, ok := cph.blockStateDetailsMap[parentHash]
 	if ok == false {
+		return BLOCK_STATE_UNKNOWN, 0, nil
+	}
+	if blockStateDetails == nil || blockStateDetails.blockRoundMap == nil || blockStateDetails.blockRoundMap[blockStateDetails.currentRound] == nil {
 		return BLOCK_STATE_UNKNOWN, 0, nil
 	}
 
@@ -2496,9 +2508,10 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		}
 
 		cph.initTime = time.Now()
-		cph.initialized = true
 		cph.packetHashLastSentMap = make(map[common.Hash]time.Time)
 		cph.packetStats = PacketStats{}
+		cph.startBlockNumber = blockNumber
+		cph.initialized = true
 
 		return errors.New("starting up")
 	}
@@ -2525,6 +2538,15 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	cph.cleanupBlockState()
 
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
+	if blockStateDetails.skipValidation {
+		logMsg := "Not selected as a validator in this block, hence skipping validation for this block."
+		if rndVal == 1 {
+			log.Info(logMsg, "block", blockNumber, "parentHash", parentHash)
+		} else {
+			log.Debug(logMsg, "block", blockNumber, "parentHash", parentHash)
+		}
+		return errors.New("skipping validation")
+	}
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
 	_, ok := blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
@@ -2546,13 +2568,15 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 			"selfAckProposalVoteType", blockRoundDetails.selfAckProposalVoteType,
 			"shouldPropose", shouldPropose, "currTxns", len(txns), "okVoteBlocks", cph.okVoteBlocks, "nilVoteBlocks", cph.nilVoteBlocks,
 			"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
-			"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason)
+			"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
+			"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime))
 	} else {
 		log.Debug("HandleConsensus", "parentHash", parentHash, "blockNumber", blockNumber, "currentRound", blockStateDetails.currentRound, "state", blockRoundDetails.state, "blockVoteType", blockRoundDetails.blockVoteType,
 			"selfAckProposalVoteType", blockRoundDetails.selfAckProposalVoteType,
 			"shouldPropose", shouldPropose, "currTxns", len(txns), "okVoteBlocks", cph.okVoteBlocks, "nilVoteBlocks", cph.nilVoteBlocks,
 			"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
-			"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason)
+			"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
+			"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime))
 	}
 
 	if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
