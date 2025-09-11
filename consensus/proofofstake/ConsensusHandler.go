@@ -2477,6 +2477,7 @@ func (cph *ConsensusHandler) SaveHash(parentHash common.Hash) error {
 }
 
 func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []common.Hash, blockNumber uint64) error {
+	log.Trace("HandleConsensus start")
 	cph.outerPacketLock.Lock()
 	defer cph.outerPacketLock.Unlock()
 
@@ -2572,7 +2573,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
 		"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
 		"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime), "session blocksSkippedValidation", blockStateDetails.blocksSkippedValidation)
-
+	
 	if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
 		blockRoundDetails.selfKnownTransactions = make(map[common.Hash]bool) //reset, since txn list could have changed (added or removed)
 		for _, txn := range txns {

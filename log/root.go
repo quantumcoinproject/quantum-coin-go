@@ -54,7 +54,9 @@ func Error(msg string, ctx ...interface{}) {
 	root.write(msg, LvlError, ctx, skipLevel)
 }
 
-func Write(lvl Lvl, msg string, ctx ...interface{}) {}
+func Write(lvl Lvl, msg string, ctx ...interface{}) {
+	root.write(msg, lvl, ctx, skipLevel)
+}
 
 // Crit is a convenient alias for Root().Crit
 func Crit(msg string, ctx ...interface{}) {
