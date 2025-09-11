@@ -635,7 +635,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	if ok == false {
 		if isValPresentPreFilter {
 			blockStateDetails.skipValidation = true
-			log.Info("Not selected as a validator in this block.")
+			log.Debug("Not selected as a validator in this block.")
 		} else {
 			log.Info("Not found to be a validator in this block. This is normal if your node hasn't yet downloaded all the blocks or if your validator is under offline penalty or validation is paused.",
 				"blockNumber", blockNumber, "validator address", cph.account.Address)
@@ -2539,7 +2539,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
 	if blockStateDetails.skipValidation {
-		logMsg := "Not selected as a validator in this block, hence skipping validation for this block."
+		logMsg := "Waiting for block to be mined by other validators."
 		if rndVal == 1 {
 			log.Info(logMsg, "block", blockNumber, "parentHash", parentHash)
 		} else {
