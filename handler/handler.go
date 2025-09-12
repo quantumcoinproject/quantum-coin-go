@@ -46,7 +46,7 @@ const (
 )
 
 var (
-	syncChallengeTimeout = 15 * time.Second // Time allowance for a node to reply to the sync progress challenge
+	syncChallengeTimeout = 30 * time.Second // Time allowance for a node to reply to the sync progress challenge
 )
 
 // txPool defines the methods needed from a transaction pool implementation to
@@ -210,11 +210,11 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		log.Info("Rebroadcast count is 0, overriding to 1")
 		h.rebroadcastCount = 1
 	} else if h.rebroadcastCount == -1 {
-        log.Info("Rebroadcast count is -1, overriding to 0")
-        h.rebroadcastCount = 0
+		log.Info("Rebroadcast count is -1, overriding to 0")
+		h.rebroadcastCount = 0
 	} else {
-	    log.Info("Rebroadcast", "count", h.rebroadcastCount)
-    }
+		log.Info("Rebroadcast", "count", h.rebroadcastCount)
+	}
 
 	if config.Sync == downloader.FullSync {
 		// The database seems empty as the current block is the genesis. Yet the fast
@@ -474,6 +474,18 @@ func (h *P2PHandler) Stop() {
 	log.Info("Ethereum protocol stopped")
 }
 
+func (h *P2PHandler) getSendCount(peerCount int) int {
+	sendCount := int(math.Sqrt(float64(peerCount)))
+	if h.rebroadcastCount > sendCount {
+		if h.rebroadcastCount >= peerCount {
+			sendCount = peerCount
+		} else {
+			sendCount = h.rebroadcastCount
+		}
+	}
+	return sendCount
+}
+
 // BroadcastBlock will either propagate a block to a subset of its peers, or
 // will only announce its availability (depending what's requested).
 func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
@@ -491,11 +503,11 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 			return
 		}
 		// Send the block to a subset of our peers
-		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		transfer := peers[:h.getSendCount(len(peers))]
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block, td)
 		}
-		log.Trace("Propagated block", "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Info("Propagated block", "number", block.NumberU64(), "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
@@ -503,7 +515,7 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range peers {
 			peer.AsyncSendNewBlockHash(block)
 		}
-		log.Trace("Announced block", "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Info("Announced block", "number", block.NumberU64(), "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 
@@ -526,7 +538,7 @@ func (h *P2PHandler) BroadcastTransactions(txs types.Transactions) {
 	for _, tx := range txs {
 		peers := h.peers.peersWithoutTransaction(tx.Hash())
 		// Send the tx unconditionally to a subset of our peers
-		numDirect := int(math.Sqrt(float64(len(peers))))
+		numDirect := h.getSendCount(len(peers))
 		for _, peer := range peers[:numDirect] {
 			txset[peer] = append(txset[peer], tx.Hash())
 		}
