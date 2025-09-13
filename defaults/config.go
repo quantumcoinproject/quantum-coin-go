@@ -124,7 +124,7 @@ var mainnetPosConfig = ProofOfStakeConfig{
 
 	SixtySevenVoteStartBlock: uint64(2082171 + 10 + 10),
 
-	OfflineValidatorV4StartBlock: 3000030,
+	OfflineValidatorV4StartBlock: 3600030,
 
 	MinOfflineProposerBlockDelay: 3600,
 }

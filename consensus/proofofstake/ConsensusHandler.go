@@ -535,11 +535,18 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 		validators[j] = valAddr
 		j = j + 1
 	}
+	blockBytes := common.Uint64ToBytes(blockNumber)
 
 	sort.Slice(validators, func(i, j int) bool {
-		vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
-		vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
-		return bytes.Compare(vi, vj) == -1
+		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
+			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		} else {
+			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}, blockBytes).Bytes()
+			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}, blockBytes).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		}
 	})
 
 	proposer = validators[0]
@@ -2573,7 +2580,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
 		"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
 		"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime), "session blocksSkippedValidation", blockStateDetails.blocksSkippedValidation)
-	
+
 	if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
 		blockRoundDetails.selfKnownTransactions = make(map[common.Hash]bool) //reset, since txn list could have changed (added or removed)
 		for _, txn := range txns {

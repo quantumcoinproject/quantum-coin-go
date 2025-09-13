@@ -837,9 +837,9 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			log.Error("GetBlockConsensusContextFn err", "err", err)
 			return err
 		}
-		var consensuscontext [32]byte
-		copy(consensuscontext[:], header.ParentHash.Bytes())
-		err = c.SetConsensusContext(key, consensuscontext, state, header)
+		var consensusContext [32]byte
+		copy(consensusContext[:], header.ParentHash.Bytes())
+		err = c.SetConsensusContext(key, consensusContext, state, header)
 		if err != nil {
 			log.Error("SetConsensusContext err", "err", err)
 			return err
