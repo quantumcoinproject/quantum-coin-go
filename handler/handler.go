@@ -492,6 +492,13 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 	hash := block.Hash()
 	peers := h.peers.peersWithoutBlock(hash)
 
+	var logLevel log.Lvl
+	if h.rebroadcastCount > 1 {
+		logLevel = log.LvlInfo
+	} else {
+		logLevel = log.LvlDebug
+	}
+
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
@@ -499,7 +506,7 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
 			td = new(big.Int).Add(block.Difficulty(), h.chain.GetTd(block.ParentHash(), block.NumberU64()-1))
 		} else {
-			log.Error("Propagating dangling block", "number", block.Number(), "hash", hash)
+			log.Debug("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
 		// Send the block to a subset of our peers
@@ -507,7 +514,7 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range transfer {
 			peer.AsyncSendNewBlock(block, td)
 		}
-		log.Info("Propagated block", "number", block.NumberU64(), "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Write(logLevel, "Propagated block", "number", block.NumberU64(), "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
@@ -515,7 +522,7 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		for _, peer := range peers {
 			peer.AsyncSendNewBlockHash(block)
 		}
-		log.Info("Announced block", "number", block.NumberU64(), "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Write(logLevel, "Announced block", "number", block.NumberU64(), "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 

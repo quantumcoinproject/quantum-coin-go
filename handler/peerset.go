@@ -19,6 +19,7 @@ package handler
 import (
 	"errors"
 	"math/big"
+	"math/rand"
 	"sync"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -112,6 +113,34 @@ func (ps *peerSet) getPeer(id string) (*ethPeer, bool) {
 	return peer, ok
 }
 
+func shufflePeers(peers []*ethPeer) []*ethPeer {
+	for i := len(peers) - 1; i > 0; i-- { //Fisher Yates shuffle. Send to a random set of peers each time
+		minVal := 0
+		maxVal := i
+
+		j := rand.Intn(maxVal-minVal) + minVal //non-crypto rand is ok for this purpose
+		temp := peers[i]
+		peers[i] = peers[j]
+		peers[j] = temp
+	}
+
+	return peers
+}
+
+func shufflePeerIds(peers []string) []string {
+	for i := len(peers) - 1; i > 0; i-- { //Fisher Yates shuffle. Send to a random set of peers each time
+		minVal := 0
+		maxVal := i
+
+		j := rand.Intn(maxVal-minVal) + minVal //non-crypto rand is ok for this purpose
+		temp := peers[i]
+		peers[i] = peers[j]
+		peers[j] = temp
+	}
+
+	return peers
+}
+
 // peersWithoutBlock retrieves a list of peers that do not have a given block in
 // their set of known hashes so it might be propagated to them.
 func (ps *peerSet) peersWithoutBlock(hash common.Hash) []*ethPeer {
@@ -124,6 +153,8 @@ func (ps *peerSet) peersWithoutBlock(hash common.Hash) []*ethPeer {
 			list = append(list, p)
 		}
 	}
+	list = shufflePeers(list)
+
 	return list
 }
 
@@ -134,6 +165,8 @@ func (ps *peerSet) allPeers() []*ethPeer {
 	for _, p := range ps.peers {
 		list = append(list, p)
 	}
+	list = shufflePeers(list)
+
 	return list
 }
 
@@ -149,6 +182,8 @@ func (ps *peerSet) peersWithoutTransaction(hash common.Hash) []*ethPeer {
 			list = append(list, p)
 		}
 	}
+	list = shufflePeers(list)
+
 	return list
 }
 
@@ -173,6 +208,8 @@ func (ps *peerSet) PeerList() []string {
 		i = i + 1
 	}
 
+	peerList = shufflePeerIds(peerList)
+
 	return peerList
 }
 
@@ -186,6 +223,8 @@ func (ps *peerSet) PeerIdList() []string {
 		peerList[i] = peer.ID()
 		i = i + 1
 	}
+
+	peerList = shufflePeerIds(peerList)
 
 	return peerList
 }
