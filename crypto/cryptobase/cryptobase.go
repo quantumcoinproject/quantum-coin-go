@@ -198,18 +198,22 @@ func (dv DynamicVerifier) ValidateSignatureValues(digestHash []byte, v byte, r, 
 	}
 }
 
-func (dv DynamicVerifier) IsSignatureTypeAllowed(blockNumber uint64, signature []byte) (bool, error) {
+func (dv DynamicVerifier) IsSignatureTypeAllowedForTxn(blockNumber uint64, signature []byte) (bool, error) {
 	algType := crypto.SignatureAlgorithmType(signature[0])
 
 	isBreakglassBlock := defaults.IsCryptoBreakglassMode(blockNumber)
 	if isBreakglassBlock == false {
-		return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID, nil
+		if defaults.IsSigAlgSwitchMode(blockNumber) {
+			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID, nil
+		} else {
+			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID, nil
+		}
 	} else {
-		return algType == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID || algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID, nil
+		return algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID, nil
 	}
 }
 
-func GetSigAlg(blockNumber uint64) signaturealgorithm.SignatureAlgorithm {
+func GetSigAlgForValidation(blockNumber uint64) signaturealgorithm.SignatureAlgorithm {
 	if defaults.IsCryptoBreakglassMode(blockNumber) {
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridMlDsaEddsaSlhDsaFull)
 	} else if defaults.IsSigAlgSwitchMode(blockNumber) {

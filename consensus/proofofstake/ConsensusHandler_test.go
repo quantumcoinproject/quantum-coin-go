@@ -165,7 +165,7 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 	} else {
 		startIndex = 1
 	}
-	sigAlg := cryptobase.GetSigAlg(TEST_CONSENSUS_BLOCK_NUMBER)
+	sigAlg := cryptobase.GetSigAlgForValidation(TEST_CONSENSUS_BLOCK_NUMBER)
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
 	if defaults.IsCryptoBreakglassMode(TEST_CONSENSUS_BLOCK_NUMBER) || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) {

@@ -808,7 +808,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 	digestHash := crypto.Keccak256(dataToVerify)
 	var pubKey *signaturealgorithm.PublicKey
 	var err error
-	sigAlg := cryptobase.GetSigAlg(blockNumber)
+	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
 
 	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength() {
 		return errors.New("invalid breakglass signature length")
@@ -1381,7 +1381,7 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.Address, error) {
 	dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
 	digestHash := crypto.Keccak256(dataToVerify)
-	sigAlg := cryptobase.GetSigAlg(blockNumber)
+	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
 	pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 	if err != nil {
 		log.Trace("invalid 1", "err", err)

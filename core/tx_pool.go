@@ -580,9 +580,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	//Check breakglass compatibility
 	blockNumber := pool.chain.CurrentBlock().NumberU64()
 	_, _, s := tx.RawSignatureValues()
-	compatible, err := cryptobase.DynamicSigVerifier.IsSignatureTypeAllowed(blockNumber, s.Bytes())
+	compatible, err := cryptobase.DynamicSigVerifier.IsSignatureTypeAllowedForTxn(blockNumber, s.Bytes())
 	if err != nil {
-		log.Debug("validateTx IsSignatureTypeAllowed", "error", err, "tx", tx.Hash().Hex(), "currentBlockNumber", blockNumber)
+		log.Debug("validateTx IsSignatureTypeAllowedForTxn", "error", err, "tx", tx.Hash().Hex(), "currentBlockNumber", blockNumber)
 		return err
 	} else if compatible == false {
 		log.Warn("validateTx compatible false", "error", err, "currentBlockNumber", blockNumber)
