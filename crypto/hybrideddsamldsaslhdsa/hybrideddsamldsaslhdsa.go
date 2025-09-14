@@ -46,6 +46,10 @@ func (s HybridEddsaMldsaSlhdsaSig) SignatureName() string {
 	return s.sigName
 }
 
+func (s HybridEddsaMldsaSlhdsaSig) GetSigAlgType() crypto.SignatureAlgorithmType {
+	return crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID
+}
+
 func (s HybridEddsaMldsaSlhdsaSig) PublicKeyLength() int {
 	return s.publicKeyLength
 }

@@ -41,6 +41,10 @@ func (s HybridEddsaMldsaSlhdsaFullSig) SignatureName() string {
 	return s.sigName
 }
 
+func (s HybridEddsaMldsaSlhdsaFullSig) GetSigAlgType() crypto.SignatureAlgorithmType {
+	return crypto.MLDSA_ED25519_SLHDSA_FULL_ID
+}
+
 func (s HybridEddsaMldsaSlhdsaFullSig) PublicKeyLength() int {
 	return s.publicKeyLength
 }
@@ -288,7 +292,7 @@ func (s HybridEddsaMldsaSlhdsaFullSig) SignWithContext(digestHash []byte, prv *s
 		return nil, errors.New("SignWithContext failed context")
 	}
 
-	if context[0] == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
+	if context[0] == byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
 		newDigestHash := crypto.Keccak256(digestHash, context)
 		return s.Sign(newDigestHash, prv)
 	}
@@ -314,7 +318,7 @@ func (s HybridEddsaMldsaSlhdsaFullSig) VerifyWithContext(pubKey []byte, digestHa
 		return false
 	}
 
-	if context[0] == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
+	if context[0] == byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
 		newDigestHash := crypto.Keccak256(digestHash, context)
 		return s.Verify(pubKey, newDigestHash, signature)
 	}
@@ -385,7 +389,7 @@ func (s HybridEddsaMldsaSlhdsaFullSig) GetAddress(digestHash []byte, sig []byte)
 }
 
 func (s HybridEddsaMldsaSlhdsaFullSig) PublicKeyFromSignatureWithContext(digestHash []byte, sig []byte, context []byte) (*signaturealgorithm.PublicKey, error) {
-	if context[0] != byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
+	if context[0] != byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
 		return nil, errors.New("invalid context")
 	}
 

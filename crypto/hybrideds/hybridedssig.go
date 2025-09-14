@@ -48,6 +48,10 @@ func (s HybridedsSig) SignatureName() string {
 	return s.sigName
 }
 
+func (s HybridedsSig) GetSigAlgType() crypto.SignatureAlgorithmType {
+	return crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID
+}
+
 func (s HybridedsSig) PublicKeyLength() int {
 	return s.publicKeyLength
 }

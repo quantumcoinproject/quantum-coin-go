@@ -281,7 +281,7 @@ func (ks *KeyStore) SignHashWithContext(a accounts.Account, hash []byte, context
 	if !found {
 		return nil, ErrLocked
 	}
-	return cryptobase.SigAlg.SignWithContext(hash, unlockedKey.PrivateKey, context)
+	return cryptobase.DynamicSign.SignWithContext(hash, unlockedKey.PrivateKey, context)
 }
 
 // SignTx signs the given transaction with the requested account.

@@ -28,6 +28,10 @@ const DILITHIUM_ED25519_SPHINCS_COMPACT_ID SignatureAlgorithmType = 1
 
 const DILITHIUM_ED25519_SPHINCS_FULL_ID SignatureAlgorithmType = 2
 
+const MLDSA_ED25519_SLHDSA_COMPACT_ID SignatureAlgorithmType = 3
+
+const MLDSA_ED25519_SLHDSA_FULL_ID SignatureAlgorithmType = 4
+
 func Sha256(data ...[]byte) []byte {
 	h1 := sha3.NewLegacyKeccak256()
 	for _, b := range data {

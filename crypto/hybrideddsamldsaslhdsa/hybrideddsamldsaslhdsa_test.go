@@ -86,7 +86,7 @@ func testCompactFull(t *testing.T) {
 		t.Fatal("Verify failed 2")
 	}
 
-	context := []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}
+	context := []byte{byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID)}
 
 	//The actual test
 	signatureContext, err := sigCompact.SignWithContext(digestHash1, keyCompact1, context)
