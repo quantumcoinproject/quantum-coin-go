@@ -19,8 +19,6 @@ func GetScheme() kem.Scheme {
 
 var schemeOverride = false
 
-//var Scheme = GetScheme()
-
 type KeyEncap struct {
 	PriKey *PrivateKey
 }
