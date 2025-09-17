@@ -3,13 +3,14 @@ package rlpx
 import (
 	"bytes"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/pipes"
 	"math/rand"
 	"testing"
 	"time"
 )
 
-func Test_HandshakeOnly(t *testing.T) {
+func testHandshake(t *testing.T) {
 	waitTime := time.Second
 	clientConn, serverConn, err := pipes.TCPPipe()
 	if err != nil {
@@ -57,7 +58,11 @@ func Test_HandshakeOnly(t *testing.T) {
 	}
 }
 
-func Test_SinglePingPong(t *testing.T) {
+func Test_HandshakeOnly(t *testing.T) {
+	testHandshake(t)
+}
+
+func testSinglePingPong(t *testing.T) {
 	waitTime := 5 * time.Second
 	clientConn, serverConn, err := pipes.TCPPipe()
 	if err != nil {
@@ -147,10 +152,13 @@ func Test_SinglePingPong(t *testing.T) {
 	if !bytes.Equal(dataPacket.fragment, randomData) {
 		t.Fatal(err)
 	}
-
 }
 
-func Test_e2eHandshake(t *testing.T) {
+func Test_SinglePingPong(t *testing.T) {
+	testSinglePingPong(t)
+}
+
+func testE2eHandskahe(t *testing.T) {
 	waitTime := 5 * time.Second
 	clientConn, serverConn, err := pipes.TCPPipe()
 	if err != nil {
@@ -254,4 +262,10 @@ func Test_e2eHandshake(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func Test_e2eHandshake(t *testing.T) {
+	testHandshake(t)
+	keyestablishmentalgorithm.SetSchemeHybrid()
+	testHandshake(t)
 }

@@ -15,9 +15,10 @@ var wgKEMCorrectness sync.WaitGroup
 // wgKEMWrongCiphertext groups goroutines and blocks the caller until all goroutines finish.
 var wgKEMWrongCiphertext sync.WaitGroup
 
-var KemName = Scheme.Name()
-
 func EncapSecret(publicKey []byte) (ciphertext, sharedSecret []byte, err error) {
+	var scheme = GetScheme()
+	var KemName = scheme.Name()
+
 	kem := KeyEncap{}
 	defer kem.Clean() // clean up even in case of panic
 	err = kem.Init(KemName, nil)
@@ -29,6 +30,9 @@ func EncapSecret(publicKey []byte) (ciphertext, sharedSecret []byte, err error) 
 }
 
 func DecapSecret(seckey, ciphertext []byte) ([]byte, error) {
+	var scheme = GetScheme()
+	var KemName = scheme.Name()
+
 	kem := KeyEncap{}
 	defer kem.Clean() // clean up even in case of panic
 	err := kem.Init(KemName, seckey)
@@ -41,6 +45,8 @@ func DecapSecret(seckey, ciphertext []byte) ([]byte, error) {
 
 // testKEMCorrectness tests the correctness of a specific KEM.
 func testKEMCorrectness(threading bool, t *testing.T) {
+	var scheme = GetScheme()
+	var KemName = scheme.Name()
 
 	log.Println("Correctness - ", KemName) // thread-safe
 	if threading == true {
@@ -95,6 +101,9 @@ func testKEMCorrectness(threading bool, t *testing.T) {
 
 // testKEMWrongCiphertext tests the wrong ciphertext regime of a specific KEM.
 func testKEMWrongCiphertext(threading bool, t *testing.T) {
+	var scheme = GetScheme()
+	var KemName = scheme.Name()
+
 	if threading == true {
 		defer wgKEMWrongCiphertext.Done()
 	}
@@ -121,21 +130,23 @@ func testKEMWrongCiphertext(threading bool, t *testing.T) {
 }
 
 func TestEncapBasic(t *testing.T) {
-	pub1, pri1, err := Scheme.GenerateKeyPair()
+	var scheme = GetScheme()
+
+	pub1, pri1, err := scheme.GenerateKeyPair()
 	if err != nil {
 		t.Fatalf("failed")
 	}
 
-	_, pri2, err := Scheme.GenerateKeyPair()
+	_, pri2, err := scheme.GenerateKeyPair()
 	if err != nil {
 		t.Fatalf("failed")
 	}
 
-	cipher1, ss1, err := Scheme.Encapsulate(pub1)
+	cipher1, ss1, err := scheme.Encapsulate(pub1)
 	if err != nil {
 		t.Fatalf("failed")
 	}
-	ss2, err := Scheme.Decapsulate(pri1, cipher1)
+	ss2, err := scheme.Decapsulate(pri1, cipher1)
 	if err != nil {
 		t.Fatalf("failed")
 	}
@@ -144,7 +155,7 @@ func TestEncapBasic(t *testing.T) {
 		t.Fatalf("failed")
 	}
 
-	ss3, err := Scheme.Decapsulate(pri2, cipher1)
+	ss3, err := scheme.Decapsulate(pri2, cipher1)
 	if err != nil {
 		t.Fatalf("failed")
 	}
@@ -159,10 +170,24 @@ func TestKeyEncapsulationCorrectness(t *testing.T) {
 	wgKEMCorrectness.Add(1)
 	testKEMCorrectness(true, t)
 	wgKEMCorrectness.Wait()
+
+	SetSchemeHybrid()
+
+	testKEMCorrectness(false, t)
+	wgKEMCorrectness.Add(1)
+	testKEMCorrectness(true, t)
+	wgKEMCorrectness.Wait()
 }
 
 // TestKeyEncapsulationWrongCiphertext tests the wrong ciphertext regime of all enabled KEMs.
 func TestKeyEncapsulationWrongCiphertext(t *testing.T) {
+	testKEMWrongCiphertext(false, t)
+	wgKEMWrongCiphertext.Add(1)
+	testKEMWrongCiphertext(true, t)
+	wgKEMWrongCiphertext.Wait()
+
+	SetSchemeHybrid()
+
 	testKEMWrongCiphertext(false, t)
 	wgKEMWrongCiphertext.Add(1)
 	testKEMWrongCiphertext(true, t)
