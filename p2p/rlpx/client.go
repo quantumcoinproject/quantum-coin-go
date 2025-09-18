@@ -339,11 +339,6 @@ func (c *Client) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 		clientIv = c.secret.ClientApplicationIv
 	}
 
-	encryptedData, err := Encrypt(cipher, data, additionalData, packetType, clientIv, seqNum)
-	if err != nil {
-		return err
-	}
-
 	header := new(Header)
 	header.PacketType = uint(packetType)
 	header.MajorVersion = majorVersion
@@ -354,12 +349,18 @@ func (c *Client) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 	}
 
 	if header.MinorVersion >= minorVersionV2 {
-		compressedData, err := compress(encryptedData)
+		compressedData, err := compress(data)
 		if err != nil {
 			return err
 		}
-		encryptedData = compressedData
+		data = compressedData
 	}
+
+	encryptedData, err := Encrypt(cipher, data, additionalData, packetType, clientIv, seqNum)
+	if err != nil {
+		return err
+	}
+
 	header.RecordLength = uint(len(encryptedData))
 	header.Context = context
 	copy(header.AdditionalData[:], additionalData)
@@ -419,14 +420,6 @@ func (c *Client) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		return nil, errors.New("prefix size less")
 	}
 
-	if header.MinorVersion >= minorVersionV2 {
-		uncompressedData, err := decompress(encryptedData)
-		if err != nil {
-			return nil, err
-		}
-		encryptedData = uncompressedData
-	}
-
 	var cipher cipher2.AEAD
 	var seqNum uint
 	var serverIv []byte
@@ -449,6 +442,14 @@ func (c *Client) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		return nil, errors.New("packetType mismatch")
 	}
 	dataPacket.context = header.Context
+
+	if header.MinorVersion >= minorVersionV2 {
+		uncompressedData, err := decompress(dataPacket.fragment)
+		if err != nil {
+			return nil, err
+		}
+		dataPacket.fragment = uncompressedData
+	}
 
 	if packetType == PacketTypeHandshake {
 		c.serverSeqNumHandshake = c.serverSeqNumHandshake + 1
