@@ -24,7 +24,6 @@ type KeyEncap struct {
 }
 
 func SetSchemeHybrid() { //test hook
-	//Scheme = hybrid.X25519MLKEM768()
 	schemeOverride = true
 }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/pipes"
 	"math/rand"
 	"testing"
@@ -158,7 +159,7 @@ func Test_SinglePingPong(t *testing.T) {
 	testSinglePingPong(t)
 }
 
-func testE2eHandskahe(t *testing.T) {
+func testE2eHandShake(t *testing.T) {
 	waitTime := 5 * time.Second
 	clientConn, serverConn, err := pipes.TCPPipe()
 	if err != nil {
@@ -265,7 +266,18 @@ func testE2eHandskahe(t *testing.T) {
 }
 
 func Test_e2eHandshake(t *testing.T) {
-	testHandshake(t)
+	testE2eHandShake(t)
 	keyestablishmentalgorithm.SetSchemeHybrid()
-	testHandshake(t)
+	testE2eHandShake(t)
+}
+
+func Test_SinglePingPongHybrid(t *testing.T) {
+	keyestablishmentalgorithm.SetSchemeHybrid()
+	testSinglePingPong(t)
+}
+
+func Test_SinglePingPongCompression(t *testing.T) {
+	keyestablishmentalgorithm.SetSchemeHybrid()
+	defaults.DefaultConfig.KemSwitchTime = time.Now().UTC().Add(-24 * time.Hour).Unix()
+	testSinglePingPong(t)
 }

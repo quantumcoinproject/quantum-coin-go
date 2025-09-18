@@ -9,9 +9,11 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"io"
 	"sync"
+	"time"
 )
 
 type ServerHelloMessage struct {
@@ -322,7 +324,19 @@ func (s *Server) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 	header := new(Header)
 	header.PacketType = uint(packetType)
 	header.MajorVersion = majorVersion
-	header.MinorVersion = minorVersion
+	if time.Now().UTC().Unix() < defaults.DefaultConfig.KemSwitchTime {
+		header.MinorVersion = minorVersion
+	} else {
+		header.MinorVersion = minorVersionV2
+	}
+	if header.MinorVersion >= minorVersionV2 {
+		compressedData, err := compress(encryptedData)
+		if err != nil {
+			return err
+		}
+		encryptedData = compressedData
+	}
+
 	header.RecordLength = uint(len(encryptedData))
 	header.Context = context
 	copy(header.AdditionalData[:], additionalData)
@@ -378,6 +392,14 @@ func (s *Server) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 
 	if bytesRead != int(recLen) {
 		return nil, errors.New("prefix size less")
+	}
+
+	if header.MinorVersion >= minorVersionV2 {
+		uncompressedData, err := decompress(encryptedData)
+		if err != nil {
+			return nil, err
+		}
+		encryptedData = uncompressedData
 	}
 
 	var cipher cipher2.AEAD
