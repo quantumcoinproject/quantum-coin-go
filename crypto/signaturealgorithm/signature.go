@@ -3,6 +3,7 @@ package signaturealgorithm
 import (
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"io"
 	"math/big"
 )
@@ -75,4 +76,6 @@ type SignatureAlgorithm interface {
 	ValidateSignatureValues(digestHash []byte, v byte, r, s *big.Int) (isOk bool, pubKey []byte, signature []byte)
 
 	GetAddress(digestHash []byte, sig []byte) (common.Address, error)
+
+	GetSigAlgType() crypto.SignatureAlgorithmType
 }

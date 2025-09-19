@@ -1,4 +1,4 @@
-package pqchelper
+package pqchelpereds
 
 import (
 	"bytes"

@@ -10,7 +10,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelper"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereds"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -25,7 +25,6 @@ const CRYPTO_SIGNATURE_BYTES = hybrideds.CompactSigLength
 
 type HybridedsSig struct {
 	sigName                      string
-	publicKeyBytesIndexStart     int
 	publicKeyLength              int
 	privateKeyLength             int
 	signatureLength              int
@@ -37,7 +36,6 @@ func CreateHybridedsSig() HybridedsSig {
 	fullSigAlg := hybridedsfull.CreateHybridedsfullSig()
 
 	return HybridedsSig{sigName: "hybrideds",
-		publicKeyBytesIndexStart:     12,
 		publicKeyLength:              hybrideds.PublicKeySize,
 		privateKeyLength:             hybrideds.PrivateKeySize,
 		signatureLength:              hybrideds.CompactSigLength,
@@ -48,6 +46,10 @@ func CreateHybridedsSig() HybridedsSig {
 
 func (s HybridedsSig) SignatureName() string {
 	return s.sigName
+}
+
+func (s HybridedsSig) GetSigAlgType() crypto.SignatureAlgorithmType {
+	return crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID
 }
 
 func (s HybridedsSig) PublicKeyLength() int {
@@ -67,7 +69,7 @@ func (s HybridedsSig) SignatureWithPublicKeyLength() int {
 }
 
 func (s HybridedsSig) GenerateKey() (*signaturealgorithm.PrivateKey, error) {
-	pubKey, priKey, err := pqchelper.GenerateKey()
+	pubKey, priKey, err := pqchelpereds.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +110,7 @@ func (s HybridedsSig) GenerateKeyWithSeed(seed []byte) (*signaturealgorithm.Priv
 	if len(seed) != hybrideds.SeedSize {
 		return nil, errors.New("invalid seed size")
 	}
-	pubKey, priKey, err := pqchelper.GenerateKeyWithSeed(seed)
+	pubKey, priKey, err := pqchelpereds.GenerateKeyWithSeed(seed)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +140,7 @@ func (s HybridedsSig) SerializePrivateKey(priv *signaturealgorithm.PrivateKey) (
 
 func (s HybridedsSig) DeserializePrivateKey(priv []byte) (*signaturealgorithm.PrivateKey, error) {
 
-	privKeyBytes, pubKeyBytes, err := pqchelper.PrivateAndPublicFromPrivateKey(priv)
+	privKeyBytes, pubKeyBytes, err := pqchelpereds.PrivateAndPublicFromPrivateKey(priv)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +275,7 @@ func (s HybridedsSig) Sign(digestHash []byte, prv *signaturealgorithm.PrivateKey
 		return nil, err
 	}
 
-	sigBytes, err := pqchelper.SignCompact(seckey, digestHash)
+	sigBytes, err := pqchelpereds.SignCompact(seckey, digestHash)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +311,7 @@ func (s HybridedsSig) Verify(pubKey []byte, digestHash []byte, signature []byte)
 	if !bytes.Equal(pubKey, pubKeyBytes) {
 		return false
 	}
-	return pqchelper.VerifyCompact(pubKey, digestHash, sigBytes)
+	return pqchelpereds.VerifyCompact(pubKey, digestHash, sigBytes)
 }
 
 func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []byte, sig []byte) (signature []byte, pubKey []byte, err error) {
@@ -318,10 +320,10 @@ func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []by
 		return nil, nil, err
 	}
 
-	ok := pqchelper.VerifyCompact(pubKey, digestHash, signature)
+	ok := pqchelpereds.VerifyCompact(pubKey, digestHash, signature)
 
 	if ok == false {
-		return nil, nil, pqchelper.ErrVerifyFailed
+		return nil, nil, pqchelpereds.ErrVerifyFailed
 	}
 
 	return signature, pubKey, nil
@@ -330,7 +332,7 @@ func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []by
 func (s HybridedsSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {
 	if len(sigBytes) < s.signatureLength {
 		log.Debug("HybridedsSig CombinePublicKeySignature", "sigbytes len", len(sigBytes), "signatureLength", s.signatureLength)
-		return nil, pqchelper.ErrInvalidSignatureLen
+		return nil, pqchelpereds.ErrInvalidSignatureLen
 	}
 
 	if len(pubKeyBytes) != s.publicKeyLength {
@@ -341,7 +343,7 @@ func (s HybridedsSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []b
 }
 
 func (s HybridedsSig) PublicKeyBytesFromSignature(digestHash []byte, sig []byte) ([]byte, error) {
-	return pqchelper.PublicKeyBytesFromSignatureCompact(digestHash, sig)
+	return pqchelpereds.PublicKeyBytesFromSignatureCompact(digestHash, sig)
 }
 
 func (s HybridedsSig) PublicKeyFromSignature(digestHash []byte, sig []byte) (*signaturealgorithm.PublicKey, error) {
@@ -468,7 +470,7 @@ func checkKeyFileEnd(r *bufio.Reader) error {
 // convertBytesToPrivate exports the corresponding secret key from the sig receiver.
 func (s HybridedsSig) convertBytesToPrivate(privy []byte) (*signaturealgorithm.PrivateKey, error) {
 	if len(privy) != s.privateKeyLength {
-		return nil, pqchelper.ErrInvalidPrivateKeyLen
+		return nil, pqchelpereds.ErrInvalidPrivateKeyLen
 	}
 	privKey := new(signaturealgorithm.PrivateKey)
 	privKey.PriData = make([]byte, s.privateKeyLength)
@@ -480,7 +482,7 @@ func (s HybridedsSig) convertBytesToPrivate(privy []byte) (*signaturealgorithm.P
 // convertBytesToPublic exports the corresponding secret key from the sig receiver.
 func (s HybridedsSig) convertBytesToPublic(pub []byte) (*signaturealgorithm.PublicKey, error) {
 	if len(pub) != s.publicKeyLength {
-		return nil, pqchelper.ErrInvalidPublicKeyLen
+		return nil, pqchelpereds.ErrInvalidPublicKeyLen
 	}
 	pubKey := new(signaturealgorithm.PublicKey)
 	pubKey.PubData = make([]byte, s.publicKeyLength)
@@ -491,7 +493,7 @@ func (s HybridedsSig) convertBytesToPublic(pub []byte) (*signaturealgorithm.Publ
 // exportPrivateKey exports a private key into a binary dump.
 func (s HybridedsSig) exportPrivateKey(privy *signaturealgorithm.PrivateKey) ([]byte, error) {
 	if len(privy.PriData) != s.privateKeyLength {
-		return nil, pqchelper.ErrInvalidPrivateKeyLen
+		return nil, pqchelpereds.ErrInvalidPrivateKeyLen
 	}
 
 	buf := make([]byte, s.privateKeyLength)
@@ -502,7 +504,7 @@ func (s HybridedsSig) exportPrivateKey(privy *signaturealgorithm.PrivateKey) ([]
 // exportPublicKey exports a public key into a binary dump.
 func (s HybridedsSig) exportPublicKey(pub *signaturealgorithm.PublicKey) ([]byte, error) {
 	if len(pub.PubData) != s.publicKeyLength {
-		return nil, pqchelper.ErrInvalidPublicKeyLen
+		return nil, pqchelpereds.ErrInvalidPublicKeyLen
 	}
 	buf := make([]byte, s.publicKeyLength)
 	copy(buf, pub.PubData)

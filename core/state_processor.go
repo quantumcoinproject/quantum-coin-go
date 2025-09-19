@@ -192,9 +192,9 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, 
 	//Check breakglass compatibility
 	blockNumber := header.Number.Uint64()
 	_, _, s := tx.RawSignatureValues()
-	compatible, err := cryptobase.DynamicSigVerifier.IsSignatureTypeAllowed(blockNumber, s.Bytes())
+	compatible, err := cryptobase.DynamicSigVerifier.IsSignatureTypeAllowedForTxn(blockNumber, s.Bytes())
 	if err != nil {
-		log.Debug("ApplyTransaction IsSignatureTypeAllowed", "error", err, "tx", tx.Hash().Hex(), "currentBlockNumber", blockNumber)
+		log.Debug("ApplyTransaction IsSignatureTypeAllowedForTxn", "error", err, "tx", tx.Hash().Hex(), "currentBlockNumber", blockNumber)
 		return nil, err
 	} else if compatible == false {
 		log.Warn("ApplyTransaction compatible false", "error", err, "currentBlockNumber", blockNumber)

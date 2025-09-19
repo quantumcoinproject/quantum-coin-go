@@ -70,7 +70,8 @@ type ConsensusHandler struct {
 	lastBlockNumber           uint64
 	lastBlockNumberChangeTime time.Time
 
-	packetStats PacketStats
+	packetStats      PacketStats
+	startBlockNumber uint64
 
 	latestBlockNumber uint64 //temporary variable
 	latestBlockMutex  sync.RWMutex
@@ -181,12 +182,14 @@ const (
 
 const (
 	GENESIS_BLOCK_HASH = "0x2c8127f13d50434052128a88c9c9f79a27d44a1145e51f6fd250b6e247369e99"
+	GEN_BLOCK_HASH     = "2c8127f13d50434052128a88c9c9f79a27d44a1145e51f6fd250b6e247369e99"
 )
 
 var (
 	//Use genesis block as context, so that cryptographic state-proof using full-signature-mode can be verified using the genesis file itself (if signatures from proposal blocks of genesis validators are available as well).
 	//Eventually when 70% (staked coins) of genesis proposers have full-signed proposal blocks that also contain genesis hash as part of the message, it means that the first state-proof is achieved for the chain.
-	FULL_SIGN_CONTEXT = append(common.Hex2Bytes(GENESIS_BLOCK_HASH), []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}...)
+	FULL_SIGN_CONTEXT    = append(common.Hex2Bytes(GENESIS_BLOCK_HASH), []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}...)
+	FULL_SIGN_CONTEXT_V2 = append([]byte{byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID)}, common.Hex2Bytes(GEN_BLOCK_HASH)...)
 )
 
 var (
@@ -254,6 +257,8 @@ type BlockStateDetails struct {
 	parentHash                        common.Hash
 	highestProposalRoundSeen          byte
 	consensusContext                  common.Hash
+	skipValidation                    bool
+	blocksSkippedValidation           uint64
 
 	//stats
 	proposalTime    int64
@@ -532,11 +537,18 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 		validators[j] = valAddr
 		j = j + 1
 	}
+	blockBytes := common.Uint64ToBytes(blockNumber)
 
 	sort.Slice(validators, func(i, j int) bool {
-		vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
-		vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
-		return bytes.Compare(vi, vj) == -1
+		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
+			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		} else {
+			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}, blockBytes).Bytes()
+			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}, blockBytes).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		}
 	})
 
 	proposer = validators[0]
@@ -596,6 +608,8 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		}
 	}
 
+	_, isValPresentPreFilter := validators[cph.account.Address]
+
 	var filteredValidators map[common.Address]bool
 	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(blockStateDetails.consensusContext, &validators, blockNumber, &validatorDetailsMap)
 	if err != nil {
@@ -629,8 +643,14 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
 	if ok == false {
-		log.Info("Not a validator in this block. This is normal if your node hasn't yet downloaded all the blocks or if your validator is under offline penalty or validation is paused.",
-			"blockNumber", blockNumber, "validator address", cph.account.Address)
+		blockStateDetails.skipValidation = true
+		if isValPresentPreFilter {
+			blockStateDetails.blocksSkippedValidation = blockStateDetails.blocksSkippedValidation + 1 //don't have to update in else
+			log.Debug("Not selected as a validator in this block.")
+		} else {
+			log.Info("Not found to be a validator in this block. This is normal if your node hasn't yet downloaded all the blocks or if your validator is under offline penalty or validation is paused.",
+				"blockNumber", blockNumber, "validator address", cph.account.Address)
+		}
 	}
 
 	cph.blockStateDetailsMap[parentHash] = blockStateDetails
@@ -764,9 +784,7 @@ func shouldSignFull(blockNumber uint64) bool {
 		return true
 	}
 	if defaults.IsCryptoBreakglassMode(blockNumber) {
-		{
-			return true
-		}
+		return true
 	}
 	return false
 }
@@ -790,21 +808,25 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 	digestHash := crypto.Keccak256(dataToVerify)
 	var pubKey *signaturealgorithm.PublicKey
 	var err error
+	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
 
-	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != cryptobase.SigAlgHybridEdsFull.SignatureWithPublicKeyLength() {
+	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength() {
 		return errors.New("invalid breakglass signature length")
 	}
 
-	sigAlg := cryptobase.GetSigAlg(blockNumber)
-
-	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength() { //for verify, it is ok not to check the blockNumber for full
-		pubKey, err = sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
+	if defaults.IsCryptoBreakglassMode(blockNumber) || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) { //for verify, it is ok not to check the blockNumber for full
+		var signContext []byte
+		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			signContext = FULL_SIGN_CONTEXT
+		} else {
+			signContext = FULL_SIGN_CONTEXT_V2
+		}
+		pubKey, err = sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, signContext)
 		if err != nil {
 			log.Debug("processPacket invalid 1")
 			return InvalidPacketErr
 		}
-
-		if sigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
+		if sigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, signContext) == false {
 			return InvalidPacketErr
 		}
 	} else {
@@ -1036,6 +1058,9 @@ func (cph *ConsensusHandler) getBlockState(parentHash common.Hash) (blockRoundSt
 
 	blockStateDetails, ok := cph.blockStateDetailsMap[parentHash]
 	if ok == false {
+		return BLOCK_STATE_UNKNOWN, 0, nil
+	}
+	if blockStateDetails == nil || blockStateDetails.blockRoundMap == nil || blockStateDetails.blockRoundMap[blockStateDetails.currentRound] == nil {
 		return BLOCK_STATE_UNKNOWN, 0, nil
 	}
 
@@ -1356,7 +1381,7 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.Address, error) {
 	dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
 	digestHash := crypto.Keccak256(dataToVerify)
-	sigAlg := cryptobase.GetSigAlg(blockNumber)
+	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
 	pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 	if err != nil {
 		log.Trace("invalid 1", "err", err)
@@ -1920,8 +1945,9 @@ func (cph *ConsensusHandler) proposeBlock(parentHash common.Hash, txns []common.
 	}
 
 	fullSignNeeded := shouldSignFull(blockNumber)
-	packet, err = cph.createConsensusPacket(parentHash, dataToSend, fullSignNeeded)
+	packet, err = cph.createConsensusPacket(parentHash, dataToSend, fullSignNeeded, blockNumber)
 	if err != nil {
+		log.Error("createConsensusPacket", "error", err)
 		return err
 	}
 
@@ -1984,7 +2010,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 			dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)
 		}
 
-		packet, err := cph.createConsensusPacket(parentHash, dataToSend, false)
+		packet, err := cph.createConsensusPacket(parentHash, dataToSend, defaults.IsCryptoBreakglassMode(blockStateDetails.blockNumber), blockStateDetails.blockNumber)
 		if err != nil {
 			return err
 		}
@@ -2167,7 +2193,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 		} else {
 			dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL)}, data...)
 		}
-		packet, err := cph.createConsensusPacket(parentHash, dataToSend, false)
+		packet, err := cph.createConsensusPacket(parentHash, dataToSend, defaults.IsCryptoBreakglassMode(blockStateDetails.blockNumber), blockStateDetails.blockNumber)
 		if err != nil {
 			return err
 		}
@@ -2301,7 +2327,7 @@ func (cph *ConsensusHandler) precommitBlock(parentHash common.Hash) error {
 		dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_PRECOMMIT_BLOCK)}, data...)
 	}
 
-	packet, err := cph.createConsensusPacket(parentHash, dataToSend, false)
+	packet, err := cph.createConsensusPacket(parentHash, dataToSend, defaults.IsCryptoBreakglassMode(blockStateDetails.blockNumber), blockStateDetails.blockNumber)
 	if err != nil {
 		return err
 	}
@@ -2355,7 +2381,7 @@ func (cph *ConsensusHandler) commitBlock(parentHash common.Hash) error {
 		dataToSend = append([]byte{byte(CONSENSUS_PACKET_TYPE_COMMIT_BLOCK)}, data...)
 	}
 
-	packet, err := cph.createConsensusPacket(parentHash, dataToSend, false)
+	packet, err := cph.createConsensusPacket(parentHash, dataToSend, defaults.IsCryptoBreakglassMode(blockStateDetails.blockNumber), blockStateDetails.blockNumber)
 	if err != nil {
 		return err
 	}
@@ -2463,6 +2489,7 @@ func (cph *ConsensusHandler) SaveHash(parentHash common.Hash) error {
 }
 
 func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []common.Hash, blockNumber uint64) error {
+	log.Trace("HandleConsensus start")
 	cph.outerPacketLock.Lock()
 	defer cph.outerPacketLock.Unlock()
 
@@ -2470,6 +2497,12 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	const minRand = 1
 
 	rndVal := rand.Intn(MaxRand-minRand) + minRand
+	var logLevel log.Lvl
+	if rndVal == 1 {
+		logLevel = log.LvlInfo
+	} else {
+		logLevel = log.LvlDebug
+	}
 
 	if blockNumber < cph.lastBlockNumber {
 		log.Warn("HandleConsensus", "blockNumber", blockNumber, "cph.lastBlockNumber", cph.lastBlockNumber)
@@ -2479,7 +2512,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	cph.SetLatestBlockNumber(blockNumber)
 	if defaults.IsCryptoBreakglassMode(blockNumber) {
 		log.Trace("IsCryptoBreakglassMode mode is set")
-		defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID))
+		defaults.SetCryptoSigningMode(byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID))
 	}
 
 	if cph.initialized == false {
@@ -2496,9 +2529,10 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		}
 
 		cph.initTime = time.Now()
-		cph.initialized = true
 		cph.packetHashLastSentMap = make(map[common.Hash]time.Time)
 		cph.packetStats = PacketStats{}
+		cph.startBlockNumber = blockNumber
+		cph.initialized = true
 
 		return errors.New("starting up")
 	}
@@ -2525,6 +2559,10 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	cph.cleanupBlockState()
 
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
+	if blockStateDetails.skipValidation {
+		log.Write(logLevel, "Waiting for block to be mined by other validators.", "block", blockNumber, "parentHash", parentHash)
+		return errors.New("skipping validation")
+	}
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
 	_, ok := blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
@@ -2541,19 +2579,12 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 
 	err = errors.New("not ready yet")
 
-	if rndVal == 1 {
-		log.Info("HandleConsensus", "parentHash", parentHash, "blockNumber", blockNumber, "currentRound", blockStateDetails.currentRound, "state", blockRoundDetails.state, "blockVoteType", blockRoundDetails.blockVoteType,
-			"selfAckProposalVoteType", blockRoundDetails.selfAckProposalVoteType,
-			"shouldPropose", shouldPropose, "currTxns", len(txns), "okVoteBlocks", cph.okVoteBlocks, "nilVoteBlocks", cph.nilVoteBlocks,
-			"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
-			"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason)
-	} else {
-		log.Debug("HandleConsensus", "parentHash", parentHash, "blockNumber", blockNumber, "currentRound", blockStateDetails.currentRound, "state", blockRoundDetails.state, "blockVoteType", blockRoundDetails.blockVoteType,
-			"selfAckProposalVoteType", blockRoundDetails.selfAckProposalVoteType,
-			"shouldPropose", shouldPropose, "currTxns", len(txns), "okVoteBlocks", cph.okVoteBlocks, "nilVoteBlocks", cph.nilVoteBlocks,
-			"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
-			"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason)
-	}
+	log.Write(logLevel, "HandleConsensus", "parentHash", parentHash, "blockNumber", blockNumber, "currentRound", blockStateDetails.currentRound, "state", blockRoundDetails.state, "blockVoteType", blockRoundDetails.blockVoteType,
+		"selfAckProposalVoteType", blockRoundDetails.selfAckProposalVoteType,
+		"shouldPropose", shouldPropose, "currTxns", len(txns), "okVoteBlocks", cph.okVoteBlocks, "nilVoteBlocks", cph.nilVoteBlocks,
+		"totalTransactions", cph.totalTransactions, "maxTransactionsInBlock", cph.maxTransactionsInBlock, "maxTransactionsBlockTime", cph.maxTransactionsBlockTime,
+		"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
+		"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime), "session blocksSkippedValidation", blockStateDetails.blocksSkippedValidation)
 
 	if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
 		blockRoundDetails.selfKnownTransactions = make(map[common.Hash]bool) //reset, since txn list could have changed (added or removed)
@@ -2616,7 +2647,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	return err
 }
 
-func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data []byte, fullSign bool) (*eth.ConsensusPacket, error) {
+func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data []byte, fullSign bool, blockNumber uint64) (*eth.ConsensusPacket, error) {
 	if cph.signFn == nil {
 		return nil, errors.New("signFn is not set")
 	}
@@ -2624,8 +2655,15 @@ func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data 
 	var signature []byte
 	var err error
 	if fullSign {
+		var signContext []byte
+		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			signContext = FULL_SIGN_CONTEXT
+		} else {
+			signContext = FULL_SIGN_CONTEXT_V2
+		}
+
 		log.Debug("createConsensusPacket", "parentHash", parentHash, "fullSign", fullSign)
-		signature, err = cph.signFnWithContext(cph.account, accounts.MimetypeProofOfStake, dataToSign, FULL_SIGN_CONTEXT)
+		signature, err = cph.signFnWithContext(cph.account, accounts.MimetypeProofOfStake, dataToSign, signContext)
 	} else {
 		log.Trace("createConsensusPacket", "parentHash", parentHash, "fullSign", fullSign)
 		signature, err = cph.signFn(cph.account, accounts.MimetypeProofOfStake, dataToSign)

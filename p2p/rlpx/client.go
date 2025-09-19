@@ -10,10 +10,12 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"io"
 	"sync"
+	"time"
 )
 
 type ClientHelloMessage struct {
@@ -337,15 +339,28 @@ func (c *Client) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 		clientIv = c.secret.ClientApplicationIv
 	}
 
+	header := new(Header)
+	header.PacketType = uint(packetType)
+	header.MajorVersion = majorVersion
+	if time.Now().UTC().Unix() < defaults.DefaultConfig.KemSwitchTime {
+		header.MinorVersion = minorVersion
+	} else {
+		header.MinorVersion = minorVersionV2
+	}
+
+	if header.MinorVersion >= minorVersionV2 {
+		compressedData, err := compress(data)
+		if err != nil {
+			return err
+		}
+		data = compressedData
+	}
+
 	encryptedData, err := Encrypt(cipher, data, additionalData, packetType, clientIv, seqNum)
 	if err != nil {
 		return err
 	}
 
-	header := new(Header)
-	header.PacketType = uint(packetType)
-	header.MajorVersion = majorVersion
-	header.MinorVersion = minorVersion
 	header.RecordLength = uint(len(encryptedData))
 	header.Context = context
 	copy(header.AdditionalData[:], additionalData)
@@ -427,6 +442,14 @@ func (c *Client) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		return nil, errors.New("packetType mismatch")
 	}
 	dataPacket.context = header.Context
+
+	if header.MinorVersion >= minorVersionV2 {
+		uncompressedData, err := decompress(dataPacket.fragment)
+		if err != nil {
+			return nil, err
+		}
+		dataPacket.fragment = uncompressedData
+	}
 
 	if packetType == PacketTypeHandshake {
 		c.serverSeqNumHandshake = c.serverSeqNumHandshake + 1

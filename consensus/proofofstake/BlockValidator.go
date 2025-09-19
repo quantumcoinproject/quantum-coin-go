@@ -74,18 +74,24 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 		resultsChan <- &PacketParseResult{err: err}
 	}
 
-	sigAlg := cryptobase.GetSigAlg(blockNumber)
+	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
-	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength() { //for verify, it is ok not to check the blockNumber for full
-		pubKey, err = sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
+	if defaults.IsCryptoBreakglassMode(blockNumber) || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength()) { //for verify, it is ok not to check the blockNumber for full
+		var signContext []byte
+		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			signContext = FULL_SIGN_CONTEXT
+		} else {
+			signContext = FULL_SIGN_CONTEXT_V2
+		}
+		pubKey, err = sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, signContext)
 		if err != nil {
 			err = InvalidPacketErr
 			resultsChan <- &PacketParseResult{err: err}
 			return
 		}
 
-		if sigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, []byte{byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID)}) == false {
+		if sigAlg.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, signContext) == false {
 			err = InvalidPacketErr
 			resultsChan <- &PacketParseResult{err: err}
 			return

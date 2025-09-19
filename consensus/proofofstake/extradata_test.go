@@ -43,11 +43,6 @@ func TestExtraData_encode_decode(t *testing.T) {
 		return
 	}
 
-	if len(decoded.ExtraData) != 0 {
-		t.Fatalf("decoded bytes check fail")
-		return
-	}
-
 	verified, err := VerifyExtraData(blockNumber, encoded)
 	if err != nil {
 		t.Fatalf(err.Error())

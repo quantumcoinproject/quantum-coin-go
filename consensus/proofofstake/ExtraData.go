@@ -16,7 +16,6 @@ var DefaultExtraData = common.Hex2Bytes(DefaultExtraDataHex)
 
 type BlockExtraData struct {
 	ErrorTransactions types.Transactions `json:"errorTransactions" gencodec:"required"`
-	ExtraData         []byte             `json:"extraData" gencodec:"required"`
 }
 
 func EncodeBlockExtraData(errorTransactions types.Transactions, currentExtraData []byte, blockNumber uint64) ([]byte, error) {
@@ -34,7 +33,6 @@ func EncodeBlockExtraData(errorTransactions types.Transactions, currentExtraData
 
 	blockExtraData := BlockExtraData{
 		ErrorTransactions: errorTransactions,
-		ExtraData:         make([]byte, 0),
 	}
 
 	data, err := rlp.EncodeToBytes(&blockExtraData)
@@ -84,9 +82,6 @@ func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, err
 		if bytes.Compare(origExtraData, DefaultExtraData) != 0 {
 			log.Error("VerifyExtraData b", "number", blockNumber, "actual", common.Bytes2Hex(extraData), "expected", common.Bytes2Hex(DefaultExtraData))
 			return nil, errors.New("invalid ExtraData a")
-		}
-		if len(blockExtraData.ExtraData) != 0 {
-			return nil, errors.New("invalid ExtraData c")
 		}
 
 		//todo: further verification

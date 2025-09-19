@@ -1,16 +1,16 @@
-package pqchelper
+package pqchelpereddsamldsaslhdsa
 
 import (
 	"crypto/rand"
 	"errors"
-	"github.com/quantumcoinproject/circl/sign/hybrideds"
+	"github.com/quantumcoinproject/circl/sign/hybridedmldsaslhdsa"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 const (
 	CRYPTO_MESSAGE_LEN             = 32
-	CRYPTO_COMPACT_SIGNATURE_BYTES = 2 + 64 + 2420 + 40 + CRYPTO_MESSAGE_LEN //2558
+	CRYPTO_COMPACT_SIGNATURE_BYTES = 2 + 64 + 2420 + CRYPTO_MESSAGE_LEN //2558
 )
 
 var (
@@ -22,13 +22,13 @@ var (
 )
 
 func GenerateKeyWithSeed(seed []byte) (publicKey []byte, secretKey []byte, err error) {
-	if len(seed) != hybrideds.SeedSize {
+	if len(seed) != hybridedmldsaslhdsa.SeedSize {
 		return nil, nil, ErrInvalidSeed
 	}
-	var seedAlt [hybrideds.SeedSize]byte
+	var seedAlt [hybridedmldsaslhdsa.SeedSize]byte
 	copy(seedAlt[:], seed)
 
-	pub, pri, err := hybrideds.NewKeyFromSeed(&seedAlt)
+	pub, pri, err := hybridedmldsaslhdsa.NewKeyFromSeed(&seedAlt)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -44,7 +44,7 @@ func GenerateKeyWithSeed(seed []byte) (publicKey []byte, secretKey []byte, err e
 }
 
 func GenerateKey() (publicKey []byte, secretKey []byte, err error) {
-	pub, pri, err := hybrideds.GenerateKey(rand.Reader)
+	pub, pri, err := hybridedmldsaslhdsa.GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -60,11 +60,11 @@ func GenerateKey() (publicKey []byte, secretKey []byte, err error) {
 }
 
 func Sign(secretKey []byte, message []byte) ([]byte, error) {
-	pri, err := hybrideds.UnmarshalPrivateKey(secretKey)
+	pri, err := hybridedmldsaslhdsa.UnmarshalPrivateKey(secretKey)
 	if err != nil {
 		return nil, err
 	}
-	signature, err := hybrideds.Sign(pri, rand.Reader, message)
+	signature, err := hybridedmldsaslhdsa.Sign(pri, rand.Reader, message)
 	if err != nil {
 		return nil, err
 	}
@@ -73,19 +73,19 @@ func Sign(secretKey []byte, message []byte) ([]byte, error) {
 }
 
 func Verify(pubKey []byte, digestHash []byte, signature []byte) bool {
-	pub, err := hybrideds.UnmarshalPublicKey(pubKey)
+	pub, err := hybridedmldsaslhdsa.UnmarshalPublicKey(pubKey)
 	if err != nil {
 		return false
 	}
-	return hybrideds.Verify(pub, digestHash, signature)
+	return hybridedmldsaslhdsa.Verify(pub, digestHash, signature)
 }
 
 func SignCompact(secretKey []byte, message []byte) ([]byte, error) {
-	pri, err := hybrideds.UnmarshalPrivateKey(secretKey)
+	pri, err := hybridedmldsaslhdsa.UnmarshalPrivateKey(secretKey)
 	if err != nil {
 		return nil, err
 	}
-	signature, err := hybrideds.SignCompact(pri, rand.Reader, message)
+	signature, err := hybridedmldsaslhdsa.SignCompact(pri, rand.Reader, message)
 	if err != nil {
 		return nil, err
 	}
@@ -94,11 +94,11 @@ func SignCompact(secretKey []byte, message []byte) ([]byte, error) {
 }
 
 func VerifyCompact(pubKey []byte, digestHash []byte, signature []byte) bool {
-	pub, err := hybrideds.UnmarshalPublicKey(pubKey)
+	pub, err := hybridedmldsaslhdsa.UnmarshalPublicKey(pubKey)
 	if err != nil {
 		return false
 	}
-	return hybrideds.VerifyCompact(pub, digestHash, signature)
+	return hybridedmldsaslhdsa.VerifyCompact(pub, digestHash, signature)
 }
 
 func PublicKeyBytesFromSignatureCompact(digestHash []byte, sig []byte) ([]byte, error) {
@@ -120,7 +120,7 @@ func PublicKeyBytesFromSignatureCompact(digestHash []byte, sig []byte) ([]byte, 
 }
 
 func PrivateAndPublicFromPrivateKey(compositePrivateKey []byte) (privateBytes []byte, publicBytes []byte, err error) {
-	pri, err := hybrideds.UnmarshalPrivateKey(compositePrivateKey)
+	pri, err := hybridedmldsaslhdsa.UnmarshalPrivateKey(compositePrivateKey)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -148,7 +148,7 @@ func CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSig
 		return nil, errors.New("invalid signature length")
 	}
 
-	if len(pubKeyBytes) != hybrideds.PublicKeySize {
+	if len(pubKeyBytes) != hybridedmldsaslhdsa.PublicKeySize {
 		return nil, errors.New("invalid public key length")
 	}
 

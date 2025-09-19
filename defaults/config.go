@@ -30,6 +30,10 @@ func IsCryptoBreakglassMode(blockNumber uint64) bool {
 	return cryptoBreakglassBlock != 0 && blockNumber >= cryptoBreakglassBlock
 }
 
+func IsSigAlgSwitchMode(blockNumber uint64) bool {
+	return cryptoBreakglassBlock != 0 && blockNumber >= DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+}
+
 func SetCryptoSigningMode(signMode byte) {
 	signingMode = signMode
 }
@@ -86,6 +90,7 @@ type Config struct {
 	ValidateSigPubStartTime int64
 	TxnStartAllowedTime     int64
 	ConversionTxnLastTime   int64
+	KemSwitchTime           int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -124,7 +129,7 @@ var mainnetPosConfig = ProofOfStakeConfig{
 
 	SixtySevenVoteStartBlock: uint64(2082171 + 10 + 10),
 
-	OfflineValidatorV4StartBlock: 3000030,
+	OfflineValidatorV4StartBlock: 3600030,
 
 	MinOfflineProposerBlockDelay: 3600,
 }
@@ -175,9 +180,10 @@ var MainnetConfig = &Config{
 	DeepCheckStartBlock:     uint64(3000000),
 	GasPriceStartBlock:      uint64(3000001),
 	DefaultGasLimit:         300000000,
-	ValidateSigPubStartTime: int64(1761955200),
-	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	ValidateSigPubStartTime: int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:     int64(1713052800),    //April 14th, 2024
+	ConversionTxnLastTime:   int64(1744675199),    //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:           int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
 }
 
 var DevnetConfig = &Config{
@@ -185,9 +191,10 @@ var DevnetConfig = &Config{
 	DeepCheckStartBlock:     uint64(3000000),
 	GasPriceStartBlock:      uint64(3000001),
 	DefaultGasLimit:         300000000,
-	ValidateSigPubStartTime: int64(1761955200),
-	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	ValidateSigPubStartTime: int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:     int64(1713052800),    //April 14th, 2024
+	ConversionTxnLastTime:   int64(1744675199),    //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:           int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
 }
 
 var DefaultConfig = MainnetConfig

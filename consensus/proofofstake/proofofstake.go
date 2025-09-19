@@ -90,6 +90,8 @@ var (
 	errInvalidGasLimit = errors.New("invalid gas limit")
 )
 
+var SKIP_BLOCK_DEEP_CHECK = os.Getenv("SKIP_BLOCK_DEEP_CHECK")
+
 // SignerFn hashes and signs the data to be signed by a backing account.
 type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
 type SignerFnWithContext func(signer accounts.Account, mimeType string, message []byte, context []byte) ([]byte, error)
@@ -558,6 +560,32 @@ func (c *ProofOfStake) VerifyBlock(chain consensus.ChainHeaderReader, block *typ
 		return err
 	}
 
+	if SKIP_BLOCK_DEEP_CHECK == "1" {
+		//perform only a mini check
+		if header.ConsensusData == nil || header.UnhashedConsensusData == nil {
+			return errors.New("VerifyBlock ConsensusData is nil")
+		}
+
+		blockConsensusData := &BlockConsensusData{}
+		err = rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
+		if err != nil {
+			return err
+		}
+
+		blockAdditionalConsensusData := &BlockAdditionalConsensusData{}
+		err = rlp.DecodeBytes(header.UnhashedConsensusData, blockAdditionalConsensusData)
+		if err != nil {
+			return err
+		}
+
+		if blockAdditionalConsensusData.ConsensusPackets == nil {
+			return errors.New("ValidateBlockConsensusData ConsensusPackets is nil")
+		}
+
+		log.Info("VerifyBlock SKIP_BLOCK_DEEP_CHECK is set, skipping deep check. Do not use this mode except for testing", "number", header.Number.Uint64(), "hash", header.Hash())
+		return nil
+	}
+
 	validatorDepositMap, err := c.GetValidators(header.ParentHash)
 	if err != nil {
 		log.Trace("VerifyBlock 3", "err", err)
@@ -809,9 +837,9 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			log.Error("GetBlockConsensusContextFn err", "err", err)
 			return err
 		}
-		var consensuscontext [32]byte
-		copy(consensuscontext[:], header.ParentHash.Bytes())
-		err = c.SetConsensusContext(key, consensuscontext, state, header)
+		var consensusContext [32]byte
+		copy(consensusContext[:], header.ParentHash.Bytes())
+		err = c.SetConsensusContext(key, consensusContext, state, header)
 		if err != nil {
 			log.Error("SetConsensusContext err", "err", err)
 			return err

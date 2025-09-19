@@ -1,11 +1,14 @@
 package rlpx
 
 import (
+	"bytes"
+	"compress/gzip"
 	"crypto/cipher"
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"io"
 	"time"
 )
 
@@ -19,6 +22,8 @@ const (
 
 	majorVersion = 1
 	minorVersion = 1
+
+	minorVersionV2 = 2
 
 	padLen = 0
 	shaLen = 32
@@ -154,4 +159,42 @@ func NewKem(context string) (*keyestablishmentalgorithm.KeyEncapsulation, error)
 	}
 	kem = k
 	return &kem, err
+}
+
+func compress(data []byte) ([]byte, error) {
+	var buff bytes.Buffer
+
+	// Create a new gzip writer that writes to the buffer
+	gzWriter := gzip.NewWriter(&buff)
+
+	// Write the uncompressed data to the gzip writer
+	_, err := gzWriter.Write(data)
+	if err != nil {
+		return nil, err
+	}
+
+	// Close the gzip writer to flush any buffered data and write the gzip footer
+	err = gzWriter.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return buff.Bytes(), nil
+}
+
+func decompress(compressedData []byte) ([]byte, error) {
+	// Create a new gzip reader that reads from the compressed data
+	gzReader, err := gzip.NewReader(bytes.NewReader(compressedData))
+	if err != nil {
+		return nil, err
+	}
+	defer gzReader.Close() // Ensure the reader is closed
+
+	// Read the decompressed data
+	decompressedData, err := io.ReadAll(gzReader)
+	if err != nil {
+		return nil, err
+	}
+
+	return decompressedData, nil
 }

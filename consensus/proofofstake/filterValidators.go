@@ -53,6 +53,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	}
 
 	if totalDepositValue.Cmp(MIN_BLOCK_DEPOSIT) == -1 {
+		log.Error("min block deposit not met", "MIN_BLOCK_DEPOSIT", MIN_BLOCK_DEPOSIT, "totalDepositValue", totalDepositValue)
 		return nil, nil, nil, errors.New("min block deposit not met")
 	}
 
@@ -63,12 +64,15 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 			filteredValidators[validator] = true
 		}
 	} else {
-		filteredValidatorsRet, err := getMaxFilteredValidators(consensusContext, totalDepositValue, valDepMap)
+		filteredValidatorsRet, err := getMaxFilteredValidators(blockNumber, consensusContext, totalDepositValue, valDepMap)
 		if err != nil {
 			return nil, nil, nil, err
 		}
 		filteredValidators = *filteredValidatorsRet
 	}
+
+	//Normalize deposit
+	normalizeDeposit(blockNumber, &validatorsDepositMap, validatorDetailsMap)
 
 	filteredDepositValue = big.NewInt(0)
 	for val, _ := range filteredValidators {
@@ -99,13 +103,14 @@ For security of the network, the goal is to select validators in a way that at-l
 while at the same time allowing even validators will lesser amount of staked coins (relative to others), to get selected for validation.
 It might not always be possible to select validators in a way that 51% of staked coins are selected, but the algorithm tries to establish a balance.
 */
-func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *big.Int, valDepMap *map[common.Address]*big.Int) (*map[common.Address]bool, error) {
+func getMaxFilteredValidators(blockNumber uint64, consensusContext common.Hash, totalDepositValue *big.Int, valDepMap *map[common.Address]*big.Int) (*map[common.Address]bool, error) {
 	validatorsDepositMap := *valDepMap
 
 	depositValueSoFar := big.NewInt(0)
 	blockMinWeightedStake := common.SafeRelativePercentageBigInt(totalDepositValue, MAX_VALIDATOR_SELECTION_MIN_PERCENTAGE)
 	log.Debug("getMaxFilteredValidators", "blockMinWeightedStake", blockMinWeightedStake, "totalDepositValue", totalDepositValue)
 	filteredValidators := make(map[common.Address]bool)
+	blockNumberBytes := common.Uint64ToBytes(blockNumber)
 
 	validatorList := make([]common.Address, len(validatorsDepositMap))
 	ctr := 0
@@ -120,9 +125,15 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 		valDepJ := validatorsDepositMap[validatorList[j]]
 		cmpResult := valDepI.Cmp(valDepJ)
 		if cmpResult == 0 { //equal deposit, sort by consensus context + validator address combo
-			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
-			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
-			return bytes.Compare(vi, vj) == -1
+			if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+				vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
+				vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
+				return bytes.Compare(vi, vj) == -1
+			} else {
+				vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes(), blockNumberBytes).Bytes()
+				vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes(), blockNumberBytes).Bytes()
+				return bytes.Compare(vi, vj) == -1
+			}
 		}
 		return cmpResult > 0
 	})
@@ -145,8 +156,15 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 			continue
 		}
 		//Note, we do Keccak256Hash to reduce risk from generation of validator address that are more likely to be lower than just comparing with consensus-context
-		leftHash := crypto.Keccak256Hash(consensusContext.Bytes(), validator.Bytes()).Bytes()
-		rightHash := crypto.Keccak256Hash(validator.Bytes(), consensusContext.Bytes()).Bytes()
+		var leftHash []byte
+		var rightHash []byte
+		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			leftHash = crypto.Keccak256Hash(consensusContext.Bytes(), validator.Bytes()).Bytes()
+			rightHash = crypto.Keccak256Hash(validator.Bytes(), consensusContext.Bytes()).Bytes()
+		} else {
+			leftHash = crypto.Keccak256Hash(consensusContext.Bytes(), validator.Bytes(), blockNumberBytes).Bytes()
+			rightHash = crypto.Keccak256Hash(validator.Bytes(), consensusContext.Bytes(), blockNumberBytes).Bytes()
+		}
 		if bytes.Compare(leftHash, rightHash) > 0 {
 			filteredValidators[validator] = true
 			if len(filteredValidators) == MAX_VALIDATORS_SECOND_PASS_VALIDATOR_SELECTION_CUTOFF {
@@ -162,9 +180,15 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 	//Third pass, fill by consensus context sort order, if the buffer is not full even after second pass. This is to ensure fairness even for validators with lower number of staked coins
 	//Sort based on consensus context
 	sort.Slice(validatorList, func(i, j int) bool {
-		vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
-		vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
-		return bytes.Compare(vi, vj) == -1
+		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
+			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		} else {
+			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes(), blockNumberBytes).Bytes()
+			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes(), blockNumberBytes).Bytes()
+			return bytes.Compare(vi, vj) == -1
+		}
 	})
 
 	for _, validator := range validatorList {
@@ -181,8 +205,14 @@ func getMaxFilteredValidators(consensusContext common.Hash, totalDepositValue *b
 	return &filteredValidators, nil
 }
 
-func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
+func normalizeDeposit(blockNumber uint64, valDepMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
+	if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+		log.Debug("normalizeDeposit skipping block number", "blockNumber", blockNumber)
+		return
+	}
+
 	if len(*valDepMap) < MIN_VALIDATORS_NORMALIZATION {
+		log.Debug("normalizeDeposit skipping MIN_VALIDATORS_NORMALIZATION", "len(*valDepMap)", len(*valDepMap), "blockNumber", blockNumber)
 		return
 	}
 
@@ -207,6 +237,8 @@ func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMa
 			coinsReduced = common.SafeAddBigInt(coinsReduced, reduction)
 			depMap[val] = maxCoins
 			hasChanges = true
+			log.Debug("normalizeDeposit first round", "val", val, "amt", amt, "reduction", reduction, "coinsReduced", coinsReduced, "maxCoins", maxCoins)
+
 		}
 		if valDetailsMap[val].NilBlockCount.Uint64() == 0 {
 			nonOfflineCoinsAfterReduction = common.SafeAddBigInt(nonOfflineCoinsAfterReduction, depMap[val])
@@ -214,6 +246,7 @@ func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMa
 	}
 
 	if hasChanges == false {
+		log.Debug("normalizeDeposit skipping no changes", "blockNumber", blockNumber)
 		return
 	}
 
@@ -223,8 +256,12 @@ func normalizeDeposit(valDepMap *map[common.Address]*big.Int, validatorDetailsMa
 			continue
 		}
 		amountToIncrease := common.SafeDivBigInt(common.SafeMulBigInt(coinsReduced, amt), nonOfflineCoinsAfterReduction)
+		before := depMap[val]
 		depMap[val] = common.SafeAddBigInt(depMap[val], amountToIncrease)
+		log.Debug("normalizeDeposit second round", "val", val, "before", before, "after", depMap[val], "amountToIncrease", amountToIncrease, "nonOfflineCoinsAfterReduction", nonOfflineCoinsAfterReduction)
 	}
+
+	log.Debug("normalizeDeposit applied", "blockNumber", blockNumber, "nonOfflineCoinsAfterReduction", nonOfflineCoinsAfterReduction)
 
 	return
 }

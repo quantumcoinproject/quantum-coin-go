@@ -57,7 +57,7 @@ const rttMinEstimate = 2 * time.Second
 // special connectivity ones might experience significant delays (e.g. satellite
 // uplink with 3s RTT). This value should be low enough to forbid stalling the
 // pipeline too long, but large enough to cover the worst of the worst links.
-const rttMaxEstimate = 20 * time.Second
+const rttMaxEstimate = 30 * time.Second
 
 // rttPushdownFactor is a multiplier to attempt forcing quicker requests than
 // what the message rate tracker estimates. The reason is that message rate
@@ -78,13 +78,13 @@ const rttMinConfidence = 0.1
 // request time, it might be higher than anticipated. This scaling factor ensures
 // that we allow remote connections some slack but at the same time do enforce a
 // behavior similar to our median peers.
-const ttlScaling = 3
+const ttlScaling = 6
 
 // ttlLimit is the maximum timeout allowance to prevent reaching crazy numbers
 // if some unforeseen network events shappen. As much as we try to hone in on
 // the most optimal values, it doesn't make any sense to go above a threshold,
 // even if everything is slow and screwy.
-const ttlLimit = time.Minute
+const ttlLimit = 2 * time.Minute
 
 // tuningConfidenceCap is the number of active peers above which to stop detuning
 // the confidence number. The idea here is that once we hone in on the capacity

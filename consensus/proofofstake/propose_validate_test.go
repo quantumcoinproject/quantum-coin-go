@@ -168,11 +168,11 @@ func TestCanPropose_v4(t *testing.T) {
 		t.Fatalf("failed")
 	}
 
-	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 2, 3003632, true) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 2, 3003632+600000, true) == false {
 		t.Fatalf("failed")
 	}
 
-	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 32, 3069166, true) == false {
+	if canProposeTest(int64(defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock), 32, 3069166+600000, true) == false {
 		t.Fatalf("failed")
 	}
 }

@@ -165,24 +165,30 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 	} else {
 		startIndex = 1
 	}
-	sigAlg := cryptobase.GetSigAlg(TEST_CONSENSUS_BLOCK_NUMBER)
+	sigAlg := cryptobase.GetSigAlgForValidation(TEST_CONSENSUS_BLOCK_NUMBER)
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
-	if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) && packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && packet.ParentHash.IsEqualTo(getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER)) {
+	if defaults.IsCryptoBreakglassMode(TEST_CONSENSUS_BLOCK_NUMBER) || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) {
 		log.Info("getSigner shouldSignFull")
-		pubKey, err := cryptobase.SigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, FULL_SIGN_CONTEXT)
+		var signContext []byte
+		if TEST_CONSENSUS_BLOCK_NUMBER < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			signContext = FULL_SIGN_CONTEXT
+		} else {
+			signContext = FULL_SIGN_CONTEXT_V2
+		}
+		pubKey, err := sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, signContext)
 		if err != nil {
-			log.Info("a1")
+			log.Info("a1", "err", err, "signContext", signContext)
 			return ZERO_ADDRESS, err
 		}
-		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, FULL_SIGN_CONTEXT) == false {
+		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, signContext) == false {
 			log.Info("a2")
 			return ZERO_ADDRESS, InvalidPacketErr
 		}
 
-		validator, err := cryptobase.SigAlg.PublicKeyToAddress(pubKey)
+		validator, err := sigAlg.PublicKeyToAddress(pubKey)
 		if err != nil {
-			log.Info("a3")
+			log.Info("a3", "err", err)
 			return ZERO_ADDRESS, err
 		}
 
@@ -191,7 +197,7 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 		log.Info("getSigner other")
 		pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
-			log.Info("a4", "len", len(packet.Signature), "packetType", packetType, "packet.ParentHash", packet.ParentHash, "getTestParentHash", getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER), "startIndex", startIndex)
+			log.Info("a4", "err", err, "len", len(packet.Signature), "packetType", packetType, "packet.ParentHash", packet.ParentHash, "getTestParentHash", getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER), "startIndex", startIndex)
 			return ZERO_ADDRESS, err
 		}
 		if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
@@ -201,7 +207,7 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 
 		validator, err := sigAlg.PublicKeyToAddress(pubKey)
 		if err != nil {
-			log.Info("a6")
+			log.Info("a6", "err", err)
 			return ZERO_ADDRESS, err
 		}
 
@@ -378,7 +384,7 @@ func (vm *ValidatorManager) SignDataWithContext(account accounts.Account, mimeTy
 	}
 
 	hash := crypto.Keccak256(data)
-	return cryptobase.SigAlg.SignWithContext(hash, val.key, context)
+	return cryptobase.DynamicSign.SignWithContext(hash, val.key, context)
 }
 
 func (vm *ValidatorManager) GetValidatorsFn(blockHash common.Hash) (map[common.Address]*big.Int, error) {

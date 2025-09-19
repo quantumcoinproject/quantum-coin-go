@@ -819,7 +819,7 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 
 			errInternal := w.freezeTransactionsIfNeeded(&txnFilteredMap, s)
 			if errInternal != nil {
-				log.Debug("freezeTransactionsIfNeeded", "errInternal", errInternal)
+				log.Debug("freezeTransactionsIfNeeded post HandleTransactions error", "errInternal", errInternal)
 			}
 
 			return err

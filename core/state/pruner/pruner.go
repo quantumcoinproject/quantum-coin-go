@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -478,9 +479,9 @@ func findBloomFilter(datadir string) (string, common.Hash, error) {
 		stateBloomPath string
 		stateBloomRoot common.Hash
 	)
-	log.Debug("findBloomFilter before filepath.Walk")
-	if err := filepath.Walk(datadir, func(path string, info os.FileInfo, err error) error {
-		if info != nil && !info.IsDir() {
+	log.Debug("findBloomFilter before filepath.WalkDir", "datadir", datadir)
+	if err := filepath.WalkDir(datadir, func(path string, d fs.DirEntry, err error) error {
+		if d != nil && !d.IsDir() {
 			log.Trace("isBloomFilter before", "path", path)
 			ok, root := isBloomFilter(path)
 			if ok {

@@ -159,7 +159,11 @@ func main() {
 		return
 	}
 	signMode := os.Getenv("SIGN_MODE")
-	if signMode == "2" {
+	if signMode == "4" {
+		defaults.SetCryptoSigningMode(4)
+	} else if signMode == "3" {
+		defaults.SetCryptoSigningMode(3)
+	} else if signMode == "2" {
 		defaults.SetCryptoSigningMode(2)
 	} else if signMode == "1" {
 		defaults.SetCryptoSigningMode(1)

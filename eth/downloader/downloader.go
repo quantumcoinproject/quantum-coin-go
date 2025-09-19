@@ -59,6 +59,10 @@ var (
 	fsHeaderForceVerify    = 24              // Number of headers to verify before and after the pivot to accept it
 	fsHeaderContCheck      = 3 * time.Second // Time interval to check for header continuations during state download
 	fsMinFullBlocks        = 64              // Number of blocks to retrieve fully even in fast sync
+
+	PeerErrorLock sync.Mutex
+	PeerErrorMap  = make(map[string]uint)
+	PeerMaxErrors = uint(16)
 )
 
 var (
@@ -340,7 +344,9 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 			// Timeouts can occur if e.g. compaction hits at the wrong time, and can be ignored
 			log.Warn("Downloader wants to drop peer, but peerdrop-function is not set", "peer", id)
 		} else {
-			d.dropPeer(id)
+			if shouldDisconnectPeer(id) {
+				d.dropPeer(id)
+			}
 		}
 		return err
 	}
@@ -1943,4 +1949,23 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 	case <-cancel:
 		return errNoSyncActive
 	}
+}
+
+func shouldDisconnectPeer(peerId string) bool {
+	PeerErrorLock.Lock()
+	defer PeerErrorLock.Unlock()
+
+	count, ok := PeerErrorMap[peerId]
+	if ok == false {
+		PeerErrorMap[peerId] = 0
+		count = 0
+	}
+	count = count + 1
+	if count >= PeerMaxErrors {
+		PeerErrorMap[peerId] = 0
+		return true
+	}
+	log.Warn("shouldDisconnectPeer", "errorCount below threshold", count, "peerId", peerId, "threshold", PeerMaxErrors)
+	PeerErrorMap[peerId] = count
+	return false
 }
