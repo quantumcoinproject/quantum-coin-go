@@ -42,6 +42,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	// Force-load the tracer engines to trigger registration
+	_ "github.com/quantumcoinproject/quantum-coin-go/eth/tracers/js"
+	_ "github.com/quantumcoinproject/quantum-coin-go/eth/tracers/native"
 )
 
 const (

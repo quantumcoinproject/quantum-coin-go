@@ -29,6 +29,7 @@ var Modules = map[string]string{
 	"txpool":       TxpoolJs,
 	"les":          LESJs,
 	"vflux":        VfluxJs,
+	"tracer":       TracerJs,
 }
 
 const ProofOfStakeJs = `
@@ -419,6 +420,69 @@ web3._extend({
 			name: 'freezeClient',
 			call: 'debug_freezeClient',
 			params: 1,
+		}),
+	],
+	properties: []
+});
+`
+
+const TracerJs = `
+web3._extend({
+	property: 'tracer',
+	methods: [
+		new web3._extend.Method({
+			name: 'traceBlock',
+			call: 'tracer_traceBlock',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockFromFile',
+			call: 'tracer_traceBlockFromFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBadBlock',
+			call: 'tracer_traceBadBlock',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'standardTraceBadBlockToFile',
+			call: 'tracer_standardTraceBadBlockToFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'standardTraceBlockToFile',
+			call: 'tracer_standardTraceBlockToFile',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockByNumber',
+			call: 'tracer_traceBlockByNumber',
+			params: 2,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceBlockByHash',
+			call: 'tracer_traceBlockByHash',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceTransaction',
+			call: 'tracer_traceTransaction',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'traceCall',
+			call: 'tracer_traceCall',
+			params: 3,
+			inputFormatter: [null, null, null]
 		}),
 	],
 	properties: []
