@@ -2558,14 +2558,18 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 
 	cph.cleanupBlockState()
 
-	blockStateDetails := cph.blockStateDetailsMap[parentHash]
+	blockStateDetails, ok := cph.blockStateDetailsMap[parentHash]
+	if ok == false || blockStateDetails == nil {
+		log.Warn("HandleConsensus blockStateDetails is unexpectedly nil", "parentHash", parentHash, "currentParentHash", cph.currentParentHash)
+		return errors.New("HandleConsensus blockStateDetails is unexpectedly nil")
+	}
 	if blockStateDetails.skipValidation {
 		log.Write(logLevel, "Waiting for block to be mined by other validators.", "block", blockNumber, "parentHash", parentHash)
 		return errors.New("skipping validation")
 	}
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
-	_, ok := blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
+	_, ok = blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
 	if ok == false {
 		return errors.New("not a validator in this block")
 	}
