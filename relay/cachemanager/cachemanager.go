@@ -699,7 +699,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 					if strings.ToUpper(iTxn.Type) == "CREATE" || strings.ToUpper(iTxn.Type) == "CREATE2" {
 						tokenDetails, err := c.client.GetTokenDetails(common.HexToAddress(iTxn.To), blockNum)
 						if err != nil {
-							if errors.Is(err, token.NotATokenError) {
+							if errors.Is(err, ethclient.NotATokenError) {
 								continue
 							} else {
 								return err
@@ -1693,7 +1693,7 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 
 		tokenBalance, err := c.client.GetAccountTokenBalance(t.ContractAddress, t.From)
 		if err != nil {
-			if errors.Is(err, token.NotATokenError) {
+			if errors.Is(err, ethclient.NotATokenError) {
 				log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "from", t.From)
 				return err
 			}
@@ -1707,7 +1707,7 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 
 		tokenBalance, err = c.client.GetAccountTokenBalance(t.ContractAddress, t.To)
 		if err != nil {
-			if errors.Is(err, token.NotATokenError) {
+			if errors.Is(err, ethclient.NotATokenError) {
 				log.Error("processAccountTokenTransfers GetAccountTokenBalance from", "contractAddress", contractAddress, "error", err, "to", t.To)
 				return err
 			}
