@@ -34,7 +34,7 @@ import (
 )
 
 const (
-	version = 3
+	version = 4
 )
 
 type Key struct {
@@ -69,11 +69,11 @@ type encryptedKeyJSONV3 struct {
 	Version int        `json:"version"`
 }
 
-type encryptedKeyJSONV1 struct {
+type encryptedKeyJSONV4 struct {
 	Address string     `json:"address"`
 	Crypto  CryptoJSON `json:"crypto"`
 	Id      string     `json:"id"`
-	Version string     `json:"version"`
+	Version int        `json:"version"`
 }
 
 type CryptoJSON struct {
