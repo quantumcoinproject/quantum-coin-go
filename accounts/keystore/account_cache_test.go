@@ -38,6 +38,10 @@ var (
 	cachetestDir, _   = filepath.Abs(filepath.Join("testdata", "keystore"))
 	cachetestAccounts = []accounts.Account{
 		{
+			Address: common.HexToAddress("307e327c31f08918e960995cbd374f383f4071075b389cf5f2e985c038920492"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "307e327c31f08918e960995cbd374f383f4071075b389cf5f2e985c038920492")},
+		},
+		{
 			Address: common.HexToAddress("ff8fd0e9064bcbc5462763229b8a4314f07cf000"),
 			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "UTC--2023-01-17T00-37-32.112011400Z--ff8fd0e9064bcbc5462763229b8a4314f07cf000")},
 		},
