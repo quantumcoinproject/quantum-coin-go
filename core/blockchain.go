@@ -20,8 +20,6 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
-	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"io"
 	"math"
 	"math/big"
@@ -31,6 +29,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -983,6 +984,7 @@ func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
+	log.Warn("BlockChain Stopping", "TrieDirtyDisabled", bc.cacheConfig.TrieDirtyDisabled)
 	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
 		return
 	}
