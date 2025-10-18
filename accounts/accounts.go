@@ -19,9 +19,10 @@ package accounts
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
-	"math/big"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
@@ -113,6 +114,8 @@ type Wallet interface {
 	SignData(account Account, mimeType string, data []byte) ([]byte, error)
 
 	SignDataWithContext(account Account, mimeType string, data []byte, context []byte) ([]byte, error)
+
+	SignDataSigAlg(account Account, mimeType string, data []byte, sigAlg byte) ([]byte, error)
 
 	// SignDataWithPassphrase is identical to SignData, but also takes a password
 	// NOTE: there's a chance that an erroneous call might mistake the two strings, and

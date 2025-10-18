@@ -22,6 +22,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"math/big"
+	"os"
+	"sync"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/state"
@@ -34,11 +40,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
-	"io"
-	"math/big"
-	"os"
-	"sync"
-	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
@@ -93,7 +94,7 @@ var (
 var SKIP_BLOCK_DEEP_CHECK = os.Getenv("SKIP_BLOCK_DEEP_CHECK")
 
 // SignerFn hashes and signs the data to be signed by a backing account.
-type SignerFn func(signer accounts.Account, mimeType string, message []byte) ([]byte, error)
+type SignerFn func(signer accounts.Account, mimeType string, message []byte, sigAlg byte) ([]byte, error)
 type SignerFnWithContext func(signer accounts.Account, mimeType string, message []byte, context []byte) ([]byte, error)
 type SignerTxFn func(accounts.Account, *types.Transaction, *big.Int) (*types.Transaction, error)
 

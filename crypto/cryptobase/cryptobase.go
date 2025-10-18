@@ -2,6 +2,8 @@ package cryptobase
 
 import (
 	"errors"
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideddsamldsaslhdsa"
@@ -10,7 +12,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"math/big"
 )
 
 var SigAlg = hybrideds.CreateHybridedsSig()
@@ -24,6 +25,19 @@ type DynamicSigner struct {
 }
 
 var DynamicSign DynamicSigner = DynamicSigner{}
+
+func (ds DynamicSigner) SignSigAlg(digestHash []byte, prv *signaturealgorithm.PrivateKey, sigAlg byte) (sig []byte, err error) {
+	if sigAlg == byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID) {
+		return SigAlg.Sign(digestHash, prv)
+	} else if sigAlg == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
+		return SigAlgHybridEdsFull.Sign(digestHash, prv)
+	} else if sigAlg == byte(crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID) {
+		return SigAlgHybridMlDsaEddsaSlhDsaCompact.Sign(digestHash, prv)
+	} else if sigAlg == byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
+		return SigAlgHybridMlDsaEddsaSlhDsaFull.Sign(digestHash, prv)
+	}
+	return nil, errors.New("invalid sign mode")
+}
 
 func (ds DynamicSigner) Sign(digestHash []byte, prv *signaturealgorithm.PrivateKey) (sig []byte, err error) {
 	signMode := defaults.GetSigningMode()

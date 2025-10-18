@@ -17,11 +17,12 @@
 package keystore
 
 import (
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"math/big"
 )
 
 // keystoreWallet implements the accounts.Wallet interface for the original
@@ -92,6 +93,15 @@ func (w *keystoreWallet) signHash(account accounts.Account, hash []byte) ([]byte
 	return w.keystore.SignHash(account, hash)
 }
 
+func (w *keystoreWallet) signHashSigAlg(account accounts.Account, hash []byte, sigAlg byte) ([]byte, error) {
+	// Make sure the requested account is contained within
+	if !w.Contains(account) {
+		return nil, accounts.ErrUnknownAccount
+	}
+	// Account seems valid, request the keystore to sign
+	return w.keystore.SignHashSigAlg(account, hash, sigAlg)
+}
+
 func (w *keystoreWallet) signHashWithContext(account accounts.Account, hash []byte, context []byte) ([]byte, error) {
 	// Make sure the requested account is contained within
 	if !w.Contains(account) {
@@ -108,6 +118,11 @@ func (w *keystoreWallet) SignDataWithContext(account accounts.Account, mimeType 
 // SignData signs keccak256(data). The mimetype parameter describes the type of data being signed.
 func (w *keystoreWallet) SignData(account accounts.Account, mimeType string, data []byte) ([]byte, error) {
 	return w.signHash(account, crypto.Keccak256(data))
+}
+
+// SignData signs keccak256(data). The mimetype parameter describes the type of data being signed.
+func (w *keystoreWallet) SignDataSigAlg(account accounts.Account, mimeType string, data []byte, sigAlg byte) ([]byte, error) {
+	return w.signHashSigAlg(account, crypto.Keccak256(data), sigAlg)
 }
 
 // SignDataWithPassphrase signs keccak256(data). The mimetype parameter describes the type of data being signed.

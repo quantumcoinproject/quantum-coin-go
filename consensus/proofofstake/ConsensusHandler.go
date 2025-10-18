@@ -3,6 +3,18 @@ package proofofstake
 import (
 	"bytes"
 	"errors"
+	"io/ioutil"
+	"math"
+	"math/big"
+	"math/rand"
+	"os"
+	"path/filepath"
+	"runtime/debug"
+	"sort"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -16,17 +28,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/node"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	"io/ioutil"
-	"math"
-	"math/big"
-	"math/rand"
-	"os"
-	"path/filepath"
-	"runtime/debug"
-	"sort"
-	"strconv"
-	"sync"
-	"time"
 )
 
 type GetBlockConsensusContextFn func(key string, blockHash common.Hash) ([32]byte, error)
@@ -810,11 +811,14 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 	var err error
 	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
 
+	isBreakGlass := defaults.IsCryptoBreakglassMode(blockNumber)
 	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength() {
 		return errors.New("invalid breakglass signature length")
 	}
 
-	if defaults.IsCryptoBreakglassMode(blockNumber) || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) { //for verify, it is ok not to check the blockNumber for full
+	if isBreakGlass || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) { //for verify, it is ok not to check the blockNumber for full
+		log.Debug("processPacket shouldSignFull", "sigAlg", sigAlg.SignatureName(), "IsCryptoBreakglassMode", isBreakGlass,
+			"len(packet.Signature)", len(packet.Signature), "sigAlg.SignatureWithPublicKeyLength()", sigAlg.SignatureWithPublicKeyLength(), "name", sigAlg.SignatureName())
 		var signContext []byte
 		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
 			signContext = FULL_SIGN_CONTEXT
@@ -2670,7 +2674,11 @@ func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data 
 		signature, err = cph.signFnWithContext(cph.account, accounts.MimetypeProofOfStake, dataToSign, signContext)
 	} else {
 		log.Trace("createConsensusPacket", "parentHash", parentHash, "fullSign", fullSign)
-		signature, err = cph.signFn(cph.account, accounts.MimetypeProofOfStake, dataToSign)
+		sigAlg := byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
+		if blockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+			sigAlg = byte(crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
+		}
+		signature, err = cph.signFn(cph.account, accounts.MimetypeProofOfStake, dataToSign, sigAlg)
 	}
 	if err != nil {
 		log.Trace("createConsensusPacket signAndSend failed", "err", err)

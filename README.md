@@ -6,7 +6,7 @@ quantum-coin-go is a Golang implementation of the Quantum Coin blockchain node c
 
 ### Prerequisites
 
-Requires GO version 1.24.5 or later.
+Requires GO version 1.25.3 or later.
 
 ##### Building
 - 1) Open a new terminal and navigate to the quantum-coin-go folder.
