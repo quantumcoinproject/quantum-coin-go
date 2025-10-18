@@ -19,12 +19,13 @@ package eth
 
 import (
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
-	"github.com/quantumcoinproject/quantum-coin-go/handler"
 	"math/big"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
+	"github.com/quantumcoinproject/quantum-coin-go/handler"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -201,6 +202,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 			Preimages:           config.Preimages,
 		}
 	)
+	log.Trace("New Backend", "TrieDirtyDisabled", cacheConfig.TrieDirtyDisabled)
 	eth.blockchain, err = core.NewBlockChain(chainDb, cacheConfig, chainConfig, eth.engine, vmConfig, eth.shouldPreserve, &config.TxLookupLimit)
 	if err != nil {
 		return nil, err
@@ -535,7 +537,6 @@ func (s *Ethereum) ChainDb() ethdb.Database            { return s.chainDb }
 func (s *Ethereum) IsListening() bool                  { return true } // Always listening
 func (s *Ethereum) Downloader() *downloader.Downloader { return s.handler.Downloader }
 func (s *Ethereum) Synced() bool                       { return atomic.LoadUint32(&s.handler.AcceptTxns) == 1 }
-func (s *Ethereum) ArchiveMode() bool                  { return s.config.NoPruning }
 func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 
 // Protocols returns all the currently configured
