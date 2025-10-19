@@ -2,6 +2,11 @@ package proofofstake
 
 import (
 	"errors"
+	"math/big"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -11,10 +16,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	"math/big"
-	"strconv"
-	"sync"
-	"time"
 )
 
 type PacketMap struct {
@@ -69,7 +70,8 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 		startIndex = 1
 	}
 
-	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != cryptobase.SigAlgHybridEdsFull.SignatureWithPublicKeyLength() {
+	isBreakGlass := defaults.IsCryptoBreakglassMode(blockNumber)
+	if isBreakGlass && len(packet.Signature) != cryptobase.SigAlgHybridEdsFull.SignatureWithPublicKeyLength() {
 		err = errors.New("invalid breakglass signature length")
 		resultsChan <- &PacketParseResult{err: err}
 	}
@@ -77,7 +79,9 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
-	if defaults.IsCryptoBreakglassMode(blockNumber) || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != cryptobase.SigAlg.SignatureWithPublicKeyLength()) { //for verify, it is ok not to check the blockNumber for full
+	if isBreakGlass || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) { //for verify, it is ok not to check the blockNumber for full
+		log.Info("ParseConsensusPacket shouldSignFull", "sigAlg", sigAlg.SignatureName(), "IsCryptoBreakglassMode", isBreakGlass,
+			"len(packet.Signature)", len(packet.Signature), "sigAlg.SignatureWithPublicKeyLength()", sigAlg.SignatureWithPublicKeyLength(), "name", sigAlg.SignatureName())
 		var signContext []byte
 		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
 			signContext = FULL_SIGN_CONTEXT

@@ -20,8 +20,6 @@ package core
 import (
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
-	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"io"
 	"math"
 	"math/big"
@@ -31,6 +29,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -503,13 +504,25 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 	// Retrieve the last pivot block to short circuit rollbacks beyond it and the
 	// current freezer limit to start nuking id underflown
 	pivot := rawdb.ReadLastPivotNumber(bc.db)
-	frozen, _ := bc.db.Ancients()
+	frozen, err := bc.db.Ancients()
+	if err != nil {
+		log.Trace("SetHeadBeyondRoot", "Ancients() error", err)
+	}
 
 	updateFn := func(db ethdb.KeyValueWriter, header *types.Header) (uint64, bool) {
 		// Rewind the block chain, ensuring we don't end up with a stateless head
 		// block. Note, depth equality is permitted to allow using SetHead as a
 		// chain reparation mechanism without deleting any data!
+
+		if bc.CurrentBlock() == nil {
+			log.Trace("SetHeadBeyondRoot updateFn 1.1.1", "currentBlock", bc.CurrentBlock().NumberU64(), "header.Number.Uint64()", header.Number.Uint64(), "root", root, "head", head)
+		} else {
+			log.Trace("SetHeadBeyondRoot updateFn 1.1.2", "currentBlock", bc.CurrentBlock().NumberU64(), "header.Number.Uint64()", header.Number.Uint64(),
+				"root", root, "head", head, "bc.CurrentBlock()", bc.CurrentBlock().NumberU64())
+		}
+
 		if currentBlock := bc.CurrentBlock(); currentBlock != nil && header.Number.Uint64() <= currentBlock.NumberU64() {
+			log.Trace("SetHeadBeyondRoot updateFn 2", "bc.CurrentBlock()", bc.CurrentBlock().NumberU64())
 			newHeadBlock := bc.GetBlock(header.Hash(), header.Number.Uint64())
 			if newHeadBlock == nil {
 				log.Error("Gap in the chain, rewinding to genesis", "number", header.Number, "hash", header.Hash())
@@ -519,14 +532,16 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 				// keeping rewinding until we exceed the optional threshold
 				// root hash
 				beyondRoot := (root == common.Hash{}) // Flag whether we're beyond the requested root (no root, always true)
+				log.Trace("beyondRoot before", "beyondRoot", beyondRoot)
 
 				for {
 					// If a root threshold was requested but not yet crossed, check
 					if root != (common.Hash{}) && !beyondRoot && newHeadBlock.Root() == root {
+						log.Trace("beyondRoot", "root", root.Hex(), "beyondRoot", beyondRoot, "newHeadBlock.Root()", newHeadBlock.Root().Hex(), "newHeadBlock", newHeadBlock.NumberU64())
 						beyondRoot, rootNumber = true, newHeadBlock.NumberU64()
 					}
 					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps); err != nil {
-						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
+						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "err", err)
 						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
 							parent := bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1)
 							if parent != nil {
@@ -541,7 +556,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 						}
 					}
 					if beyondRoot || newHeadBlock.NumberU64() == 0 {
-						log.Debug("Rewound to block with state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash())
+						log.Debug("Rewound to block with state", "newHeadBlock", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "beyondRoot", beyondRoot, "root", root.Hex(), "head", head)
 						break
 					}
 					log.Debug("Skipping block with threshold state", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "root", newHeadBlock.Root())
@@ -559,6 +574,7 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 		}
 		// Rewind the fast block in a simpleton way to the target head
 		if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock != nil && header.Number.Uint64() < currentFastBlock.NumberU64() {
+			log.Trace("currentFastBlock", "currentFastBlock", currentFastBlock.NumberU64(), "header.Number", header.Number)
 			newHeadFastBlock := bc.GetBlock(header.Hash(), header.Number.Uint64())
 			// If either blocks reached nil, reset to the genesis state
 			if newHeadFastBlock == nil {
@@ -580,8 +596,10 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 		// between the stateful-block and the sethead target.
 		var wipe bool
 		if head+1 < frozen {
+			log.Trace("internal", "head", head, "frozen", frozen)
 			wipe = pivot == nil || head >= *pivot
 		}
+		log.Trace("exit updateFn")
 		return head, wipe // Only force wipe if full synced
 	}
 	// Rewind the header chain, deleting all block bodies until then
@@ -608,13 +626,16 @@ func (bc *BlockChain) SetHeadBeyondRoot(head uint64, root common.Hash) (uint64, 
 	// If SetHead was only called as a chain reparation method, try to skip
 	// touching the header chain altogether, unless the freezer is broken
 	if block := bc.CurrentBlock(); block.NumberU64() == head {
+		log.Trace("updateFn 2", "head", head)
+
 		if target, force := updateFn(bc.db, block.Header()); force {
+			log.Trace("updateFn 3", "head", head, "target", target, "force", force)
 			bc.hc.SetHead(target, updateFn, delFn)
 		}
 	} else {
 		// Rewind the chain to the requested head and keep going backwards until a
 		// block with a state is found or fast sync pivot is passed
-		log.Warn("Rewinding blockchain", "target", head)
+		log.Trace("Rewinding blockchain", "target", head)
 		bc.hc.SetHead(head, updateFn, delFn)
 	}
 	// Clear out any stale content from the caches
@@ -983,6 +1004,7 @@ func (bc *BlockChain) ContractCodeWithPrefix(hash common.Hash) ([]byte, error) {
 // Stop stops the blockchain service. If any imports are currently in progress
 // it will abort them using the procInterrupt.
 func (bc *BlockChain) Stop() {
+	log.Warn("BlockChain Stopping", "TrieDirtyDisabled", bc.cacheConfig.TrieDirtyDisabled)
 	if !atomic.CompareAndSwapInt32(&bc.running, 0, 1) {
 		return
 	}

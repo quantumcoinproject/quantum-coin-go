@@ -2,14 +2,16 @@ package proofofstake
 
 import (
 	"errors"
+	"sync"
+
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/handler"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	"sync"
 )
 
 const MinConsensusNetworkProtocolVersion = byte(5)
@@ -235,7 +237,7 @@ func (p *PeerHandler) CreateConsensusPacket(data []byte) (*eth.ConsensusPacket, 
 	var signature []byte
 	var err error
 
-	signature, err = p.signFn(p.account, accounts.MimetypeProofOfStake, dataToSign)
+	signature, err = p.signFn(p.account, accounts.MimetypeProofOfStake, dataToSign, byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID))
 
 	if err != nil {
 		log.Trace("PeerHandler CreateConsensusPacket failed", "err", err)

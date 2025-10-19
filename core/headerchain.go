@@ -569,10 +569,12 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 	)
 	for hdr := hc.CurrentHeader(); hdr != nil && hdr.Number.Uint64() > head; hdr = hc.CurrentHeader() {
 		num := hdr.Number.Uint64()
+		log.Trace("SetHead", "head", head, "hdr", hdr.Number.Uint64())
 
 		// Rewind block chain to new head.
 		parent := hc.GetHeader(hdr.ParentHash, num-1)
 		if parent == nil {
+			log.Trace("parent is nil", "parent num", num-1)
 			parent = hc.genesisHeader
 		}
 		parentHash = parent.Hash()
@@ -587,6 +589,7 @@ func (hc *HeaderChain) SetHead(head uint64, updateFn UpdateHeadBlocksCallback, d
 		markerBatch := hc.chainDb.NewBatch()
 		if updateFn != nil {
 			newHead, force := updateFn(markerBatch, parent)
+			log.Trace("updateFn", "newHead", newHead, "force", force)
 			if force && newHead < head {
 				log.Warn("Force rewinding till ancient limit", "head", newHead)
 				head = newHead

@@ -2,8 +2,9 @@ package defaults
 
 import (
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"math/big"
+
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 var DEFAULT_PRICE = int64(47619047619047600)
@@ -31,7 +32,7 @@ func IsCryptoBreakglassMode(blockNumber uint64) bool {
 }
 
 func IsSigAlgSwitchMode(blockNumber uint64) bool {
-	return cryptoBreakglassBlock != 0 && blockNumber >= DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	return cryptoBreakglassBlock == 0 && blockNumber >= DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
 }
 
 func SetCryptoSigningMode(signMode byte) {

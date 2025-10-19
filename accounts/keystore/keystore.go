@@ -23,8 +23,6 @@ package keystore
 import (
 	crand "crypto/rand"
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -32,6 +30,9 @@ import (
 	"runtime"
 	"sync"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -270,6 +271,18 @@ func (ks *KeyStore) SignHash(a accounts.Account, hash []byte) ([]byte, error) {
 		return nil, ErrLocked
 	}
 	return cryptobase.DynamicSign.Sign(hash, unlockedKey.PrivateKey)
+}
+
+func (ks *KeyStore) SignHashSigAlg(a accounts.Account, hash []byte, sigAlg byte) ([]byte, error) {
+	// Look up the key to sign with and abort if it cannot be found
+	ks.mu.RLock()
+	defer ks.mu.RUnlock()
+
+	unlockedKey, found := ks.unlocked[a.Address]
+	if !found {
+		return nil, ErrLocked
+	}
+	return cryptobase.DynamicSign.SignSigAlg(hash, unlockedKey.PrivateKey, sigAlg)
 }
 
 func (ks *KeyStore) SignHashWithContext(a accounts.Account, hash []byte, context []byte) ([]byte, error) {
