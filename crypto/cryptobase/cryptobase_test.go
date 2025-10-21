@@ -22,11 +22,14 @@ func TestValidationAlg(t *testing.T) {
 	testSigAlg(t, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 	testSigAlg(t, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+1, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 	block := uint64(10000000)
-	testSigAlg(t, block, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 
+	testSigAlg(t, block, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 	err := defaults.SetCryptoBreakGlassBlock(block)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	testSigAlg(t, block-1, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 	testSigAlg(t, block, crypto.MLDSA_ED25519_SLHDSA_FULL_ID)
+	testSigAlg(t, block+1, crypto.MLDSA_ED25519_SLHDSA_FULL_ID)
 }

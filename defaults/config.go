@@ -32,7 +32,7 @@ func IsCryptoBreakglassMode(blockNumber uint64) bool {
 }
 
 func IsSigAlgSwitchMode(blockNumber uint64) bool {
-	return cryptoBreakglassBlock == 0 && blockNumber >= DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	return blockNumber >= DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
 }
 
 func SetCryptoSigningMode(signMode byte) {
