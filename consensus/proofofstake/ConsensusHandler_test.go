@@ -654,12 +654,54 @@ func testPacketHandler_basic(numKeys int, t *testing.T) {
 	}
 }
 
-func TestPacketHandler_single(t *testing.T) {
+func TestPacketHandler_offline_validator_block(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
 	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock}
 
 	for _, b := range blockNumbers {
 		TEST_CONSENSUS_BLOCK_NUMBER = b
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		for i := 1; i <= TEST_ITERATIONS; i++ {
+			fmt.Println("iteration", i)
+			testPacketHandler_basic(4, t)
+		}
+	}
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	fmt.Println("TestPacketHandler_basic_various_blocks done")
+}
+
+func TestPacketHandler_offline_validator_block_full_sign(t *testing.T) {
+	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+	var blockNumbers = []uint64{3604480} //full sign block after offline validator
+
+	for _, b := range blockNumbers {
+		TEST_CONSENSUS_BLOCK_NUMBER = b
+		if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) == false {
+			t.Fatalf("failed")
+		}
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		for i := 1; i <= TEST_ITERATIONS; i++ {
+			fmt.Println("iteration", i)
+			testPacketHandler_basic(4, t)
+		}
+	}
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	fmt.Println("TestPacketHandler_basic_various_blocks done")
+}
+
+func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T) {
+	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+	var blockNumbers = []uint64{10000000}
+	err := defaults.SetCryptoBreakGlassBlock(10000000)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+
+	for _, b := range blockNumbers {
+		TEST_CONSENSUS_BLOCK_NUMBER = b
+		if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) == false {
+			t.Fatalf("failed")
+		}
 		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
 		for i := 1; i <= TEST_ITERATIONS; i++ {
 			fmt.Println("iteration", i)
