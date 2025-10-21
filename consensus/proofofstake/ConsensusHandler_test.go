@@ -654,6 +654,22 @@ func testPacketHandler_basic(numKeys int, t *testing.T) {
 	}
 }
 
+func TestPacketHandler_single(t *testing.T) {
+	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock}
+
+	for _, b := range blockNumbers {
+		TEST_CONSENSUS_BLOCK_NUMBER = b
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		for i := 1; i <= TEST_ITERATIONS; i++ {
+			fmt.Println("iteration", i)
+			testPacketHandler_basic(4, t)
+		}
+	}
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	fmt.Println("TestPacketHandler_basic_various_blocks done")
+}
+
 func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
 	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, 1, defaults.DefaultConfig.PosConfig.RewardStartBlockNumber, defaults.DefaultConfig.PosConfig.SlashStartBlockNumber, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
@@ -1986,20 +2002,4 @@ func TestPacketHandler_breakglass(t *testing.T) {
 	fmt.Println("testPacketHandler_basic sanity check starting")
 	testPacketHandler_basic(4, t)
 	fmt.Println("testPacketHandler_basic sanity check done")
-}
-
-func TestPacketHandler_single(t *testing.T) {
-	fmt.Println("TestPacketHandler_basic_various_blocks starting")
-	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock}
-
-	for _, b := range blockNumbers {
-		TEST_CONSENSUS_BLOCK_NUMBER = b
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
-		for i := 1; i <= TEST_ITERATIONS; i++ {
-			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, t)
-		}
-	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
-	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }

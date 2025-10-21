@@ -227,6 +227,7 @@ func (dv DynamicVerifier) IsSignatureTypeAllowedForTxn(blockNumber uint64, signa
 	}
 }
 
+// excludes fullSign blocks
 func GetSigAlgForValidation(blockNumber uint64) signaturealgorithm.SignatureAlgorithm {
 	if defaults.IsCryptoBreakglassMode(blockNumber) {
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridMlDsaEddsaSlhDsaFull)
