@@ -1914,6 +1914,7 @@ func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64)
 		}
 	}
 
+	log.Debug("ValidateBlockProposalTimeConsensus ok", "blockNumber", blockNumber, "proposedTime", proposedTime)
 	return true
 }
 
