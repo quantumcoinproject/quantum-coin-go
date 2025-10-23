@@ -1877,11 +1877,13 @@ func GetProposalTime(blockNumber uint64) uint64 {
 func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64) bool {
 	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK {
 		if proposedTime == 0 {
+			log.Warn("ValidateBlockProposalTimeConsensus false case 1", "blockNumber", blockNumber, "proposedTime", proposedTime)
 			return false
 		}
 
 		tm := time.Unix(int64(proposedTime), 0)
 		if tm.Second() != 0 || tm.Nanosecond() != 0 { //No granularity at anything other than minute level allowed, to reduce ability to manipulate blockHash
+			log.Warn("ValidateBlockProposalTimeConsensus false case 2", "blockNumber", blockNumber, "proposedTime", proposedTime)
 			return false
 		}
 		currTimeVal := time.Now().UTC().Unix() //Note that packet may have arrived late. So, these comparisions are approximate.
@@ -1893,20 +1895,26 @@ func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64)
 		if currTime.Before(tm) {
 			difference := tm.Sub(currTime)
 			if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
+				log.Warn("ValidateBlockProposalTimeConsensus false case 3", "blockNumber", blockNumber, "proposedTime", proposedTime,
+					"currTime", currTime, "currTimeVal", currTimeVal, "difference", difference)
 				return false
 			}
 		} else if currTime.After(tm) {
 			difference := currTime.Sub(tm)
 			if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
+				log.Warn("ValidateBlockProposalTimeConsensus false case 4", "blockNumber", blockNumber, "proposedTime", proposedTime,
+					"currTime", currTime, "currTimeVal", currTimeVal, "difference", difference)
 				return false
 			}
 		}
 	} else {
 		if proposedTime != 0 {
+			log.Warn("ValidateBlockProposalTimeConsensus false case 5", "blockNumber", blockNumber, "proposedTime", proposedTime)
 			return false
 		}
 	}
 
+	log.Debug("ValidateBlockProposalTimeConsensus ok", "blockNumber", blockNumber, "proposedTime", proposedTime)
 	return true
 }
 

@@ -689,29 +689,6 @@ func TestPacketHandler_offline_validator_block_full_sign(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }
 
-func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T) {
-	fmt.Println("TestPacketHandler_basic_various_blocks starting")
-	var blockNumbers = []uint64{10000000}
-	err := defaults.SetCryptoBreakGlassBlock(10000000)
-	if err != nil {
-		t.Fatalf("failed")
-	}
-
-	for _, b := range blockNumbers {
-		TEST_CONSENSUS_BLOCK_NUMBER = b
-		if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) == false {
-			t.Fatalf("failed")
-		}
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
-		for i := 1; i <= TEST_ITERATIONS; i++ {
-			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, t)
-		}
-	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
-	fmt.Println("TestPacketHandler_basic_various_blocks done")
-}
-
 func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
 	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, 1, defaults.DefaultConfig.PosConfig.RewardStartBlockNumber, defaults.DefaultConfig.PosConfig.SlashStartBlockNumber, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
@@ -2044,4 +2021,27 @@ func TestPacketHandler_breakglass(t *testing.T) {
 	fmt.Println("testPacketHandler_basic sanity check starting")
 	testPacketHandler_basic(4, t)
 	fmt.Println("testPacketHandler_basic sanity check done")
+}
+
+func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T) {
+	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+	var blockNumbers = []uint64{10000000}
+	err := defaults.SetCryptoBreakGlassBlock(10000000)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+
+	for _, b := range blockNumbers {
+		TEST_CONSENSUS_BLOCK_NUMBER = b
+		if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) == false {
+			t.Fatalf("failed")
+		}
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		for i := 1; i <= TEST_ITERATIONS; i++ {
+			fmt.Println("iteration", i)
+			testPacketHandler_basic(4, t)
+		}
+	}
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }
