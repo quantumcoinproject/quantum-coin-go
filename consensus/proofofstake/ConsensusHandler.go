@@ -1504,7 +1504,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 
 	//If there are votes in greater rounds
 	balanceDepositVotesRequiredCurrentRound := common.SafeSubBigInt(blockStateDetails.blockMinWeightedProposalsRequired, currentRoundDepositSoFar)
-	log.Trace("shouldMoveToNextRoundProposalAcks",
+	log.Debug("shouldMoveToNextRoundProposalAcks",
 		"blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired,
 		"balanceDepositVotesRequiredCurrentRound", balanceDepositVotesRequiredCurrentRound,
 		"currentRoundDepositSoFar", currentRoundDepositSoFar,
