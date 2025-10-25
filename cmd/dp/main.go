@@ -20,6 +20,12 @@ package main
 import (
 	"errors"
 	"fmt"
+	"os"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/bt51/ntpclient"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -27,6 +33,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/downloader"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
@@ -37,11 +44,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 	"github.com/quantumcoinproject/quantum-coin-go/node"
 	"gopkg.in/urfave/cli.v1"
-	"os"
-	"sort"
-	"strconv"
-	"strings"
-	"time"
 
 	// Force-load the tracer engines to trigger registration
 	_ "github.com/quantumcoinproject/quantum-coin-go/eth/tracers/js"
@@ -270,6 +272,7 @@ func main() {
 		os.Exit(-1)
 	}
 
+	defaults.LoadDefaultConfig()
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

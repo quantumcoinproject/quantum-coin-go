@@ -3,13 +3,16 @@ package defaults
 import (
 	"errors"
 	"math/big"
+	"os"
 
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 var DEFAULT_PRICE = int64(47619047619047600)
 var cryptoBreakglassBlock uint64 = 0
 var signingMode byte = 1 //crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
+var okConfig bool = LoadDefaultConfig()
 
 func GetGasLimit(blockNumber uint64) uint64 {
 	if blockNumber < DefaultConfig.GasPriceStartBlock {
@@ -211,3 +214,15 @@ var DevnetConfig = &Config{
 }
 
 var DefaultConfig = MainnetConfig
+
+func LoadDefaultConfig() bool {
+	config := os.Getenv("Q_DEFAULT_CONFIG")
+	if config == "1" {
+		DefaultConfig = DevnetConfig
+		log.Warn("Setting default config to DevnetConfig. Q_DEFAULT_CONFIG is set.")
+	} else {
+		log.Info("Setting default config to MainnetConfig")
+		DefaultConfig = MainnetConfig
+	}
+	return true
+}
