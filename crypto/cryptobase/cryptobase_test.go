@@ -18,9 +18,9 @@ func testSigAlg(t *testing.T, blockNumber uint64, expected crypto.SignatureAlgor
 
 // excludes fullSign
 func TestValidationAlg(t *testing.T) {
-	testSigAlg(t, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock-1, crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
-	testSigAlg(t, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
-	testSigAlg(t, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock+1, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
+	testSigAlg(t, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock-1, crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
+	testSigAlg(t, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
+	testSigAlg(t, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock+1, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 	block := uint64(10000000)
 
 	testSigAlg(t, block, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)

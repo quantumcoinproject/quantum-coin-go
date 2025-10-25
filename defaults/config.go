@@ -32,7 +32,7 @@ func IsCryptoBreakglassMode(blockNumber uint64) bool {
 }
 
 func IsSigAlgSwitchMode(blockNumber uint64) bool {
-	if blockNumber >= DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+	if blockNumber >= DefaultConfig.PosConfig.SigAlgSwitchBlock {
 		if cryptoBreakglassBlock != 0 && blockNumber >= cryptoBreakglassBlock {
 			return false
 		}
@@ -86,6 +86,8 @@ type ProofOfStakeConfig struct {
 
 	OfflineValidatorV4StartBlock uint64
 
+	SigAlgSwitchBlock uint64
+
 	MinOfflineProposerBlockDelay uint64
 }
 
@@ -138,6 +140,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 
 	OfflineValidatorV4StartBlock: 3600030,
 
+	SigAlgSwitchBlock: 3600030 + 2,
+
 	MinOfflineProposerBlockDelay: 3600,
 }
 
@@ -179,6 +183,8 @@ var devnetPosConfig = ProofOfStakeConfig{
 
 	OfflineValidatorV4StartBlock: 90 + 10 + 10 + 10,
 
+	SigAlgSwitchBlock: 90 + 10 + 10 + 10 + 2,
+
 	MinOfflineProposerBlockDelay: 3600,
 }
 
@@ -195,8 +201,8 @@ var MainnetConfig = &Config{
 
 var DevnetConfig = &Config{
 	PosConfig:               &devnetPosConfig,
-	DeepCheckStartBlock:     uint64(3000000),
-	GasPriceStartBlock:      uint64(3000001),
+	DeepCheckStartBlock:     uint64(256),
+	GasPriceStartBlock:      uint64(257),
 	DefaultGasLimit:         300000000,
 	ValidateSigPubStartTime: int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
 	TxnStartAllowedTime:     int64(1713052800),    //April 14th, 2024
