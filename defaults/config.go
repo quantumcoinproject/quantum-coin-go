@@ -184,8 +184,8 @@ var devnetPosConfig = ProofOfStakeConfig{
 
 var MainnetConfig = &Config{
 	PosConfig:               &mainnetPosConfig,
-	DeepCheckStartBlock:     uint64(3000000),
-	GasPriceStartBlock:      uint64(3000001),
+	DeepCheckStartBlock:     uint64(4000000),
+	GasPriceStartBlock:      uint64(4000001),
 	DefaultGasLimit:         300000000,
 	ValidateSigPubStartTime: int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
 	TxnStartAllowedTime:     int64(1713052800),    //April 14th, 2024
