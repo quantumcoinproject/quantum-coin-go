@@ -196,10 +196,10 @@ var MainnetConfig = &Config{
 	DeepCheckStartBlock:     uint64(4000000),
 	GasPriceStartBlock:      uint64(4000001),
 	DefaultGasLimit:         300000000,
-	ValidateSigPubStartTime: int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
+	ValidateSigPubStartTime: int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 	TxnStartAllowedTime:     int64(1713052800),    //April 14th, 2024
 	ConversionTxnLastTime:   int64(1744675199),    //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:           int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
+	KemSwitchTime:           int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 }
 
 var DevnetConfig = &Config{
@@ -207,10 +207,10 @@ var DevnetConfig = &Config{
 	DeepCheckStartBlock:     uint64(256),
 	GasPriceStartBlock:      uint64(257),
 	DefaultGasLimit:         300000000,
-	ValidateSigPubStartTime: int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
+	ValidateSigPubStartTime: int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 	TxnStartAllowedTime:     int64(1713052800),    //April 14th, 2024
 	ConversionTxnLastTime:   int64(1744675199),    //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:           int64(1767225600000), //Thursday, January 1, 2026 12:00:00 AM
+	KemSwitchTime:           int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 }
 
 var DefaultConfig = MainnetConfig
