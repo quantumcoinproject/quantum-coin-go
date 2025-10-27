@@ -83,7 +83,7 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 		log.Info("ParseConsensusPacket shouldSignFull", "sigAlg", sigAlg.SignatureName(), "IsCryptoBreakglassMode", isBreakGlass,
 			"len(packet.Signature)", len(packet.Signature), "sigAlg.SignatureWithPublicKeyLength()", sigAlg.SignatureWithPublicKeyLength(), "name", sigAlg.SignatureName())
 		var signContext []byte
-		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+		if blockNumber < defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
 			signContext = FULL_SIGN_CONTEXT
 		} else {
 			signContext = FULL_SIGN_CONTEXT_V2

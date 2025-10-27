@@ -820,7 +820,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 		log.Debug("processPacket shouldSignFull", "sigAlg", sigAlg.SignatureName(), "IsCryptoBreakglassMode", isBreakGlass,
 			"len(packet.Signature)", len(packet.Signature), "sigAlg.SignatureWithPublicKeyLength()", sigAlg.SignatureWithPublicKeyLength(), "name", sigAlg.SignatureName())
 		var signContext []byte
-		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+		if blockNumber < defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
 			signContext = FULL_SIGN_CONTEXT
 		} else {
 			signContext = FULL_SIGN_CONTEXT_V2
@@ -1504,7 +1504,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 
 	//If there are votes in greater rounds
 	balanceDepositVotesRequiredCurrentRound := common.SafeSubBigInt(blockStateDetails.blockMinWeightedProposalsRequired, currentRoundDepositSoFar)
-	log.Trace("shouldMoveToNextRoundProposalAcks",
+	log.Debug("shouldMoveToNextRoundProposalAcks",
 		"blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired,
 		"balanceDepositVotesRequiredCurrentRound", balanceDepositVotesRequiredCurrentRound,
 		"currentRoundDepositSoFar", currentRoundDepositSoFar,
@@ -2672,7 +2672,7 @@ func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data 
 	var err error
 	if fullSign {
 		var signContext []byte
-		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+		if blockNumber < defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
 			signContext = FULL_SIGN_CONTEXT
 		} else {
 			signContext = FULL_SIGN_CONTEXT_V2
@@ -2683,7 +2683,7 @@ func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data 
 	} else {
 		log.Trace("createConsensusPacket", "parentHash", parentHash, "fullSign", fullSign)
 		sigAlg := byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
-		if blockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
+		if blockNumber >= defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
 			sigAlg = byte(crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 		}
 		signature, err = cph.signFn(cph.account, accounts.MimetypeProofOfStake, dataToSign, sigAlg)
