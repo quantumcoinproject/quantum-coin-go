@@ -141,9 +141,9 @@ var mainnetPosConfig = ProofOfStakeConfig{
 
 	SixtySevenVoteStartBlock: uint64(2082171 + 10 + 10),
 
-	OfflineValidatorV4StartBlock: 3600030,
+	OfflineValidatorV4StartBlock: 3426261,
 
-	SigAlgSwitchBlock: 3600030 + 2,
+	SigAlgSwitchBlock: 3426261 + 2,
 
 	MinOfflineProposerBlockDelay: 3600,
 }
@@ -193,12 +193,12 @@ var devnetPosConfig = ProofOfStakeConfig{
 
 var MainnetConfig = &Config{
 	PosConfig:               &mainnetPosConfig,
-	DeepCheckStartBlock:     uint64(4000000),
-	GasPriceStartBlock:      uint64(4000001),
+	DeepCheckStartBlock:     uint64(3426261 + 3),
+	GasPriceStartBlock:      uint64(3426261 + 4),
 	DefaultGasLimit:         300000000,
 	ValidateSigPubStartTime: int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:     int64(1713052800),    //April 14th, 2024
-	ConversionTxnLastTime:   int64(1744675199),    //April 14th, 2025, 11:59:59 PM UTC
+	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
 	KemSwitchTime:           int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 }
 
@@ -208,8 +208,8 @@ var DevnetConfig = &Config{
 	GasPriceStartBlock:      uint64(257),
 	DefaultGasLimit:         300000000,
 	ValidateSigPubStartTime: int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:     int64(1713052800),    //April 14th, 2024
-	ConversionTxnLastTime:   int64(1744675199),    //April 14th, 2025, 11:59:59 PM UTC
+	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
 	KemSwitchTime:           int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 }
 
