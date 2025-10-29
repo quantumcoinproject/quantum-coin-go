@@ -19,6 +19,8 @@ package core
 import (
 	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/misc"
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
@@ -26,7 +28,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
-	"math/big"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus"
@@ -303,24 +304,24 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 				switch {
 				case errors.Is(err, ErrGasLimitReached):
 					// Pop the current out-of-gas transaction without shifting in the next from the account
-					log.Debug("Gas limit exceeded for current block", "sender", from)
+					log.Debug("Gas limit exceeded for current block", "sender", from, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
 
 				case errors.Is(err, ErrNonceTooLow):
 					// New head notification data race between the transaction pool and miner, shift
-					log.Debug("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce())
+					log.Debug("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
 
 				case errors.Is(err, ErrNonceTooHigh):
 					// Reorg notification data race between the transaction pool and miner, skip account =
-					log.Debug("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce())
+					log.Debug("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
 
 				case errors.Is(err, ErrTxTypeNotSupported):
 					// Pop the unsupported transaction without shifting in the next from the account
-					log.Debug("Skipping unsupported transaction type", "sender", from, "type", tx.Type())
+					log.Debug("Skipping unsupported transaction type", "sender", from, "type", tx.Type(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
 
 				default:
 					// Strange error, discard the transaction and get the next in line (note, the
 					// nonce-too-high clause will prevent us from executing in vain).
-					log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err)
+					log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
 				}
 			}
 			continue
