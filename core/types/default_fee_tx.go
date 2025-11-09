@@ -1,11 +1,13 @@
 package types
 
 import (
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"math/big"
 )
 
 const DEFAULT_CHAIN_ID int64 = 123123
@@ -95,6 +97,21 @@ func (tx *DefaultFeeTx) copy() TxData {
 	return cpy
 }
 
+func (tx *DefaultFeeTx) calcInternalGasPrice() *big.Int {
+	defaultGas := GetDefaultGasPrice()
+
+	if tx.R == nil || tx.S == nil || tx.V == nil || tx.ChainID == nil {
+		return defaultGas
+	}
+	additionalGasMultiplier, err := cryptobase.GetAdditionalGasMultiplierForTxn(tx.S.Bytes())
+	if err != nil {
+		log.Debug("gasPrice GetAdditionalGasMultiplierForTxn failed", "err", err)
+		return defaultGas
+	}
+
+	return common.SafeMulBigInt(defaultGas, big.NewInt(additionalGasMultiplier))
+}
+
 // accessors for innerTx.
 func (tx *DefaultFeeTx) txType() byte           { return DefaultFeeTxType }
 func (tx *DefaultFeeTx) chainID() *big.Int      { return tx.ChainID }
@@ -102,20 +119,18 @@ func (tx *DefaultFeeTx) protected() bool        { return true }
 func (tx *DefaultFeeTx) accessList() AccessList { return tx.AccessList }
 func (tx *DefaultFeeTx) data() []byte           { return tx.Data }
 func (tx *DefaultFeeTx) gas() uint64            { return tx.Gas }
-func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GetDefaultGasPrice() }
+func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return tx.calcInternalGasPrice() }
 func (tx *DefaultFeeTx) gasPrice() *big.Int {
-	if tx.MaxGasTier == GAS_TIER_DEFAULT {
-		return GetDefaultGasPrice()
-	}
-	return GetDefaultGasPrice()
+	return tx.calcInternalGasPrice()
 }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
 func (tx *DefaultFeeTx) verifyFields() bool {
-	if tx.gasPrice().Cmp(GetDefaultGasPrice()) != 0 {
-		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "GetDefaultGasPrice()", GetDefaultGasPrice())
+	fee := tx.calcInternalGasPrice()
+	if tx.gasPrice().Cmp(fee) != 0 {
+		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "GetDefaultGasPrice()", fee)
 		return false
 	}
 	return len(tx.Remarks) <= MAX_REMARKS_LENGTH

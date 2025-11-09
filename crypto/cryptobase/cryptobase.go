@@ -218,13 +218,27 @@ func (dv DynamicVerifier) IsSignatureTypeAllowedForTxn(blockNumber uint64, signa
 	isBreakglassBlock := defaults.IsCryptoBreakglassMode(blockNumber)
 	if isBreakglassBlock == false {
 		if defaults.IsSigAlgSwitchMode(blockNumber) {
-			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID, nil
+			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID, nil
 		} else {
 			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID, nil
 		}
 	} else {
 		return algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID, nil
 	}
+}
+func GetAdditionalGasMultiplierForSigAlg(algType crypto.SignatureAlgorithmType) (int64, error) {
+	if algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
+		return 1, nil
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID || algType == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID {
+		return defaults.DefaultConfig.SigAlg4AdditionalBaseGasMultiplier, nil
+	} else {
+		return 1, errors.New("invalid signature type for additional gas")
+	}
+}
+
+func GetAdditionalGasMultiplierForTxn(signature []byte) (int64, error) {
+	algType := crypto.SignatureAlgorithmType(signature[0])
+	return GetAdditionalGasMultiplierForSigAlg(algType)
 }
 
 // excludes fullSign blocks
