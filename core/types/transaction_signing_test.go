@@ -18,9 +18,11 @@ package types
 
 import (
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"math/big"
 	"testing"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
@@ -81,16 +83,17 @@ func getDynamicFeeTx() DynamicFeeTx {
 	v := big.NewInt(7)
 
 	return DynamicFeeTx{
-		ChainID:    big.NewInt(DEFAULT_CHAIN_ID),
-		Nonce:      1,
-		To:         &to,
-		Value:      big.NewInt(100),
-		Data:       []byte{1, 2, 3},
-		Gas:        10,
-		GasFeeCap:  GetDefaultGasPrice(),
-		GasTipCap:  big.NewInt(15),
-		Remarks:    []byte{2},
-		AccessList: accesses,
+		ChainID:        big.NewInt(DEFAULT_CHAIN_ID),
+		Nonce:          1,
+		To:             &to,
+		Value:          big.NewInt(100),
+		Data:           []byte{1, 2, 3},
+		Gas:            10,
+		GasFeeCap:      GetDefaultGasPrice(),
+		GasTipCap:      big.NewInt(15),
+		SigningContext: byte(crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID),
+		Remarks:        []byte{2},
+		AccessList:     accesses,
 
 		V: v,
 		R: r,
@@ -399,7 +402,7 @@ func TestHashDynamicFeeTx(t *testing.T) {
 
 	tx := NewTx(&innerTx)
 
-	if tx.Hash().Hex() != "0x863a4041f51d9b946177306a32a28c998cc1fb4df888f385fddccaa5137ccd4f" {
+	if tx.Hash().Hex() != "0x05e73e8c173c1e0c32f6d32aba1fedc39c312845456475f86405379fa2dbb5e1" {
 		t.Fatalf("failed " + tx.Hash().Hex())
 	}
 	chainId := big.NewInt(DEFAULT_CHAIN_ID)
@@ -429,7 +432,7 @@ func TestHashDynamicFeeTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed")
 	}
-	if txRawHash.Hex() != "0xf90cdea178d765187e1cd849ec1d3951a4caf5ec4a3fae5a30c659e45e2cb472" {
+	if txRawHash.Hex() != "0xee000ddb450be9dfd159f3f7df4618081d5fd490a2fdacea23f7b350ca120ca5" {
 		t.Fatalf("failed " + txRawHash.Hex())
 	}
 	txHash1 := signedTx.Hash()
@@ -535,6 +538,21 @@ func TestHashDynamicFeeTx(t *testing.T) {
 	//GasTipCap change
 	innerTx1 = getDynamicFeeTx()
 	innerTx1.GasTipCap = big.NewInt(100)
+
+	tx1 = NewTx(&innerTx1)
+	gotHash, err = signer.Hash(tx1)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+
+	if gotHash.IsEqualTo(origHash) {
+		fmt.Println("gotHash", gotHash, "origHash", origHash)
+		t.Fatalf("failed")
+	}
+
+	//Signing Context Change
+	innerTx1 = getDynamicFeeTx()
+	innerTx1.SigningContext = byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID)
 
 	tx1 = NewTx(&innerTx1)
 	gotHash, err = signer.Hash(tx1)

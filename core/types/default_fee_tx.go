@@ -1,11 +1,13 @@
 package types
 
 import (
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"math/big"
 )
 
 const DEFAULT_CHAIN_ID int64 = 123123
@@ -111,6 +113,9 @@ func (tx *DefaultFeeTx) gasPrice() *big.Int {
 }
 func (tx *DefaultFeeTx) gasTipCap() *big.Int { return tx.gasPrice() }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
+func (tx *DefaultFeeTx) signingContext() byte {
+	return byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
+}
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }

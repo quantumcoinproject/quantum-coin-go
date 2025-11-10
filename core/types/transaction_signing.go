@@ -272,6 +272,7 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 				tx.Gas(),
 				tx.GasTipCap(),
 				tx.GasFeeCap(),
+				tx.SigningContext(),
 				tx.Value(),
 				tx.Data(),
 				tx.AccessList(),
