@@ -18,12 +18,14 @@ package types
 
 import (
 	"errors"
+	"fmt"
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
-	"math/big"
 )
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
@@ -188,26 +190,46 @@ func (s londonSigner) Equal(s2 Signer) bool {
 }
 
 func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	txdata1, ok1 := tx.inner.(*DefaultFeeTx)
-	if ok1 {
-		// Check that chain ID of tx matches the signer. We also accept ID zero here,
-		// because it indicates that the chain ID was not specified in the tx.
-		if txdata1.ChainID.Sign() != 0 && txdata1.ChainID.Cmp(s.chainId) != 0 {
-			return nil, nil, nil, ErrInvalidChainId
+	if tx.Type() == DefaultFeeTxType {
+		txdata1, ok1 := tx.inner.(*DefaultFeeTx)
+		if ok1 {
+			// Check that chain ID of tx matches the signer. We also accept ID zero here,
+			// because it indicates that the chain ID was not specified in the tx.
+			if txdata1.ChainID.Sign() != 0 && txdata1.ChainID.Cmp(s.chainId) != 0 {
+				return nil, nil, nil, ErrInvalidChainId
+			}
+			sigHash, err := s.Hash(tx)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			R, S, _, err = decodeSignature(sigHash.Bytes(), sig)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			V = big.NewInt(1)
+			return R, S, V, nil
 		}
-		sigHash, err := s.Hash(tx)
-		if err != nil {
-			return nil, nil, nil, err
+	} else if tx.Type() == DynamicFeeTxType {
+		txdata1, ok1 := tx.inner.(*DynamicFeeTx)
+		if ok1 {
+			// Check that chain ID of tx matches the signer. We also accept ID zero here,
+			// because it indicates that the chain ID was not specified in the tx.
+			if txdata1.ChainID.Sign() != 0 && txdata1.ChainID.Cmp(s.chainId) != 0 {
+				return nil, nil, nil, ErrInvalidChainId
+			}
+			sigHash, err := s.Hash(tx)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			R, S, _, err = decodeSignature(sigHash.Bytes(), sig)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			V = big.NewInt(1)
+			return R, S, V, nil
 		}
-		R, S, v, err := decodeSignature(sigHash.Bytes(), sig)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		if v.Uint64() != 1 {
-			return nil, nil, nil, ErrInvalidSig
-		}
-		V = big.NewInt(1)
-		return R, S, v, nil
 	}
 
 	return nil, nil, nil, errors.New("signature error")
@@ -217,7 +239,7 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // It does not uniquely identify the transaction.
 func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 	if tx.VerifyFields() == false {
-		return common.ZERO_HASH, errors.New("txn field verify failed")
+		return common.ZERO_HASH, errors.New(fmt.Sprintf("txn field verify failed for type %d", tx.Type()))
 	}
 	if s.chainId == nil || tx.ChainId() == nil {
 		return common.ZERO_HASH, errors.New("chain id is nil")
@@ -226,19 +248,37 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 		log.Debug("signing failed, chainId mismatch", "S", s.chainId, "tx", tx.ChainId())
 		return common.ZERO_HASH, errors.New("signing failed, chainId mismatch")
 	}
-	return prefixedRlpHash(
-		tx.Type(),
-		[]interface{}{
-			s.chainId,
-			tx.Nonce(),
-			tx.To(),
-			tx.Gas(),
-			tx.MaxGasTier(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-			tx.Remarks(),
-		}), nil
+	if tx.Type() == DefaultFeeTxType {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.Nonce(),
+				tx.To(),
+				tx.Gas(),
+				tx.MaxGasTier(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+				tx.Remarks(),
+			}), nil
+	} else if tx.Type() == DynamicFeeTxType {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.Nonce(),
+				tx.To(),
+				tx.Gas(),
+				tx.GasTipCap(),
+				tx.GasFeeCap(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+				tx.Remarks(),
+			}), nil
+	}
+	return common.Hash{}, errors.New("unknown transaction type")
 }
 
 func decodeSignature(digestHash []byte, sig []byte) (r, s, v *big.Int, err error) {
