@@ -2,6 +2,7 @@ package types
 
 import (
 	"errors"
+	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"math/big"
 )
@@ -90,7 +91,7 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 // It does not uniquely identify the transaction.
 func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 	if tx.VerifyFields() == false {
-		return common.ZERO_HASH, errors.New("txn field verify failed")
+		return common.ZERO_HASH, errors.New(fmt.Sprintf("txn field verify failed for type %d", tx.Type()))
 	}
 	if s.chainId == nil || tx.ChainId() == nil {
 		return common.ZERO_HASH, errors.New("chain id is nil")

@@ -31,17 +31,19 @@ type txJSON struct {
 	Type hexutil.Uint64 `json:"type"`
 
 	// Common transaction fields:
-	Nonce      *hexutil.Uint64 `json:"nonce"`
-	GasPrice   *hexutil.Big    `json:"gasPrice"`
-	Gas        *hexutil.Uint64 `json:"gas"`
-	MaxGasTier *hexutil.Uint64 `json:"maxGasTier"`
-	Value      *hexutil.Big    `json:"value"`
-	Data       *hexutil.Bytes  `json:"input"`
-	V          *hexutil.Big    `json:"v"`
-	R          *hexutil.Big    `json:"r"`
-	S          *hexutil.Big    `json:"s"`
-	To         *common.Address `json:"to"`
-	Remarks    *hexutil.Bytes  `json:"remarks"`
+	Nonce                *hexutil.Uint64 `json:"nonce"`
+	GasPrice             *hexutil.Big    `json:"gasPrice"`
+	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
+	Gas                  *hexutil.Uint64 `json:"gas"`
+	MaxGasTier           *hexutil.Uint64 `json:"maxGasTier"`
+	Value                *hexutil.Big    `json:"value"`
+	Data                 *hexutil.Bytes  `json:"input"`
+	V                    *hexutil.Big    `json:"v"`
+	R                    *hexutil.Big    `json:"r"`
+	S                    *hexutil.Big    `json:"s"`
+	To                   *common.Address `json:"to"`
+	Remarks              *hexutil.Bytes  `json:"remarks"`
 
 	// Access list transaction fields:
 	ChainID    *hexutil.Big `json:"chainId,omitempty"`
@@ -59,14 +61,16 @@ type txJSONinner struct {
 	Type hexutil.Uint64 `json:"type"`
 
 	// Common transaction fields:
-	Nonce      *hexutil.Uint64 `json:"nonce"`
-	GasPrice   *hexutil.Big    `json:"gasPrice"`
-	Gas        *hexutil.Uint64 `json:"gas"`
-	MaxGasTier *hexutil.Uint64 `json:"maxGasTier"`
-	Value      *hexutil.Big    `json:"value"`
-	Data       *hexutil.Bytes  `json:"input"`
-	To         *common.Address `json:"to"`
-	Remarks    *hexutil.Bytes  `json:"remarks"`
+	Nonce                *hexutil.Uint64 `json:"nonce"`
+	GasPrice             *hexutil.Big    `json:"gasPrice"`
+	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
+	Gas                  *hexutil.Uint64 `json:"gas"`
+	MaxGasTier           *hexutil.Uint64 `json:"maxGasTier"`
+	Value                *hexutil.Big    `json:"value"`
+	Data                 *hexutil.Bytes  `json:"input"`
+	To                   *common.Address `json:"to"`
+	Remarks              *hexutil.Bytes  `json:"remarks"`
 
 	// Access list transaction fields:
 	ChainID    *hexutil.Big `json:"chainId,omitempty"`
@@ -98,6 +102,26 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
 		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
 		enc.MaxGasTier = (*hexutil.Uint64)(&tx.MaxGasTier)
+		enc.Value = (*hexutil.Big)(tx.Value)
+		enc.Data = (*hexutil.Bytes)(&tx.Data)
+		enc.Remarks = (*hexutil.Bytes)(&tx.Remarks)
+		enc.To = t.To()
+		enc.V = (*hexutil.Big)(tx.V)
+		enc.R = (*hexutil.Big)(tx.R)
+		enc.S = (*hexutil.Big)(tx.S)
+		enc.VBlob = tx.V.Bytes()
+		enc.RBlob = tx.R.Bytes()
+		enc.SBlob = tx.S.Bytes()
+	case *DynamicFeeTx:
+		if tx.verifyFields() == false {
+			return nil, errors.New("verify fields failed")
+		}
+		enc.ChainID = (*hexutil.Big)(tx.ChainID)
+		enc.AccessList = &tx.AccessList
+		enc.Nonce = (*hexutil.Uint64)(&tx.Nonce)
+		enc.Gas = (*hexutil.Uint64)(&tx.Gas)
+		enc.MaxFeePerGas = (*hexutil.Big)(tx.GasFeeCap)
+		enc.MaxPriorityFeePerGas = (*hexutil.Big)(tx.GasTipCap)
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 		enc.Remarks = (*hexutil.Bytes)(&tx.Remarks)
@@ -170,7 +194,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'maxGasTier' in transaction") //todo: fill
 		}
 		maxGasTier := int64(*dec.MaxGasTier)
-
+		log.Warn("decode", "maxGasTier", maxGasTier)
 		if big.NewInt(maxGasTier).Cmp(GetDefaultGasPrice()) == 0 {
 			itx.MaxGasTier = GAS_TIER_DEFAULT
 		} else if maxGasTier == int64(GAS_TIER_DEFAULT) {
@@ -180,6 +204,70 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("invalid max gas tier")
 		}
 
+		if dec.VBlob == nil {
+			return errors.New("missing required field 'VBlob' in transaction")
+		} else {
+			itx.V = big.NewInt(1).SetBytes(dec.VBlob)
+		}
+
+		if dec.RBlob == nil {
+			return errors.New("missing required field 'RBlob' in transaction")
+		} else {
+			itx.R = big.NewInt(1).SetBytes(dec.RBlob)
+		}
+
+		if dec.SBlob == nil {
+			return errors.New("missing required field 'SBlob' in transaction")
+		} else {
+			itx.S = big.NewInt(1).SetBytes(dec.SBlob)
+		}
+
+	case DynamicFeeTxType:
+		var itx DynamicFeeTx
+		inner = &itx
+		// Access list is optional for now.
+		if dec.AccessList != nil {
+			itx.AccessList = *dec.AccessList
+		}
+		if dec.ChainID == nil {
+			return errors.New("missing required field 'chainId' in transaction")
+		}
+		itx.ChainID = (*big.Int)(dec.ChainID)
+		if dec.To != nil {
+			itx.To = dec.To
+		}
+		if dec.Nonce == nil {
+			return errors.New("missing required field 'nonce' in transaction")
+		}
+		itx.Nonce = uint64(*dec.Nonce)
+		if dec.MaxPriorityFeePerGas == nil {
+			return errors.New("missing required field 'maxPriorityFeePerGas' for txdata")
+		}
+		itx.GasTipCap = (*big.Int)(dec.MaxPriorityFeePerGas)
+		if dec.MaxFeePerGas == nil {
+			return errors.New("missing required field 'maxFeePerGas' for txdata")
+		}
+		itx.GasFeeCap = (*big.Int)(dec.MaxFeePerGas)
+		if dec.Gas == nil {
+			return errors.New("missing required field 'gas' for txdata")
+		}
+		itx.Gas = uint64(*dec.Gas)
+		if dec.Value == nil {
+			return errors.New("missing required field 'value' in transaction")
+		}
+		itx.Value = (*big.Int)(dec.Value)
+		if dec.Data == nil {
+			return errors.New("missing required field 'input' in transaction")
+		}
+		itx.Data = *dec.Data
+
+		if dec.Remarks != nil {
+			itx.Remarks = *dec.Data
+			if len(itx.Remarks) > MAX_REMARKS_LENGTH {
+				return errors.New("verify remarks failed")
+			}
+		}
+		
 		if dec.VBlob == nil {
 			return errors.New("missing required field 'VBlob' in transaction")
 		} else {

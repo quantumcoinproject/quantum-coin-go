@@ -46,6 +46,7 @@ var (
 // Transaction types.
 const (
 	DefaultFeeTxType = iota
+	DynamicFeeTxType = iota
 )
 
 // Transaction is an Ethereum transaction.
@@ -78,6 +79,8 @@ type TxData interface {
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
+	gasTipCap() *big.Int
+	gasFeeCap() *big.Int
 	maxGasTier() GasTier
 	value() *big.Int
 	nonce() uint64
@@ -175,6 +178,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner DefaultFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case DynamicFeeTxType:
+		var inner DynamicFeeTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -221,6 +228,12 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
 func (tx *Transaction) MaxGasTier() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
+
+// GasTipCap returns the gasTipCap per gas of the transaction.
+func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
+
+// GasFeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
 
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
@@ -689,11 +702,17 @@ func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	return msg, err
 }
 
-func (m Message) From() common.Address            { return m.from }
-func (m Message) To() *common.Address             { return m.to }
-func (m Message) GasPrice() *big.Int              { return m.gasPrice }
-func (m Message) Value() *big.Int                 { return m.amount }
-func (m Message) Gas() uint64                     { return m.gasLimit }
+func (m Message) From() common.Address { return m.from }
+func (m Message) To() *common.Address  { return m.to }
+func (m Message) GasPrice() *big.Int   { return m.gasPrice }
+func (m Message) Value() *big.Int      { return m.amount }
+func (m Message) Gas() uint64          { return m.gasLimit }
+
+// Tip returns the tip per gas of the transaction.
+func (tx *Transaction) Tip() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
+
+// FeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) FeeCap() *big.Int          { return new(big.Int).Set(tx.inner.gasFeeCap()) }
 func (m Message) Nonce() uint64                   { return m.nonce }
 func (m Message) Data() []byte                    { return m.data }
 func (m Message) AccessList() AccessList          { return m.accessList }
