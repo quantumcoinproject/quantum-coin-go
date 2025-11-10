@@ -95,15 +95,14 @@ type ProofOfStakeConfig struct {
 }
 
 type Config struct {
-	PosConfig                          *ProofOfStakeConfig
-	DeepCheckStartBlock                uint64
-	GasPriceStartBlock                 uint64
-	DefaultGasLimit                    uint64
-	ValidateSigPubStartTime            int64
-	TxnStartAllowedTime                int64
-	ConversionTxnLastTime              int64
-	KemSwitchTime                      int64
-	SigAlg4AdditionalBaseGasMultiplier int64
+	PosConfig               *ProofOfStakeConfig
+	DeepCheckStartBlock     uint64
+	GasPriceStartBlock      uint64
+	DefaultGasLimit         uint64
+	ValidateSigPubStartTime int64
+	TxnStartAllowedTime     int64
+	ConversionTxnLastTime   int64
+	KemSwitchTime           int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -193,27 +192,25 @@ var devnetPosConfig = ProofOfStakeConfig{
 }
 
 var MainnetConfig = &Config{
-	PosConfig:                          &mainnetPosConfig,
-	DeepCheckStartBlock:                uint64(3426261 + 3),
-	GasPriceStartBlock:                 uint64(3426261 + 4),
-	DefaultGasLimit:                    300000000,
-	ValidateSigPubStartTime:            int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:                int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:              int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:                      int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
-	SigAlg4AdditionalBaseGasMultiplier: 30,
+	PosConfig:               &mainnetPosConfig,
+	DeepCheckStartBlock:     uint64(3426261 + 3),
+	GasPriceStartBlock:      uint64(3426261 + 4),
+	DefaultGasLimit:         300000000,
+	ValidateSigPubStartTime: int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:           int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 }
 
 var DevnetConfig = &Config{
-	PosConfig:                          &devnetPosConfig,
-	DeepCheckStartBlock:                uint64(130),
-	GasPriceStartBlock:                 uint64(131),
-	DefaultGasLimit:                    300000000,
-	ValidateSigPubStartTime:            int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:                int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:              int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:                      int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
-	SigAlg4AdditionalBaseGasMultiplier: 30,
+	PosConfig:               &devnetPosConfig,
+	DeepCheckStartBlock:     uint64(130),
+	GasPriceStartBlock:      uint64(131),
+	DefaultGasLimit:         300000000,
+	ValidateSigPubStartTime: int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:           int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 }
 
 var DefaultConfig = MainnetConfig
