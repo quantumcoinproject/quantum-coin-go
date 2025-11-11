@@ -19,8 +19,9 @@ package types
 import (
 	"encoding/json"
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"math/big"
+
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -37,6 +38,7 @@ type txJSON struct {
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
 	Gas                  *hexutil.Uint64 `json:"gas"`
 	MaxGasTier           *hexutil.Uint64 `json:"maxGasTier"`
+	SigningContext       byte            `json:"signingContext"`
 	Value                *hexutil.Big    `json:"value"`
 	Data                 *hexutil.Bytes  `json:"input"`
 	V                    *hexutil.Big    `json:"v"`
@@ -67,6 +69,7 @@ type txJSONinner struct {
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
 	Gas                  *hexutil.Uint64 `json:"gas"`
 	MaxGasTier           *hexutil.Uint64 `json:"maxGasTier"`
+	SigningContext       byte            `json:"signingContext"`
 	Value                *hexutil.Big    `json:"value"`
 	Data                 *hexutil.Bytes  `json:"input"`
 	To                   *common.Address `json:"to"`
@@ -105,6 +108,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 		enc.Remarks = (*hexutil.Bytes)(&tx.Remarks)
+		enc.SigningContext = tx.signingContext()
 		enc.To = t.To()
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
@@ -125,6 +129,7 @@ func (t *Transaction) MarshalJSON() ([]byte, error) {
 		enc.Value = (*hexutil.Big)(tx.Value)
 		enc.Data = (*hexutil.Bytes)(&tx.Data)
 		enc.Remarks = (*hexutil.Bytes)(&tx.Remarks)
+		enc.SigningContext = tx.signingContext()
 		enc.To = t.To()
 		enc.V = (*hexutil.Big)(tx.V)
 		enc.R = (*hexutil.Big)(tx.R)
@@ -255,6 +260,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		if dec.Value == nil {
 			return errors.New("missing required field 'value' in transaction")
 		}
+		itx.SigningContext = dec.SigningContext
 		itx.Value = (*big.Int)(dec.Value)
 		if dec.Data == nil {
 			return errors.New("missing required field 'input' in transaction")
@@ -267,7 +273,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 				return errors.New("verify remarks failed")
 			}
 		}
-		
+
 		if dec.VBlob == nil {
 			return errors.New("missing required field 'VBlob' in transaction")
 		} else {

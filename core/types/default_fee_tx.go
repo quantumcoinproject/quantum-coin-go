@@ -5,7 +5,6 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
@@ -114,7 +113,7 @@ func (tx *DefaultFeeTx) gasPrice() *big.Int {
 func (tx *DefaultFeeTx) gasTipCap() *big.Int { return tx.gasPrice() }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
 func (tx *DefaultFeeTx) signingContext() byte {
-	return byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
+	return 0
 }
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
