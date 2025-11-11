@@ -3,6 +3,7 @@ package proofofstake
 import (
 	"bytes"
 	"errors"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
@@ -26,7 +27,7 @@ func EncodeBlockExtraData(errorTransactions types.Transactions, currentExtraData
 		}
 	} else {
 		if len(currentExtraData) < len(DefaultExtraData) { //todo: deep check
-			log.Error("EncodeBlockExtraData b", "extraData length invalid", len(currentExtraData), blockNumber, blockNumber)
+			log.Error("EncodeBlockExtraData b", "extraData length invalid", len(currentExtraData), "blockNumber", blockNumber)
 			return nil, errors.New("invalid ExtraData")
 		}
 	}
