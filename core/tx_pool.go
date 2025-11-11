@@ -18,18 +18,19 @@ package core
 
 import (
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
-	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
-	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"math"
 	"math/big"
 	"os"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
+	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/prque"
@@ -586,7 +587,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return err
 	} else if compatible == false {
 		log.Warn("validateTx compatible false", "error", err, "currentBlockNumber", blockNumber)
-		return errors.New("tx signature type is not allowed")
+		return errors.New("txpool tx signature type is not allowed")
 	}
 
 	// Reject transactions over defined size to prevent DOS attacks

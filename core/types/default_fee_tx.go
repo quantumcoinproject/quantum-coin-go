@@ -5,8 +5,10 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
 )
 
 const DEFAULT_CHAIN_ID int64 = 123123
@@ -105,15 +107,12 @@ func (tx *DefaultFeeTx) data() []byte           { return tx.Data }
 func (tx *DefaultFeeTx) gas() uint64            { return tx.Gas }
 func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GetDefaultGasPrice() }
 func (tx *DefaultFeeTx) gasPrice() *big.Int {
-	if tx.MaxGasTier == GAS_TIER_DEFAULT {
-		return GetDefaultGasPrice()
-	}
 	return GetDefaultGasPrice()
 }
 func (tx *DefaultFeeTx) gasTipCap() *big.Int { return tx.gasPrice() }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
 func (tx *DefaultFeeTx) signingContext() byte {
-	return 0
+	return byte(crypto.SigningContextDefault)
 }
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
@@ -121,6 +120,10 @@ func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
 func (tx *DefaultFeeTx) verifyFields() bool {
 	if tx.gasPrice().Cmp(GetDefaultGasPrice()) != 0 {
 		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "GetDefaultGasPrice()", GetDefaultGasPrice())
+		return false
+	}
+	if tx.maxGasTier() != GasTier(types.GAS_TIER_DEFAULT) {
+		log.Debug("verifyFields", "tx.maxGasTier()", tx.maxGasTier())
 		return false
 	}
 	return len(tx.Remarks) <= MAX_REMARKS_LENGTH

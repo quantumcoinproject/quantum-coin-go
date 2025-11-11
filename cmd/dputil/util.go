@@ -7,6 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"math/big"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi/bind"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -26,15 +36,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
 	"github.com/quantumcoinproject/quantum-coin-go/token"
 	"github.com/quantumcoinproject/quantum-coin-go/token/tokenconversion"
-	"io/ioutil"
-	"log"
-	"math/big"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const GAS_LIMIT_ENV = "GAS_LIMIT"
@@ -357,7 +358,8 @@ func send(from string, to string, quantity string) (string, error) {
 	value := etherToWeiFloat(v)
 
 	var data []byte
-	tx := types.NewDefaultFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data)
+
+	tx := types.NewDDynamicFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data)
 	fmt.Println("chainID", chainID)
 
 	signedTx, err := types.SignTx(tx, types.NewLondonSigner(chainID), key.PrivateKey)

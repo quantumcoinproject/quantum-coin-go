@@ -218,7 +218,7 @@ func (dv DynamicVerifier) IsSignatureTypeAllowedForTxn(blockNumber uint64, signa
 	isBreakglassBlock := defaults.IsCryptoBreakglassMode(blockNumber)
 	if isBreakglassBlock == false {
 		if defaults.IsSigAlgSwitchMode(blockNumber) {
-			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID, nil
+			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID, nil
 		} else {
 			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID, nil
 		}
@@ -235,5 +235,20 @@ func GetSigAlgForValidation(blockNumber uint64) signaturealgorithm.SignatureAlgo
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridMlDsaEddsaSlhDsaCompact)
 	} else {
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridEds)
+	}
+}
+
+func GetSigningContext() crypto.SigningContext {
+	signMode := defaults.GetSigningMode()
+	if signMode == byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID) {
+		return crypto.SigningContextDefault
+	} else if signMode == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
+		return crypto.SigningContextLevel1
+	} else if signMode == byte(crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID) {
+		return crypto.SigningContextDefault
+	} else if signMode == byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
+		return crypto.SigningContextLevel1
+	} else {
+		return crypto.SigningContextDefault
 	}
 }

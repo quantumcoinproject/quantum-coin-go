@@ -10,6 +10,7 @@ import (
 )
 
 var DEFAULT_PRICE = int64(47619047619047600)
+var SigningContextLevel1Multiplier = int64(30)
 var cryptoBreakglassBlock uint64 = 0
 var signingMode byte = 1 //crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
 var okConfig bool = LoadDefaultConfig()

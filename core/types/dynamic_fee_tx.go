@@ -19,6 +19,8 @@ package types
 import (
 	"math/big"
 
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -88,6 +90,20 @@ func (tx *DynamicFeeTx) copy() TxData {
 	return cpy
 }
 
+func (tx *DynamicFeeTx) calcGasFee() *big.Int {
+	defaultFee := GetDefaultGasPrice()
+	var expectedGasPrice *big.Int
+	if tx.SigningContext == byte(crypto.SigningContextDefault) {
+		expectedGasPrice = defaultFee
+	} else if tx.SigningContext == byte(crypto.SigningContextLevel1) {
+		expectedGasPrice = common.SafeMulBigInt(defaultFee, big.NewInt(defaults.SigningContextLevel1Multiplier))
+	} else {
+		log.Warn("verifyFields", "SigningContext", tx.SigningContext)
+		return nil
+	}
+	return expectedGasPrice
+}
+
 // accessors for innerTx.
 func (tx *DynamicFeeTx) txType() byte           { return DynamicFeeTxType }
 func (tx *DynamicFeeTx) chainID() *big.Int      { return tx.ChainID }
@@ -97,7 +113,7 @@ func (tx *DynamicFeeTx) data() []byte           { return tx.Data }
 func (tx *DynamicFeeTx) gas() uint64            { return tx.Gas }
 func (tx *DynamicFeeTx) gasFeeCap() *big.Int    { return tx.GasFeeCap }
 func (tx *DynamicFeeTx) gasTipCap() *big.Int    { return tx.GasTipCap }
-func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.GasFeeCap }
+func (tx *DynamicFeeTx) gasPrice() *big.Int     { return tx.calcGasFee() }
 func (tx *DynamicFeeTx) signingContext() byte {
 	return tx.SigningContext
 }
@@ -106,12 +122,41 @@ func (tx *DynamicFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DynamicFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DynamicFeeTx) to() *common.Address { return tx.To }
 func (tx *DynamicFeeTx) verifyFields() bool {
-	if tx.gasPrice().Cmp(GetDefaultGasPrice()) != 0 {
-		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "GetDefaultGasPrice()", GetDefaultGasPrice())
+	if tx.S != nil {
+		signature := tx.S.Bytes()
+		if len(signature) > 0 {
+			algType := crypto.SignatureAlgorithmType(signature[0])
+			if tx.SigningContext == byte(crypto.SigningContextDefault) {
+				if algType != crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID && algType != crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
+					log.Debug("verifyFields signing context algtype mismatch", "tx.signingContext", tx.SigningContext, "algType", algType)
+					return false
+				}
+			} else if tx.SigningContext == byte(crypto.SigningContextLevel1) {
+				if algType != crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID && algType != crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
+					log.Debug("verifyFields signing context algtype mismatch", "tx.signingContext", tx.SigningContext, "algType", algType)
+					return false
+				}
+			} else {
+				log.Warn("verifyFields", "SigningContext", tx.SigningContext)
+				return false
+			}
+		}
+	}
+
+	expectedGasPrice := tx.calcGasFee()
+	if expectedGasPrice == nil {
+		log.Debug("verifyFields nil expectedGasPrice", "tx.gasPrice()", tx.gasPrice(), "signingContext", tx.SigningContext)
 		return false
 	}
+
+	if tx.gasPrice().Cmp(expectedGasPrice) != 0 {
+		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "expectedGasFee", expectedGasPrice, "signingContext", tx.SigningContext)
+		return false
+	}
+
 	if tx.maxGasTier() != GasTier(types.GAS_TIER_DEFAULT) {
 		log.Debug("verifyFields", "tx.maxGasTier()", tx.maxGasTier())
+		return false
 	}
 	return len(tx.Remarks) <= MAX_REMARKS_LENGTH
 }
@@ -126,4 +171,18 @@ func (tx *DynamicFeeTx) setSignatureValues(chainID, v, r, s *big.Int) {
 
 func (tx *DynamicFeeTx) remarks() []byte {
 	return tx.Remarks
+}
+
+func NewDDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte) *Transaction {
+	tx := NewTx(&DynamicFeeTx{
+		ChainID:        chainId,
+		Nonce:          nonce,
+		To:             to,
+		Value:          amount,
+		Data:           data,
+		Gas:            gasLimit,
+		SigningContext: byte(signingContext),
+	})
+
+	return tx
 }
