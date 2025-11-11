@@ -33,6 +33,7 @@ var packetSentCount int32
 var TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 var DefaultMaxWaitCount = 30
 var HandlerLock sync.Mutex
+var wgPacket sync.WaitGroup
 
 type ValidatorDetailsTest struct {
 	balance *big.Int
@@ -230,6 +231,8 @@ func (p *MockP2PHandler) GetLocalPeerId() string {
 
 func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) error {
 	HandlerLock.Lock()
+	wgPacket.Add(1)
+	defer wgPacket.Done()
 	handlers := p.mockP2pManager.mockP2pHandlers
 	HandlerLock.Unlock()
 
@@ -426,6 +429,7 @@ func (vm *ValidatorManager) ListValidatorsAsMap(blockHash common.Hash) (map[comm
 func Initialize(numKeys int) (vm *ValidatorManager, mockp2pManager *MockP2PManager, validatorMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
 	HandlerLock.Lock()
 	defer HandlerLock.Unlock()
+	wgPacket.Wait()
 
 	STARTUP_DELAY_MS = int64(2000)
 	BLOCK_TIMEOUT_MS = int64(6000)
