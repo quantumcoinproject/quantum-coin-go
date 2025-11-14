@@ -20,6 +20,7 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 		Nonce                math.HexOrDecimal64   `json:"nonce"`
 		To                   string                `json:"to"`
 		Data                 []string              `json:"data"`
+		SigningContext       byte                  `json:"signingContext"`
 		AccessLists          []*types.AccessList   `json:"accessLists,omitempty"`
 		GasLimit             []math.HexOrDecimal64 `json:"gasLimit"`
 		Value                []string              `json:"value"`
@@ -31,6 +32,7 @@ func (s stTransaction) MarshalJSON() ([]byte, error) {
 	enc.To = s.To
 	enc.Data = s.Data
 	enc.AccessLists = s.AccessLists
+	enc.SigningContext = s.SigningContext
 	if s.GasLimit != nil {
 		enc.GasLimit = make([]math.HexOrDecimal64, len(s.GasLimit))
 		for k, v := range s.GasLimit {

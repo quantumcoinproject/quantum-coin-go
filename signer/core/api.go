@@ -420,6 +420,10 @@ func logDiff(original *SignTxRequest, new *SignTxResponse) bool {
 		modified = true
 		log.Info("Value changed by UI", "was", v0, "is", v1)
 	}
+	if original.Transaction.SigningContext != new.Transaction.SigningContext {
+		modified = true
+		log.Info("SigningContext changed by UI", "was", original.Transaction.SigningContext, "is", new.Transaction.SigningContext)
+	}
 	if d0, d1 := original.Transaction.Data, new.Transaction.Data; d0 != d1 {
 		d0s := ""
 		d1s := ""

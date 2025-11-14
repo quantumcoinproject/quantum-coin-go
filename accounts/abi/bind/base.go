@@ -20,6 +20,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
+	"sync"
+
 	"github.com/quantumcoinproject/quantum-coin-go"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -27,9 +31,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/event"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"math/big"
-	"strings"
-	"sync"
 )
 
 // SignerFn is a signer function callback when a contract requires a method to
@@ -51,9 +52,10 @@ type TransactOpts struct {
 	Nonce  *big.Int       // Nonce to use for the transaction execution (nil = use pending state)
 	Signer SignerFn       // Method to use for signing the transaction (mandatory)
 
-	Value    *big.Int // Funds to transfer along the transaction (nil = 0 = no funds)
-	GasPrice *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
-	GasLimit uint64   // Gas limit to set for the transaction execution (0 = estimate)
+	Value          *big.Int // Funds to transfer along the transaction (nil = 0 = no funds)
+	GasPrice       *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
+	GasLimit       uint64   // Gas limit to set for the transaction execution (0 = estimate)
+	SigningContext byte     //crypto.SigningContext
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 

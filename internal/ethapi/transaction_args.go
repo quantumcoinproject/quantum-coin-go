@@ -20,13 +20,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/common/math"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
-	"math/big"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -38,6 +39,7 @@ type TransactionArgs struct {
 	GasPrice             *hexutil.Big    `json:"gasPrice"`
 	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
 	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	SigningContext       byte            `json:"signingContext"`
 	Value                *hexutil.Big    `json:"value"`
 	Nonce                *hexutil.Uint64 `json:"nonce"`
 
@@ -166,7 +168,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) (types.Message, erro
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false, args.SigningContext)
 	return msg, nil
 }
 
@@ -181,16 +183,17 @@ func (args *TransactionArgs) toTransaction() *types.Transaction {
 			al = *args.AccessList
 		}
 		data = &types.DynamicFeeTx{
-			To:         args.To,
-			ChainID:    (*big.Int)(args.ChainID),
-			Nonce:      uint64(*args.Nonce),
-			Gas:        uint64(*args.Gas),
-			GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
-			GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
-			Value:      (*big.Int)(args.Value),
-			Data:       args.data(),
-			Remarks:    args.context(),
-			AccessList: al,
+			To:             args.To,
+			ChainID:        (*big.Int)(args.ChainID),
+			Nonce:          uint64(*args.Nonce),
+			Gas:            uint64(*args.Gas),
+			GasFeeCap:      (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:      (*big.Int)(args.MaxPriorityFeePerGas),
+			SigningContext: args.SigningContext,
+			Value:          (*big.Int)(args.Value),
+			Data:           args.data(),
+			Remarks:        args.context(),
+			AccessList:     al,
 		}
 	case args.AccessList != nil:
 		data = &types.DefaultFeeTx{

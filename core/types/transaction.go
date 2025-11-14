@@ -662,44 +662,47 @@ func (t *TransactionsByNonce) Pop1() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	data       []byte
-	accessList AccessList
-	checkNonce bool
-	remarks    []byte
+	to             *common.Address
+	from           common.Address
+	nonce          uint64
+	amount         *big.Int
+	gasLimit       uint64
+	gasPrice       *big.Int
+	signingContext byte
+	data           []byte
+	accessList     AccessList
+	checkNonce     bool
+	remarks        []byte
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, checkNonce bool, signingContext byte) Message {
 	return Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
-		data:       data,
-		accessList: accessList,
-		checkNonce: checkNonce,
+		from:           from,
+		to:             to,
+		nonce:          nonce,
+		amount:         amount,
+		gasLimit:       gasLimit,
+		gasPrice:       gasPrice,
+		signingContext: signingContext,
+		data:           data,
+		accessList:     accessList,
+		checkNonce:     checkNonce,
 	}
 }
 
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
-		nonce:      tx.Nonce(),
-		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
-		to:         tx.To(),
-		amount:     tx.Value(),
-		data:       tx.Data(),
-		accessList: tx.AccessList(),
-		checkNonce: true,
-		remarks:    tx.Remarks(),
+		nonce:          tx.Nonce(),
+		gasLimit:       tx.Gas(),
+		gasPrice:       new(big.Int).Set(tx.GasPrice()),
+		to:             tx.To(),
+		amount:         tx.Value(),
+		signingContext: tx.SigningContext(),
+		data:           tx.Data(),
+		accessList:     tx.AccessList(),
+		checkNonce:     true,
+		remarks:        tx.Remarks(),
 	}
 	var err error
 	msg.from, err = Sender(s, tx)
@@ -711,6 +714,7 @@ func (m Message) To() *common.Address  { return m.to }
 func (m Message) GasPrice() *big.Int   { return m.gasPrice }
 func (m Message) Value() *big.Int      { return m.amount }
 func (m Message) Gas() uint64          { return m.gasLimit }
+func (m Message) SigningContext() byte { return m.signingContext }
 
 // Tip returns the tip per gas of the transaction.
 func (tx *Transaction) Tip() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }

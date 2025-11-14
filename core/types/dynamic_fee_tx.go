@@ -124,7 +124,7 @@ func (tx *DynamicFeeTx) to() *common.Address { return tx.To }
 func (tx *DynamicFeeTx) verifyFields() bool {
 	if tx.S != nil {
 		signature := tx.S.Bytes()
-		if len(signature) > 0 {
+		if len(signature) > 1 {
 			algType := crypto.SignatureAlgorithmType(signature[0])
 			if tx.SigningContext == byte(crypto.SigningContextDefault) {
 				if algType != crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID && algType != crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
@@ -173,7 +173,7 @@ func (tx *DynamicFeeTx) remarks() []byte {
 	return tx.Remarks
 }
 
-func NewDDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte) *Transaction {
+func NewDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte) *Transaction {
 	tx := NewTx(&DynamicFeeTx{
 		ChainID:        chainId,
 		Nonce:          nonce,
