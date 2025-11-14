@@ -118,6 +118,17 @@ func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
 func (tx *DefaultFeeTx) verifyFields() bool {
+	if tx.S != nil {
+		signature := tx.S.Bytes()
+		if len(signature) > 1 {
+			algType := crypto.SignatureAlgorithmType(signature[0])
+			if algType != crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID && algType != crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
+				log.Warn("verifyFields", "algType", algType)
+				return false
+			}
+		}
+	}
+
 	if tx.gasPrice().Cmp(GetDefaultGasPrice()) != 0 {
 		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "GetDefaultGasPrice()", GetDefaultGasPrice())
 		return false
