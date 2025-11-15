@@ -38,7 +38,7 @@ func (al AccessList) StorageKeys() int {
 }
 
 func GetDefaultGasPrice() *big.Int {
-	return big.NewInt(defaults.DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
+	return big.NewInt(defaults.DEFAULT_PRICE) // 1000 Q / 21000 in wei (1000/21000 = 0.0476190476190476)
 }
 
 func GetDefaultGasPriceHexBig() *hexutil.Big {

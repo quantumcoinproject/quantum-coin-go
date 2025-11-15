@@ -46,6 +46,10 @@ type DynamicFeeTx struct {
 	S *big.Int `json:"s" gencodec:"required"`
 }
 
+func getGasPrice() *big.Int {
+	return big.NewInt(defaults.DEFAULT_PRICE / 10) //100 Q
+}
+
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *DynamicFeeTx) copy() TxData {
 	cpy := &DynamicFeeTx{
@@ -91,7 +95,7 @@ func (tx *DynamicFeeTx) copy() TxData {
 }
 
 func (tx *DynamicFeeTx) calcGasFee() *big.Int {
-	defaultFee := GetDefaultGasPrice()
+	defaultFee := getGasPrice()
 	var expectedGasPrice *big.Int
 	if tx.SigningContext == byte(crypto.SigningContextDefault) {
 		expectedGasPrice = defaultFee
