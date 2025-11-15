@@ -21,10 +21,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-
-	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 func TestChainId(t *testing.T) {
@@ -379,11 +378,12 @@ func TestHashDefaultFeeTx(t *testing.T) {
 
 	//S change
 	innerTx1 = getDefaultFeeTx()
-	innerTx1.S = big.NewInt(10000)
+	innerTx1.S = big.NewInt(3)
 
 	tx1 = NewTx(&innerTx1)
 	gotHash, err = signer.Hash(tx1)
 	if err != nil {
+		fmt.Println("hash error", "error", err)
 		t.Fatalf("failed")
 	}
 
@@ -688,11 +688,16 @@ func TestHashDynamicFeeTx(t *testing.T) {
 
 	//S change
 	innerTx1 = getDynamicFeeTx()
-	innerTx1.S = big.NewInt(10000)
+	innerTx1.S = big.NewInt(4)
 
 	tx1 = NewTx(&innerTx1)
 	gotHash, err = signer.Hash(tx1)
-	if err == nil {
+	if err != nil {
+		fmt.Println("Hash err", "error", err)
+		t.Fatalf("failed")
+	}
+
+	if gotHash.IsEqualTo(origHash) == false {
 		t.Fatalf("failed")
 	}
 }

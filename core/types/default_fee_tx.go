@@ -154,7 +154,7 @@ func (tx *DefaultFeeTx) setSignatureValues(chainID, v, r, s *big.Int) {
 // NewTransaction creates an unsigned legacy transaction.
 // Deprecated: use NewTx instead.
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return NewDefaultFeeTransaction(big.NewInt(DEFAULT_CHAIN_ID), nonce, &to, amount, gasLimit, GAS_TIER_DEFAULT, data)
+	return NewDefaultFeeTransaction(big.NewInt(DEFAULT_CHAIN_ID), nonce, &to, amount, gasLimit, GAS_TIER_DEFAULT, data, nil)
 }
 
 func NewDefaultFeeTransactionSimple(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, data []byte) *DefaultFeeTx {
@@ -163,7 +163,7 @@ func NewDefaultFeeTransactionSimple(nonce uint64, to *common.Address, amount *bi
 		Nonce:      nonce,
 		To:         to,
 		Value:      amount,
-		Data:       data,
+		Data:       common.CopyBytes(data),
 		Gas:        gasLimit,
 		MaxGasTier: GAS_TIER_DEFAULT,
 	}
@@ -171,15 +171,16 @@ func NewDefaultFeeTransactionSimple(nonce uint64, to *common.Address, amount *bi
 	return tx
 }
 
-func NewDefaultFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, maxGasTier GasTier, data []byte) *Transaction {
+func NewDefaultFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, maxGasTier GasTier, data []byte, remarks []byte) *Transaction {
 	tx := NewTx(&DefaultFeeTx{
 		ChainID:    chainId,
 		Nonce:      nonce,
 		To:         to,
 		Value:      amount,
-		Data:       data,
+		Data:       common.CopyBytes(data),
 		Gas:        gasLimit,
 		MaxGasTier: maxGasTier,
+		Remarks:    common.CopyBytes(remarks),
 	})
 
 	return tx
@@ -187,12 +188,13 @@ func NewDefaultFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address
 
 // NewContractCreation creates an unsigned legacy transaction.
 // Deprecated: use NewTx instead.
-func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, data []byte, remarks []byte) *Transaction {
 	return NewTx(&DefaultFeeTx{
 		Nonce:      nonce,
 		Value:      amount,
 		Gas:        gasLimit,
 		MaxGasTier: GAS_TIER_DEFAULT,
-		Data:       data,
+		Data:       common.CopyBytes(data),
+		Remarks:    common.CopyBytes(remarks),
 	})
 }

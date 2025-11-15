@@ -578,9 +578,15 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return errors.New("conversion txn not in allowed time range")
 	}
 
-	if tx.Type() == 1 && pool.chain.CurrentBlock().NumberU64() < defaults.DefaultConfig.PosConfig.DynamicFeeTxStartBlock {
-		log.Debug("dynamic fee tx start block not met", "tx", tx.Hash())
-		return errors.New("dynamic fee tx start block not met")
+	if tx.Type() == 1 {
+		if pool.chain.CurrentBlock().NumberU64() < defaults.DefaultConfig.PosConfig.DynamicFeeTxStartBlock {
+			log.Debug("dynamic fee tx start block not met", "tx", tx.Hash())
+			return errors.New("dynamic fee tx start block not met")
+		}
+		if (tx.GasFeeCap() != nil || tx.GasTipCap() != nil) && (tx.GasFeeCap().Uint64() != 0 || tx.GasTipCap().Uint64() != 0) { //todo: block till tips are implemented
+			log.Debug("gasFeeCap or gasTipCap non nil", "GasFeeCap", tx.GasFeeCap(), "GasTipCap", tx.GasTipCap())
+			return errors.New("gasFeeCap or gasTipCap non nil")
+		}
 	}
 
 	//Check breakglass compatibility

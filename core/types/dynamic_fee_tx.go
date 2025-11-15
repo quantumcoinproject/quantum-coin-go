@@ -177,13 +177,14 @@ func (tx *DynamicFeeTx) remarks() []byte {
 	return tx.Remarks
 }
 
-func NewDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte) *Transaction {
+func NewDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte, remarks []byte) *Transaction {
 	tx := NewTx(&DynamicFeeTx{
 		ChainID:        chainId,
 		Nonce:          nonce,
 		To:             to,
 		Value:          amount,
-		Data:           data,
+		Data:           common.CopyBytes(data),
+		Remarks:        common.CopyBytes(remarks),
 		Gas:            gasLimit,
 		SigningContext: byte(signingContext),
 	})

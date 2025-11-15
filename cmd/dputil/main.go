@@ -534,6 +534,10 @@ func sendTxn() {
 	from := os.Args[2]
 	to := os.Args[3]
 	quantity := os.Args[4]
+	var remarks string
+	if len(os.Args) > 5 {
+		remarks = os.Args[5]
+	}
 	shouldConfirm := os.Getenv("SHOULD_CONFIRM")
 
 	if common.IsHexAddress(from) == false {
@@ -570,7 +574,7 @@ func sendTxn() {
 	}
 	fmt.Println()
 
-	txHash, err := send(from, to, quantity)
+	txHash, err := send(from, to, quantity, remarks)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -2313,7 +2317,7 @@ func SendRawTransaction() error {
 		fmt.Println("SendRawTransaction failed", "error", err)
 		return err
 	}
-	
+
 	fmt.Println("SendRawTransaction succeeded", "tx hash", txHash)
 
 	return nil

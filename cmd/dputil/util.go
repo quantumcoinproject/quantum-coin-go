@@ -294,7 +294,7 @@ func sendVia(connectionContext *ConnectionContext, to string, quantity string, n
 	return signedTx.Hash().Hex(), nonce, nil
 }
 
-func send(from string, to string, quantity string) (string, error) {
+func send(from string, to string, quantity string, remarks string) (string, error) {
 	keyFile, err := findKeyFile(from)
 	if err != nil {
 		return "", err
@@ -376,10 +376,17 @@ func send(from string, to string, quantity string) (string, error) {
 
 	txType := os.Getenv("TX_TYPE")
 	var tx *types.Transaction
+	var remarkBytes []byte
+	if len(remarks) > 0 {
+		fmt.Println("remarks", remarks)
+		remarkBytes = []byte(remarks)
+	} else {
+		remarkBytes = nil
+	}
 	if txType == "" || txType == "0" {
-		tx = types.NewDefaultFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data)
+		tx = types.NewDefaultFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data, remarkBytes)
 	} else if txType == "1" {
-		tx = types.NewDynamicFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data)
+		tx = types.NewDynamicFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data, remarkBytes)
 	} else {
 		fmt.Println("Unknown txType", txType)
 		return "", errors.New("unknown txType")
