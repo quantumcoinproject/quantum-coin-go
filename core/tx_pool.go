@@ -578,6 +578,11 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return errors.New("conversion txn not in allowed time range")
 	}
 
+	if tx.Type() == 1 && pool.chain.CurrentBlock().NumberU64() < defaults.DefaultConfig.PosConfig.DynamicFeeTxStartBlock {
+		log.Debug("dynamic fee tx start block not met", "tx", tx.Hash())
+		return errors.New("dynamic fee tx start block not met")
+	}
+
 	//Check breakglass compatibility
 	blockNumber := pool.chain.CurrentBlock().NumberU64()
 	_, _, s := tx.RawSignatureValues()

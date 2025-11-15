@@ -93,6 +93,8 @@ type ProofOfStakeConfig struct {
 	SigAlgSwitchBlock uint64
 
 	MinOfflineProposerBlockDelay uint64
+
+	DynamicFeeTxStartBlock uint64
 }
 
 type Config struct {
@@ -147,6 +149,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	SigAlgSwitchBlock: 3426261 + 2,
 
 	MinOfflineProposerBlockDelay: 3600,
+
+	DynamicFeeTxStartBlock: 3426261 + 2 + 10,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -190,6 +194,8 @@ var devnetPosConfig = ProofOfStakeConfig{
 	SigAlgSwitchBlock: 90 + 10 + 10 + 10 + 2,
 
 	MinOfflineProposerBlockDelay: 3600,
+
+	DynamicFeeTxStartBlock: 90 + 10 + 10 + 10 + 2 + 10,
 }
 
 var MainnetConfig = &Config{
