@@ -1,8 +1,6 @@
 module github.com/quantumcoinproject/quantum-coin-go
 
-go 1.22.0
-
-toolchain go1.24.3
+go 1.25.3
 
 require (
 	github.com/Azure/azure-storage-blob-go v0.7.0
