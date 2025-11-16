@@ -9,6 +9,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
+const BASIC_TXN_GAS = uint64(21000)
+
 var DEFAULT_PRICE = int64(47619047619047600)
 var SigningContextLevel1Multiplier = int64(30)
 var cryptoBreakglassBlock uint64 = 0
@@ -21,6 +23,10 @@ func GetGasLimit(blockNumber uint64) uint64 {
 	} else {
 		return DefaultConfig.DefaultGasLimit
 	}
+}
+
+func GetMaxTransactionsForBlock(blockNumber uint64) int {
+	return int(DefaultConfig.DefaultGasLimit / BASIC_TXN_GAS)
 }
 
 func SetCryptoBreakGlassBlock(blockNumber uint64) error {
