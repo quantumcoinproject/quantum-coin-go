@@ -20,24 +20,28 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/common/math"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
-	"math/big"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
 type TransactionArgs struct {
-	From     *common.Address `json:"from"`
-	To       *common.Address `json:"to"`
-	Gas      *hexutil.Uint64 `json:"gas"`
-	GasPrice *hexutil.Big    `json:"gasPrice"`
-	Value    *hexutil.Big    `json:"value"`
-	Nonce    *hexutil.Uint64 `json:"nonce"`
+	From                 *common.Address `json:"from"`
+	To                   *common.Address `json:"to"`
+	Gas                  *hexutil.Uint64 `json:"gas"`
+	GasPrice             *hexutil.Big    `json:"gasPrice"`
+	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
+	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
+	SigningContext       byte            `json:"signingContext"`
+	Value                *hexutil.Big    `json:"value"`
+	Nonce                *hexutil.Uint64 `json:"nonce"`
 
 	// We accept "data" and "input" for backwards-compatibility reasons.
 	// "input" is the newer name and should be preferred by clients.
@@ -164,7 +168,7 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) (types.Message, erro
 	if args.AccessList != nil {
 		accessList = *args.AccessList
 	}
-	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false)
+	msg := types.NewMessage(addr, args.To, 0, value, gas, gasPrice, data, accessList, false, args.SigningContext)
 	return msg, nil
 }
 
@@ -173,6 +177,24 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64) (types.Message, erro
 func (args *TransactionArgs) toTransaction() *types.Transaction {
 	var data types.TxData
 	switch {
+	case args.MaxFeePerGas != nil:
+		al := types.AccessList{}
+		if args.AccessList != nil {
+			al = *args.AccessList
+		}
+		data = &types.DynamicFeeTx{
+			To:             args.To,
+			ChainID:        (*big.Int)(args.ChainID),
+			Nonce:          uint64(*args.Nonce),
+			Gas:            uint64(*args.Gas),
+			GasFeeCap:      (*big.Int)(args.MaxFeePerGas),
+			GasTipCap:      (*big.Int)(args.MaxPriorityFeePerGas),
+			SigningContext: args.SigningContext,
+			Value:          (*big.Int)(args.Value),
+			Data:           args.data(),
+			Remarks:        args.context(),
+			AccessList:     al,
+		}
 	case args.AccessList != nil:
 		data = &types.DefaultFeeTx{
 			To:         args.To,

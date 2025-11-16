@@ -18,18 +18,19 @@ package core
 
 import (
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
-	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
-	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"math"
 	"math/big"
 	"os"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
+	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/prque"
@@ -577,6 +578,17 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return errors.New("conversion txn not in allowed time range")
 	}
 
+	if tx.Type() == 1 {
+		if pool.chain.CurrentBlock().NumberU64() < defaults.DefaultConfig.PosConfig.DynamicFeeTxStartBlock {
+			log.Debug("dynamic fee tx start block not met", "tx", tx.Hash())
+			return errors.New("dynamic fee tx start block not met")
+		}
+		if (tx.GasFeeCap() != nil || tx.GasTipCap() != nil) && (tx.GasFeeCap().Uint64() != 0 || tx.GasTipCap().Uint64() != 0) { //todo: block till tips are implemented
+			log.Debug("gasFeeCap or gasTipCap non nil", "GasFeeCap", tx.GasFeeCap(), "GasTipCap", tx.GasTipCap())
+			return errors.New("gasFeeCap or gasTipCap non nil")
+		}
+	}
+
 	//Check breakglass compatibility
 	blockNumber := pool.chain.CurrentBlock().NumberU64()
 	_, _, s := tx.RawSignatureValues()
@@ -586,7 +598,7 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 		return err
 	} else if compatible == false {
 		log.Warn("validateTx compatible false", "error", err, "currentBlockNumber", blockNumber)
-		return errors.New("tx signature type is not allowed")
+		return errors.New("txpool tx signature type is not allowed")
 	}
 
 	// Reject transactions over defined size to prevent DOS attacks

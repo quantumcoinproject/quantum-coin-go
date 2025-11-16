@@ -32,6 +32,8 @@ var packetDropCount int32
 var packetSentCount int32
 var TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 var DefaultMaxWaitCount = 30
+var HandlerLock sync.Mutex
+var wgPacket sync.WaitGroup
 
 type ValidatorDetailsTest struct {
 	balance *big.Int
@@ -228,7 +230,13 @@ func (p *MockP2PHandler) GetLocalPeerId() string {
 }
 
 func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) error {
-	for _, val := range p.mockP2pManager.mockP2pHandlers {
+	HandlerLock.Lock()
+	wgPacket.Add(1)
+	defer wgPacket.Done()
+	handlers := p.mockP2pManager.mockP2pHandlers
+	HandlerLock.Unlock()
+
+	for _, val := range handlers {
 		handler := val.consensusHandler
 		if bytes.Compare(handler.account.Address.Bytes(), p.validator.Bytes()) != 0 {
 			if p.networkDetails.packetLoss > 0 {
@@ -419,6 +427,10 @@ func (vm *ValidatorManager) ListValidatorsAsMap(blockHash common.Hash) (map[comm
 }
 
 func Initialize(numKeys int) (vm *ValidatorManager, mockp2pManager *MockP2PManager, validatorMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
+	HandlerLock.Lock()
+	defer HandlerLock.Unlock()
+	wgPacket.Wait()
+
 	STARTUP_DELAY_MS = int64(2000)
 	BLOCK_TIMEOUT_MS = int64(6000)
 	ACK_BLOCK_TIMEOUT_MS = 18000 //relative to start of block locally
@@ -690,16 +702,9 @@ func TestPacketHandler_SigAlgSwitch_block_full_sign(t *testing.T) {
 	fmt.Println("TestPacketHandler_SigAlgSwitch_block_full_sign done")
 }
 
-func TestPacketHandler_basic_various_blocks(t *testing.T) {
+func TestPacketHandler_basic_various_blocks_post_offline_validator_block(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
-	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock, defaults.DefaultConfig.DeepCheckStartBlock, 1, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, 1, defaults.DefaultConfig.PosConfig.RewardStartBlockNumber, defaults.DefaultConfig.PosConfig.SlashStartBlockNumber, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
-		defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
-		defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
-		defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK, defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD, defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK,
-		defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock,
-		defaults.DefaultConfig.PosConfig.SlashV2StartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock,
-		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock,
-	}
+	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock, defaults.DefaultConfig.DeepCheckStartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock}
 
 	for _, b := range blockNumbers {
 		TEST_CONSENSUS_BLOCK_NUMBER = b
@@ -716,6 +721,29 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 func TestPacketHandler_offline_validator_block(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
 	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock}
+
+	for _, b := range blockNumbers {
+		TEST_CONSENSUS_BLOCK_NUMBER = b
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		for i := 1; i <= TEST_ITERATIONS; i++ {
+			fmt.Println("iteration", i)
+			testPacketHandler_basic(4, t)
+		}
+	}
+	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+	fmt.Println("TestPacketHandler_basic_various_blocks done")
+}
+
+func TestPacketHandler_basic_various_blocks(t *testing.T) {
+	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+	var blockNumbers = []uint64{1, defaults.DefaultConfig.PosConfig.RewardStartBlockNumber, defaults.DefaultConfig.PosConfig.SlashStartBlockNumber, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
+		defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
+		defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
+		defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK, defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD, defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK,
+		defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock,
+		defaults.DefaultConfig.PosConfig.SlashV2StartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock,
+		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock,
+	}
 
 	for _, b := range blockNumbers {
 		TEST_CONSENSUS_BLOCK_NUMBER = b

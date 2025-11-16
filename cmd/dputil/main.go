@@ -6,17 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
-	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
-	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
-	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/crosssign"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
-	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"io"
 	"io/ioutil"
 	"math/big"
@@ -28,6 +17,18 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/console/prompt"
+	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/crosssign"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
+	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
 const READ_API_URL = "https://scan.dpapi.org"
@@ -144,6 +145,8 @@ func printHelp() {
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil sethead BLOCK_NUMBER")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("dputil sendrawtransaction RAW_TX_HEX")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("===========")
@@ -338,6 +341,11 @@ func main() {
 		if err != nil {
 			fmt.Println("Error", err)
 		}
+	} else if os.Args[1] == "sendrawtransaction" {
+		err := SendRawTransaction()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
 	} else {
 		printHelp()
 	}
@@ -526,6 +534,10 @@ func sendTxn() {
 	from := os.Args[2]
 	to := os.Args[3]
 	quantity := os.Args[4]
+	var remarks string
+	if len(os.Args) > 5 {
+		remarks = os.Args[5]
+	}
 	shouldConfirm := os.Getenv("SHOULD_CONFIRM")
 
 	if common.IsHexAddress(from) == false {
@@ -562,7 +574,7 @@ func sendTxn() {
 	}
 	fmt.Println()
 
-	txHash, err := send(from, to, quantity)
+	txHash, err := send(from, to, quantity, remarks)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -2290,6 +2302,23 @@ func SetHead() error {
 	}
 
 	fmt.Println("SetHead succeeded")
+
+	return nil
+}
+
+func SendRawTransaction() error {
+	if len(os.Args) < 3 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+	txRawHex := os.Args[2]
+	txHash, err := sendRawTransaction(txRawHex)
+	if err != nil {
+		fmt.Println("SendRawTransaction failed", "error", err)
+		return err
+	}
+
+	fmt.Println("SendRawTransaction succeeded", "tx hash", txHash)
 
 	return nil
 }

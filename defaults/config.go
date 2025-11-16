@@ -9,7 +9,10 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 )
 
+const BASIC_TXN_GAS = uint64(21000)
+
 var DEFAULT_PRICE = int64(47619047619047600)
+var SigningContextLevel1Multiplier = int64(30)
 var cryptoBreakglassBlock uint64 = 0
 var signingMode byte = 1 //crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
 var okConfig bool = LoadDefaultConfig()
@@ -20,6 +23,10 @@ func GetGasLimit(blockNumber uint64) uint64 {
 	} else {
 		return DefaultConfig.DefaultGasLimit
 	}
+}
+
+func GetMaxTransactionsForBlock(blockNumber uint64) int {
+	return int(DefaultConfig.DefaultGasLimit / BASIC_TXN_GAS)
 }
 
 func SetCryptoBreakGlassBlock(blockNumber uint64) error {
@@ -92,6 +99,8 @@ type ProofOfStakeConfig struct {
 	SigAlgSwitchBlock uint64
 
 	MinOfflineProposerBlockDelay uint64
+
+	DynamicFeeTxStartBlock uint64
 }
 
 type Config struct {
@@ -146,6 +155,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	SigAlgSwitchBlock: 3426261 + 2,
 
 	MinOfflineProposerBlockDelay: 3600,
+
+	DynamicFeeTxStartBlock: 3426261 + 2 + 10,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -189,6 +200,8 @@ var devnetPosConfig = ProofOfStakeConfig{
 	SigAlgSwitchBlock: 90 + 10 + 10 + 10 + 2,
 
 	MinOfflineProposerBlockDelay: 3600,
+
+	DynamicFeeTxStartBlock: 90 + 10 + 10 + 10 + 2 + 10,
 }
 
 var MainnetConfig = &Config{
@@ -204,8 +217,8 @@ var MainnetConfig = &Config{
 
 var DevnetConfig = &Config{
 	PosConfig:               &devnetPosConfig,
-	DeepCheckStartBlock:     uint64(256),
-	GasPriceStartBlock:      uint64(257),
+	DeepCheckStartBlock:     uint64(130),
+	GasPriceStartBlock:      uint64(131),
 	DefaultGasLimit:         300000000,
 	ValidateSigPubStartTime: int64(1767225600), //Thursday, January 1, 2026 12:00:00 AM
 	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024

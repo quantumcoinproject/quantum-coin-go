@@ -20,11 +20,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 	"math/big"
 	"strconv"
 	"strings"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -97,14 +98,15 @@ type stEnvMarshaling struct {
 //go:generate gencodec -type stTransaction -field-override stTransactionMarshaling -out gen_sttransaction.go
 
 type stTransaction struct {
-	GasPrice    *big.Int            `json:"gasPrice"`
-	Nonce       uint64              `json:"nonce"`
-	To          string              `json:"to"`
-	Data        []string            `json:"data"`
-	AccessLists []*types.AccessList `json:"accessLists,omitempty"`
-	GasLimit    []uint64            `json:"gasLimit"`
-	Value       []string            `json:"value"`
-	PrivateKey  []byte              `json:"secretKey"`
+	GasPrice       *big.Int            `json:"gasPrice"`
+	Nonce          uint64              `json:"nonce"`
+	To             string              `json:"to"`
+	Data           []string            `json:"data"`
+	SigningContext byte                `json:"signingContext"`
+	AccessLists    []*types.AccessList `json:"accessLists,omitempty"`
+	GasLimit       []uint64            `json:"gasLimit"`
+	Value          []string            `json:"value"`
+	PrivateKey     []byte              `json:"secretKey"`
 }
 
 type stTransactionMarshaling struct {
@@ -323,7 +325,7 @@ func (tx *stTransaction) toMessage(ps stPostState) (core.Message, error) {
 	}
 
 	msg := types.NewMessage(from, to, tx.Nonce, value, gasLimit, gasPrice,
-		data, accessList, true)
+		data, accessList, true, tx.SigningContext)
 	return msg, nil
 }
 

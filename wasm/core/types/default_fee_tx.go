@@ -1,9 +1,10 @@
 package types
 
 import (
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"math/big"
 )
 
 const DEFAULT_CHAIN_ID int64 = 123123

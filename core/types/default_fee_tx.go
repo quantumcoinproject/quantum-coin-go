@@ -1,11 +1,14 @@
 package types
 
 import (
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"math/big"
+	"github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
 )
 
 const DEFAULT_CHAIN_ID int64 = 123123
@@ -35,7 +38,7 @@ func (al AccessList) StorageKeys() int {
 }
 
 func GetDefaultGasPrice() *big.Int {
-	return big.NewInt(defaults.DEFAULT_PRICE) // 1000 DP / 21000 in wei (1000/21000 = 0.0476190476190476)
+	return big.NewInt(defaults.DEFAULT_PRICE) // 1000 Q / 21000 in wei (1000/21000 = 0.0476190476190476)
 }
 
 func GetDefaultGasPriceHexBig() *hexutil.Big {
@@ -104,18 +107,34 @@ func (tx *DefaultFeeTx) data() []byte           { return tx.Data }
 func (tx *DefaultFeeTx) gas() uint64            { return tx.Gas }
 func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GetDefaultGasPrice() }
 func (tx *DefaultFeeTx) gasPrice() *big.Int {
-	if tx.MaxGasTier == GAS_TIER_DEFAULT {
-		return GetDefaultGasPrice()
-	}
 	return GetDefaultGasPrice()
 }
+func (tx *DefaultFeeTx) gasTipCap() *big.Int { return tx.gasPrice() }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
+func (tx *DefaultFeeTx) signingContext() byte {
+	return byte(crypto.SigningContextDefault)
+}
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
 func (tx *DefaultFeeTx) verifyFields() bool {
+	if tx.S != nil {
+		signature := tx.S.Bytes()
+		if len(signature) > 1 {
+			algType := crypto.SignatureAlgorithmType(signature[0])
+			if algType != crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID && algType != crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
+				log.Warn("verifyFields", "algType", algType)
+				return false
+			}
+		}
+	}
+
 	if tx.gasPrice().Cmp(GetDefaultGasPrice()) != 0 {
 		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "GetDefaultGasPrice()", GetDefaultGasPrice())
+		return false
+	}
+	if tx.maxGasTier() != GasTier(types.GAS_TIER_DEFAULT) {
+		log.Debug("verifyFields", "tx.maxGasTier()", tx.maxGasTier())
 		return false
 	}
 	return len(tx.Remarks) <= MAX_REMARKS_LENGTH
@@ -135,7 +154,7 @@ func (tx *DefaultFeeTx) setSignatureValues(chainID, v, r, s *big.Int) {
 // NewTransaction creates an unsigned legacy transaction.
 // Deprecated: use NewTx instead.
 func NewTransaction(nonce uint64, to common.Address, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
-	return NewDefaultFeeTransaction(big.NewInt(DEFAULT_CHAIN_ID), nonce, &to, amount, gasLimit, GAS_TIER_DEFAULT, data)
+	return NewDefaultFeeTransaction(big.NewInt(DEFAULT_CHAIN_ID), nonce, &to, amount, gasLimit, GAS_TIER_DEFAULT, data, nil)
 }
 
 func NewDefaultFeeTransactionSimple(nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, data []byte) *DefaultFeeTx {
@@ -144,7 +163,7 @@ func NewDefaultFeeTransactionSimple(nonce uint64, to *common.Address, amount *bi
 		Nonce:      nonce,
 		To:         to,
 		Value:      amount,
-		Data:       data,
+		Data:       common.CopyBytes(data),
 		Gas:        gasLimit,
 		MaxGasTier: GAS_TIER_DEFAULT,
 	}
@@ -152,15 +171,16 @@ func NewDefaultFeeTransactionSimple(nonce uint64, to *common.Address, amount *bi
 	return tx
 }
 
-func NewDefaultFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, maxGasTier GasTier, data []byte) *Transaction {
+func NewDefaultFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, maxGasTier GasTier, data []byte, remarks []byte) *Transaction {
 	tx := NewTx(&DefaultFeeTx{
 		ChainID:    chainId,
 		Nonce:      nonce,
 		To:         to,
 		Value:      amount,
-		Data:       data,
+		Data:       common.CopyBytes(data),
 		Gas:        gasLimit,
 		MaxGasTier: maxGasTier,
+		Remarks:    common.CopyBytes(remarks),
 	})
 
 	return tx
@@ -168,12 +188,13 @@ func NewDefaultFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address
 
 // NewContractCreation creates an unsigned legacy transaction.
 // Deprecated: use NewTx instead.
-func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte) *Transaction {
+func NewContractCreation(nonce uint64, amount *big.Int, gasLimit uint64, data []byte, remarks []byte) *Transaction {
 	return NewTx(&DefaultFeeTx{
 		Nonce:      nonce,
 		Value:      amount,
 		Gas:        gasLimit,
 		MaxGasTier: GAS_TIER_DEFAULT,
-		Data:       data,
+		Data:       common.CopyBytes(data),
+		Remarks:    common.CopyBytes(remarks),
 	})
 }

@@ -7,6 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"math/big"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi/bind"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -20,21 +30,13 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv1"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
 	"github.com/quantumcoinproject/quantum-coin-go/token"
 	"github.com/quantumcoinproject/quantum-coin-go/token/tokenconversion"
-	"io/ioutil"
-	"log"
-	"math/big"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"time"
 )
 
 const GAS_LIMIT_ENV = "GAS_LIMIT"
@@ -79,6 +81,20 @@ func getBalance(address string) (ethBalance string, weiBalance string, err error
 		return "", "", err
 	}
 	return weiToEther(balance).String(), balance.String(), nil
+}
+
+func sendRawTransaction(rawTxHex string) (txHash *common.Hash, err error) {
+	client, err := rpc.Dial(rawURL)
+
+	if err != nil {
+		return nil, err
+	}
+	err = client.CallContext(context.Background(), &txHash, "eth_sendRawTransaction", rawTxHex)
+	if err != nil {
+		return nil, err
+	}
+
+	return txHash, nil
 }
 
 func requestGetBalance(address string) (ethBalance string, weiBalance string, nonce string, err error) {
@@ -278,7 +294,7 @@ func sendVia(connectionContext *ConnectionContext, to string, quantity string, n
 	return signedTx.Hash().Hex(), nonce, nil
 }
 
-func send(from string, to string, quantity string) (string, error) {
+func send(from string, to string, quantity string, remarks string) (string, error) {
 	keyFile, err := findKeyFile(from)
 	if err != nil {
 		return "", err
@@ -357,8 +373,25 @@ func send(from string, to string, quantity string) (string, error) {
 	value := etherToWeiFloat(v)
 
 	var data []byte
-	tx := types.NewDefaultFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data)
-	fmt.Println("chainID", chainID)
+
+	txType := os.Getenv("TX_TYPE")
+	var tx *types.Transaction
+	var remarkBytes []byte
+	if len(remarks) > 0 {
+		fmt.Println("remarks", remarks)
+		remarkBytes = []byte(remarks)
+	} else {
+		remarkBytes = nil
+	}
+	if txType == "" || txType == "0" {
+		tx = types.NewDefaultFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data, remarkBytes)
+	} else if txType == "1" {
+		tx = types.NewDynamicFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data, remarkBytes)
+	} else {
+		fmt.Println("Unknown txType", txType)
+		return "", errors.New("unknown txType")
+	}
+	fmt.Println("chainID", chainID, "txType", tx.Type())
 
 	signedTx, err := types.SignTx(tx, types.NewLondonSigner(chainID), key.PrivateKey)
 	if err != nil {

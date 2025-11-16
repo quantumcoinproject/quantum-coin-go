@@ -32,6 +32,11 @@ const MLDSA_ED25519_SLHDSA_COMPACT_ID SignatureAlgorithmType = 3
 
 const MLDSA_ED25519_SLHDSA_FULL_ID SignatureAlgorithmType = 4
 
+type SigningContext byte
+
+const SigningContextDefault SigningContext = 0 //DILITHIUM_ED25519_SPHINCS_COMPACT_ID, MLDSA_ED25519_SLHDSA_COMPACT_ID
+const SigningContextLevel1 SigningContext = 1  //MLDSA_ED25519_SLHDSA_FULL_ID
+
 func Sha256(data ...[]byte) []byte {
 	h1 := sha3.NewLegacyKeccak256()
 	for _, b := range data {

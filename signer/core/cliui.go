@@ -118,6 +118,7 @@ func (ui *CommandlineUI) ApproveTx(request *SignTxRequest) (SignTxResponse, erro
 	fmt.Printf("gas:                %v (%v)\n", request.Transaction.Gas, uint64(request.Transaction.Gas))
 	fmt.Printf("gasprice: %v wei\n", request.Transaction.GasPrice.ToInt())
 	fmt.Printf("nonce:    %v (%v)\n", request.Transaction.Nonce, uint64(request.Transaction.Nonce))
+	fmt.Printf("signingContext:    %v (%v)\n", request.Transaction.SigningContext, byte(request.Transaction.SigningContext))
 	if chainId := request.Transaction.ChainID; chainId != nil {
 		fmt.Printf("chainid:  %v\n", chainId)
 	}

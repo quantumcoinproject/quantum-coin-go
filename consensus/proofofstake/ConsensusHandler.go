@@ -1931,7 +1931,12 @@ func (cph *ConsensusHandler) proposeBlock(parentHash common.Hash, txns []common.
 
 	proposalDetails.Round = blockStateDetails.currentRound
 	if blockStateDetails.currentRound < MAX_ROUND { //No transactions after this round, to reduce chance of FLP
-		proposalDetails.Txns = make([]common.Hash, len(txns))
+		txnCount := len(txns)
+		maxTxns := defaults.GetMaxTransactionsForBlock(blockNumber)
+		if txnCount > maxTxns {
+			txnCount = maxTxns
+		}
+		proposalDetails.Txns = make([]common.Hash, txnCount)
 		for i := 0; i < len(proposalDetails.Txns); i++ {
 			proposalDetails.Txns[i].CopyFrom(txns[i])
 		}
@@ -2154,7 +2159,10 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 			return errors.New("unexpected state")
 		}
 
-		if blockStateDetails.currentRound >= MAX_ROUND && len(blockRoundDetails.blockProposalDetails.Txns) > 0 {
+		if (blockStateDetails.currentRound >= MAX_ROUND && len(blockRoundDetails.blockProposalDetails.Txns) > 0) ||
+			len(blockRoundDetails.blockProposalDetails.Txns) > defaults.GetMaxTransactionsForBlock(blockStateDetails.blockNumber) {
+			log.Debug("ackBlockProposal", "blockStateDetails.currentRound", blockStateDetails.currentRound,
+				"len(blockRoundDetails.blockProposalDetails.Txns)", len(blockRoundDetails.blockProposalDetails.Txns), "blockStateDetails.blockNumber", blockStateDetails.blockNumber)
 			return errors.New("unexpected transaction count")
 		} else {
 			//Find if any new transactions we don't know yet

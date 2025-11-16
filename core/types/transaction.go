@@ -20,15 +20,16 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"io"
 	"math/big"
 	"runtime/debug"
 	"sort"
 	"sync/atomic"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -46,6 +47,7 @@ var (
 // Transaction types.
 const (
 	DefaultFeeTxType = iota
+	DynamicFeeTxType = iota
 )
 
 // Transaction is an Ethereum transaction.
@@ -78,7 +80,10 @@ type TxData interface {
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
+	gasTipCap() *big.Int
+	gasFeeCap() *big.Int
 	maxGasTier() GasTier
+	signingContext() byte
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
@@ -175,6 +180,10 @@ func (tx *Transaction) decodeTyped(b []byte) (TxData, error) {
 		var inner DefaultFeeTx
 		err := rlp.DecodeBytes(b[1:], &inner)
 		return &inner, err
+	case DynamicFeeTxType:
+		var inner DynamicFeeTx
+		err := rlp.DecodeBytes(b[1:], &inner)
+		return &inner, err
 	default:
 		return nil, ErrTxTypeNotSupported
 	}
@@ -221,6 +230,14 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
 func (tx *Transaction) MaxGasTier() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
+
+// GasTipCap returns the gasTipCap per gas of the transaction.
+func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
+
+// GasFeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
+
+func (tx *Transaction) SigningContext() byte { return tx.inner.signingContext() }
 
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
@@ -645,55 +662,65 @@ func (t *TransactionsByNonce) Pop1() {
 //
 // NOTE: In a future PR this will be removed.
 type Message struct {
-	to         *common.Address
-	from       common.Address
-	nonce      uint64
-	amount     *big.Int
-	gasLimit   uint64
-	gasPrice   *big.Int
-	data       []byte
-	accessList AccessList
-	checkNonce bool
-	remarks    []byte
+	to             *common.Address
+	from           common.Address
+	nonce          uint64
+	amount         *big.Int
+	gasLimit       uint64
+	gasPrice       *big.Int
+	signingContext byte
+	data           []byte
+	accessList     AccessList
+	checkNonce     bool
+	remarks        []byte
 }
 
-func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, checkNonce bool) Message {
+func NewMessage(from common.Address, to *common.Address, nonce uint64, amount *big.Int, gasLimit uint64, gasPrice *big.Int, data []byte, accessList AccessList, checkNonce bool, signingContext byte) Message {
 	return Message{
-		from:       from,
-		to:         to,
-		nonce:      nonce,
-		amount:     amount,
-		gasLimit:   gasLimit,
-		gasPrice:   gasPrice,
-		data:       data,
-		accessList: accessList,
-		checkNonce: checkNonce,
+		from:           from,
+		to:             to,
+		nonce:          nonce,
+		amount:         amount,
+		gasLimit:       gasLimit,
+		gasPrice:       gasPrice,
+		signingContext: signingContext,
+		data:           data,
+		accessList:     accessList,
+		checkNonce:     checkNonce,
 	}
 }
 
 // AsMessage returns the transaction as a core.Message.
 func (tx *Transaction) AsMessage(s Signer) (Message, error) {
 	msg := Message{
-		nonce:      tx.Nonce(),
-		gasLimit:   tx.Gas(),
-		gasPrice:   new(big.Int).Set(tx.GasPrice()),
-		to:         tx.To(),
-		amount:     tx.Value(),
-		data:       tx.Data(),
-		accessList: tx.AccessList(),
-		checkNonce: true,
-		remarks:    tx.Remarks(),
+		nonce:          tx.Nonce(),
+		gasLimit:       tx.Gas(),
+		gasPrice:       new(big.Int).Set(tx.GasPrice()),
+		to:             tx.To(),
+		amount:         tx.Value(),
+		signingContext: tx.SigningContext(),
+		data:           tx.Data(),
+		accessList:     tx.AccessList(),
+		checkNonce:     true,
+		remarks:        tx.Remarks(),
 	}
 	var err error
 	msg.from, err = Sender(s, tx)
 	return msg, err
 }
 
-func (m Message) From() common.Address            { return m.from }
-func (m Message) To() *common.Address             { return m.to }
-func (m Message) GasPrice() *big.Int              { return m.gasPrice }
-func (m Message) Value() *big.Int                 { return m.amount }
-func (m Message) Gas() uint64                     { return m.gasLimit }
+func (m Message) From() common.Address { return m.from }
+func (m Message) To() *common.Address  { return m.to }
+func (m Message) GasPrice() *big.Int   { return m.gasPrice }
+func (m Message) Value() *big.Int      { return m.amount }
+func (m Message) Gas() uint64          { return m.gasLimit }
+func (m Message) SigningContext() byte { return m.signingContext }
+
+// Tip returns the tip per gas of the transaction.
+func (tx *Transaction) Tip() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
+
+// FeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) FeeCap() *big.Int          { return new(big.Int).Set(tx.inner.gasFeeCap()) }
 func (m Message) Nonce() uint64                   { return m.nonce }
 func (m Message) Data() []byte                    { return m.data }
 func (m Message) AccessList() AccessList          { return m.accessList }
