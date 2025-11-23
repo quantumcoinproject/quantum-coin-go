@@ -30,6 +30,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
+var SKIP_TIME_DIFF_CHECK = os.Getenv("SKIP_TIME_DIFF_CHECK")
+
 type GetBlockConsensusContextFn func(key string, blockHash common.Hash) ([32]byte, error)
 type GetValidatorsFn func(blockHash common.Hash) (map[common.Address]*big.Int, error)
 type DoesFinalizedTransactionExistFn func(txnHash common.Hash) (bool, error)
@@ -1892,19 +1894,21 @@ func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64)
 		}
 		currTime := time.Unix(currTimeVal, 0)
 
-		if currTime.Before(tm) {
-			difference := tm.Sub(currTime)
-			if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
-				log.Debug("ValidateBlockProposalTimeConsensus false case 3", "blockNumber", blockNumber, "proposedTime", proposedTime,
-					"currTime", currTime, "currTimeVal", currTimeVal, "difference", difference)
-				return false
-			}
-		} else if currTime.After(tm) {
-			difference := currTime.Sub(tm)
-			if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
-				log.Debug("ValidateBlockProposalTimeConsensus false case 4", "blockNumber", blockNumber, "proposedTime", proposedTime,
-					"currTime", currTime, "currTimeVal", currTimeVal, "difference", difference)
-				return false
+		if SKIP_TIME_DIFF_CHECK == "" {
+			if currTime.Before(tm) {
+				difference := tm.Sub(currTime)
+				if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
+					log.Debug("ValidateBlockProposalTimeConsensus false case 3", "blockNumber", blockNumber, "proposedTime", proposedTime,
+						"currTime", currTime, "currTimeVal", currTimeVal, "difference", difference)
+					return false
+				}
+			} else if currTime.After(tm) {
+				difference := currTime.Sub(tm)
+				if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
+					log.Debug("ValidateBlockProposalTimeConsensus false case 4", "blockNumber", blockNumber, "proposedTime", proposedTime,
+						"currTime", currTime, "currTimeVal", currTimeVal, "difference", difference)
+					return false
+				}
 			}
 		}
 	} else {
