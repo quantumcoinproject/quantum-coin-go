@@ -18,6 +18,9 @@ package proofofstake
 
 import (
 	"fmt"
+	"math/big"
+	"testing"
+
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
@@ -28,8 +31,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
-	"math/big"
-	"testing"
 )
 
 func TestTxnFee(t *testing.T) {
@@ -297,4 +298,8 @@ func Test_GetBlockConsensusContextForBlock(t *testing.T) {
 	testGetBlockConsensusContextForBlock(t, uint64(933888), uint64(869888))
 	testGetBlockConsensusContextForBlock(t, uint64(933889), uint64(421889))
 	testGetBlockConsensusContextForBlock(t, uint64(933890), uint64(421890))
+}
+
+func TestTemp(t *testing.T) {
+	fmt.Println(common.HexToAddress("0x49ecf333e5b8c95c40fdafc95c1ad136e8914a8fb55e9dc8bb01eaa83a2df9ad"))
 }
