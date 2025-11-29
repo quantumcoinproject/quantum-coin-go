@@ -25,6 +25,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
@@ -301,5 +302,9 @@ func Test_GetBlockConsensusContextForBlock(t *testing.T) {
 }
 
 func TestTemp(t *testing.T) {
-	fmt.Println(common.HexToAddress("0x49ecf333e5b8c95c40fdafc95c1ad136e8914a8fb55e9dc8bb01eaa83a2df9ad"))
+	fmt.Println(common.HexToAddress("0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9"))
+}
+
+func TestTemp1(t *testing.T) {
+	fmt.Println(crypto.Keccak256Hash([]byte("C:/github/quantumswap/main/v3-periphery/contracts/libraries/NFTDescriptor.sol:NFTDescriptor")))
 }

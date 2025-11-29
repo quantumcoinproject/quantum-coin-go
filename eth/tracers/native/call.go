@@ -26,12 +26,19 @@ import (
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/tracers"
 )
 
 func init() {
 	register("callTracer", newCallTracer)
+}
+
+type callLog struct {
+	Address common.Address `json:"address"`
+	Topics  []common.Hash  `json:"topics"`
+	Data    hexutil.Bytes  `json:"data"`
 }
 
 type callFrame struct {
@@ -45,6 +52,11 @@ type callFrame struct {
 	Output  string      `json:"output,omitempty"`
 	Error   string      `json:"error,omitempty"`
 	Calls   []callFrame `json:"calls,omitempty"`
+	Logs    []callLog   `json:"logs,omitempty" rlp:"optional"`
+}
+
+func (f callFrame) failed() bool {
+	return len(f.Error) > 0
 }
 
 type callTracer struct {
@@ -93,6 +105,26 @@ func (t *callTracer) CaptureEnd(output []byte, gasUsed uint64, _ time.Duration, 
 
 // CaptureState implements the EVMLogger interface to trace a single step of VM execution.
 func (t *callTracer) CaptureState(env *vm.EVM, pc uint64, op vm.OpCode, gas, cost uint64, scope *vm.ScopeContext, rData []byte, depth int, err error) {
+	switch op {
+	case vm.LOG0, vm.LOG1, vm.LOG2, vm.LOG3, vm.LOG4:
+		size := int(op - vm.LOG0)
+
+		stack := scope.Stack
+		stackData := stack.Data()
+
+		// Don't modify the stack
+		mStart := stackData[len(stackData)-1]
+		mSize := stackData[len(stackData)-2]
+		topics := make([]common.Hash, size)
+		for i := 0; i < size; i++ {
+			topic := stackData[len(stackData)-2-(i+1)]
+			topics[i] = common.Hash(topic.Bytes32())
+		}
+
+		data := scope.Memory.GetCopy(int64(mStart.Uint64()), int64(mSize.Uint64()))
+		log := callLog{Address: scope.Contract.Address(), Topics: topics, Data: hexutil.Bytes(data)}
+		t.callstack[len(t.callstack)-1].Logs = append(t.callstack[len(t.callstack)-1].Logs, log)
+	}
 }
 
 // CaptureFault implements the EVMLogger interface to trace an execution fault.
@@ -144,7 +176,9 @@ func (t *callTracer) CaptureExit(output []byte, gasUsed uint64, err error) {
 
 func (*callTracer) CaptureTxStart(gasLimit uint64) {}
 
-func (*callTracer) CaptureTxEnd(restGas uint64) {}
+func (t *callTracer) CaptureTxEnd(restGas uint64) {
+	clearFailedLogs(&t.callstack[0], false)
+}
 
 // GetResult returns the json-encoded nested list of call traces, and any
 // error arising from the encoding or forceful termination (via `Stop`).
@@ -182,4 +216,17 @@ func uintToHex(n uint64) string {
 
 func addrToHex(a common.Address) string {
 	return strings.ToLower(a.Hex())
+}
+
+// clearFailedLogs clears the logs of a callframe and all its children
+// in case of execution failure.
+func clearFailedLogs(cf *callFrame, parentFailed bool) {
+	failed := cf.failed() || parentFailed
+	// Clear own logs
+	if failed {
+		cf.Logs = nil
+	}
+	for i := range cf.Calls {
+		clearFailedLogs(&cf.Calls[i], failed)
+	}
 }
