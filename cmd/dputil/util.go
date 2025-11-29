@@ -35,8 +35,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv1"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
-	"github.com/quantumcoinproject/quantum-coin-go/token"
 	"github.com/quantumcoinproject/quantum-coin-go/token/tokenconversion"
+	"github.com/quantumcoinproject/quantum-coin-go/tokenv2"
 )
 
 const GAS_LIMIT_ENV = "GAS_LIMIT"
@@ -1593,7 +1593,7 @@ func transferTokens(contractAddr string, toAddr string, tokenTransferAmount *big
 	txnOpts.Value = big.NewInt(0)
 
 	var tx *types.Transaction
-	contract, err := token.NewToken(contractAddress, client)
+	contract, err := tokenv2.NewTokenv2(contractAddress, client)
 	if err != nil {
 		return err
 	}
@@ -1641,8 +1641,7 @@ func createToken(tokenName string, tokenSymbol string, tokenTotalSupply *big.Int
 	txnOpts.Value = big.NewInt(0)
 
 	var tx *types.Transaction
-	contractAddress, tx, _, err := token.DeployToken(txnOpts, client, tokenName, tokenSymbol,
-		tokenTotalSupply, burnPercentDivisor, tokenDecimals, fromAddress)
+	contractAddress, tx, _, err := tokenv2.DeployTokenv2(txnOpts, client, tokenName, tokenSymbol, tokenTotalSupply, tokenDecimals, fromAddress)
 	if err != nil {
 		return err
 	}
@@ -1662,7 +1661,7 @@ func getTokenBalance(accountAddress common.Address, contractAddress common.Addre
 		return nil, err
 	}
 
-	instance, err := token.NewToken(contractAddress, client)
+	instance, err := tokenv2.NewTokenv2(contractAddress, client)
 	if err != nil {
 		return nil, err
 	}
@@ -1687,7 +1686,7 @@ func getTokenAllowance(accountAddress common.Address, contractAddress common.Add
 		return nil, err
 	}
 
-	instance, err := token.NewToken(contractAddress, client)
+	instance, err := tokenv2.NewTokenv2(contractAddress, client)
 	if err != nil {
 		return nil, err
 	}
@@ -1820,7 +1819,7 @@ func multiTransferTokensInner(contractAddr common.Address, toAddressList []commo
 	fmt.Println()
 
 	var tx *types.Transaction
-	contract, err := token.NewToken(contractAddr, client)
+	contract, err := tokenv2.NewTokenv2(contractAddr, client)
 	if err != nil {
 		return err
 	}
@@ -2027,7 +2026,7 @@ func renounceTokenOwnership(contractAddr string, key *signaturealgorithm.Private
 	txnOpts.Value = big.NewInt(0)
 
 	var tx *types.Transaction
-	contract, err := token.NewToken(contractAddress, client)
+	contract, err := tokenv2.NewTokenv2(contractAddress, client)
 	if err != nil {
 		return err
 	}
@@ -2095,7 +2094,7 @@ func tokenApprove(tokenAddress common.Address, spenderAddress common.Address, am
 	txnOpts.Value = big.NewInt(0)
 
 	var tx *types.Transaction
-	contract, err := token.NewToken(tokenAddress, client)
+	contract, err := tokenv2.NewTokenv2(tokenAddress, client)
 	if err != nil {
 		return err
 	}
