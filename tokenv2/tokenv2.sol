@@ -24,6 +24,7 @@ library SafeMath {
     }
 
     function div(uint256 a, uint256 b) internal pure returns (uint256) {
+        require(b > 0, "SafeMath: division by zero");
         uint256 c = a / b;
         return c;
     }
@@ -53,8 +54,6 @@ contract TokenDetailed is IERC20 {
     mapping (address => mapping (address => uint256)) private _allowed;
 
     uint256 private _totalSupply;
-    uint256 private _basePercent = 100;
-    uint256 private _baseBurnPercentDivisor;
 
     string private _name;
     string private _symbol;
@@ -69,7 +68,6 @@ contract TokenDetailed is IERC20 {
         string memory tokenName,
         string memory tokenSymbol,
         uint256 tokenTotalSupply,
-        uint256 baseBurnPercentDivisor,
         uint8 tokenDecimals,
         address ownerAccount
     ) {
@@ -77,9 +75,9 @@ contract TokenDetailed is IERC20 {
         _symbol = tokenSymbol;
         _totalSupply = tokenTotalSupply;
         _decimals = tokenDecimals;
-        _baseBurnPercentDivisor = baseBurnPercentDivisor;
+        _owner = ownerAccount;
 
-        _mint(ownerAccount, totalSupply());
+        _mint(ownerAccount, tokenTotalSupply);
     }
 
     function name() public view returns(string memory) {
@@ -106,25 +104,13 @@ contract TokenDetailed is IERC20 {
         return _allowed[accountOwner][spender];
     }
 
-    //This function calculates number of tokens to burn, given an input number of tokens
-    function calculateNumTokensToBurn(uint256 numTokens) public view returns (uint256)  {
-        uint256 roundValue = numTokens.ceil(_basePercent);
-        return roundValue.mul(_basePercent).div(_baseBurnPercentDivisor);
-    }
-
     function transfer(address to, uint256 value) public virtual override returns (bool) {
-        require(value <= _balances[msg.sender]);
-
-        uint256 tokensToBurn = calculateNumTokensToBurn(value);
-        uint256 tokensToTransfer = value.sub(tokensToBurn);
+        require(value <= _balances[msg.sender], "Token: insufficient balance");
 
         _balances[msg.sender] = _balances[msg.sender].sub(value);
-        _balances[to] = _balances[to].add(tokensToTransfer);
+        _balances[to] = _balances[to].add(value);
 
-        _totalSupply = _totalSupply.sub(tokensToBurn);
-
-        emit Transfer(msg.sender, to, tokensToTransfer);
-        emit Transfer(msg.sender, address(0), tokensToBurn);
+        emit Transfer(msg.sender, to, value);
 
         return true;
     }
@@ -138,21 +124,14 @@ contract TokenDetailed is IERC20 {
     }
 
     function transferFrom(address from, address to, uint256 value) public virtual override returns (bool) {
-        require(value <= _balances[from]);
-        require(value <= _allowed[from][msg.sender]);
+        require(value <= _balances[from], "Token: insufficient balance");
+        require(value <= _allowed[from][msg.sender], "Token: insufficient allowance");
 
         _balances[from] = _balances[from].sub(value);
-
-        uint256 tokensToBurn = calculateNumTokensToBurn(value);
-        uint256 tokensToTransfer = value.sub(tokensToBurn);
-
-        _balances[to] = _balances[to].add(tokensToTransfer);
-        _totalSupply = _totalSupply.sub(tokensToBurn);
-
+        _balances[to] = _balances[to].add(value);
         _allowed[from][msg.sender] = _allowed[from][msg.sender].sub(value);
 
-        emit Transfer(from, to, tokensToTransfer);
-        emit Transfer(from, address(0), tokensToBurn);
+        emit Transfer(from, to, value);
 
         return true;
     }
@@ -172,21 +151,16 @@ contract TokenDetailed is IERC20 {
     }
 
     function _mint(address account, uint256 amount) internal {
-        require(amount != 0);
-        _owner = account;
+        require(_totalSupply == 0, "Token: already minted");
+        require(amount != 0, "Token: mint amount must be greater than zero");
+        _totalSupply = _totalSupply.add(amount);
         _balances[account] = _balances[account].add(amount);
         emit Transfer(address(0), account, amount);
     }
 
-    function _burn(address account, uint256 amount) internal {
-        require(amount != 0);
-        require(amount <= _balances[account]);
-        _totalSupply = _totalSupply.sub(amount);
-        _balances[account] = _balances[account].sub(amount);
-        emit Transfer(account, address(0), amount);
-    }
-
     function multiTransfer(address[] memory receivers, uint256[] memory amounts) public {
+        require(receivers.length == amounts.length, "Token: arrays length mismatch");
+        require(receivers.length > 0, "Token: empty arrays");
         for (uint256 i = 0; i < receivers.length; i++) {
             transfer(receivers[i], amounts[i]);
         }
@@ -194,7 +168,7 @@ contract TokenDetailed is IERC20 {
 
     function _checkOwner() internal view virtual {
         if (owner() != msg.sender) {
-            revert ("sender is not onwer");
+            revert("Token: sender is not owner");
         }
     }
 
@@ -223,31 +197,4 @@ contract TokenDetailed is IERC20 {
         _owner = newOwner;
         emit OwnershipTransferred(oldOwner, newOwner);
     }
-}
-
-/*
-  An example test token demonstrating usage (for testing only)
-*/
-contract Y2Q is TokenDetailed {
-
-    string constant tokenNameWeNeed = "Year2Quantum";
-    string constant tokenSymbol = "Y2Q";
-    uint8 decimalsWeNeed = 18;
-
-    uint256 totalSupplyWeNeed = 100 * (10**12) * (10**decimalsWeNeed);
-    uint256  baseBurnPercentDivisor = 100000; //0.1% per transaction
-
-    constructor() payable TokenDetailed
-    (
-    tokenNameWeNeed,
-    tokenSymbol,
-    totalSupplyWeNeed,
-    baseBurnPercentDivisor,
-    decimalsWeNeed,
-    msg.sender
-    )
-    {
-
-    }
-
 }
