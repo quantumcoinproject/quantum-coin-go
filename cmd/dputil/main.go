@@ -123,6 +123,12 @@ func printHelp() {
 	fmt.Println("dputil tokenbalance CONTRACT_ADDRESS ACCOUNT_ADDRESS")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil tokenapprove CONTRACT_ADDRESS FROM_ADDRESS SPENDER_ADDRESS AMOUNT")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           CHAIN_ID, DP_RAW_URL, DP_KEY_FILE_DIR or DP_KEY_FILE")
+	fmt.Println("dputil tokenallowance CONTRACT_ADDRESS ACCOUNT_ADDRESS SPENDER_ADDRESS")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil multitransfertokens CONTRACT_ADDRESS FROM_ADDRESS CSV_FILE")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
@@ -298,6 +304,13 @@ func main() {
 		}
 	} else if os.Args[1] == "tokenbalance" {
 		err := TokenBalance()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "tokenapprove" {
+		TokenApprove()
+	} else if os.Args[1] == "tokenallowance" {
+		err := TokenAllowance()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1735,6 +1748,31 @@ func TokenBalance() error {
 	return err
 }
 
+func TokenAllowance() error {
+	if len(os.Args) < 5 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	contractAddr := os.Args[2]
+	if common.IsHexAddress(contractAddr) == false {
+		return errors.New("invalid contract address " + contractAddr)
+	}
+
+	accountAddr := os.Args[3]
+	if common.IsHexAddress(accountAddr) == false {
+		return errors.New("invalid account address " + accountAddr)
+	}
+
+	spenderAddr := os.Args[4]
+	if common.IsHexAddress(spenderAddr) == false {
+		return errors.New("invalid spender address " + accountAddr)
+	}
+
+	_, err := getTokenAllowance(common.HexToAddress(accountAddr), common.HexToAddress(contractAddr), common.HexToAddress(spenderAddr))
+	return err
+}
+
 func MultiTransferTokens() error {
 	if len(os.Args) < 5 {
 		printHelp()
@@ -2321,4 +2359,78 @@ func SendRawTransaction() error {
 	fmt.Println("SendRawTransaction succeeded", "tx hash", txHash)
 
 	return nil
+}
+
+func TokenApprove() {
+	if len(os.Args) < 5 {
+		printHelp()
+		return
+	}
+
+	tokenAddr := os.Args[2]
+	if common.IsHexAddress(tokenAddr) == false {
+		fmt.Println("Invalid CONTRACT_ADDRESS", tokenAddr)
+		return
+	}
+	tokenAddress := common.HexToAddress(tokenAddr)
+
+	fromAddr := os.Args[3]
+	if common.IsHexAddress(fromAddr) == false {
+		fmt.Println("Invalid FROM_ADDRESS", fromAddr)
+		return
+	}
+	fromAddress := common.HexToAddress(fromAddr)
+
+	spenderAddr := os.Args[4]
+	if common.IsHexAddress(spenderAddr) == false {
+		fmt.Println("Invalid SPENDER_ADDRESS", spenderAddr)
+		return
+	}
+	spenderAddress := common.HexToAddress(spenderAddr)
+
+	amountVal := os.Args[5]
+	amount, err := strconv.ParseUint(amountVal, 10, 64)
+	if err != nil {
+		fmt.Println("Error parsing AMOUNT", err)
+		return
+	}
+
+	fromAccountKeyFile, err := findKeyFile(fromAddr)
+	if err != nil {
+		fmt.Println("Error findKeyFile", err)
+		return
+	}
+
+	fmt.Println(fmt.Sprintf("From account wallet address %s", fromAccountKeyFile))
+	fromAccountPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the wallet password : "))
+	if err != nil {
+		fmt.Println("Error findKeyFile", err)
+		return
+	}
+	if len(fromAccountPwd) == 0 {
+		fmt.Println("Error password is empty")
+		return
+	}
+
+	fromKey, err := GetKeyFromFile(fromAccountKeyFile, fromAccountPwd)
+	if err != nil {
+		fmt.Println("Error GetKeyFromFile", err)
+		return
+	}
+
+	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("Do you want to Approve from %s?", fromAddress))
+	if err != nil {
+		fmt.Println("error", err)
+		return
+	}
+	if ethConfirm != true {
+		fmt.Println("confirmation not made")
+		return
+	}
+
+	err = tokenApprove(tokenAddress, spenderAddress, int64(amount), fromKey)
+	if err != nil {
+		fmt.Println("tokenApprove error", err)
+		return
+	}
 }

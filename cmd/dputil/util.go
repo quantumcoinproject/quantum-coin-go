@@ -1681,6 +1681,31 @@ func getTokenBalance(accountAddress common.Address, contractAddress common.Addre
 	return tokenBalance, nil
 }
 
+func getTokenAllowance(accountAddress common.Address, contractAddress common.Address, spenderAddress common.Address) (*big.Int, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	instance, err := token.NewToken(contractAddress, client)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenBalance, err := instance.Allowance(nil, accountAddress, spenderAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("tokenAllowance", "accountAddress", accountAddress, "contractAddress", contractAddress, "spenderAddress", spenderAddress, "tokens", weiToEther(tokenBalance).String(), "wei", tokenBalance)
+
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return tokenBalance, nil
+}
+
 func readCsvFile(filePath string) ([][]string, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
@@ -2034,4 +2059,57 @@ func listConversionDetails() (*proofofstake.ConversionSummary, error) {
 	}
 
 	return summary, nil
+}
+
+func tokenApprove(tokenAddress common.Address, spenderAddress common.Address, amount int64, key *signaturealgorithm.PrivateKey) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+
+	fromAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+
+	if err != nil {
+		return err
+	}
+
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	txnOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(123123))
+
+	if err != nil {
+		return err
+	}
+
+	txnOpts.From = fromAddress
+	txnOpts.Nonce = big.NewInt(int64(nonce))
+	txnOpts.GasLimit, err = getGasLimit(uint64(100000))
+	if err != nil {
+		fmt.Println("gas limit error", err)
+		return err
+	}
+
+	txnOpts.Value = big.NewInt(0)
+
+	var tx *types.Transaction
+	contract, err := token.NewToken(tokenAddress, client)
+	if err != nil {
+		return err
+	}
+
+	tx, err = contract.Approve(txnOpts, spenderAddress, params.EtherToWei(big.NewInt(amount)))
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Your request to approve tokens has been added to the queue for processing. Please check your account balance after 10 minutes.")
+	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash(), "tokenAddress", tokenAddress, "fromAddress", fromAddress, "spenderAddress", spenderAddress)
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return nil
 }
