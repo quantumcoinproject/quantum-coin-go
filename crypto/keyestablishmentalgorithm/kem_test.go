@@ -3,6 +3,7 @@ package keyestablishmentalgorithm
 import (
 	"bytes"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -55,47 +56,54 @@ func testKEMCorrectness(threading bool, t *testing.T) {
 	// ignore potential errors everywhere
 	clientKey, err := GenerateKemKeyPair()
 	if err != nil {
-		t.Errorf(KemName + ": GenerateKemKeyPair failed")
+		fmt.Println(KemName + ": GenerateKemKeyPair failed")
+		t.Fatalf("failed")
 	}
 
 	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.N.Bytes())
 	if err != nil {
-		t.Errorf(KemName + ": EncapSecret sharedSecretServer failed")
+		fmt.Println(KemName + ": EncapSecret sharedSecretServer failed")
 	}
 
 	if bytes.Equal(clientKey.N.Bytes(), ciphertext) {
 		// t.Errorf is thread-safe
-		t.Errorf(KemName + ": publicKey ciphertext coincides")
+		fmt.Println(KemName + ": publicKey ciphertext coincides")
+		t.Fatalf("failed")
 	}
 
 	ciphertext1, sharedSecretServer1, err := EncapSecret(clientKey.N.Bytes())
 	if err != nil {
-		t.Errorf(KemName + ": EncapSecret sharedSecretServer1 failed")
+		fmt.Println(KemName + ": EncapSecret sharedSecretServer1 failed")
 	}
 
 	if bytes.Equal(ciphertext, ciphertext1) {
 		// t.Errorf is thread-safe
-		t.Errorf(KemName + ": ciphertext coincides")
+		fmt.Println(KemName + ": ciphertext coincides")
+		t.Fatalf("failed")
 	}
 
 	sharedSecretClient, err := DecapSecret(clientKey.D.Bytes(), ciphertext)
 	if err != nil {
-		t.Errorf(KemName + ": DecapSecret sharedSecretClient failed")
+		fmt.Println(KemName + ": DecapSecret sharedSecretClient failed")
+		t.Fatalf("failed")
 	}
 
 	if !bytes.Equal(sharedSecretClient, sharedSecretServer) {
 		// t.Errorf is thread-safe
-		t.Errorf(KemName + ": shared secrets do not coincide")
+		fmt.Println(KemName + ": shared secrets do not coincide")
+		t.Fatalf("failed")
 	}
 
 	sharedSecretClient1, err := DecapSecret(clientKey.D.Bytes(), ciphertext1)
 	if err != nil {
-		t.Errorf(KemName + ": DecapSecret sharedSecretClient1 failed")
+		fmt.Println(KemName + ": DecapSecret sharedSecretClient1 failed")
+		t.Fatalf("failed")
 	}
 
 	if !bytes.Equal(sharedSecretClient1, sharedSecretServer1) {
 		// t.Errorf is thread-safe
-		t.Errorf(KemName + ": shared secrets do not coincide")
+		fmt.Println(KemName + ": shared secrets do not coincide")
+		t.Fatalf("failed")
 	}
 }
 
@@ -110,22 +118,26 @@ func testKEMWrongCiphertext(threading bool, t *testing.T) {
 	// ignore potential errors everywhere
 	clientKey, err := GenerateKemKeyPair()
 	if err != nil {
-		t.Errorf(KemName + ": GenerateKemKeyPair failed")
+		fmt.Println(KemName + ": GenerateKemKeyPair failed")
+		t.Fatalf("failed")
 	}
 
 	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.N.Bytes())
 	if err != nil {
-		t.Errorf(KemName + ": EncapSecret sharedSecretServer failed")
+		fmt.Println(KemName + ": EncapSecret sharedSecretServer failed")
+		t.Fatalf("failed")
 	}
 
 	wrongCiphertext := csprngEntropy(len(ciphertext))
 	sharedSecretClient, err := DecapSecret(clientKey.D.Bytes(), wrongCiphertext)
 	if err != nil {
-		t.Errorf(KemName + ": DecapSecret sharedSecretClient failed")
+		fmt.Println(KemName + ": DecapSecret sharedSecretClient failed")
+		t.Fatalf("failed")
 	}
 
 	if bytes.Equal(sharedSecretClient, sharedSecretServer) {
-		t.Errorf(KemName + ": shared secrets should not coincide")
+		fmt.Println(KemName + ": shared secrets should not coincide")
+		t.Fatalf("failed")
 	}
 }
 

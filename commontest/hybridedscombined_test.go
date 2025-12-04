@@ -3,11 +3,12 @@ package commontest
 import (
 	"bytes"
 	"fmt"
+	"testing"
+
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
-	"testing"
 )
 
 var testmsg1 = "HELLO WORLD"
@@ -21,27 +22,32 @@ func TestCompactAndFullInterop(t *testing.T) {
 
 	keyCompact, err := sigCompact.GenerateKey()
 	if err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 	}
 
 	serializedCompact, err := sigCompact.SerializePrivateKey(keyCompact)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 	}
 
 	keyFull, err := sigFull.DeserializePrivateKey(serializedCompact)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 	}
 
 	addrCompact, err := sigCompact.PublicKeyToAddress(&keyCompact.PublicKey)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 	}
 
 	addrFull, err := sigFull.PublicKeyToAddress(&keyFull.PublicKey)
 	if err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 	}
 
 	if addrFull.IsEqualTo(addrCompact) == false {

@@ -626,7 +626,7 @@ func getTxn() {
 			fmt.Printf("%+v\n", receipt)
 			return
 		}
-		fmt.Printf(prettyReceipt)
+		fmt.Print(prettyReceipt)
 	} else {
 		fmt.Println("receipt is nil")
 	}
