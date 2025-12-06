@@ -2,26 +2,27 @@ package proofofstake
 
 import (
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 func TestPacketHandler_min_basic_time_hash(t *testing.T) {
 	if os.Getenv("EXTENDED_TESTS") == "" {
 		t.Skip("skipped")
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK
+	CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1)
 
 	parentHash := common.BytesToHash([]byte{1})
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 	log.Info("=================proposer", "proposer", proposer)
 
 	skipped := false
@@ -34,13 +35,13 @@ func TestPacketHandler_min_basic_time_hash(t *testing.T) {
 			skipList[h.validator] = true
 			continue
 		}
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
 	fmt.Println("c", c)
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, DefaultMaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, CurrentConsensusTest.MaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -57,8 +58,6 @@ func TestPacketHandler_min_basic_time_hash(t *testing.T) {
 			}
 		}
 	}
-
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 }
 
 func testPacketHandler_block_proposer_timedout(t *testing.T) {
@@ -66,23 +65,23 @@ func testPacketHandler_block_proposer_timedout(t *testing.T) {
 		t.Skip("skipped")
 	}
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1)
 
 	parentHash := common.BytesToHash([]byte{1})
 	c := 1
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
 		if h.validator.IsEqualTo(proposer) {
 			continue //proposer timeout simulation
 		}
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, DefaultMaxWaitCount*5, map[VoteType]bool{VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, CurrentConsensusTest.MaxWaitCount*5, map[VoteType]bool{VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
