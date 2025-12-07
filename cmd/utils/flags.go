@@ -236,9 +236,9 @@ var (
 		Usage: "Number of recent blocks to maintain transactions index for (default = about one year, 0 = entire chain)",
 		Value: ethconfig.Defaults.TxLookupLimit,
 	}
-	LightKDFFlag = cli.BoolFlag{
-		Name:  "lightkdf",
-		Usage: "Reduce key-derivation RAM & CPU usage at some expense of KDF strength",
+	KeyTypeFlag = cli.IntFlag{
+		Name:  "keytype",
+		Usage: "SigAlg type, should be between 0 t0 5 (0 to 4 produces same key type)",
 	}
 	WhitelistFlag = cli.StringFlag{
 		Name:  "whitelist",
@@ -1262,12 +1262,6 @@ func SetNodeConfig(ctx *cli.Context, cfg *node.Config) {
 
 	if ctx.GlobalIsSet(KeyStoreDirFlag.Name) {
 		cfg.KeyStoreDir = ctx.GlobalString(KeyStoreDirFlag.Name)
-	}
-	if ctx.GlobalIsSet(DeveloperFlag.Name) {
-		cfg.UseLightweightKDF = true
-	}
-	if ctx.GlobalIsSet(LightKDFFlag.Name) {
-		cfg.UseLightweightKDF = ctx.GlobalBool(LightKDFFlag.Name)
 	}
 	if ctx.GlobalIsSet(NoUSBFlag.Name) || cfg.NoUSB {
 		log.Warn("Option nousb is deprecated and USB is deactivated by default. Use --usb to enable")

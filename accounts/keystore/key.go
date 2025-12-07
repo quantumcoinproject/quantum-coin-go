@@ -28,6 +28,7 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 
 	"github.com/google/uuid"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
@@ -185,16 +186,22 @@ func newKeyFromSigAlgKey(privateKey *signaturealgorithm.PrivateKey) (*Key, error
 	return key, nil
 }
 
-func newKey(rand io.Reader) (*Key, error) {
-	privateKey, err := cryptobase.SigAlg.GenerateKeyWithReader(rand)
+func newKey(rand io.Reader, keyType int) (*Key, error) {
+	sigAlgPtr, err := cryptobase.GetSigAlgForKeyType(keyType)
 	if err != nil {
 		return nil, err
 	}
+	sigAlg := *sigAlgPtr
+	privateKey, err := sigAlg.GenerateKeyWithReader(rand)
+	if err != nil {
+		return nil, err
+	}
+	log.Info("Create new key", "type", keyType)
 	return newKeyFromSigAlgKey(privateKey)
 }
 
-func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Account, error) {
-	key, err := newKey(rand)
+func storeNewKey(ks keyStore, rand io.Reader, auth string, keyType int) (*Key, accounts.Account, error) {
+	key, err := newKey(rand, keyType)
 	if err != nil {
 		return nil, accounts.Account{}, err
 	}

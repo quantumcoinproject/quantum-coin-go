@@ -407,3 +407,16 @@ func SigAlgFromSignature(digestHash []byte, sig []byte) (algorithm *signaturealg
 	}
 	return &s, nil
 }
+
+func GetSigAlgForKeyType(keyType int) (*signaturealgorithm.SignatureAlgorithm, error) {
+	var s signaturealgorithm.SignatureAlgorithm
+	if keyType >= 0 && keyType <= 4 {
+		s = &SigAlgHybridMlDsaEddsaSlhDsaCompact
+	} else if keyType == 5 {
+		s = &SigAlgHybridMlDsaEddsaSlhDsa5
+	} else {
+		return nil, errors.New("invalid key type")
+	}
+
+	return &s, nil
+}

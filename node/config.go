@@ -18,14 +18,15 @@ package node
 
 import (
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -82,9 +83,8 @@ type Config struct {
 	// ExternalSigner specifies an external URI for a clef-type signer
 	ExternalSigner string `toml:",omitempty"`
 
-	// UseLightweightKDF lowers the memory and CPU requirements of the key store
-	// scrypt KDF at the expense of security.
-	UseLightweightKDF bool `toml:",omitempty"`
+	// KeyType either 1 or 5, default is 1
+	KeyType int `toml:",omitempty"`
 
 	// InsecureUnlockAllowed allows user to unlock accounts in unsafe http environment.
 	InsecureUnlockAllowed bool `toml:",omitempty"`
@@ -450,10 +450,6 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 func (c *Config) AccountConfig() (int, int, string, error) {
 	scryptN := keystore.StandardScryptN
 	scryptP := keystore.StandardScryptP
-	if c.UseLightweightKDF {
-		scryptN = keystore.LightScryptN
-		scryptP = keystore.LightScryptP
-	}
 
 	var (
 		keydir string
