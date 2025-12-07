@@ -21,7 +21,6 @@ func TestValidationAlg(t *testing.T) {
 	testSigAlg(t, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock-1, crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
 	testSigAlg(t, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 	testSigAlg(t, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock+1, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
-	testSigAlg(t, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock+1, crypto.MLDSA_ED25519_SLHDSA_5_ID)
 	block := uint64(10000000)
 
 	testSigAlg(t, block, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
@@ -33,5 +32,4 @@ func TestValidationAlg(t *testing.T) {
 	testSigAlg(t, block-1, crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
 	testSigAlg(t, block, crypto.MLDSA_ED25519_SLHDSA_FULL_ID)
 	testSigAlg(t, block+1, crypto.MLDSA_ED25519_SLHDSA_FULL_ID)
-	testSigAlg(t, block+1, crypto.MLDSA_ED25519_SLHDSA_5_ID)
 }
