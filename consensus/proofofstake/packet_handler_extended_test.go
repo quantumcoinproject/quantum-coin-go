@@ -17,7 +17,7 @@ func TestPacketHandler_min_basic_time_hash(t *testing.T) {
 	}
 	CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
 	parentHash := common.BytesToHash([]byte{1})
 
@@ -65,7 +65,7 @@ func testPacketHandler_block_proposer_timedout(t *testing.T) {
 		t.Skip("skipped")
 	}
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
 	parentHash := common.BytesToHash([]byte{1})
 	c := 1
@@ -108,4 +108,30 @@ func TestPacketHandler_block_proposer_timedout(t *testing.T) {
 		fmt.Println("iteration", i)
 		testPacketHandler_block_proposer_timedout(t)
 	}
+}
+
+func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T) {
+	fmt.Println("TestPacketHandler_basic_various_blocks starting")
+	var blockNumbers = []uint64{10000001}
+	err := defaults.SetCryptoBreakGlassBlock(10000001)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+
+	for _, b := range blockNumbers {
+		if shouldSignFull(b) == false {
+			t.Fatalf("failed")
+		}
+		fmt.Println("CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER", b)
+		for i := 1; i <= TEST_ITERATIONS; i++ {
+			fmt.Println("iteration", i)
+			testPacketHandler_basic(4, b, t)
+		}
+	}
+	err = defaults.SetCryptoBreakGlassBlock(0)
+	if err != nil {
+		t.Fatalf("failed")
+	}
+
+	fmt.Println("TestPacketHandler_offline_validator_block_full_sign_breakglass done")
 }

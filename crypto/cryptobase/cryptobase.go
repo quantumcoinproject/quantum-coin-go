@@ -12,6 +12,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 var SigAlg = hybrideds.CreateHybridedsSig()
@@ -230,10 +231,13 @@ func (dv DynamicVerifier) IsSignatureTypeAllowedForTxn(blockNumber uint64, signa
 // excludes fullSign blocks
 func GetSigAlgForValidation(blockNumber uint64) signaturealgorithm.SignatureAlgorithm {
 	if defaults.IsCryptoBreakglassMode(blockNumber) {
+		log.Debug("GetSigAlgForValidation breakglass", "blockNumber", blockNumber)
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridMlDsaEddsaSlhDsaFull)
 	} else if defaults.IsSigAlgSwitchMode(blockNumber) {
+		log.Debug("GetSigAlgForValidation SigAlgSwitchMode", "blockNumber", blockNumber)
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridMlDsaEddsaSlhDsaCompact)
 	} else {
+		log.Debug("GetSigAlgForValidation default", "blockNumber", blockNumber)
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridEds)
 	}
 }
