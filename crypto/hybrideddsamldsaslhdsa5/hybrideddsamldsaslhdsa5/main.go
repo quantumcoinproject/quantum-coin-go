@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideddsamldsaslhdsa"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideddsamldsaslhdsa5"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 	fmt.Println("Perf starting 2")
 	pprof.StartCPUProfile(f)
 	defer pprof.StopCPUProfile()
-	sig := hybrideddsamldsaslhdsa.CreateHybridEddsaMldsaSlhdsaSig()
+	sig := hybrideddsamldsaslhdsa5.CreateHybridEddsaMldsaSlhdsaSig5()
 	keypair, err := sig.GenerateKey()
 	if err != nil {
 		fmt.Println("GenerateKey failed", err)
