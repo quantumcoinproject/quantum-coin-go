@@ -20,14 +20,15 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
@@ -374,7 +375,8 @@ func TestBlockReceiptStorage(t *testing.T) {
 	// Check that no receipt entries are in a pristine database
 	hash := common.BytesToHash([]byte{0x03, 0x14})
 	if rs := ReadReceipts(db, hash, 0, params.TestChainConfig); len(rs) != 0 {
-		t.Fatalf("non existent receipts returned: %v", rs)
+		fmt.Println("non existent receipts returned: ", rs)
+		t.Fatalf("failed")
 	}
 	// Insert the body that corresponds to the receipts
 	WriteBody(db, hash, 0, body)
@@ -385,7 +387,8 @@ func TestBlockReceiptStorage(t *testing.T) {
 		t.Fatalf("no receipts returned")
 	} else {
 		if err := checkReceiptsRLP(rs, receipts); err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 		}
 	}
 	// Delete the body and ensure that the receipts are no longer returned (metadata can't be recomputed)
@@ -395,7 +398,8 @@ func TestBlockReceiptStorage(t *testing.T) {
 	}
 	// Ensure that receipts without metadata can be returned without the block body too
 	if err := checkReceiptsRLP(ReadRawReceipts(db, hash, 0), receipts); err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 	}
 	// Sanity check that body alone without the receipt is a full purge
 	WriteBody(db, hash, 0, body)

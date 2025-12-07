@@ -18,18 +18,20 @@ package proofofstake
 
 import (
 	"fmt"
+	"math/big"
+	"testing"
+
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
-	"math/big"
-	"testing"
 )
 
 func TestTxnFee(t *testing.T) {
@@ -297,4 +299,12 @@ func Test_GetBlockConsensusContextForBlock(t *testing.T) {
 	testGetBlockConsensusContextForBlock(t, uint64(933888), uint64(869888))
 	testGetBlockConsensusContextForBlock(t, uint64(933889), uint64(421889))
 	testGetBlockConsensusContextForBlock(t, uint64(933890), uint64(421890))
+}
+
+func TestTemp(t *testing.T) {
+	fmt.Println(common.HexToAddress("0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9"))
+}
+
+func TestTemp1(t *testing.T) {
+	fmt.Println(crypto.Keccak256Hash([]byte("C:/github/quantumswap/main/v3-periphery/contracts/libraries/NFTDescriptor.sol:NFTDescriptor")))
 }

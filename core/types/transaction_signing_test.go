@@ -29,7 +29,8 @@ import (
 func TestChainId(t *testing.T) {
 	key, _, err := defaultTestKey()
 	if err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 		return
 	}
 
@@ -403,7 +404,8 @@ func TestHashDynamicFeeTx(t *testing.T) {
 	tx := NewTx(&innerTx)
 
 	if tx.Hash().Hex() != "0xaddcafa24dee455e2e6f7f25aa01e4d8d48a70f45fac98e07b18c6bc6690a2d8" {
-		t.Fatalf("failed " + tx.Hash().Hex())
+		fmt.Println(tx.Hash().Hex())
+		t.Fatalf("failed")
 	}
 	chainId := big.NewInt(DEFAULT_CHAIN_ID)
 
@@ -432,7 +434,8 @@ func TestHashDynamicFeeTx(t *testing.T) {
 		t.Fatalf("failed")
 	}
 	if txRawHash.Hex() != "0xc723e7a22286bfdc8acd07a76da4f093c5c5b3ccce51ac068c226f17bdb26ca4" {
-		t.Fatalf("failed " + txRawHash.Hex())
+		fmt.Println("failed " + txRawHash.Hex())
+		t.Fatalf("failed")
 	}
 	txHash1 := signedTx.Hash()
 	txHash2 := signedTx.Hash()
@@ -616,7 +619,8 @@ func TestHashDynamicFeeTx(t *testing.T) {
 	tx1 = NewTx(&innerTx1)
 	gotHash, err = signer.Hash(tx1)
 	if err != nil {
-		t.Fatalf("failed " + err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 	}
 
 	if gotHash.IsEqualTo(origHash) {

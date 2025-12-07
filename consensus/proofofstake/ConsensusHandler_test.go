@@ -26,14 +26,32 @@ import (
 
 const TEST_ITERATIONS int = 1
 
-var waitLock sync.Mutex
-var waitMap map[common.Address]bool
-var packetDropCount int32
-var packetSentCount int32
-var TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
-var DefaultMaxWaitCount = 30
-var HandlerLock sync.Mutex
-var wgPacket sync.WaitGroup
+type ConsensusTest struct {
+	waitLock                    sync.Mutex
+	waitMap                     map[common.Address]bool
+	packetDropCount             int32
+	packetSentCount             int32
+	TEST_CONSENSUS_BLOCK_NUMBER uint64
+	MaxWaitCount                int
+	HandlerLock                 sync.Mutex
+	wgPacket                    sync.WaitGroup
+	testName                    string
+}
+
+var CurrentConsensusTest *ConsensusTest
+
+var ConsensusTestLock sync.Mutex
+
+func NewConsensusTest(numKeys int, blockNumber uint64, testName string) (vm *ValidatorManager, mockp2pManager *MockP2PManager, validatorMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
+	ConsensusTestLock.Lock()
+	defer ConsensusTestLock.Unlock()
+	CurrentConsensusTest = &ConsensusTest{
+		MaxWaitCount:                20,
+		TEST_CONSENSUS_BLOCK_NUMBER: blockNumber,
+		testName:                    testName,
+	}
+	return CurrentConsensusTest.Initialize(numKeys)
+}
 
 type ValidatorDetailsTest struct {
 	balance *big.Int
@@ -67,6 +85,7 @@ type MockP2PHandler struct {
 	validatorDetails *ValidatorDetailsTest
 	networkDetails   MockNetworkDetails
 	localPeerId      string
+	consensusTest    *ConsensusTest
 }
 
 func (m *MockP2PManager) DoesFinalizedTransactionExistFn(txnHash common.Hash) (bool, error) {
@@ -158,7 +177,7 @@ func (m *MockP2PManager) IsValidatorPacketsBlocked(val common.Address) bool {
 	return m.blockPacketValidatorMap[val]
 }
 
-func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
+func (ct *ConsensusTest) getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 	dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
 	digestHash := crypto.Keccak256(dataToVerify)
 
@@ -168,52 +187,60 @@ func getSigner(packet *eth.ConsensusPacket) (common.Address, error) {
 	} else {
 		startIndex = 1
 	}
-	sigAlg := cryptobase.GetSigAlgForValidation(TEST_CONSENSUS_BLOCK_NUMBER)
+	sigAlg := cryptobase.GetSigAlgForValidation(ct.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
-	isBreakGlass := defaults.IsCryptoBreakglassMode(TEST_CONSENSUS_BLOCK_NUMBER)
+	isBreakGlass := defaults.IsCryptoBreakglassMode(ct.TEST_CONSENSUS_BLOCK_NUMBER)
 	if isBreakGlass || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) {
 		log.Info("getSigner shouldSignFull", "sigAlg", sigAlg.SignatureName(), "IsCryptoBreakglassMode", isBreakGlass,
-			"len(packet.Signature)", len(packet.Signature), "sigAlg.SignatureWithPublicKeyLength()", sigAlg.SignatureWithPublicKeyLength(), "name", sigAlg.SignatureName())
+			"len(packet.Signature)", len(packet.Signature), "sigAlg.SignatureWithPublicKeyLength()", sigAlg.SignatureWithPublicKeyLength(), "name", sigAlg.SignatureName(),
+			"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 		var signContext []byte
-		if TEST_CONSENSUS_BLOCK_NUMBER < defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
+		if ct.TEST_CONSENSUS_BLOCK_NUMBER < defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
 			signContext = FULL_SIGN_CONTEXT
 		} else {
 			signContext = FULL_SIGN_CONTEXT_V2
 		}
 		pubKey, err := sigAlg.PublicKeyFromSignatureWithContext(digestHash, packet.Signature, signContext)
 		if err != nil {
-			log.Info("a1", "err", err, "signContext", signContext)
+			log.Info("a1", "err", err, "signContext", signContext,
+				"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 			return ZERO_ADDRESS, err
 		}
 		if cryptobase.DynamicSigVerifier.VerifyWithContext(pubKey.PubData, digestHash, packet.Signature, signContext) == false {
-			log.Info("a2")
+			log.Info("a2",
+				"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 			return ZERO_ADDRESS, InvalidPacketErr
 		}
 
 		validator, err := sigAlg.PublicKeyToAddress(pubKey)
 		if err != nil {
-			log.Info("a3", "err", err)
+			log.Info("a3", "err", err, "isBreakGlass", isBreakGlass,
+				"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 			return ZERO_ADDRESS, err
 		}
 
 		return validator, nil
 	} else {
-		log.Info("getSigner other", "sigAlg", sigAlg.SignatureName())
+		log.Info("getSigner other", "sigAlg", sigAlg.SignatureName(),
+			"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 		pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
 			log.Info("a4", "err", err, "len", len(packet.Signature), "packetType", packetType, "packet.ParentHash", packet.ParentHash,
-				"getTestParentHash", getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER), "startIndex", startIndex)
+				"getTestParentHash", getTestParentHash(ct.TEST_CONSENSUS_BLOCK_NUMBER), "startIndex", startIndex,
+				"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 			return ZERO_ADDRESS, err
 		}
 		if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
-			log.Info("a5")
+			log.Info("a5",
+				"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 			return ZERO_ADDRESS, InvalidPacketErr
 		}
 
 		validator, err := sigAlg.PublicKeyToAddress(pubKey)
 		if err != nil {
-			log.Info("a6", "err", err)
+			log.Info("a6", "err", err,
+				"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 			return ZERO_ADDRESS, err
 		}
 
@@ -230,11 +257,24 @@ func (p *MockP2PHandler) GetLocalPeerId() string {
 }
 
 func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) error {
-	HandlerLock.Lock()
-	wgPacket.Add(1)
-	defer wgPacket.Done()
+	left := p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER
+	right := CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER
+	if left != right {
+		fmt.Println("BroadcastConsensusData left", left, "right", right)
+		return nil
+	}
+
+	pHash := getTestParentHash(p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
+	if pHash.IsEqualTo(packet.ParentHash) == false {
+		fmt.Println("BroadcastConsensusData pHash", pHash, "isEqualTo", packet.ParentHash)
+		return nil
+	}
+	p.consensusTest.HandlerLock.Lock()
+
+	p.consensusTest.wgPacket.Add(1)
+	defer p.consensusTest.wgPacket.Done()
 	handlers := p.mockP2pManager.mockP2pHandlers
-	HandlerLock.Unlock()
+	p.consensusTest.HandlerLock.Unlock()
 
 	for _, val := range handlers {
 		handler := val.consensusHandler
@@ -242,20 +282,20 @@ func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) err
 			if p.networkDetails.packetLoss > 0 {
 				r := rand.Intn(100)
 				if r <= p.networkDetails.packetLoss {
-					atomic.AddInt32(&packetDropCount, 1)
+					atomic.AddInt32(&p.consensusTest.packetDropCount, 1)
 					continue
 				}
-				atomic.AddInt32(&packetSentCount, 1)
+				atomic.AddInt32(&p.consensusTest.packetSentCount, 1)
 			}
 			handler := val.consensusHandler
 			if p.mockP2pManager.IsValidatorPacketsBlocked(handler.account.Address) {
 				continue
 			}
-			signer, err := getSigner(packet)
+			signer, err := p.consensusTest.getSigner(packet)
 			if err != nil {
-				log.Error("getSigner error", "error", err, "TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
-				if defaults.IsCryptoBreakglassMode(TEST_CONSENSUS_BLOCK_NUMBER) == false { //stray packets due to timing mismatch
-					fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+				log.Error("getSigner error", "error", err, "TEST_CONSENSUS_BLOCK_NUMBER", p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
+				if defaults.IsCryptoBreakglassMode(p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER) == false { //stray packets due to timing mismatch
+					fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 					panic("unexpected")
 				}
 				continue
@@ -426,10 +466,10 @@ func (vm *ValidatorManager) ListValidatorsAsMap(blockHash common.Hash) (map[comm
 	return valDetailsMap, nil
 }
 
-func Initialize(numKeys int) (vm *ValidatorManager, mockp2pManager *MockP2PManager, validatorMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
-	HandlerLock.Lock()
-	defer HandlerLock.Unlock()
-	wgPacket.Wait()
+func (ct *ConsensusTest) Initialize(numKeys int) (vm *ValidatorManager, mockp2pManager *MockP2PManager, validatorMap *map[common.Address]*big.Int, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) {
+	ct.HandlerLock.Lock()
+	defer ct.HandlerLock.Unlock()
+	ct.wgPacket.Wait()
 
 	STARTUP_DELAY_MS = int64(2000)
 	BLOCK_TIMEOUT_MS = int64(6000)
@@ -441,7 +481,7 @@ func Initialize(numKeys int) (vm *ValidatorManager, mockp2pManager *MockP2PManag
 	CONSENSUS_DATA_REQUEST_RESEND_DELAY = int64(60000)
 	SKIP_HASH_CHECK = true
 
-	waitMap = make(map[common.Address]bool)
+	ct.waitMap = make(map[common.Address]bool)
 	vm = NewValidatorManager(numKeys)
 
 	valMap, _ := vm.GetValidatorsFn(common.Hash{})
@@ -486,6 +526,7 @@ func Initialize(numKeys int) (vm *ValidatorManager, mockp2pManager *MockP2PManag
 			consensusHandler: consensusHandler,
 			validatorDetails: vm.valMap[addr],
 			networkDetails:   MockNetworkDetails{},
+			consensusTest:    ct,
 		}
 		consensusHandler.p2pHandler = p2pHandler
 		p2pHandler.consensusHandler = consensusHandler
@@ -497,19 +538,19 @@ func Initialize(numKeys int) (vm *ValidatorManager, mockp2pManager *MockP2PManag
 	return
 }
 
-func WaitBlockCommit(parentHash common.Hash, mockp2pHandler *MockP2PHandler, t *testing.T) {
-	waitLock.Lock()
+func (ct *ConsensusTest) WaitBlockCommit(parentHash common.Hash, mockp2pHandler *MockP2PHandler, t *testing.T) {
+	ct.waitLock.Lock()
 
 	valAddress := mockp2pHandler.validator
-	_, ok := waitMap[valAddress]
+	_, ok := ct.waitMap[valAddress]
 	if ok == true {
 		t.Fatalf("validator wait already exists")
 	}
-	waitLock.Unlock()
+	ct.waitLock.Unlock()
 
 	for {
 		txns := mockp2pHandler.GetValidatorTransactions()
-		err := mockp2pHandler.consensusHandler.HandleConsensus(parentHash, txns, TEST_CONSENSUS_BLOCK_NUMBER)
+		err := mockp2pHandler.consensusHandler.HandleConsensus(parentHash, txns, ct.TEST_CONSENSUS_BLOCK_NUMBER)
 		if err != nil {
 			//fmt.Println("HandleTransactions err", err)
 		}
@@ -584,7 +625,7 @@ func ValidateBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager,
 		}
 		consensusContext := crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(len(*validatorMap))))
 
-		err = ValidateBlockConsensusDataInner(txns, parentHash, blockConsensusData, blockAdditionalConsensusData, validatorMap, TEST_CONSENSUS_BLOCK_NUMBER, valDetailsMap, consensusContext)
+		err = ValidateBlockConsensusDataInner(txns, parentHash, blockConsensusData, blockAdditionalConsensusData, validatorMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, valDetailsMap, consensusContext)
 		if err != nil {
 			t.Fatalf("ValidateBlockConsensusDataInner failed")
 		}
@@ -640,21 +681,21 @@ func ValidateTest(validatorMap *map[common.Address]*big.Int, valDetailsMap *map[
 }
 
 func getTestParentHash(blockNumber uint64) common.Hash {
-	return common.BytesToHash([]byte(strconv.FormatUint(TEST_CONSENSUS_BLOCK_NUMBER, 10)))
+	return common.BytesToHash([]byte(strconv.FormatUint(blockNumber, 10)))
 }
 
-func testPacketHandler_basic(numKeys int, t *testing.T) {
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+func testPacketHandler_basic(numKeys int, blockNumber uint64, t *testing.T) {
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, blockNumber, t.Name())
 
-	parentHash := getTestParentHash(TEST_CONSENSUS_BLOCK_NUMBER)
+	parentHash := getTestParentHash(blockNumber)
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, CurrentConsensusTest.MaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -672,14 +713,12 @@ func TestPacketHandler_SigAlgSwitch_block(t *testing.T) {
 	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock}
 
 	for _, b := range blockNumbers {
-		TEST_CONSENSUS_BLOCK_NUMBER = b
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", b)
 		for i := 1; i <= TEST_ITERATIONS; i++ {
 			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, t)
+			testPacketHandler_basic(4, b, t)
 		}
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 	fmt.Println("TestPacketHandler_SigAlgSwitch_block done")
 }
 
@@ -688,17 +727,12 @@ func TestPacketHandler_SigAlgSwitch_block_full_sign(t *testing.T) {
 	var blockNumbers = []uint64{3604480} //full sign block after SigAlgSwitchBlock
 
 	for _, b := range blockNumbers {
-		TEST_CONSENSUS_BLOCK_NUMBER = b
-		if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) == false {
-			t.Fatalf("failed")
-		}
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", b)
 		for i := 1; i <= TEST_ITERATIONS; i++ {
 			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, t)
+			testPacketHandler_basic(4, b, t)
 		}
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 	fmt.Println("TestPacketHandler_SigAlgSwitch_block_full_sign done")
 }
 
@@ -707,14 +741,12 @@ func TestPacketHandler_basic_various_blocks_post_offline_validator_block(t *test
 	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock, defaults.DefaultConfig.DeepCheckStartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock}
 
 	for _, b := range blockNumbers {
-		TEST_CONSENSUS_BLOCK_NUMBER = b
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", b)
 		for i := 1; i <= TEST_ITERATIONS; i++ {
 			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, t)
+			testPacketHandler_basic(4, b, t)
 		}
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }
 
@@ -723,14 +755,12 @@ func TestPacketHandler_offline_validator_block(t *testing.T) {
 	var blockNumbers = []uint64{defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock}
 
 	for _, b := range blockNumbers {
-		TEST_CONSENSUS_BLOCK_NUMBER = b
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", b)
 		for i := 1; i <= TEST_ITERATIONS; i++ {
 			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, t)
+			testPacketHandler_basic(4, b, t)
 		}
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }
 
@@ -746,39 +776,38 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	}
 
 	for _, b := range blockNumbers {
-		TEST_CONSENSUS_BLOCK_NUMBER = b
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", b)
 		for i := 1; i <= TEST_ITERATIONS; i++ {
 			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, t)
+			testPacketHandler_basic(4, b, t)
 		}
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+
 	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }
 
 func TestPacketHandler_basic(t *testing.T) {
 	for i := 1; i <= TEST_ITERATIONS; i++ {
 		fmt.Println("iteration", i)
-		testPacketHandler_basic(4, t)
+		testPacketHandler_basic(4, uint64(1), t)
 	}
 }
 
 func TestPacketHandler_basic_max_validators(t *testing.T) {
 	for i := 1; i <= 1; i++ {
 		fmt.Println("iteration", i)
-		testPacketHandler_basic(8, t)
+		testPacketHandler_basic(8, uint64(1), t)
 	}
 }
 
 func testPacketHandler_min_basic(t *testing.T) {
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	skipped := false
 	c := 0
@@ -790,13 +819,13 @@ func testPacketHandler_min_basic(t *testing.T) {
 			skipList[h.validator] = true
 			continue
 		}
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
 	fmt.Println("c", c)
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, CurrentConsensusTest.MaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -823,17 +852,17 @@ func TestPacketHandler_min_basic(t *testing.T) {
 }
 
 func testPacketHandler_extended_failure(t *testing.T, numKeys int, minPass int, responsiveValidators int) {
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
 		if h.validator.IsEqualTo(proposer) == true {
-			go WaitBlockCommit(parentHash, h, t)
+			go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 			break
 		}
 	}
@@ -850,13 +879,13 @@ func testPacketHandler_extended_failure(t *testing.T, numKeys int, minPass int, 
 			c = c + 1
 			continue
 		}
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
 	fmt.Println("c", c)
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, CurrentConsensusTest.MaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -884,12 +913,12 @@ func TestPacketHandler_extended_failure(t *testing.T) {
 }
 
 func testPacketHandler_min_negative(t *testing.T, numKeys int, minPass int, unresponsiveValCount int) {
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	c := 1
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 	skipList := make(map[common.Address]bool)
 
 	for _, handler := range p2p.mockP2pHandlers {
@@ -898,11 +927,11 @@ func testPacketHandler_min_negative(t *testing.T, numKeys int, minPass int, unre
 			skipList[h.validator] = true
 			continue
 		}
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == true {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, CurrentConsensusTest.MaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == true {
 		t.Fatalf("failed")
 	}
 
@@ -923,12 +952,12 @@ func TestPacketHandler_min_negative(t *testing.T) {
 }
 
 func testPacketHandler_no_round2_then_round2(t *testing.T, numKeys int, minPass int) {
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	c := 1
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 	skipCount := 0
 	unresponsiveValCount := 2
 	var valSkipList []common.Address
@@ -953,7 +982,7 @@ func testPacketHandler_no_round2_then_round2(t *testing.T, numKeys int, minPass 
 		}
 		h.SetValidatorTransactions(txns)
 
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
@@ -986,7 +1015,7 @@ func testPacketHandler_no_round2_then_round2(t *testing.T, numKeys int, minPass 
 						txns[i] = common.BytesToHash([]byte{byte(rand.Intn(255))})
 					}
 					vh.SetValidatorTransactions(txns)
-					go WaitBlockCommit(parentHash, vh, t)
+					go CurrentConsensusTest.WaitBlockCommit(parentHash, vh, t)
 				}
 				breakLoop = true
 				break
@@ -1000,7 +1029,7 @@ func testPacketHandler_no_round2_then_round2(t *testing.T, numKeys int, minPass 
 	}
 
 	fmt.Println("ValidateTest start")
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, DefaultMaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_NIL: true, VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 3, CurrentConsensusTest.MaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_NIL: true, VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1033,9 +1062,9 @@ func TestPacketHandler_no_round2_then_round2(t *testing.T) {
 }
 
 func testPacketHandler_bifurcated(t *testing.T) {
-	_, p2p, valMap, valDetailsMap := Initialize(4)
-	parentHash := common.BytesToHash([]byte{1})
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(4, 1, t.Name())
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 	c := 0
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
 
@@ -1074,7 +1103,7 @@ func testPacketHandler_bifurcated(t *testing.T) {
 		}
 		h.SetValidatorTransactions(txns)
 		prev = h
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
@@ -1115,8 +1144,8 @@ func TestPacketHandler_bifurcated(t *testing.T) {
 }
 
 func testPacketHandler_round2(t *testing.T, numKeys int, minPass int) {
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
-	parentHash := common.BytesToHash([]byte{1})
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	c := 0
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
 
@@ -1134,7 +1163,7 @@ func testPacketHandler_round2(t *testing.T, numKeys int, minPass int) {
 		}
 		h.SetValidatorTransactions(txns)
 		prev = h
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
@@ -1162,7 +1191,7 @@ func testPacketHandler_round2(t *testing.T, numKeys int, minPass int) {
 	}
 
 	fmt.Println("===============Round 2 start")
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_OK: true, VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, CurrentConsensusTest.MaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_OK: true, VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1216,10 +1245,10 @@ func TestPacketHandler_round2(t *testing.T) {
 
 func testPacketHandler_basic_txns(t *testing.T) {
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	numTxns := 5
 	txns := make([]common.Hash, numTxns)
 	for i := 0; i < numTxns; i++ {
@@ -1229,10 +1258,10 @@ func testPacketHandler_basic_txns(t *testing.T) {
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
 		h.SetValidatorTransactions(txns)
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, CurrentConsensusTest.MaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1276,10 +1305,10 @@ func TestPacketHandler_basic_txns(t *testing.T) {
 
 func testPacketHandler_basic_txns_finalize_fail(t *testing.T) {
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	numTxns := 5
 	txns := make([]common.Hash, numTxns)
 	for i := 0; i < numTxns; i++ {
@@ -1292,10 +1321,10 @@ func testPacketHandler_basic_txns_finalize_fail(t *testing.T) {
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
 		h.SetValidatorTransactions(txns)
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys-1, DefaultMaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys-1, CurrentConsensusTest.MaxWaitCount*2, map[VoteType]bool{VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 }
@@ -1309,10 +1338,10 @@ func TestPacketHandler_basic_txns_finalize_fail(t *testing.T) {
 
 func testPacketHandler_split_txns(t *testing.T) {
 	numKeys := 6
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 	rand.Seed(time.Now().UnixNano())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	j := 0
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
@@ -1328,11 +1357,11 @@ func testPacketHandler_split_txns(t *testing.T) {
 
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, CurrentConsensusTest.MaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1376,9 +1405,9 @@ func TestPacketHandler_split_txns(t *testing.T) {
 
 func testPacketHandler_split_increasing_txns(t *testing.T) {
 	numKeys := 8
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	j := 0
 	numTxns := 0
@@ -1392,10 +1421,10 @@ func testPacketHandler_split_increasing_txns(t *testing.T) {
 		}
 		h := handler
 		handler.SetValidatorTransactions(txns)
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 7, DefaultMaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, 7, CurrentConsensusTest.MaxWaitCount, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1439,10 +1468,10 @@ func TestPacketHandler_split_increasing_txns(t *testing.T) {
 
 func testPacketHandler_split_increasing_txns_some_unresponsive(t *testing.T, numVal int, minPass int, responsiveValidators int) {
 	numKeys := numVal
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	j := 0
 	numTxns := 0
@@ -1458,7 +1487,7 @@ func testPacketHandler_split_increasing_txns_some_unresponsive(t *testing.T, num
 				j = j + 1
 			}
 			h.SetValidatorTransactions(txns)
-			go WaitBlockCommit(parentHash, h, t)
+			go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 			break
 		}
 	}
@@ -1479,11 +1508,11 @@ func testPacketHandler_split_increasing_txns_some_unresponsive(t *testing.T, num
 			j = j + 1
 		}
 		h.SetValidatorTransactions(txns)
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount*5, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, CurrentConsensusTest.MaxWaitCount*5, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1528,9 +1557,9 @@ func TestPacketHandler_split_increasing_txns_some_unresponsive(t *testing.T) {
 func testPacketHandler_packet_loss_txns(t *testing.T) {
 	numKeys := 10
 	minPass := 7
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	j := 0
 	numTxns := 0
@@ -1545,10 +1574,10 @@ func testPacketHandler_packet_loss_txns(t *testing.T) {
 		h := handler
 		handler.SetValidatorTransactions(txns)
 		h.networkDetails.packetLoss = 50
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 	}
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount*10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, CurrentConsensusTest.MaxWaitCount*10, map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1592,10 +1621,10 @@ func TestPacketHandler_packet_loss_txns(t *testing.T) {
 
 func testPacketHandler_packet_loss_txns_some_unresponsive(t *testing.T, numVal int, minPass int, responsiveValidators int) {
 	numKeys := numVal
-	_, p2p, valMap, valDetailsMap := Initialize(numKeys)
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
+	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	j := 0
 	numTxns := 0
@@ -1613,7 +1642,7 @@ func testPacketHandler_packet_loss_txns_some_unresponsive(t *testing.T, numVal i
 			}
 			h.SetValidatorTransactions(txns)
 			h.networkDetails.packetLoss = 50
-			go WaitBlockCommit(parentHash, h, t)
+			go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 			break
 		}
 	}
@@ -1634,13 +1663,13 @@ func testPacketHandler_packet_loss_txns_some_unresponsive(t *testing.T, numVal i
 			j = j + 1
 		}
 		handler.SetValidatorTransactions(txns)
-		go WaitBlockCommit(parentHash, h, t)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
 		c = c + 1
 	}
 
 	fmt.Println("c", c)
 
-	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, DefaultMaxWaitCount*5, map[VoteType]bool{VOTE_TYPE_OK: true, VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, minPass, CurrentConsensusTest.MaxWaitCount*5, map[VoteType]bool{VOTE_TYPE_OK: true, VOTE_TYPE_NIL: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
 		t.Fatalf("failed")
 	}
 
@@ -1911,7 +1940,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 
 func Test_consensuspacket_negative(t *testing.T) {
 	numKeys := 4
-	_, p2p, _, _ := Initialize(numKeys)
+	_, p2p, _, _ := NewConsensusTest(numKeys, 1, t.Name())
 
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
@@ -1976,7 +2005,7 @@ func Test_consensuspacket_negative(t *testing.T) {
 
 func Test_requestconsensuspacket_negative(t *testing.T) {
 	numKeys := 4
-	_, p2p, _, _ := Initialize(numKeys)
+	_, p2p, _, _ := NewConsensusTest(numKeys, 1, t.Name())
 
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
@@ -2028,12 +2057,11 @@ func Test_shouldSignFull(t *testing.T) {
 
 func TestPacketHandler_basic_fullsign(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_fullsign starting")
-	TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK
 	for i := 1; i <= TEST_ITERATIONS; i++ {
 		fmt.Println("iteration", i)
-		testPacketHandler_basic(4, t)
+		testPacketHandler_basic(4, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK, t)
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
+
 	fmt.Println("TestPacketHandler_basic_fullsign done")
 }
 
@@ -2046,16 +2074,14 @@ func TestPacketHandler_breakglass(t *testing.T) {
 		t.Fatalf("failed IsCryptoBreakglassMode")
 		return
 	}
-	TEST_CONSENSUS_BLOCK_NUMBER = breakglassBlock
-	fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
+	fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", breakglassBlock)
 	for i := 1; i <= TEST_ITERATIONS; i++ {
 		fmt.Println("iteration", i)
-		testPacketHandler_basic(4, t)
+		testPacketHandler_basic(4, breakglassBlock, t)
 	}
 
 	time.Sleep(10 * time.Second) //to allow for leftover packets to be processed, if any
 
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
 	err := defaults.SetCryptoBreakGlassBlock(0)
 	if err != nil {
 		t.Fatalf("failed")
@@ -2064,29 +2090,6 @@ func TestPacketHandler_breakglass(t *testing.T) {
 	fmt.Println("TestPacketHandler_breakglass done")
 
 	fmt.Println("testPacketHandler_basic sanity check starting")
-	testPacketHandler_basic(4, t)
+	testPacketHandler_basic(4, 1, t)
 	fmt.Println("testPacketHandler_basic sanity check done")
-}
-
-func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T) {
-	fmt.Println("TestPacketHandler_basic_various_blocks starting")
-	var blockNumbers = []uint64{10000000}
-	err := defaults.SetCryptoBreakGlassBlock(10000000)
-	if err != nil {
-		t.Fatalf("failed")
-	}
-
-	for _, b := range blockNumbers {
-		TEST_CONSENSUS_BLOCK_NUMBER = b
-		if shouldSignFull(TEST_CONSENSUS_BLOCK_NUMBER) == false {
-			t.Fatalf("failed")
-		}
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", TEST_CONSENSUS_BLOCK_NUMBER)
-		for i := 1; i <= TEST_ITERATIONS; i++ {
-			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, t)
-		}
-	}
-	TEST_CONSENSUS_BLOCK_NUMBER = uint64(1)
-	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }

@@ -3,10 +3,11 @@ package proofofstake
 import (
 	"bytes"
 	"fmt"
+	"testing"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"testing"
 )
 
 func TestExtraData_basic(t *testing.T) {
@@ -24,13 +25,15 @@ func TestExtraData_encode_decode(t *testing.T) {
 
 	encoded, err := EncodeBlockExtraData(errorTransactions, DefaultExtraData, blockNumber)
 	if err != nil {
-		t.Fatalf(err.Error())
+		errVal := err.Error()
+		t.Fatalf("failed to encode block extra data: %s", errVal)
 		return
 	}
 
 	decoded, origExtraData, err := DecodeBlockExtraData(encoded, blockNumber)
 	if err != nil {
-		t.Fatalf(err.Error())
+		errVal := err.Error()
+		t.Fatalf("failed to encode block extra data: %s", errVal)
 		return
 	}
 
@@ -45,7 +48,8 @@ func TestExtraData_encode_decode(t *testing.T) {
 
 	verified, err := VerifyExtraData(blockNumber, encoded)
 	if err != nil {
-		t.Fatalf(err.Error())
+		errVal := err.Error()
+		t.Fatalf("failed to encode block extra data: %s", errVal)
 		return
 	}
 

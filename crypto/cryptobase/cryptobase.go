@@ -7,11 +7,13 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideddsamldsaslhdsa"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideddsamldsaslhdsa5"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideddsamldsaslhdsafull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 var SigAlg = hybrideds.CreateHybridedsSig()
@@ -20,6 +22,7 @@ var SigAlgHybridEds = hybrideds.CreateHybridedsSig()
 var SigAlgHybridEdsFull = hybridedsfull.CreateHybridedsfullSig()
 var SigAlgHybridMlDsaEddsaSlhDsaFull = hybrideddsamldsaslhdsafull.CreateHybridEddsaMldsaSlhdsaFullSig()
 var SigAlgHybridMlDsaEddsaSlhDsaCompact = hybrideddsamldsaslhdsa.CreateHybridEddsaMldsaSlhdsaSig()
+var SigAlgHybridMlDsaEddsaSlhDsa5 = hybrideddsamldsaslhdsa5.CreateHybridEddsaMldsaSlhdsaSig5()
 
 type DynamicSigner struct {
 }
@@ -35,6 +38,8 @@ func (ds DynamicSigner) SignSigAlg(digestHash []byte, prv *signaturealgorithm.Pr
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.Sign(digestHash, prv)
 	} else if sigAlg == byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.Sign(digestHash, prv)
+	} else if sigAlg == byte(crypto.MLDSA_ED25519_SLHDSA_5_ID) {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.Sign(digestHash, prv)
 	}
 	return nil, errors.New("invalid sign mode")
 }
@@ -49,6 +54,8 @@ func (ds DynamicSigner) Sign(digestHash []byte, prv *signaturealgorithm.PrivateK
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.Sign(digestHash, prv)
 	} else if signMode == byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.Sign(digestHash, prv)
+	} else if signMode == byte(crypto.MLDSA_ED25519_SLHDSA_5_ID) {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.Sign(digestHash, prv)
 	}
 	return nil, errors.New("invalid sign mode")
 }
@@ -78,6 +85,8 @@ func (dv DynamicVerifier) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.CombinePublicKeySignature(sigBytes, pubKeyBytes)
 	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.CombinePublicKeySignature(sigBytes, pubKeyBytes)
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_5_ID {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.CombinePublicKeySignature(sigBytes, pubKeyBytes)
 	} else {
 		return nil, errors.New("CombinePublicKeySignature invalid signature type")
 	}
@@ -100,6 +109,8 @@ func (dv DynamicVerifier) PublicKeyAndSignatureFromCombinedSignature(digestHash 
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.PublicKeyAndSignatureFromCombinedSignature(digestHash, sig)
 	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.PublicKeyAndSignatureFromCombinedSignature(digestHash, sig)
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_5_ID {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.PublicKeyAndSignatureFromCombinedSignature(digestHash, sig)
 	} else {
 		return nil, nil, errors.New("PublicKeyAndSignatureFromCombinedSignature invalid signature type")
 	}
@@ -122,6 +133,8 @@ func (dv DynamicVerifier) PublicKeyBytesFromSignature(digestHash []byte, sig []b
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.PublicKeyBytesFromSignature(digestHash, sig)
 	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.PublicKeyBytesFromSignature(digestHash, sig)
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_5_ID {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.PublicKeyBytesFromSignature(digestHash, sig)
 	} else {
 		return nil, errors.New("PublicKeyBytesFromSignature invalid signature type")
 	}
@@ -144,6 +157,8 @@ func (dv DynamicVerifier) GetAddress(digestHash []byte, sig []byte) (common.Addr
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.GetAddress(digestHash, sig)
 	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.GetAddress(digestHash, sig)
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_5_ID {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.GetAddress(digestHash, sig)
 	} else {
 		return common.Address{}, errors.New("GetAddress invalid signature type")
 	}
@@ -166,6 +181,8 @@ func (dv DynamicVerifier) Verify(pubKey []byte, digestHash []byte, signature []b
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.Verify(pubKey, digestHash, signature)
 	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.Verify(pubKey, digestHash, signature)
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_5_ID {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.Verify(pubKey, digestHash, signature)
 	} else {
 		return false
 	}
@@ -188,6 +205,8 @@ func (dv DynamicVerifier) VerifyWithContext(pubKey []byte, digestHash []byte, si
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.VerifyWithContext(pubKey, digestHash, signature, context)
 	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.VerifyWithContext(pubKey, digestHash, signature, context)
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_5_ID {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.VerifyWithContext(pubKey, digestHash, signature, context)
 	} else {
 		return false
 	}
@@ -207,6 +226,8 @@ func (dv DynamicVerifier) ValidateSignatureValues(digestHash []byte, v byte, r, 
 		return SigAlgHybridMlDsaEddsaSlhDsaCompact.ValidateSignatureValues(digestHash, v, r, s)
 	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
 		return SigAlgHybridMlDsaEddsaSlhDsaFull.ValidateSignatureValues(digestHash, v, r, s)
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_5_ID {
+		return SigAlgHybridMlDsaEddsaSlhDsa5.ValidateSignatureValues(digestHash, v, r, s)
 	} else {
 		return false, nil, nil
 	}
@@ -218,22 +239,26 @@ func (dv DynamicVerifier) IsSignatureTypeAllowedForTxn(blockNumber uint64, signa
 	isBreakglassBlock := defaults.IsCryptoBreakglassMode(blockNumber)
 	if isBreakglassBlock == false {
 		if defaults.IsSigAlgSwitchMode(blockNumber) {
-			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID, nil
+			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID || algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID ||
+				algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID || algType == crypto.MLDSA_ED25519_SLHDSA_5_ID, nil
 		} else {
 			return algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID, nil
 		}
 	} else {
-		return algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID, nil
+		return algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID || algType == crypto.MLDSA_ED25519_SLHDSA_5_ID, nil
 	}
 }
 
 // excludes fullSign blocks
 func GetSigAlgForValidation(blockNumber uint64) signaturealgorithm.SignatureAlgorithm {
 	if defaults.IsCryptoBreakglassMode(blockNumber) {
+		log.Debug("GetSigAlgForValidation breakglass", "blockNumber", blockNumber)
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridMlDsaEddsaSlhDsaFull)
 	} else if defaults.IsSigAlgSwitchMode(blockNumber) {
+		log.Debug("GetSigAlgForValidation SigAlgSwitchMode", "blockNumber", blockNumber)
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridMlDsaEddsaSlhDsaCompact)
 	} else {
+		log.Debug("GetSigAlgForValidation default", "blockNumber", blockNumber)
 		return signaturealgorithm.SignatureAlgorithm(SigAlgHybridEds)
 	}
 }
@@ -247,6 +272,8 @@ func GetSigningContext() crypto.SigningContext {
 	} else if signMode == byte(crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID) {
 		return crypto.SigningContextDefault
 	} else if signMode == byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
+		return crypto.SigningContextLevel2
+	} else if signMode == byte(crypto.MLDSA_ED25519_SLHDSA_5_ID) {
 		return crypto.SigningContextLevel1
 	} else {
 		return crypto.SigningContextDefault

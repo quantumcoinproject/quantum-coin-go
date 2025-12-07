@@ -21,13 +21,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -164,7 +165,8 @@ func TestRecipientEmpty(t *testing.T) {
 	signer := NewLondonSignerDefaultChain()
 	key, addr, err := defaultTestKey()
 	if err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 		return
 	}
 
@@ -200,7 +202,8 @@ func TestRecipientNormal(t *testing.T) {
 	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	_, addr, err := defaultTestKey()
 	if err != nil {
-		t.Fatalf(err.Error())
+		fmt.Println(err)
+		t.Fatalf("failed")
 		return
 	}
 
@@ -228,7 +231,8 @@ func TestTransactionSort(t *testing.T) {
 		for i := 0; i < len(keys); i++ {
 			keys[i], err = cryptobase.SigAlg.GenerateKey()
 			if err != nil {
-				t.Fatalf(err.Error())
+				fmt.Println(err)
+				t.Fatalf("failed")
 				return
 			}
 		}
@@ -243,7 +247,8 @@ func TestTransactionSort(t *testing.T) {
 			for i := 0; i < 5; i++ {
 				tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
 				if err != nil {
-					t.Fatalf(err.Error())
+					fmt.Println(err)
+					t.Fatalf("failed")
 					return
 				}
 				tx.time = time.Unix(0, int64(len(keys)-start))
@@ -262,7 +267,8 @@ func TestTransactionSort(t *testing.T) {
 			txn := txset.PeekCursor()
 			from, err := Sender(signer, txn)
 			if err != nil {
-				t.Fatalf(err.Error())
+				fmt.Println(err)
+				t.Fatalf("failed")
 				return
 			}
 			fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
@@ -283,7 +289,8 @@ func TestTransactionSortIncreasing(t *testing.T) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], err = cryptobase.SigAlg.GenerateKey()
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 	}
@@ -318,7 +325,8 @@ func TestTransactionSortIncreasing(t *testing.T) {
 		txn := txset.PeekCursor()
 		from, err := Sender(signer, txn)
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 		fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
@@ -338,7 +346,8 @@ func TestTransactionSortDecreasing(t *testing.T) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], err = cryptobase.SigAlg.GenerateKey()
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 	}
@@ -354,7 +363,8 @@ func TestTransactionSortDecreasing(t *testing.T) {
 		for i := 0; i < txnCount; i++ {
 			tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
 			if err != nil {
-				t.Fatalf(err.Error())
+				fmt.Println(err)
+				t.Fatalf("failed")
 				return
 			}
 			tx.time = time.Unix(0, int64(len(keys)-start))
@@ -373,7 +383,8 @@ func TestTransactionSortDecreasing(t *testing.T) {
 		txn := txset.PeekCursor()
 		from, err := Sender(signer, txn)
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 		fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
@@ -394,7 +405,8 @@ func TestTransactionSortIncreaseDecrease(t *testing.T) {
 		for i := 0; i < len(keys); i++ {
 			keys[i], err = cryptobase.SigAlg.GenerateKey()
 			if err != nil {
-				t.Fatalf(err.Error())
+				fmt.Println(err)
+				t.Fatalf("failed")
 				return
 			}
 		}
@@ -415,7 +427,8 @@ func TestTransactionSortIncreaseDecrease(t *testing.T) {
 				fmt.Println("txnCount", txnCount)
 				tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
 				if err != nil {
-					t.Fatalf(err.Error())
+					fmt.Println(err)
+					t.Fatalf("failed")
 					return
 				}
 				tx.time = time.Unix(0, int64(len(keys)-start))
@@ -434,7 +447,8 @@ func TestTransactionSortIncreaseDecrease(t *testing.T) {
 			txn := txset.PeekCursor()
 			from, err := Sender(signer, txn)
 			if err != nil {
-				t.Fatalf(err.Error())
+				fmt.Println(err)
+				t.Fatalf("failed")
 				return
 			}
 			fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
@@ -455,7 +469,8 @@ func TestTransactionSortSingle(t *testing.T) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], err = cryptobase.SigAlg.GenerateKey()
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 	}
@@ -469,7 +484,8 @@ func TestTransactionSortSingle(t *testing.T) {
 		for i := 0; i < 1; i++ {
 			tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
 			if err != nil {
-				t.Fatalf(err.Error())
+				fmt.Println(err)
+				t.Fatalf("failed")
 				return
 			}
 			tx.time = time.Unix(0, int64(len(keys)-start))
@@ -488,7 +504,8 @@ func TestTransactionSortSingle(t *testing.T) {
 		txn := txset.PeekCursor()
 		from, err := Sender(signer, txn)
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 		fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
@@ -508,7 +525,8 @@ func TestTransactionSortSingleAccount(t *testing.T) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], err = cryptobase.SigAlg.GenerateKey()
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 	}
@@ -523,7 +541,8 @@ func TestTransactionSortSingleAccount(t *testing.T) {
 		for i := 0; i < txnCount; i++ {
 			tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
 			if err != nil {
-				t.Fatalf(err.Error())
+				fmt.Println(err)
+				t.Fatalf("failed")
 				return
 			}
 			tx.time = time.Unix(0, int64(len(keys)-start))
@@ -542,7 +561,8 @@ func TestTransactionSortSingleAccount(t *testing.T) {
 		txn := txset.PeekCursor()
 		from, err := Sender(signer, txn)
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 		fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
@@ -573,7 +593,8 @@ func TestTransactionSortNoTxns(t *testing.T) {
 		txn := txset.PeekCursor()
 		from, err := Sender(signer, txn)
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 		fmt.Println("Cursor", txn.Hash(), from, txn.Nonce())
@@ -593,7 +614,8 @@ func testTransactionNonceOrder_byCount(txnCount int, t *testing.T) {
 	for i := 0; i < len(keys); i++ {
 		keys[i], err = cryptobase.SigAlg.GenerateKey()
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 	}
@@ -609,7 +631,8 @@ func testTransactionNonceOrder_byCount(txnCount int, t *testing.T) {
 		for i := 0; i < txnCount; i++ {
 			tx, err := SignTx(NewTransaction(uint64(i), common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
 			if err != nil {
-				t.Fatalf(err.Error())
+				fmt.Println(err)
+				t.Fatalf("failed")
 				return
 			}
 			tx.time = time.Unix(0, int64(len(keys)-start))
@@ -639,7 +662,8 @@ func testTransactionNonceOrder_byCount(txnCount int, t *testing.T) {
 		prevNonce = txn.Nonce()
 		from, err := Sender(signer, txn)
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 		fmt.Println("Cursor", txn.Hash(), from, txn.Nonce(), prevNonce)
@@ -666,7 +690,8 @@ func testTransactionNonceOrder_skip_byCount(txnCount int, skipMap map[int]bool, 
 	for i := 0; i < len(keys); i++ {
 		keys[i], err = cryptobase.SigAlg.GenerateKey()
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 	}
@@ -716,7 +741,8 @@ func testTransactionNonceOrder_skip_byCount(txnCount int, skipMap map[int]bool, 
 		prevNonce = txn.Nonce()
 		from, err := Sender(signer, txn)
 		if err != nil {
-			t.Fatalf(err.Error())
+			fmt.Println(err)
+			t.Fatalf("failed")
 			return
 		}
 		fmt.Println("Cursor", txn.Hash(), from, txn.Nonce(), prevNonce)
@@ -744,7 +770,8 @@ func TestTransactionCoding(t *testing.T) {
 	defaults.DefaultConfig.ValidateSigPubStartTime = time.Now().UTC().Unix()
 	key, err := cryptobase.SigAlg.GenerateKey()
 	if err != nil {
-		t.Fatalf("could not generate key: %v", err)
+		fmt.Println(err)
+		t.Fatalf("failed")
 	}
 	var (
 		signer    = NewLondonSigner(big.NewInt(DEFAULT_CHAIN_ID))
@@ -768,7 +795,8 @@ func TestTransactionCoding(t *testing.T) {
 
 		tx, err := SignNewTx(key, signer, txdata)
 		if err != nil {
-			t.Fatalf("could not sign transaction: %v", err)
+			fmt.Println(err)
+			t.Fatalf("failed")
 		}
 		// RLP
 		parsedTx, err := encodeDecodeBinary(tx)

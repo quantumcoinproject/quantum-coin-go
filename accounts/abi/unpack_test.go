@@ -912,7 +912,8 @@ func TestOOMMaliciousInput(t *testing.T) {
 		}
 		encb, err := hex.DecodeString(test.enc)
 		if err != nil {
-			t.Fatalf("invalid hex: %s" + test.enc)
+			fmt.Println("invalid hex: %s" + test.enc)
+			t.Fatalf("failed")
 		}
 		_, err = abi.Methods["method"].Outputs.UnpackValues(encb)
 		if err == nil {

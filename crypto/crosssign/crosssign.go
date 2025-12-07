@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/dustinxie/ecc"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -16,7 +18,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/status-im/keycard-go/hexutils"
-	"strings"
 )
 
 const (
@@ -253,11 +254,11 @@ func CrossSignVerification(signJsonData string) error {
 
 	err := json.Unmarshal([]byte(signJsonData), &signDetails)
 	if err != nil {
-		return fmt.Errorf("error 1 : " + err.Error())
+		return err
 	}
 
 	if len(signDetails.Msg) == 0 || len(signDetails.Sig) == 0 || len(signDetails.Address) == 0 {
-		return fmt.Errorf("error 1-1 : Some data is empty")
+		return errors.New("error 1-1 : Some data is empty")
 	}
 
 	msgData := []byte(signDetails.Msg)
@@ -266,10 +267,10 @@ func CrossSignVerification(signJsonData string) error {
 	addressBytes := hexToAddress(signDetails.Address)
 
 	if len(sig) != 65 {
-		return fmt.Errorf("error 2 : mismatch sign length")
+		return errors.New("error 2 : mismatch sign length")
 	}
 	if sig[64] != 27 && sig[64] != 28 {
-		return fmt.Errorf("error 3 : Sign last byte mismatch")
+		return errors.New("error 3 : Sign last byte mismatch")
 	}
 
 	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
@@ -278,21 +279,21 @@ func CrossSignVerification(signJsonData string) error {
 
 	recovered, err := sigToPub(msgHash, sign)
 	if err != nil {
-		return fmt.Errorf("error 4 : " + err.Error())
+		return errors.New("error 4 : " + err.Error())
 	}
 
 	recoveredAddressBytes := pubkeyToAddress(*recovered)
 
 	if len(addressBytes) != ERC20AddressLength {
-		return fmt.Errorf("error 5 : mismatch length addressBytes")
+		return errors.New("error 5 : mismatch length addressBytes")
 	}
 
 	if len(recoveredAddressBytes) != ERC20AddressLength {
-		return fmt.Errorf("error 6 : mismatch length recoveredAddressBytes")
+		return errors.New("error 6 : mismatch length recoveredAddressBytes")
 	}
 
 	if bytes.Compare(recoveredAddressBytes, addressBytes) != 0 {
-		return fmt.Errorf("error 7 : mismatch address bytes (recoveredAddressBytes, addressBytes) ")
+		return errors.New("error 7 : mismatch address bytes (recoveredAddressBytes, addressBytes) ")
 	}
 
 	//fmt.Println("recoveredAddress ", recoveredAddressBytes)
@@ -304,10 +305,10 @@ func CrossSignVerification(signJsonData string) error {
 
 func VerifyEthereumAddressAndMessage(ethAddress string, messageDigest []byte, signature []byte) error {
 	if len(signature) != 65 {
-		return fmt.Errorf("error 2 : mismatch sign length")
+		return errors.New("error 2 : mismatch sign length")
 	}
 	if signature[64] != 27 && signature[64] != 28 {
-		return fmt.Errorf("error 3 : Sign last byte mismatch")
+		return errors.New("error 3 : Sign last byte mismatch")
 	}
 	signature[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 	sign := make([]byte, 65)
@@ -315,7 +316,7 @@ func VerifyEthereumAddressAndMessage(ethAddress string, messageDigest []byte, si
 
 	recovered, err := sigToPub(messageDigest, sign)
 	if err != nil {
-		return fmt.Errorf("error : " + err.Error())
+		return errors.New("error : " + err.Error())
 	}
 
 	recoveredAddressBytes := pubkeyToAddress(*recovered)
@@ -323,7 +324,7 @@ func VerifyEthereumAddressAndMessage(ethAddress string, messageDigest []byte, si
 
 	if bytes.Compare(recoveredAddressBytes, addressBytes) != 0 {
 		log.Trace("VerifyEthereumAddressAndMessage mismatch", "recoveredAddressBytes", common.Bytes2Hex(recoveredAddressBytes), "addressBytes", common.Bytes2Hex(addressBytes))
-		return fmt.Errorf("error : mismatch address bytes (recoveredAddressBytes, addressBytes) ")
+		return errors.New("error : mismatch address bytes (recoveredAddressBytes, addressBytes) ")
 	}
 
 	return nil

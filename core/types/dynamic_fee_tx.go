@@ -101,6 +101,8 @@ func (tx *DynamicFeeTx) calcGasFee() *big.Int {
 		expectedGasPrice = defaultFee
 	} else if tx.SigningContext == byte(crypto.SigningContextLevel1) {
 		expectedGasPrice = common.SafeMulBigInt(defaultFee, big.NewInt(defaults.SigningContextLevel1Multiplier))
+	} else if tx.SigningContext == byte(crypto.SigningContextLevel2) {
+		expectedGasPrice = common.SafeMulBigInt(defaultFee, big.NewInt(defaults.SigningContextLevel2Multiplier))
 	} else {
 		log.Warn("verifyFields", "SigningContext", tx.SigningContext)
 		return nil
@@ -132,12 +134,17 @@ func (tx *DynamicFeeTx) verifyFields() bool {
 			algType := crypto.SignatureAlgorithmType(signature[0])
 			if tx.SigningContext == byte(crypto.SigningContextDefault) {
 				if algType != crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID && algType != crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
-					log.Debug("verifyFields signing context algtype mismatch", "tx.signingContext", tx.SigningContext, "algType", algType)
+					log.Debug("verifyFields signing context algtype mismatch a", "tx.signingContext", tx.SigningContext, "algType", algType)
 					return false
 				}
 			} else if tx.SigningContext == byte(crypto.SigningContextLevel1) {
+				if algType != crypto.MLDSA_ED25519_SLHDSA_5_ID {
+					log.Debug("verifyFields signing context algtype mismatch b", "tx.signingContext", tx.SigningContext, "algType", algType)
+					return false
+				}
+			} else if tx.SigningContext == byte(crypto.SigningContextLevel2) {
 				if algType != crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID && algType != crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
-					log.Debug("verifyFields signing context algtype mismatch", "tx.signingContext", tx.SigningContext, "algType", algType)
+					log.Debug("verifyFields signing context algtype mismatch c", "tx.signingContext", tx.SigningContext, "algType", algType)
 					return false
 				}
 			} else {

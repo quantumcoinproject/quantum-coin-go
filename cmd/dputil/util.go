@@ -35,8 +35,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv1"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
-	"github.com/quantumcoinproject/quantum-coin-go/token"
 	"github.com/quantumcoinproject/quantum-coin-go/token/tokenconversion"
+	"github.com/quantumcoinproject/quantum-coin-go/tokenv2"
 )
 
 const GAS_LIMIT_ENV = "GAS_LIMIT"
@@ -1593,7 +1593,7 @@ func transferTokens(contractAddr string, toAddr string, tokenTransferAmount *big
 	txnOpts.Value = big.NewInt(0)
 
 	var tx *types.Transaction
-	contract, err := token.NewToken(contractAddress, client)
+	contract, err := tokenv2.NewTokenv2(contractAddress, client)
 	if err != nil {
 		return err
 	}
@@ -1641,8 +1641,7 @@ func createToken(tokenName string, tokenSymbol string, tokenTotalSupply *big.Int
 	txnOpts.Value = big.NewInt(0)
 
 	var tx *types.Transaction
-	contractAddress, tx, _, err := token.DeployToken(txnOpts, client, tokenName, tokenSymbol,
-		tokenTotalSupply, burnPercentDivisor, tokenDecimals, fromAddress)
+	contractAddress, tx, _, err := tokenv2.DeployTokenv2(txnOpts, client, tokenName, tokenSymbol, tokenTotalSupply, tokenDecimals, fromAddress)
 	if err != nil {
 		return err
 	}
@@ -1662,7 +1661,7 @@ func getTokenBalance(accountAddress common.Address, contractAddress common.Addre
 		return nil, err
 	}
 
-	instance, err := token.NewToken(contractAddress, client)
+	instance, err := tokenv2.NewTokenv2(contractAddress, client)
 	if err != nil {
 		return nil, err
 	}
@@ -1673,6 +1672,31 @@ func getTokenBalance(accountAddress common.Address, contractAddress common.Addre
 	}
 
 	fmt.Println("tokenBalance", "accountAddress", accountAddress, "contractAddress", contractAddress, "tokens", weiToEther(tokenBalance).String(), "wei", tokenBalance)
+
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return tokenBalance, nil
+}
+
+func getTokenAllowance(accountAddress common.Address, contractAddress common.Address, spenderAddress common.Address) (*big.Int, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+
+	instance, err := tokenv2.NewTokenv2(contractAddress, client)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenBalance, err := instance.Allowance(nil, accountAddress, spenderAddress)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println("tokenAllowance", "accountAddress", accountAddress, "contractAddress", contractAddress, "spenderAddress", spenderAddress, "tokens", weiToEther(tokenBalance).String(), "wei", tokenBalance)
 
 	fmt.Println()
 
@@ -1795,7 +1819,7 @@ func multiTransferTokensInner(contractAddr common.Address, toAddressList []commo
 	fmt.Println()
 
 	var tx *types.Transaction
-	contract, err := token.NewToken(contractAddr, client)
+	contract, err := tokenv2.NewTokenv2(contractAddr, client)
 	if err != nil {
 		return err
 	}
@@ -2002,7 +2026,7 @@ func renounceTokenOwnership(contractAddr string, key *signaturealgorithm.Private
 	txnOpts.Value = big.NewInt(0)
 
 	var tx *types.Transaction
-	contract, err := token.NewToken(contractAddress, client)
+	contract, err := tokenv2.NewTokenv2(contractAddress, client)
 	if err != nil {
 		return err
 	}
@@ -2034,4 +2058,57 @@ func listConversionDetails() (*proofofstake.ConversionSummary, error) {
 	}
 
 	return summary, nil
+}
+
+func tokenApprove(tokenAddress common.Address, spenderAddress common.Address, amount int64, key *signaturealgorithm.PrivateKey) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+
+	fromAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+
+	if err != nil {
+		return err
+	}
+
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	txnOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(123123))
+
+	if err != nil {
+		return err
+	}
+
+	txnOpts.From = fromAddress
+	txnOpts.Nonce = big.NewInt(int64(nonce))
+	txnOpts.GasLimit, err = getGasLimit(uint64(100000))
+	if err != nil {
+		fmt.Println("gas limit error", err)
+		return err
+	}
+
+	txnOpts.Value = big.NewInt(0)
+
+	var tx *types.Transaction
+	contract, err := tokenv2.NewTokenv2(tokenAddress, client)
+	if err != nil {
+		return err
+	}
+
+	tx, err = contract.Approve(txnOpts, spenderAddress, params.EtherToWei(big.NewInt(amount)))
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Your request to approve tokens has been added to the queue for processing. Please check your account balance after 10 minutes.")
+	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash(), "tokenAddress", tokenAddress, "fromAddress", fromAddress, "spenderAddress", spenderAddress)
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return nil
 }
