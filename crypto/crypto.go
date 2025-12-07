@@ -32,6 +32,8 @@ const MLDSA_ED25519_SLHDSA_COMPACT_ID SignatureAlgorithmType = 3
 
 const MLDSA_ED25519_SLHDSA_FULL_ID SignatureAlgorithmType = 4
 
+const MLDSA_ED25519_SLHDSA_5_ID SignatureAlgorithmType = 5
+
 type SigningContext byte
 
 const SigningContextDefault SigningContext = 0 //DILITHIUM_ED25519_SPHINCS_COMPACT_ID, MLDSA_ED25519_SLHDSA_COMPACT_ID
