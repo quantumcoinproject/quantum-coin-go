@@ -672,7 +672,13 @@ func GetConversionMessage() error {
 		return err
 	}
 
-	qAddr, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(key.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	qAddr, err := sigAlg.PublicKeyToAddress(&key.PublicKey)
 	if err != nil {
 		return err
 	}
@@ -755,7 +761,13 @@ func ConvertToCoins() error {
 		return err
 	}
 
-	qAddr, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(key.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	qAddr, err := sigAlg.PublicKeyToAddress(&key.PublicKey)
 	if err != nil {
 		return err
 	}
@@ -867,7 +879,13 @@ func Deposit() error {
 		return errors.New("error decrypting depositor key " + err.Error())
 	}
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -905,7 +923,7 @@ func Deposit() error {
 		return errors.New("error decrypting validator key " + err.Error())
 	}
 
-	valAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&valKey.PublicKey)
+	valAddressFromKey, err := sigAlg.PublicKeyToAddress(&valKey.PublicKey)
 	if err != nil {
 		return errors.New("validator PublicKeyToAddress " + err.Error())
 	}
@@ -968,7 +986,13 @@ func InitiateWithdrawal() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1026,7 +1050,13 @@ func CompleteWithdrawal() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1124,7 +1154,13 @@ func InitiateWithdrawalRewards() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1219,7 +1255,13 @@ func InitiatePartialWithdrawal() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1277,7 +1319,13 @@ func CompletePartialWithdrawal() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1336,7 +1384,13 @@ func IncreaseDeposit() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1417,7 +1471,12 @@ func ChangeValidator() error {
 		return errors.New("error decrypting validator key " + err.Error())
 	}
 
-	valAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&valKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(valKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+	valAddressFromKey, err := sigAlg.PublicKeyToAddress(&valKey.PublicKey)
 	if err != nil {
 		return errors.New("validator PublicKeyToAddress " + err.Error())
 	}
@@ -1437,7 +1496,7 @@ func ChangeValidator() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1509,7 +1568,13 @@ func PauseValidation() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1567,7 +1632,13 @@ func ResumeValidation() error {
 	}
 	fmt.Println()
 
-	depAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&depKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(depKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	depAddressFromKey, err := sigAlg.PublicKeyToAddress(&depKey.PublicKey)
 	if err != nil {
 		return errors.New("depositor public key to address " + err.Error())
 	}
@@ -1643,7 +1714,13 @@ func TransferTokens() error {
 	}
 	fmt.Println()
 
-	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(fromKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	fromAddressFromKey, err := sigAlg.PublicKeyToAddress(&fromKey.PublicKey)
 	if err != nil {
 		return errors.New("from account public key to address " + err.Error())
 	}
@@ -1718,7 +1795,13 @@ func CreateToken() error {
 	}
 	fmt.Println()
 
-	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(fromKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	fromAddressFromKey, err := sigAlg.PublicKeyToAddress(&fromKey.PublicKey)
 	if err != nil {
 		return errors.New("from account public key to address " + err.Error())
 	}
@@ -1818,7 +1901,13 @@ func MultiTransferTokens() error {
 
 	fmt.Println()
 
-	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(fromKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	fromAddressFromKey, err := sigAlg.PublicKeyToAddress(&fromKey.PublicKey)
 	if err != nil {
 		return errors.New("from account public key to address " + err.Error())
 	}
@@ -1937,7 +2026,13 @@ func CreateTokenConversionContract() error {
 	}
 	fmt.Println()
 
-	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(fromKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	fromAddressFromKey, err := sigAlg.PublicKeyToAddress(&fromKey.PublicKey)
 	if err != nil {
 		return errors.New("from account public key to address " + err.Error())
 	}
@@ -2002,7 +2097,13 @@ func SubmitTokenBurnProof() error {
 	}
 	fmt.Println()
 
-	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(fromKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	fromAddressFromKey, err := sigAlg.PublicKeyToAddress(&fromKey.PublicKey)
 	if err != nil {
 		return errors.New("from account public key to address " + err.Error())
 	}
@@ -2290,7 +2391,13 @@ func RenounceTokenOwnerShip() error {
 	}
 	fmt.Println()
 
-	fromAddressFromKey, err := cryptobase.SigAlg.PublicKeyToAddress(&fromKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(fromKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	fromAddressFromKey, err := sigAlg.PublicKeyToAddress(&fromKey.PublicKey)
 	if err != nil {
 		return errors.New("from account public key to address " + err.Error())
 	}

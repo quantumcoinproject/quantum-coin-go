@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"math/big"
 	"mime"
 	"reflect"
@@ -30,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -626,11 +627,17 @@ func (api *SignerAPI) EcRecover(ctx context.Context, data hexutil.Bytes, sig hex
 	// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 
 	hash := accounts.TextHash(data)
-	rpk, err := cryptobase.SigAlg.PublicKeyFromSignature(hash, sig)
+	sigAlgPtr, err := cryptobase.SigAlgFromSignature(hash, sig)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	sigAlg := *sigAlgPtr
+
+	rpk, err := sigAlg.PublicKeyFromSignature(hash, sig)
 	if err != nil {
 		return common.Address{}, err
 	}
-	return cryptobase.SigAlg.PublicKeyToAddress(&*rpk)
+	return sigAlg.PublicKeyToAddress(&*rpk)
 }
 
 // UnmarshalValidatorData converts the bytes input to typed data

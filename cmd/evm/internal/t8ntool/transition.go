@@ -19,12 +19,13 @@ package t8ntool
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io/ioutil"
 	"math/big"
 	"os"
 	"path"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -241,7 +242,12 @@ func (t *txWithKey) UnmarshalJSON(input []byte) error {
 	}
 	if key.Key != nil {
 		k := key.Key.Hex()[2:]
-		if oqsKey, err := cryptobase.SigAlg.HexToPrivateKey(k); err != nil {
+		sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKeyHex(k)
+		if err != nil {
+			return err
+		}
+		sigAlg := *sigAlgPtr
+		if oqsKey, err := sigAlg.HexToPrivateKey(k); err != nil {
 			return err
 		} else {
 			t.key = oqsKey

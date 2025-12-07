@@ -387,7 +387,14 @@ func (ks *KeyStore) TimedUnlock(a accounts.Account, passphrase string, timeout t
 		u = &unlocked{Key: key}
 	}
 	ks.unlocked[a.Address] = u
-	pubAddr, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PrivateKey.PublicKey)
+
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(key.PrivateKey.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	pubAddr, err := sigAlg.PublicKeyToAddress(&key.PrivateKey.PublicKey)
 	if err != nil {
 		return err
 	}
@@ -491,7 +498,10 @@ func (ks *KeyStore) ImportKey(priv *signaturealgorithm.PrivateKey, passphrase st
 	ks.importMu.Lock()
 	defer ks.importMu.Unlock()
 
-	key := newKeyFromSigAlgKey(priv)
+	key, err := newKeyFromSigAlgKey(priv)
+	if err != nil {
+		return accounts.Account{}, err
+	}
 	if ks.cache.hasAddress(key.Address) {
 		return accounts.Account{
 			Address: key.Address,
@@ -533,5 +543,11 @@ func (ks *KeyStore) ImportWalletKey(keyJSON []byte, passphrase string) (accounts
 
 // zeroKey zeroes a private key in memory.
 func zeroKey(k *signaturealgorithm.PrivateKey) {
-	cryptobase.SigAlg.Zeroize(k)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(k.PriData)
+	if err != nil {
+		return
+	}
+	sigAlg := *sigAlgPtr
+
+	sigAlg.Zeroize(k)
 }

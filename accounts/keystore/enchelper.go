@@ -19,16 +19,10 @@ package keystore
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
-	"fmt"
+
 	"github.com/google/uuid"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"golang.org/x/crypto/pbkdf2"
 )
 
 // creates a Key and stores that in the given KeyStore by decrypting the key JSON
@@ -53,60 +47,7 @@ func importWalletKey(keyStore keyStore, keyJSON []byte, password string) (accoun
 }
 
 func decryptWalletKey(fileContent []byte, password string) (key *Key, err error) {
-	keyStructure := struct {
-		EncSeed string
-		EthAddr string
-		Email   string
-		BtcAddr string
-	}{}
-	err = json.Unmarshal(fileContent, &keyStructure)
-	if err != nil {
-		return nil, err
-	}
-	encSeedBytes, err := hex.DecodeString(keyStructure.EncSeed)
-	if err != nil {
-		return nil, errors.New("invalid hex in encSeed")
-	}
-	if len(encSeedBytes) < 16 {
-		return nil, errors.New("invalid encSeed, too short")
-	}
-	iv := encSeedBytes[:16]
-	cipherText := encSeedBytes[16:]
-	/*
-		See https://github.com/ethereum/pyethsaletool
-
-		pyethsaletool generates the encryption key from password by
-		2000 rounds of PBKDF2 with HMAC-SHA-256 using password as salt (:().
-		16 byte key length within PBKDF2 and resulting key is used as AES key
-	*/
-	passBytes := []byte(password)
-	derivedKey := pbkdf2.Key(passBytes, passBytes, 2000, 32, sha256.New)
-	plainText, err := aesCBCDecrypt(derivedKey, cipherText, iv)
-	if err != nil {
-		return nil, err
-	}
-	ethPriv := crypto.Keccak256(plainText)
-	ecKey, err := cryptobase.SigAlg.DeserializePrivateKey(ethPriv)
-	if err != nil {
-		return nil, err
-	}
-
-	pubKeyAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&ecKey.PublicKey)
-	if err != nil {
-		return nil, err
-	}
-
-	key = &Key{
-		Id:         uuid.UUID{},
-		Address:    pubKeyAddress,
-		PrivateKey: ecKey,
-	}
-	derivedAddr := hex.EncodeToString(key.Address.Bytes()) // needed because .Hex() gives leading "0x"
-	expectedAddr := keyStructure.EthAddr
-	if derivedAddr != expectedAddr {
-		err = fmt.Errorf("decrypted addr '%s' not equal to expected addr '%s'", derivedAddr, expectedAddr)
-	}
-	return key, err
+	return nil, errors.New("not implement")
 }
 
 func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {

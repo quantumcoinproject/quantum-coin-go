@@ -21,9 +21,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io/ioutil"
 	"math/big"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -119,7 +120,13 @@ func fetchKeystore(am *accounts.Manager) *keystore.KeyStore {
 // Example call (should fail on password too short)
 // {"jsonrpc":"2.0","method":"clef_importRawKey","params":["1111111111111111111111111111111111111111111111111111111111111111","test"], "id":6}
 func (s *UIServerAPI) ImportRawKey(privkey string, password string) (accounts.Account, error) {
-	key, err := cryptobase.SigAlg.HexToPrivateKey(privkey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKeyHex(privkey)
+	if err != nil {
+		return accounts.Account{}, err
+	}
+	sigAlg := *sigAlgPtr
+
+	key, err := sigAlg.HexToPrivateKey(privkey)
 	if err != nil {
 		return accounts.Account{}, err
 	}

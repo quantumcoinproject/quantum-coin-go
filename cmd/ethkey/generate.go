@@ -18,11 +18,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
 	"github.com/google/uuid"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -71,9 +72,12 @@ If you want to encrypt an existing private key, it can be specified by setting
 
 		var privateKey *signaturealgorithm.PrivateKey
 		var err error
+
 		if file := ctx.String("privatekey"); file != "" {
-			// Load private key from file.
-			privateKey, err = cryptobase.SigAlg.LoadPrivateKeyFromFile(file)
+			privateKey, err = cryptobase.LoadPrivateKeyFromFile(file)
+			if err != nil {
+				return err
+			}
 			if err != nil {
 				utils.Fatalf("Can't load private key: %v", err)
 			}

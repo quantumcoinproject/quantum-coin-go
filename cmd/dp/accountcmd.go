@@ -19,8 +19,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io/ioutil"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -347,7 +348,7 @@ func accountImport(ctx *cli.Context) error {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	key, err := cryptobase.SigAlg.LoadPrivateKeyFromFile(keyfile)
+	key, err := cryptobase.LoadPrivateKeyFromFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Failed to load the private key from file: %v", err)
 	}

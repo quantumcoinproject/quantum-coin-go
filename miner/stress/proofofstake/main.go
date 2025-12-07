@@ -19,13 +19,14 @@ package main
 
 import (
 	"bytes"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -110,8 +111,14 @@ func main() {
 		index := rand.Intn(len(faucets))
 		backend := nodes[index%len(nodes)]
 
+		sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(faucets[index].PriData)
+		if err != nil {
+			panic(err)
+		}
+		sigAlg := *sigAlgPtr
+
 		// Create a self transaction and inject into the pool
-		pubKeyAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&faucets[index].PublicKey)
+		pubKeyAddress, err := sigAlg.PublicKeyToAddress(&faucets[index].PublicKey)
 		if err != nil {
 			panic(err)
 		}
@@ -144,7 +151,13 @@ func makeGenesis(faucets []*signaturealgorithm.PrivateKey, sealers []*signaturea
 
 	genesis.Alloc = core.GenesisAlloc{}
 	for _, faucet := range faucets {
-		pubKeyAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&faucet.PublicKey)
+		sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(faucet.PriData)
+		if err != nil {
+			panic(err)
+		}
+		sigAlg := *sigAlgPtr
+
+		pubKeyAddress, err := sigAlg.PublicKeyToAddress(&faucet.PublicKey)
 		if err != nil {
 			panic(err)
 		}
@@ -155,7 +168,13 @@ func makeGenesis(faucets []*signaturealgorithm.PrivateKey, sealers []*signaturea
 	// Sort the signers and embed into the extra-data section
 	signers := make([]common.Address, len(sealers))
 	for i, sealer := range sealers {
-		pubKeyAddr, err := cryptobase.SigAlg.PublicKeyToAddress(&sealer.PublicKey)
+		sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(sealer.PriData)
+		if err != nil {
+			panic(err)
+		}
+		sigAlg := *sigAlgPtr
+
+		pubKeyAddr, err := sigAlg.PublicKeyToAddress(&sealer.PublicKey)
 		if err != nil {
 			panic(err)
 		}

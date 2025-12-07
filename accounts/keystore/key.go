@@ -20,13 +20,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
 	"github.com/google/uuid"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
@@ -90,7 +91,13 @@ type cipherparamsJSON struct {
 }
 
 func (k *Key) MarshalJSON() (j []byte, err error) {
-	priKeyData, err := cryptobase.SigAlg.SerializePrivateKey(k.PrivateKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(k.PrivateKey.PriData)
+	if err != nil {
+		return nil, err
+	}
+	sigAlg := *sigAlgPtr
+
+	priKeyData, err := sigAlg.SerializePrivateKey(k.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -122,14 +129,25 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	if err != nil {
 		return err
 	}
-	privkey, err := cryptobase.SigAlg.HexToPrivateKey(keyJSON.PrivateKey)
+
+	priKeyBytes, err := hex.DecodeString(keyJSON.PrivateKey)
+	if err != nil {
+		return err
+	}
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(priKeyBytes)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	privkey, err := sigAlg.HexToPrivateKey(keyJSON.PrivateKey)
 	if err != nil {
 		return err
 	}
 
 	k.Address = common.BytesToAddress(addr)
 
-	pubAddr, err := cryptobase.SigAlg.PublicKeyToAddress(&privkey.PublicKey)
+	pubAddr, err := sigAlg.PublicKeyToAddress(&privkey.PublicKey)
 	if err != nil {
 		return err
 	}
@@ -142,13 +160,19 @@ func (k *Key) UnmarshalJSON(j []byte) (err error) {
 	return nil
 }
 
-func newKeyFromSigAlgKey(privateKey *signaturealgorithm.PrivateKey) *Key {
+func newKeyFromSigAlgKey(privateKey *signaturealgorithm.PrivateKey) (*Key, error) {
 	id, err := uuid.NewRandom()
 	if err != nil {
 		panic(fmt.Sprintf("Could not create random uuid: %v", err))
 	}
 
-	pubKeyAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&privateKey.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(privateKey.PriData)
+	if err != nil {
+		return nil, err
+	}
+	sigAlg := *sigAlgPtr
+
+	pubKeyAddress, err := sigAlg.PublicKeyToAddress(&privateKey.PublicKey)
 	if err != nil {
 		panic(fmt.Sprintf("PubkeyToAddress: %v", err))
 	}
@@ -158,7 +182,7 @@ func newKeyFromSigAlgKey(privateKey *signaturealgorithm.PrivateKey) *Key {
 		Address:    pubKeyAddress,
 		PrivateKey: privateKey,
 	}
-	return key
+	return key, nil
 }
 
 func newKey(rand io.Reader) (*Key, error) {
@@ -166,7 +190,7 @@ func newKey(rand io.Reader) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	return newKeyFromSigAlgKey(privateKey), nil
+	return newKeyFromSigAlgKey(privateKey)
 }
 
 func storeNewKey(ks keyStore, rand io.Reader, auth string) (*Key, accounts.Account, error) {
