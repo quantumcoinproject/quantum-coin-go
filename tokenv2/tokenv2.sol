@@ -73,7 +73,6 @@ contract TokenDetailed is IERC20 {
     ) {
         _name = tokenName;
         _symbol = tokenSymbol;
-        _totalSupply = tokenTotalSupply;
         _decimals = tokenDecimals;
         _owner = ownerAccount;
 
@@ -151,7 +150,6 @@ contract TokenDetailed is IERC20 {
     }
 
     function _mint(address account, uint256 amount) internal {
-        require(_totalSupply == 0, "Token: already minted");
         require(amount != 0, "Token: mint amount must be greater than zero");
         _totalSupply = _totalSupply.add(amount);
         _balances[account] = _balances[account].add(amount);
