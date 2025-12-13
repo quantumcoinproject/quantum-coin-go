@@ -431,6 +431,18 @@ func GetTransaction(txnHash string) (string, *types.Receipt, error) {
 	return txString, receipt, nil
 }
 
+func peerList() ([]*ethclient.RpcPeer, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	peers, err := client.PeerList(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	return peers, nil
+}
+
 // ParseBigFloat parse string value to big.Float
 func ParseBigFloat(value string) (*big.Float, error) {
 	f := new(big.Float)

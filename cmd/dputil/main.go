@@ -155,6 +155,9 @@ func printHelp() {
 	fmt.Println("dputil sendrawtransaction RAW_TX_HEX")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil peerlist")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -196,6 +199,8 @@ func main() {
 
 	if os.Args[1] == "balance" {
 		balance()
+	} else if os.Args[1] == "peerlist" {
+		getPeerList()
 	} else if os.Args[1] == "transfercoins" {
 		sendTxn()
 	} else if os.Args[1] == "txn" {
@@ -595,6 +600,51 @@ func sendTxn() {
 	}
 
 	fmt.Println("TxnHash", txHash)
+}
+
+func getPeerList() {
+	if len(os.Args) < 2 {
+		printHelp()
+		return
+	}
+
+	peers, err := peerList()
+	if err != nil {
+		fmt.Println("GetTransaction Error", err)
+		return
+	}
+	if peers != nil {
+		peerJson, err := json.Marshal(peers)
+		if err != nil {
+			fmt.Printf("%+v\n", peerJson)
+			return
+		}
+		fmt.Println("")
+		fmt.Println("======================Peers======================")
+		prettyPeers, err := Prettify(string(peerJson))
+		if err != nil {
+			fmt.Printf("%+v\n", peers)
+			return
+		}
+		fmt.Print(prettyPeers)
+		fmt.Println("")
+		fmt.Println("======================")
+		fmt.Println("id,remote ip,inbound")
+		for _, peer := range peers {
+			line := fmt.Sprintf("\n%s,%s,%v", peer.ID, strings.Split(peer.Network.RemoteAddress, ":")[0], peer.Network.Inbound)
+			fmt.Println(line)
+		}
+		fmt.Println("")
+		fmt.Println("==================")
+		fmt.Println("remote ip list")
+		fmt.Println("==================")
+		for _, peer := range peers {
+			line := fmt.Sprintf("\n%s", strings.Split(peer.Network.RemoteAddress, ":")[0])
+			fmt.Println(line)
+		}
+	} else {
+		fmt.Println("peers is nil")
+	}
 }
 
 func getTxn() {
