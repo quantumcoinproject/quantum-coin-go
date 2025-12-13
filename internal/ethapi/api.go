@@ -339,7 +339,13 @@ func fetchKeystore(am *accounts.Manager) (*keystore.KeyStore, error) {
 // ImportRawKey stores the given hex encoded key into the key directory,
 // encrypting it with the passphrase.
 func (s *PrivateAccountAPI) ImportRawKey(privkey string, password string) (common.Address, error) {
-	key, err := cryptobase.SigAlg.HexToPrivateKey(privkey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKeyHex(privkey)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	sigAlg := *sigAlgPtr
+
+	key, err := sigAlg.HexToPrivateKey(privkey)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -497,11 +503,17 @@ func (s *PrivateAccountAPI) Sign(ctx context.Context, data hexutil.Bytes, addr c
 // https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_ecRecover
 func (s *PrivateAccountAPI) EcRecover(ctx context.Context, data, sig hexutil.Bytes) (common.Address, error) {
 
-	rpk, err := cryptobase.SigAlg.PublicKeyFromSignature(accounts.TextHash(data), sig)
+	sigAlgPtr, err := cryptobase.SigAlgFromSignature(accounts.TextHash(data), sig)
+	if err != nil {
+		return [32]byte{}, err
+	}
+	sigAlg := *sigAlgPtr
+
+	rpk, err := sigAlg.PublicKeyFromSignature(accounts.TextHash(data), sig)
 	if err != nil {
 		return common.Address{}, err
 	}
-	pubKeyAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&*rpk)
+	pubKeyAddress, err := sigAlg.PublicKeyToAddress(&*rpk)
 	if err != nil {
 		return common.Address{}, err
 	}

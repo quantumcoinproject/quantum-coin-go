@@ -20,11 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io"
 	"io/ioutil"
 	"math/big"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -89,7 +90,13 @@ func NewKeyStoreTransactor(keystore *keystore.KeyStore, account accounts.Account
 // Deprecated: Use NewKeyedTransactorWithChainID instead.
 func NewKeyedTransactor(key *signaturealgorithm.PrivateKey) *TransactOpts {
 	log.Warn("WARNING: NewKeyedTransactor has been deprecated in favour of NewKeyedTransactorWithChainID")
-	keyAddr, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(key.PriData)
+	if err != nil {
+		return nil
+	}
+	sigAlg := *sigAlgPtr
+
+	keyAddr, err := sigAlg.PublicKeyToAddress(&key.PublicKey)
 	if err != nil {
 		fmt.Errorf("error in PubkeyToAddress")
 		return nil
@@ -162,7 +169,13 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 // NewKeyedTransactorWithChainID is a utility method to easily create a transaction signer
 // from a single private key.
 func NewKeyedTransactorWithChainID(key *signaturealgorithm.PrivateKey, chainID *big.Int) (*TransactOpts, error) {
-	keyAddr, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(key.PriData)
+	if err != nil {
+		return nil, err
+	}
+	sigAlg := *sigAlgPtr
+
+	keyAddr, err := sigAlg.PublicKeyToAddress(&key.PublicKey)
 	if err != nil {
 		return nil, err
 	}

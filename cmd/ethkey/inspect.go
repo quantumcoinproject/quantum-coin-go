@@ -19,8 +19,9 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io/ioutil"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
@@ -68,7 +69,13 @@ make sure to use this feature with great caution!`,
 
 		// Output all relevant information we can retrieve.
 		showPrivate := ctx.Bool("private")
-		pubKey, err := cryptobase.SigAlg.SerializePublicKey(&key.PrivateKey.PublicKey)
+		sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(key.PrivateKey.PriData)
+		if err != nil {
+			return err
+		}
+		sigAlg := *sigAlgPtr
+
+		pubKey, err := sigAlg.SerializePublicKey(&key.PrivateKey.PublicKey)
 		if err != nil {
 			utils.Fatalf("SerializePublicKey", err)
 		}
@@ -77,7 +84,7 @@ make sure to use this feature with great caution!`,
 			PublicKey: hex.EncodeToString(pubKey),
 		}
 		if showPrivate {
-			priKey, err := cryptobase.SigAlg.SerializePrivateKey(key.PrivateKey)
+			priKey, err := sigAlg.SerializePrivateKey(key.PrivateKey)
 			if err != nil {
 				utils.Fatalf("SerializePrivateKey", err)
 			}

@@ -1,8 +1,13 @@
 package cryptobase
 
 import (
+	"bufio"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"io"
 	"math/big"
+	"os"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -17,7 +22,6 @@ import (
 )
 
 var SigAlg = hybrideds.CreateHybridedsSig()
-
 var SigAlgHybridEds = hybrideds.CreateHybridedsSig()
 var SigAlgHybridEdsFull = hybridedsfull.CreateHybridedsfullSig()
 var SigAlgHybridMlDsaEddsaSlhDsaFull = hybrideddsamldsaslhdsafull.CreateHybridEddsaMldsaSlhdsaFullSig()
@@ -278,4 +282,141 @@ func GetSigningContext() crypto.SigningContext {
 	} else {
 		return crypto.SigningContextDefault
 	}
+}
+
+func GetSigAlgForPrivateKeyHex(privateKeyHex string) (*signaturealgorithm.SignatureAlgorithm, error) {
+	privateKey, err := hex.DecodeString(privateKeyHex)
+	if err != nil {
+		return nil, err
+	}
+
+	length := len(privateKey)
+	if length == SigAlg.PrivateKeyLength() {
+		var s signaturealgorithm.SignatureAlgorithm
+		s = &SigAlgHybridEds
+		return &s, nil
+	} else if len(privateKey) == SigAlgHybridMlDsaEddsaSlhDsa5.PrivateKeyLength() {
+		var s signaturealgorithm.SignatureAlgorithm
+		s = &SigAlgHybridMlDsaEddsaSlhDsa5
+		return &s, nil
+	} else {
+		return nil, errors.New("invalid private key length")
+	}
+}
+
+func GetSigAlgForPrivateKey(privateKey []byte) (*signaturealgorithm.SignatureAlgorithm, error) {
+	length := len(privateKey)
+	if length == SigAlg.PrivateKeyLength() {
+		var s signaturealgorithm.SignatureAlgorithm
+		s = &SigAlgHybridEds
+		return &s, nil
+	} else if len(privateKey) == SigAlgHybridMlDsaEddsaSlhDsa5.PrivateKeyLength() {
+		var s signaturealgorithm.SignatureAlgorithm
+		s = &SigAlgHybridMlDsaEddsaSlhDsa5
+		return &s, nil
+	} else {
+		return nil, errors.New("invalid private key length")
+	}
+}
+
+// readASCII reads into 'buf', stopping when the buffer is full or
+// when a non-printable control character is encountered.
+func readASCII(buf []byte, r *bufio.Reader) (n int, err error) {
+	for ; n < len(buf); n++ {
+		buf[n], err = r.ReadByte()
+		switch {
+		case err == io.EOF || buf[n] < '!':
+			return n, nil
+		case err != nil:
+			return n, err
+		}
+	}
+	return n, nil
+}
+
+// checkKeyFileEnd skips over additional newlines at the end of a key file.
+func checkKeyFileEnd(r *bufio.Reader) error {
+	for i := 0; ; i++ {
+		b, err := r.ReadByte()
+		switch {
+		case err == io.EOF:
+			return nil
+		case err != nil:
+			return err
+		case b != '\n' && b != '\r':
+			return fmt.Errorf("invalid character %q at end of key file", b)
+		case i >= 2:
+			return errors.New("key file too long, want 64 hex characters")
+		}
+	}
+}
+
+func LoadPrivateKeyFromFile(file string) (*signaturealgorithm.PrivateKey, error) {
+	fd, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+
+	r := bufio.NewReader(fd)
+	buf := make([]byte, 7680*2) //max size possible based on hybridedmldsaslhdsa5.PrivateKeySize
+	n, err := readASCII(buf, r)
+	if err != nil {
+		return nil, err
+	} else if n != len(buf) {
+		return nil, fmt.Errorf("key file too short, want oqs hex character")
+	}
+	if err := checkKeyFileEnd(r); err != nil {
+		return nil, err
+	}
+	b, err := hex.DecodeString(string(buf))
+	if err != nil {
+		return nil, err
+	}
+	sigAlgPtr, err := GetSigAlgForPrivateKey(b)
+	if err != nil {
+		return nil, err
+	}
+	sigAlg := *sigAlgPtr
+
+	return sigAlg.HexToPrivateKey(string(buf))
+}
+
+func SigAlgFromSignature(digestHash []byte, sig []byte) (algorithm *signaturealgorithm.SignatureAlgorithm, err error) {
+	sigBytes, _, err := common.ExtractTwoParts(sig)
+	if err != nil {
+		return nil, err
+	}
+	if len(sigBytes) < 1 {
+		return nil, err
+	}
+	algType := crypto.SignatureAlgorithmType(sigBytes[0])
+	var s signaturealgorithm.SignatureAlgorithm
+	if algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID {
+		s = &SigAlgHybridEds
+	} else if algType == crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID {
+		s = &SigAlgHybridEdsFull
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
+		s = &SigAlgHybridMlDsaEddsaSlhDsaCompact
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
+		s = &SigAlgHybridMlDsaEddsaSlhDsaFull
+	} else if algType == crypto.MLDSA_ED25519_SLHDSA_5_ID {
+		s = &SigAlgHybridMlDsaEddsaSlhDsa5
+	} else {
+		return nil, errors.New("CombinePublicKeySignature invalid signature type")
+	}
+	return &s, nil
+}
+
+func GetSigAlgForKeyType(keyType int) (*signaturealgorithm.SignatureAlgorithm, error) {
+	var s signaturealgorithm.SignatureAlgorithm
+	if keyType >= 0 && keyType <= 4 {
+		s = &SigAlgHybridMlDsaEddsaSlhDsaCompact
+	} else if keyType == 5 {
+		s = &SigAlgHybridMlDsaEddsaSlhDsa5
+	} else {
+		return nil, errors.New("invalid key type")
+	}
+
+	return &s, nil
 }

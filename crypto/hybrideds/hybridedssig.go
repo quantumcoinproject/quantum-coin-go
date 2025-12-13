@@ -6,6 +6,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"math/big"
+	"os"
+	"time"
+
 	"github.com/quantumcoinproject/circl/sign/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -14,11 +20,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"io"
-	"io/ioutil"
-	"math/big"
-	"os"
-	"time"
 )
 
 const CRYPTO_SIGNATURE_BYTES = hybrideds.CompactSigLength

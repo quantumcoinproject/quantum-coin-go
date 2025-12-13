@@ -19,8 +19,9 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io/ioutil"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -53,7 +54,6 @@ passwordfile as argument containing the wallet password in plaintext.`,
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
-					utils.LightKDFFlag,
 				},
 				Description: `
 	geth wallet [options] /path/to/my/presale.wallet
@@ -109,7 +109,7 @@ Print a short summary of all accounts`,
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
-					utils.LightKDFFlag,
+					utils.KeyTypeFlag,
 				},
 				Description: `
     geth account new
@@ -134,7 +134,6 @@ password to file or expose in any other way.
 				Flags: []cli.Flag{
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
-					utils.LightKDFFlag,
 				},
 				Description: `
     geth account update <address>
@@ -163,7 +162,6 @@ changing your password is only possible interactively.
 					utils.DataDirFlag,
 					utils.KeyStoreDirFlag,
 					utils.PasswordFileFlag,
-					utils.LightKDFFlag,
 				},
 				ArgsUsage: "<keyFile>",
 				Description: `
@@ -283,7 +281,8 @@ func accountCreate(ctx *cli.Context) error {
 
 	password := utils.GetPassPhraseWithList("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
 
-	account, err := keystore.StoreKey(keydir, password, scryptN, scryptP)
+	keyType := ctx.GlobalInt(utils.KeyTypeFlag.Name)
+	account, err := keystore.StoreKey(keydir, password, scryptN, scryptP, keyType)
 
 	if err != nil {
 		utils.Fatalf("Failed to create account: %v", err)
@@ -347,7 +346,7 @@ func accountImport(ctx *cli.Context) error {
 	if len(keyfile) == 0 {
 		utils.Fatalf("keyfile must be given as argument")
 	}
-	key, err := cryptobase.SigAlg.LoadPrivateKeyFromFile(keyfile)
+	key, err := cryptobase.LoadPrivateKeyFromFile(keyfile)
 	if err != nil {
 		utils.Fatalf("Failed to load the private key from file: %v", err)
 	}

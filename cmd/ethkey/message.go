@@ -19,8 +19,9 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"io/ioutil"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/cmd/utils"
@@ -113,15 +114,20 @@ It is possible to refer to a file containing the message.`,
 			utils.Fatalf("Signature encoding is not hexadecimal: %v", err)
 		}
 
-		recoveredPubkey, err := cryptobase.SigAlg.PublicKeyFromSignature(signHash(message), signature)
+		sigAlgPtr, err := cryptobase.SigAlgFromSignature(signHash(message), signature)
+		if err != nil {
+			return err
+		}
+		sigAlg := *sigAlgPtr
+		recoveredPubkey, err := sigAlg.PublicKeyFromSignature(signHash(message), signature)
 		if err != nil || recoveredPubkey == nil {
 			utils.Fatalf("Signature verification failed: %v", err)
 		}
-		recoveredPubkeyBytes, err := cryptobase.SigAlg.SerializePublicKey(recoveredPubkey)
+		recoveredPubkeyBytes, err := sigAlg.SerializePublicKey(recoveredPubkey)
 		if err != nil {
 			utils.Fatalf("FromOQSPub", err)
 		}
-		recoveredAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&*recoveredPubkey)
+		recoveredAddress, err := sigAlg.PublicKeyToAddress(&*recoveredPubkey)
 		if err != nil {
 			utils.Fatalf("recoveredAddress", err)
 		}

@@ -34,6 +34,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
 	"github.com/google/uuid"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -41,10 +46,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
-	"io"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 )
 
 const (
@@ -98,8 +99,8 @@ func (ks keyStorePassphrase) GetKey(addr common.Address, filename, auth string) 
 }
 
 // StoreKey generates a key, encrypts with 'auth' and stores in the given directory
-func StoreKey(dir, auth string, scryptN, scryptP int) (accounts.Account, error) {
-	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth)
+func StoreKey(dir, auth string, scryptN, scryptP int, keyType int) (accounts.Account, error) {
+	_, a, err := storeNewKey(&keyStorePassphrase{dir, scryptN, scryptP, false}, rand.Reader, auth, keyType)
 	return a, err
 }
 
@@ -184,7 +185,13 @@ func EncryptDataV4(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) 
 // blob that can be decrypted later on.
 func EncryptKey(key *Key, auth string, scryptN, scryptP int) ([]byte, error) {
 
-	keyBytes, err := cryptobase.SigAlg.SerializePrivateKey(key.PrivateKey)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(key.PrivateKey.PriData)
+	if err != nil {
+		return nil, err
+	}
+	sigAlg := *sigAlgPtr
+
+	keyBytes, err := sigAlg.SerializePrivateKey(key.PrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +243,13 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, err := cryptobase.SigAlg.DeserializePrivateKey(keyBytes)
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(keyBytes)
+	if err != nil {
+		return nil, err
+	}
+	sigAlg := *sigAlgPtr
+
+	key, err := sigAlg.DeserializePrivateKey(keyBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +258,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		return nil, err
 	}
 
-	pubKeyAddress, err := cryptobase.SigAlg.PublicKeyToAddress(&key.PublicKey)
+	pubKeyAddress, err := sigAlg.PublicKeyToAddress(&key.PublicKey)
 	if err != nil {
 		return nil, err
 	}

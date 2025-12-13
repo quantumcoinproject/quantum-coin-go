@@ -22,6 +22,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
+
 	ethereum "github.com/quantumcoinproject/quantum-coin-go"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi/bind"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -35,8 +38,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"github.com/quantumcoinproject/quantum-coin-go/token"
-	"math/big"
-	"strings"
 )
 
 var TracingGasError = errors.New("tracing gas err")
@@ -200,6 +201,22 @@ type rpcTransaction struct {
 	TxExtraInfo
 }
 
+type RpcPeer struct {
+	ENR     string   `json:"enr,omitempty"` // Ethereum Node Record
+	Enode   string   `json:"enode"`         // Node URL
+	ID      string   `json:"id"`            // Unique node identifier
+	Name    string   `json:"name"`          // Name of the node, including client type, version, OS, custom data
+	Caps    []string `json:"caps"`          // Protocols advertised by this peer
+	Network struct {
+		LocalAddress  string `json:"localAddress"`  // Local endpoint of the TCP data connection
+		RemoteAddress string `json:"remoteAddress"` // Remote endpoint of the TCP data connection
+		Inbound       bool   `json:"inbound"`
+		Trusted       bool   `json:"trusted"`
+		Static        bool   `json:"static"`
+	} `json:"network"`
+	Protocols map[string]interface{} `json:"protocols"` // Sub-protocol specific metadata fields
+}
+
 type TxPoolTransaction struct {
 	From  common.Address  `json:"from"`
 	To    *common.Address `json:"to"`
@@ -248,6 +265,17 @@ func (ec *Client) RawTransactionByHash(ctx context.Context, hash common.Hash) (s
 		return "", ethereum.NotFound
 	}
 	return string(json), nil
+}
+
+func (ec *Client) PeerList(ctx context.Context) ([]*RpcPeer, error) {
+	var jsonPeer []*RpcPeer
+	err := ec.c.CallContext(ctx, &jsonPeer, "admin_peers")
+	if err != nil {
+		return nil, err
+	} else if jsonPeer == nil {
+		return nil, ethereum.NotFound
+	}
+	return jsonPeer, nil
 }
 
 // TransactionSender returns the sender address of the given transaction. The transaction
