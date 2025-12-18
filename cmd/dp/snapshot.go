@@ -54,7 +54,7 @@ var (
 		Subcommands: []cli.Command{
 			{
 				Name:      "prune-state",
-				Usage:     "Prune stale ethereum state data based on the snapshot",
+				Usage:     "Prune stale QuantumCoin state data based on the snapshot",
 				ArgsUsage: "<root>",
 				Action:    utils.MigrateFlags(pruneState),
 				Category:  "MISCELLANEOUS COMMANDS",
