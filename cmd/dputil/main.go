@@ -610,7 +610,7 @@ func getPeerList() {
 
 	peers, err := peerList()
 	if err != nil {
-		fmt.Println("GetTransaction Error", err)
+		fmt.Println("GetPeerList Error", err)
 		return
 	}
 	if peers != nil {

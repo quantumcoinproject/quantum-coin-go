@@ -230,6 +230,10 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 	case DynamicFeeTxType:
 		var itx DynamicFeeTx
 		inner = &itx
+
+		// Now set the inner transaction.
+		t.setDecoded(inner, 0)
+
 		// Access list is optional for now.
 		if dec.AccessList != nil {
 			itx.AccessList = *dec.AccessList

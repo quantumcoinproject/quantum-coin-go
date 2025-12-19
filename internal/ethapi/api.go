@@ -1156,6 +1156,7 @@ type RPCTransaction struct {
 	Type             hexutil.Uint64    `json:"type"`
 	Accesses         *types.AccessList `json:"accessList,omitempty"`
 	ChainID          *hexutil.Big      `json:"chainId,omitempty"`
+	SigningContext   byte              `json:"signingContext,omitempty"`
 	V                *hexutil.Big      `json:"v"`
 	R                *hexutil.Big      `json:"r"`
 	S                *hexutil.Big      `json:"s"`
@@ -1178,22 +1179,23 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	from, _ := types.Sender(signer, tx)
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
-		Type:     hexutil.Uint64(tx.Type()),
-		From:     from,
-		Gas:      hexutil.Uint64(tx.Gas()),
-		GasPrice: (*hexutil.Big)(tx.GasPrice()),
-		Hash:     tx.Hash(),
-		Input:    hexutil.Bytes(tx.Data()),
-		Nonce:    hexutil.Uint64(tx.Nonce()),
-		To:       tx.To(),
-		Value:    (*hexutil.Big)(tx.Value()),
-		V:        (*hexutil.Big)(v),
-		R:        (*hexutil.Big)(r),
-		S:        (*hexutil.Big)(s),
-		VBlob:    make([]byte, len(v.Bytes())),
-		RBlob:    make([]byte, len(r.Bytes())),
-		SBlob:    make([]byte, len(s.Bytes())),
-		Remarks:  hexutil.Bytes(tx.Remarks()),
+		Type:           hexutil.Uint64(tx.Type()),
+		From:           from,
+		Gas:            hexutil.Uint64(tx.Gas()),
+		GasPrice:       (*hexutil.Big)(tx.GasPrice()),
+		Hash:           tx.Hash(),
+		Input:          hexutil.Bytes(tx.Data()),
+		Nonce:          hexutil.Uint64(tx.Nonce()),
+		To:             tx.To(),
+		Value:          (*hexutil.Big)(tx.Value()),
+		SigningContext: tx.SigningContext(),
+		V:              (*hexutil.Big)(v),
+		R:              (*hexutil.Big)(r),
+		S:              (*hexutil.Big)(s),
+		VBlob:          make([]byte, len(v.Bytes())),
+		RBlob:          make([]byte, len(r.Bytes())),
+		SBlob:          make([]byte, len(s.Bytes())),
+		Remarks:        hexutil.Bytes(tx.Remarks()),
 	}
 	copy(result.VBlob, v.Bytes())
 	copy(result.RBlob, r.Bytes())

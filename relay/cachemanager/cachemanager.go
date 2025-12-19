@@ -5,6 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
@@ -18,15 +28,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/relay/cachemanager/token"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
-	"io/ioutil"
-	"math/big"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
 )
 
 type CacheManager struct {
@@ -627,11 +628,12 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 	var receipts types.Receipts
 	receipts = make(types.Receipts, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
+		log.Info("processByCacheManager", "txn", tx.Hash().Hex())
 		accountsInvolved := make(map[string]bool)
 
 		receipt, err := c.client.TransactionReceipt(context.Background(), tx.Hash())
 		if err != nil {
-			log.Error("processByCacheManager TransactionReceipt", "error", err)
+			log.Error("processByCacheManager TransactionReceipt", "error", err, "tx", tx.Hash().Hex())
 			return err
 		}
 		receipts[i] = receipt
@@ -702,6 +704,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 							if errors.Is(err, ethclient.NotATokenError) {
 								continue
 							} else {
+								log.Error("processByCacheManager GetTokenDetails", "error", err)
 								return err
 							}
 						}
@@ -800,6 +803,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 		for account, _ := range accountsInvolved {
 			_, err = c.getAccount(common.HexToAddress(account), blockNum, &txnBatch)
 			if err != nil {
+				log.Error("processByCacheManager getAccount", "error", err)
 				return err
 			}
 		}
