@@ -769,8 +769,13 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 
 					tokenDetails, err := c.getTokenDetailsInternal(transaction.TokenTransaction.ContractAddress) //token should already have been saved to db, when it was created
 					if err != nil {
-						log.Error("getTokenDetailsInternal", "error", err)
-						return err
+						if err.Error() == LevelDbNoTFoundErrMsg {
+							log.Warn("getTokenDetailsInternal", "error", err)
+							transaction.TransactionType = string(SMART_CONTRACT)
+						} else {
+							log.Error("getTokenDetailsInternal", "error", err)
+							return err
+						}
 					}
 					transaction.TokenTransaction.TokenCount = hexutil.EncodeBig(tokenTransfers[0].Tokens)
 					transaction.TokenTransaction.TokenName = tokenDetails.Name
@@ -1691,8 +1696,13 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 		contractAddress := strings.ToLower(t.ContractAddress.Hex())
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
 		if err != nil {
-			log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
-			return err
+			if err.Error() == LevelDbNoTFoundErrMsg {
+				log.Warn("processAccountTokenTransfers getTokenDetailsInternal not found", "contractAddress", contractAddress)
+				return nil
+			} else {
+				log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
+				return err
+			}
 		}
 
 		tokenBalance, err := c.client.GetAccountTokenBalance(t.ContractAddress, t.From)
