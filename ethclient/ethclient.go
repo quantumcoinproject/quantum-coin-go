@@ -712,8 +712,8 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 
 	tokenDetails.TotalSupply, err = contract.TotalSupply(nil)
 	if err != nil {
-		log.Debug("GetTokenDetails TotalSupply", "error", err, "contactAddress", contactAddress)
-		if errors.Is(err, vm.ErrExecutionReverted) {
+		log.Warn("GetTokenDetails TotalSupply", "error", err, "contactAddress", contactAddress)
+		if errors.Is(err, vm.ErrExecutionReverted) || err.Error() == vm.ErrExecutionReverted.Error() {
 			return nil, NotATokenError
 		}
 		return nil, err
@@ -721,39 +721,26 @@ func (ec *Client) GetTokenDetails(contactAddress common.Address, blockNumber *bi
 
 	tokenDetails.Name, err = contract.Name(nil)
 	if err != nil {
-		if errors.Is(err, vm.ErrExecutionReverted) {
-			log.Debug("GetTokenDetails Name", "error", err, "contactAddress", contactAddress)
-			return nil, err
-		}
+		log.Warn("GetTokenDetails Name", "error", err, "contactAddress", contactAddress)
 		tokenDetails.Name = ""
 	}
 
 	tokenDetails.Symbol, err = contract.Symbol(nil)
 	if err != nil {
-		if errors.Is(err, vm.ErrExecutionReverted) {
-			log.Debug("GetTokenDetails Symbol", "error", err, "contactAddress", contactAddress)
-			return nil, err
-		}
+		log.Warn("GetTokenDetails Symbol", "error", err, "contactAddress", contactAddress)
 		tokenDetails.Symbol = ""
 	}
 
 	tokenDetails.Decimals, err = contract.Decimals(nil)
 	if err != nil {
-		if errors.Is(err, vm.ErrExecutionReverted) {
-			log.Debug("GetTokenDetails Decimals", "error", err, "contactAddress", contactAddress)
-			return nil, err
-		}
+		log.Warn("GetTokenDetails Decimals", "error", err, "contactAddress", contactAddress)
 		tokenDetails.Decimals = 0
 	}
 
 	tokenDetails.Owner, err = contract.Owner(nil)
 	if err != nil {
-		if errors.Is(err, vm.ErrExecutionReverted) {
-			log.Debug("GetTokenDetails Owner", "error", err, "contactAddress", contactAddress)
-			return nil, err
-		}
 		//owner is ok to fail, not a part of ERC20 interface
-		log.Debug("GetTokenDetails Owner", "error", err)
+		log.Warn("GetTokenDetails Owner", "error", err)
 		tokenDetails.Owner.CopyFrom(common.ZERO_ADDRESS)
 	}
 
@@ -769,7 +756,7 @@ func (ec *Client) GetAccountTokenBalance(contactAddress common.Address, accountA
 
 	balance, err := contract.BalanceOf(nil, accountAddress)
 	if err != nil {
-		if errors.Is(err, vm.ErrExecutionReverted) {
+		if errors.Is(err, vm.ErrExecutionReverted) || err.Error() == vm.ErrExecutionReverted.Error() {
 			log.Debug("GetAccountTokenBalance", "error", err, "contactAddress", contactAddress)
 			return nil, NotATokenError
 		}

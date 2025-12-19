@@ -5,6 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
@@ -18,15 +28,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/relay/cachemanager/token"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
-	"io/ioutil"
-	"math/big"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
 )
 
 type CacheManager struct {
@@ -627,11 +628,12 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 	var receipts types.Receipts
 	receipts = make(types.Receipts, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
+		log.Info("processByCacheManager", "txn", tx.Hash().Hex())
 		accountsInvolved := make(map[string]bool)
 
 		receipt, err := c.client.TransactionReceipt(context.Background(), tx.Hash())
 		if err != nil {
-			log.Error("processByCacheManager TransactionReceipt", "error", err)
+			log.Error("processByCacheManager TransactionReceipt", "error", err, "tx", tx.Hash().Hex())
 			return err
 		}
 		receipts[i] = receipt
@@ -702,6 +704,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 							if errors.Is(err, ethclient.NotATokenError) {
 								continue
 							} else {
+								log.Error("processByCacheManager GetTokenDetails", "error", err)
 								return err
 							}
 						}
@@ -766,8 +769,13 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 
 					tokenDetails, err := c.getTokenDetailsInternal(transaction.TokenTransaction.ContractAddress) //token should already have been saved to db, when it was created
 					if err != nil {
-						log.Error("getTokenDetailsInternal", "error", err)
-						return err
+						if err.Error() == LevelDbNoTFoundErrMsg {
+							log.Warn("getTokenDetailsInternal", "error", err)
+							transaction.TransactionType = string(SMART_CONTRACT)
+						} else {
+							log.Error("getTokenDetailsInternal", "error", err)
+							return err
+						}
 					}
 					transaction.TokenTransaction.TokenCount = hexutil.EncodeBig(tokenTransfers[0].Tokens)
 					transaction.TokenTransaction.TokenName = tokenDetails.Name
@@ -800,6 +808,7 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 		for account, _ := range accountsInvolved {
 			_, err = c.getAccount(common.HexToAddress(account), blockNum, &txnBatch)
 			if err != nil {
+				log.Error("processByCacheManager getAccount", "error", err)
 				return err
 			}
 		}
@@ -1687,8 +1696,13 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 		contractAddress := strings.ToLower(t.ContractAddress.Hex())
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
 		if err != nil {
-			log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
-			return err
+			if err.Error() == LevelDbNoTFoundErrMsg {
+				log.Warn("processAccountTokenTransfers getTokenDetailsInternal not found", "contractAddress", contractAddress)
+				return nil
+			} else {
+				log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
+				return err
+			}
 		}
 
 		tokenBalance, err := c.client.GetAccountTokenBalance(t.ContractAddress, t.From)
