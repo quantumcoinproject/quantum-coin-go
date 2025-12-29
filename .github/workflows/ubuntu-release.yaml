@@ -30,7 +30,7 @@ jobs:
     - name: Create Release
       
       run: |
-         mkdir ${{ github.workspace }}/build/release && cp ${{ github.workspace }}/build/* ${{ github.workspace }}/build/release/
+         mkdir ${{ github.workspace }}/build/release && find ${{ github.workspace }}/build -maxdepth 1 -type f -exec cp {} ${{ github.workspace }}/build/release \;
          cd ${{ github.workspace }}/build/release && tar -czf ${{ github.workspace }}/build/quantumcoin-ubuntu-${{  github.ref_name }}.tar.gz .
          sha256sum ${{ github.workspace }}/build/quantumcoin-ubuntu-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-quantumcoin-ubuntu-${{  github.ref_name }}.txt
         
