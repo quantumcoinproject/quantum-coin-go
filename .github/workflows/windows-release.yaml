@@ -31,6 +31,9 @@ jobs:
       
       run: |
          echo ${{  github.ref_name }}
+         powershell Compress-Archive ${{ github.workspace }}\build ${{ github.workspace }}\build\quantumcoin-windows-${{  github.ref_name }}.zip
+         powershell Get-FileHash ${{ github.workspace }}\build\quantumcoin-windows-${{  github.ref_name }}.zip > ${{ github.workspace }}\build\releasehash-quantumcoin-windows-${{  github.ref_name }}.txt
+        
          mkdir ${{ github.workspace }}\build\dp
          copy ${{ github.workspace }}\build\dp.exe ${{ github.workspace }}\build\dp\dp.exe
          copy ${{ github.workspace }}\build\dputil.exe ${{ github.workspace }}\build\dp\dputil.exe
