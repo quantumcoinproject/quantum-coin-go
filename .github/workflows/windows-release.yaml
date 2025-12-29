@@ -30,7 +30,11 @@ jobs:
     - name: Create Release
       
       run: |
-         echo ${{  github.ref_name }}
+         mkdir ${{ github.workspace }}\build\release
+         copy  ${{ github.workspace }}\build\*.exe ${{ github.workspace }}\build\release\
+         powershell Compress-Archive ${{ github.workspace }}\build\release ${{ github.workspace }}\build\quantumcoin-windows-${{  github.ref_name }}.zip
+         powershell Get-FileHash ${{ github.workspace }}\build\quantumcoin-windows-${{  github.ref_name }}.zip > ${{ github.workspace }}\build\releasehash-quantumcoin-windows-${{  github.ref_name }}.txt
+        
          mkdir ${{ github.workspace }}\build\dp
          copy ${{ github.workspace }}\build\dp.exe ${{ github.workspace }}\build\dp\dp.exe
          copy ${{ github.workspace }}\build\dputil.exe ${{ github.workspace }}\build\dp\dputil.exe

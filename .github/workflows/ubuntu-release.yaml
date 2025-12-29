@@ -30,6 +30,10 @@ jobs:
     - name: Create Release
       
       run: |
+         mkdir ${{ github.workspace }}/build/release && find ${{ github.workspace }}/build -maxdepth 1 -type f -exec cp {} ${{ github.workspace }}/build/release \;
+         cd ${{ github.workspace }}/build/release && tar -czf ${{ github.workspace }}/build/quantumcoin-ubuntu-${{  github.ref_name }}.tar.gz .
+         sha256sum ${{ github.workspace }}/build/quantumcoin-ubuntu-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-quantumcoin-ubuntu-${{  github.ref_name }}.txt
+        
          mkdir ${{ github.workspace }}/build/dp-release
          cp ${{ github.workspace }}/build/dp ${{ github.workspace }}/build/dp-release/dp
          cp ${{ github.workspace }}/build/dputil ${{ github.workspace }}/build/dp-release/dputil
@@ -45,7 +49,7 @@ jobs:
          rm ${{ github.workspace }}/build/dp-release/connectvalidator.sh
          cp ${{ github.workspace }}/resources/compact/*.sh ${{ github.workspace }}/build/dp-release/
          cd ${{ github.workspace }}/build/dp-release && tar -czf ${{ github.workspace }}/build/qc-release-ubuntu-compact-${{  github.ref_name }}.tar.gz .
-         sha256sum ${{ github.workspace }}/build/qc-release-ubuntu-compact-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-ubuntu-compact-${{  github.ref_name }}.txt
+         sha256sum ${{ github.workspace }}/build/qc-release-ubuntu-compact-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-ubuntu-compact-${{  github.ref_name }}.txt      
          
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v4

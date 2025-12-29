@@ -31,7 +31,10 @@ jobs:
     - name: Create Release
       
       run: |
-         mkdir ${{ github.workspace }}/build/dp-release
+         mkdir ${{ github.workspace }}/build/release && find ${{ github.workspace }}/build -maxdepth 1 -type f -exec cp {} ${{ github.workspace }}/build/release \;
+         cd ${{ github.workspace }}/build/release && tar -czf ${{ github.workspace }}/build/quantumcoin-mac-${{  github.ref_name }}.tar.gz .
+         sha256sum ${{ github.workspace }}/build/quantumcoin-mac-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-quantumcoin-mac-${{  github.ref_name }}.txt
+        
          cp ${{ github.workspace }}/build/dp ${{ github.workspace }}/build/dp-release/dp
          cp ${{ github.workspace }}/build/dputil ${{ github.workspace }}/build/dp-release/dputil
          cp ${{ github.workspace }}/build/relay ${{ github.workspace }}/build/dp-release/relay
