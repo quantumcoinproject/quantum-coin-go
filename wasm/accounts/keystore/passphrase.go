@@ -115,12 +115,16 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		keyBytes, keyId []byte
 		err             error
 	)
-	if version, ok := m["version"].(string); ok && version == "1" {
-		k := new(encryptedKeyJSONV1)
+	ver, ok := m["version"]
+	if !ok {
+		return nil, errors.New("keystore version not found")
+	}
+	if ver == float64(4) {
+		k := new(encryptedKeyJSONV4)
 		if err := json.Unmarshal(keyjson, k); err != nil {
 			return nil, err
 		}
-		keyBytes, keyId, err = decryptKeyV1(k, auth)
+		keyBytes, keyId, err = decryptKeyV4(k, auth)
 	} else {
 		k := new(encryptedKeyJSONV3)
 		if err := json.Unmarshal(keyjson, k); err != nil {
@@ -160,6 +164,58 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	}
 
 	return key, nil
+}
+
+func DecryptDataV4(cryptoJson CryptoJSON, auth string) ([]byte, error) {
+	if cryptoJson.Cipher != "aes-256-ctr" {
+		return nil, fmt.Errorf("cipher not supported: %v", cryptoJson.Cipher)
+	}
+	mac, err := hex.DecodeString(cryptoJson.MAC)
+	if err != nil {
+		return nil, err
+	}
+
+	iv, err := hex.DecodeString(cryptoJson.CipherParams.IV)
+	if err != nil {
+		return nil, err
+	}
+
+	cipherText, err := hex.DecodeString(cryptoJson.CipherText)
+	if err != nil {
+		return nil, err
+	}
+
+	derivedKey, err := getKDFKey(cryptoJson, auth)
+	if err != nil {
+		return nil, err
+	}
+
+	calculatedMAC := crypto.Keccak256(derivedKey[32:], cipherText)
+	if !bytes.Equal(calculatedMAC, mac) {
+		return nil, ErrDecrypt
+	}
+
+	plainText, err := aesCTRXOR(derivedKey[:32], cipherText, iv)
+	if err != nil {
+		return nil, err
+	}
+	return plainText, err
+}
+
+func decryptKeyV4(keyProtected *encryptedKeyJSONV4, auth string) (keyBytes []byte, keyId []byte, err error) {
+	if keyProtected.Version != 4 {
+		return nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
+	}
+	keyUUID, err := uuid.Parse(keyProtected.Id)
+	if err != nil {
+		return nil, nil, err
+	}
+	keyId = keyUUID[:]
+	plainText, err := DecryptDataV4(keyProtected.Crypto, auth)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plainText, keyId, err
 }
 
 func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
