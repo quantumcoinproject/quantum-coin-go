@@ -457,6 +457,210 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 	return d.String()
 }
 
+// PackMethodData packs a Solidity method call with the given ABI, method name, and arguments.
+// It returns the transaction data as []byte that can be included in a transaction.
+//
+// Parameters:
+//   - abiJSON: The Solidity ABI file content as a JSON string
+//   - methodName: The name of the method to call
+//   - args: An array of js.Value representing the parameters to pass to the method
+//
+// Returns:
+//   - []byte: The packed transaction data
+//   - error: Any error that occurred during ABI parsing or packing
+func PackMethodData(abiJSON string, methodName string, args []js.Value) ([]byte, error) {
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ABI: %w", err)
+	}
+
+	method, exist := abiData.Methods[methodName]
+	if !exist {
+		return nil, fmt.Errorf("method '%s' not found", methodName)
+	}
+
+	if len(args) != len(method.Inputs) {
+		return nil, fmt.Errorf("argument count mismatch: got %d for %d", len(args), len(method.Inputs))
+	}
+
+	// Convert js.Value arguments to Go types based on ABI types
+	convertedArgs := make([]interface{}, len(args))
+	for i, arg := range args {
+		converted, err := convertJsValueToGoType(arg, method.Inputs[i].Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert argument %d (%s): %w", i, method.Inputs[i].Name, err)
+		}
+		convertedArgs[i] = converted
+	}
+
+	data, err := abiData.Pack(methodName, convertedArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack method '%s': %w", methodName, err)
+	}
+
+	return data, nil
+}
+
+// convertJsValueToGoType converts a js.Value to the appropriate Go type based on the ABI Type
+func convertJsValueToGoType(jsVal js.Value, abiType abi.Type) (interface{}, error) {
+	typeStr := abiType.String()
+
+	switch abiType.T {
+	case abi.AddressTy:
+		// Address type: convert from hex string
+		addrStr := jsVal.String()
+		if !common.IsHexAddress(addrStr) {
+			return nil, fmt.Errorf("invalid address: %s", addrStr)
+		}
+		return common.HexToAddress(addrStr), nil
+
+	case abi.UintTy:
+		// Unsigned integer types (uint8, uint256, etc.)
+		valStr := jsVal.String()
+		val, ok := new(big.Int).SetString(valStr, 10)
+		if !ok {
+			return nil, fmt.Errorf("invalid uint value: %s", valStr)
+		}
+		return val, nil
+
+	case abi.IntTy:
+		// Signed integer types (int8, int256, etc.)
+		valStr := jsVal.String()
+		val, ok := new(big.Int).SetString(valStr, 10)
+		if !ok {
+			return nil, fmt.Errorf("invalid int value: %s", valStr)
+		}
+		return val, nil
+
+	case abi.BoolTy:
+		// Boolean type
+		return jsVal.Bool(), nil
+
+	case abi.StringTy:
+		// String type
+		return jsVal.String(), nil
+
+	case abi.BytesTy:
+		// Dynamic bytes type
+		// Check if it's a Uint8Array
+		if jsVal.Type() == js.TypeObject {
+			uint8Array := js.Global().Get("Uint8Array")
+			if !uint8Array.IsUndefined() && jsVal.InstanceOf(uint8Array) {
+				bytes := make([]byte, jsVal.Get("length").Int())
+				js.CopyBytesToGo(bytes, jsVal)
+				return bytes, nil
+			}
+		}
+		// Fallback: treat as hex string
+		hexStr := jsVal.String()
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		return hexutil.Decode(hexStr)
+
+	case abi.FixedBytesTy:
+		// Fixed-size bytes type (bytes1, bytes32, etc.)
+		// Check if it's a Uint8Array
+		if jsVal.Type() == js.TypeObject {
+			uint8Array := js.Global().Get("Uint8Array")
+			if !uint8Array.IsUndefined() && jsVal.InstanceOf(uint8Array) {
+				bytes := make([]byte, abiType.Size)
+				js.CopyBytesToGo(bytes, jsVal)
+				return bytes, nil
+			}
+		}
+		// Fallback: treat as hex string
+		hexStr := jsVal.String()
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		decoded, err := hexutil.Decode(hexStr)
+		if err != nil {
+			return nil, err
+		}
+		if len(decoded) != abiType.Size {
+			return nil, fmt.Errorf("fixed bytes size mismatch: expected %d, got %d", abiType.Size, len(decoded))
+		}
+		return decoded, nil
+
+	case abi.SliceTy:
+		// Dynamic array type (uint256[], address[], etc.)
+		// Check if it's a JavaScript array
+		if jsVal.Type() == js.TypeObject && jsVal.Get("length").Type() == js.TypeNumber {
+			length := jsVal.Get("length").Int()
+			result := make([]interface{}, length)
+			for i := 0; i < length; i++ {
+				elem, err := convertJsValueToGoType(jsVal.Index(i), *abiType.Elem)
+				if err != nil {
+					return nil, fmt.Errorf("failed to convert array element %d: %w", i, err)
+				}
+				result[i] = elem
+			}
+			return result, nil
+		}
+		return nil, fmt.Errorf("expected array for slice type %s", typeStr)
+
+	case abi.ArrayTy:
+		// Fixed-size array type (uint256[5], address[10], etc.)
+		// Check if it's a JavaScript array
+		if jsVal.Type() == js.TypeObject && jsVal.Get("length").Type() == js.TypeNumber {
+			length := jsVal.Get("length").Int()
+			if length != abiType.Size {
+				return nil, fmt.Errorf("array size mismatch: expected %d, got %d", abiType.Size, length)
+			}
+			result := make([]interface{}, length)
+			for i := 0; i < length; i++ {
+				elem, err := convertJsValueToGoType(jsVal.Index(i), *abiType.Elem)
+				if err != nil {
+					return nil, fmt.Errorf("failed to convert array element %d: %w", i, err)
+				}
+				result[i] = elem
+			}
+			return result, nil
+		}
+		return nil, fmt.Errorf("expected array for fixed array type %s", typeStr)
+
+	case abi.TupleTy:
+		// Tuple type - complex struct-like types
+		// This is more complex and would require parsing the tuple structure
+		// For now, we'll try to handle it as a JavaScript object
+		if jsVal.Type() == js.TypeObject {
+			result := make([]interface{}, len(abiType.TupleElems))
+			for i, elemType := range abiType.TupleElems {
+				// Try to get the field by index or by name
+				var fieldVal js.Value
+				if jsVal.Get("length").Type() == js.TypeNumber {
+					// Array-like access
+					fieldVal = jsVal.Index(i)
+				} else {
+					// Object-like access by name
+					fieldName := abiType.TupleRawNames[i]
+					fieldVal = jsVal.Get(fieldName)
+					if fieldVal.IsUndefined() {
+						// Try camelCase
+						fieldName = abi.ToCamelCase(fieldName)
+						fieldVal = jsVal.Get(fieldName)
+					}
+				}
+				if fieldVal.IsUndefined() {
+					return nil, fmt.Errorf("missing tuple field %d (%s)", i, abiType.TupleRawNames[i])
+				}
+				elem, err := convertJsValueToGoType(fieldVal, *elemType)
+				if err != nil {
+					return nil, fmt.Errorf("failed to convert tuple field %d: %w", i, err)
+				}
+				result[i] = elem
+			}
+			return result, nil
+		}
+		return nil, fmt.Errorf("expected object for tuple type %s", typeStr)
+
+	default:
+		// Fallback: try to convert as string for unknown types
+		return jsVal.String(), nil
+	}
+}
+
 func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
 	if len(args) != 2 {
 		return nil
