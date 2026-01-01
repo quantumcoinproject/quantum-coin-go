@@ -120,6 +120,9 @@ func printHelp() {
 	fmt.Println("dputil createtoken FROM_ADDRESS TOKEN_NAME TOKEN_SYMBOL TOTAL_SUPPLY")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("dputil tokendetails CONTRACT_ADDRESS")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           CHAIN_ID, DP_RAW_URL, DP_KEY_FILE_DIR or DP_KEY_FILE")
 	fmt.Println("dputil tokenbalance CONTRACT_ADDRESS ACCOUNT_ADDRESS")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
@@ -306,6 +309,11 @@ func main() {
 		}
 	} else if os.Args[1] == "createtoken" {
 		err := CreateToken()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "tokendetails" {
+		err := TokenDetails()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1880,6 +1888,21 @@ func TokenBalance() error {
 	}
 
 	_, err := getTokenBalance(common.HexToAddress(accountAddr), common.HexToAddress(contractAddr))
+	return err
+}
+
+func TokenDetails() error {
+	if len(os.Args) < 3 {
+		printHelp()
+		return errors.New("incorrect usage")
+	}
+
+	contractAddr := os.Args[2]
+	if common.IsHexAddress(contractAddr) == false {
+		return errors.New("invalid contract address " + contractAddr)
+	}
+
+	err := tokenDetails(common.HexToAddress(contractAddr))
 	return err
 }
 

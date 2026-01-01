@@ -2238,3 +2238,49 @@ func tokenApprove(tokenAddress common.Address, spenderAddress common.Address, am
 
 	return nil
 }
+
+func tokenDetails(tokenAddress common.Address) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+
+	contract, err := tokenv2.NewTokenv2(tokenAddress, client)
+	if err != nil {
+		return err
+	}
+
+	tokenName, err := contract.Name(nil)
+	if err != nil {
+		return err
+	}
+
+	symbol, err := contract.Symbol(nil)
+	if err != nil {
+		return err
+	}
+
+	totalSupply, err := contract.TotalSupply(nil)
+	if err != nil {
+		return err
+	}
+
+	decimals, err := contract.Decimals(nil)
+	if err != nil {
+		return err
+	}
+
+	owner, err := contract.Owner(nil)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("tokenDetails", "tokenAddress", tokenAddress,
+		"tokenName", tokenName, "symbol", symbol, "totalSupply (wei)", totalSupply, "totalSupply (coins)", params.WeiToEther(totalSupply),
+		"decimals", decimals, "owner", owner.Hex())
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return nil
+}
