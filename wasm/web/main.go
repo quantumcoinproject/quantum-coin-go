@@ -458,7 +458,7 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 }
 
 // PackMethodData packs a Solidity method call with the given ABI, method name, and arguments.
-// It returns the transaction data as []byte that can be included in a transaction.
+// It returns the transaction data as a JavaScript-compatible string that can be included in a transaction.
 //
 // Parameters:
 //   - abiJSON: The Solidity ABI file content as a JSON string
@@ -466,21 +466,20 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 //   - args: An array of js.Value representing the parameters to pass to the method
 //
 // Returns:
-//   - []byte: The packed transaction data
-//   - error: Any error that occurred during ABI parsing or packing
-func PackMethodData(abiJSON string, methodName string, args []js.Value) ([]byte, error) {
+//   - interface{}: The packed transaction data as a string, or nil on error
+func PackMethodData(abiJSON string, methodName string, args []js.Value) interface{} {
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse ABI: %w", err)
+		return nil
 	}
 
 	method, exist := abiData.Methods[methodName]
 	if !exist {
-		return nil, fmt.Errorf("method '%s' not found", methodName)
+		return nil
 	}
 
 	if len(args) != len(method.Inputs) {
-		return nil, fmt.Errorf("argument count mismatch: got %d for %d", len(args), len(method.Inputs))
+		return nil
 	}
 
 	// Convert js.Value arguments to Go types based on ABI types
@@ -488,17 +487,23 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) ([]byte,
 	for i, arg := range args {
 		converted, err := convertJsValueToGoType(arg, method.Inputs[i].Type)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert argument %d (%s): %w", i, method.Inputs[i].Name, err)
+			return nil
 		}
 		convertedArgs[i] = converted
 	}
 
 	data, err := abiData.Pack(methodName, convertedArgs...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to pack method '%s': %w", methodName, err)
+		return nil
 	}
 
-	return data, nil
+	var d strings.Builder
+	for i := 0; i < len(data); i++ {
+		sh := data[i]
+		d.WriteString(string(sh))
+	}
+
+	return d.String()
 }
 
 // convertJsValueToGoType converts a js.Value to the appropriate Go type based on the ABI Type
