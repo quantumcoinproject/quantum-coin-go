@@ -55,7 +55,31 @@ func main() {
 	js.Global().Set("PublicKeyFromSignature", js.FuncOf(PublicKeyFromSignature))
 	js.Global().Set("PublicKeyFromPrivateKey", js.FuncOf(PublicKeyFromPrivateKey))
 	js.Global().Set("CombinePublicKeySignature", js.FuncOf(CombinePublicKeySignature))
+	js.Global().Set("PackMethodData", js.FuncOf(PackMethodDataWrapper))
+	js.Global().Set("UnpackMethodData", js.FuncOf(UnpackMethodDataWrapper))
 	<-done
+}
+
+// PackMethodDataWrapper is a wrapper function for PackMethodData to be used with js.FuncOf
+func PackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 3 {
+		return nil
+	}
+	abiJSON := args[0].String()
+	methodName := args[1].String()
+	methodArgs := args[2:]
+	return PackMethodData(abiJSON, methodName, methodArgs)
+}
+
+// UnpackMethodDataWrapper is a wrapper function for UnpackMethodData to be used with js.FuncOf
+func UnpackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) != 3 {
+		return nil
+	}
+	abiJSON := args[0].String()
+	methodName := args[1].String()
+	hexData := args[2]
+	return UnpackMethodData(abiJSON, methodName, hexData)
 }
 
 func Scrypt(this js.Value, args []js.Value) interface{} {
