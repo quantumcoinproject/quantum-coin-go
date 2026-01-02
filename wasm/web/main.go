@@ -521,19 +521,27 @@ func convertJsValueToGoType(jsVal js.Value, abiType abi.Type) (interface{}, erro
 
 	case abi.UintTy:
 		// Unsigned integer types (uint8, uint256, etc.)
-		valStr := jsVal.String()
-		val, ok := new(big.Int).SetString(valStr, 10)
-		if !ok {
-			return nil, fmt.Errorf("invalid uint value: %s", valStr)
+		// Convert from hex string to big.Int
+		hexStr := jsVal.String()
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		val, err := hexutil.DecodeBig(hexStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid uint value: %s", hexStr)
 		}
 		return val, nil
 
 	case abi.IntTy:
 		// Signed integer types (int8, int256, etc.)
-		valStr := jsVal.String()
-		val, ok := new(big.Int).SetString(valStr, 10)
-		if !ok {
-			return nil, fmt.Errorf("invalid int value: %s", valStr)
+		// Convert from hex string to big.Int
+		hexStr := jsVal.String()
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		val, err := hexutil.DecodeBig(hexStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid int value: %s", hexStr)
 		}
 		return val, nil
 

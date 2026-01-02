@@ -201,22 +201,26 @@ func convertValueToGoTypeForTest(val interface{}, abiType abi.Type) (interface{}
 		return common.HexToAddress(addrStr), nil
 		
 	case abi.UintTy, abi.IntTy:
-		var valStr string
+		// Convert from hex string to big.Int
+		var hexStr string
 		switch v := val.(type) {
 		case string:
-			valStr = v
+			hexStr = v
 		case int:
-			valStr = big.NewInt(int64(v)).String()
+			hexStr = hexutil.EncodeBig(big.NewInt(int64(v)))
 		case int64:
-			valStr = big.NewInt(v).String()
+			hexStr = hexutil.EncodeBig(big.NewInt(v))
 		case *big.Int:
 			return v, nil
 		default:
 			return nil, fmt.Errorf("unsupported type for int/uint: %T", val)
 		}
-		bigVal, ok := new(big.Int).SetString(valStr, 10)
-		if !ok {
-			return nil, fmt.Errorf("invalid int value: %s", valStr)
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		bigVal, err := hexutil.DecodeBig(hexStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid int/uint value: %s", hexStr)
 		}
 		return bigVal, nil
 		
@@ -345,7 +349,8 @@ func TestConvertJsValueToGoType_Address(t *testing.T) {
 }
 
 func TestConvertJsValueToGoType_Uint256(t *testing.T) {
-	testValue := "1000000000000000000" // 1e18
+	// Test with hex string (1e18 in decimal = 0xde0b6b3a7640000 in hex)
+	testValue := "0xde0b6b3a7640000"
 	abiType := createUintType(256)
 	
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
@@ -358,20 +363,22 @@ func TestConvertJsValueToGoType_Uint256(t *testing.T) {
 		t.Fatalf("Expected *big.Int, got %T", result)
 	}
 	
-	expectedVal, _ := new(big.Int).SetString(testValue, 10)
+	expectedVal, _ := hexutil.DecodeBig(testValue)
 	if bigVal.Cmp(expectedVal) != 0 {
 		t.Errorf("Value mismatch: expected %s, got %s", expectedVal.String(), bigVal.String())
 	}
 	
-	// Verify round-trip: convert back to string and check
-	valStr := bigVal.String()
-	if valStr != testValue {
-		t.Errorf("Round-trip failed: expected %s, got %s", testValue, valStr)
+	// Verify round-trip: convert back to hex and check
+	hexStr := hexutil.EncodeBig(bigVal)
+	if hexStr != testValue {
+		t.Errorf("Round-trip failed: expected %s, got %s", testValue, hexStr)
 	}
 }
 
 func TestConvertJsValueToGoType_Int256(t *testing.T) {
-	testValue := "-1000000000000000000"
+	// Test with hex string for negative number
+	// -1 in 256-bit two's complement = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+	testValue := "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
 	abiType := createIntType(256)
 	
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
@@ -384,15 +391,15 @@ func TestConvertJsValueToGoType_Int256(t *testing.T) {
 		t.Fatalf("Expected *big.Int, got %T", result)
 	}
 	
-	expectedVal, _ := new(big.Int).SetString(testValue, 10)
+	expectedVal, _ := hexutil.DecodeBig(testValue)
 	if bigVal.Cmp(expectedVal) != 0 {
 		t.Errorf("Value mismatch: expected %s, got %s", expectedVal.String(), bigVal.String())
 	}
 	
-	// Verify round-trip
-	valStr := bigVal.String()
-	if valStr != testValue {
-		t.Errorf("Round-trip failed: expected %s, got %s", testValue, valStr)
+	// Verify round-trip: convert back to hex and check
+	hexStr := hexutil.EncodeBig(bigVal)
+	if hexStr != testValue {
+		t.Errorf("Round-trip failed: expected %s, got %s", testValue, hexStr)
 	}
 }
 
@@ -525,10 +532,12 @@ func TestConvertJsValueToGoType_FixedBytes32(t *testing.T) {
 }
 
 func TestConvertJsValueToGoType_Uint256Array(t *testing.T) {
+	// Test with hex strings
+	// 1e18 = 0xde0b6b3a7640000, 2e18 = 0x1bc16d674ec80000, 3e18 = 0x29a2241af62c0000
 	testValue := []interface{}{
-		"1000000000000000000",
-		"2000000000000000000",
-		"3000000000000000000",
+		"0xde0b6b3a7640000",
+		"0x1bc16d674ec80000",
+		"0x29a2241af62c0000",
 	}
 	
 	elemType := createUintType(256)
@@ -555,15 +564,15 @@ func TestConvertJsValueToGoType_Uint256Array(t *testing.T) {
 			t.Fatalf("Expected *big.Int at index %d, got %T", i, elem)
 		}
 		
-		expectedVal, _ := new(big.Int).SetString(testValue[i].(string), 10)
+		expectedVal, _ := hexutil.DecodeBig(testValue[i].(string))
 		if bigVal.Cmp(expectedVal) != 0 {
 			t.Errorf("Element %d mismatch: expected %s, got %s", i, expectedVal.String(), bigVal.String())
 		}
 		
-		// Verify round-trip
-		valStr := bigVal.String()
-		if valStr != testValue[i].(string) {
-			t.Errorf("Round-trip failed for element %d: expected %s, got %s", i, testValue[i].(string), valStr)
+		// Verify round-trip: convert back to hex and check
+		hexStr := hexutil.EncodeBig(bigVal)
+		if hexStr != testValue[i].(string) {
+			t.Errorf("Round-trip failed for element %d: expected %s, got %s", i, testValue[i].(string), hexStr)
 		}
 	}
 }
@@ -620,10 +629,11 @@ func TestConvertJsValueToGoType_AddressArray(t *testing.T) {
 }
 
 func TestConvertJsValueToGoType_FixedArray(t *testing.T) {
+	// Test with hex strings: 100 = 0x64, 200 = 0xc8, 300 = 0x12c
 	testValue := []interface{}{
-		"100",
-		"200",
-		"300",
+		"0x64",
+		"0xc8",
+		"0x12c",
 	}
 	
 	elemType := createUintType(256)
@@ -650,7 +660,7 @@ func TestConvertJsValueToGoType_FixedArray(t *testing.T) {
 			t.Fatalf("Expected *big.Int at index %d, got %T", i, elem)
 		}
 		
-		expectedVal, _ := new(big.Int).SetString(testValue[i].(string), 10)
+		expectedVal, _ := hexutil.DecodeBig(testValue[i].(string))
 		if bigVal.Cmp(expectedVal) != 0 {
 			t.Errorf("Element %d mismatch: expected %s, got %s", i, expectedVal.String(), bigVal.String())
 		}
@@ -658,9 +668,10 @@ func TestConvertJsValueToGoType_FixedArray(t *testing.T) {
 }
 
 func TestConvertJsValueToGoType_FixedArraySizeMismatch(t *testing.T) {
+	// Test with hex strings
 	testValue := []interface{}{
-		"100",
-		"200",
+		"0x64",
+		"0xc8",
 		// Missing third element
 	}
 	
