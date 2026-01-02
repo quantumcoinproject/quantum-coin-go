@@ -5,6 +5,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -504,6 +505,88 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) interfac
 	}
 
 	return d.String()
+}
+
+// UnpackMethodData unpacks the return values of a Solidity method call.
+// It returns the unpacked values as a JSON string that can be parsed in JavaScript.
+//
+// Parameters:
+//   - abiJSON: The Solidity ABI file content as a JSON string
+//   - methodName: The name of the method whose return values to unpack
+//   - hexData: The hex-encoded return data as a js.Value (string, with or without 0x prefix)
+//
+// Returns:
+//   - interface{}: The unpacked return values as a JSON string, or nil on error
+func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) interface{} {
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil
+	}
+
+	method, exist := abiData.Methods[methodName]
+	if !exist {
+		return nil
+	}
+
+	// Get hex string from js.Value and decode to bytes
+	hexStr := hexData.String()
+	if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+		hexStr = "0x" + hexStr
+	}
+	data, err := hexutil.Decode(hexStr)
+	if err != nil {
+		return nil
+	}
+
+	// Unpack the return values using method.Outputs (not Inputs)
+	// Return values don't include method ID, just the raw return data
+	unpacked, err := method.Outputs.Unpack(data)
+	if err != nil {
+		return nil
+	}
+
+	// Convert unpacked values to JavaScript-compatible format
+	jsValues := make([]interface{}, len(unpacked))
+	for i, val := range unpacked {
+		jsValues[i] = convertGoTypeToJsValue(val)
+	}
+
+	// Return as JSON string
+	jsonData, err := json.Marshal(jsValues)
+	if err != nil {
+		return nil
+	}
+
+	return string(jsonData)
+}
+
+// convertGoTypeToJsValue converts a Go type to a JavaScript-compatible value
+func convertGoTypeToJsValue(val interface{}) interface{} {
+	switch v := val.(type) {
+	case common.Address:
+		// Convert address to hex string
+		return v.String()
+	case *big.Int:
+		// Convert big.Int to hex string
+		return hexutil.EncodeBig(v)
+	case []byte:
+		// Convert bytes to hex string
+		return hexutil.Encode(v)
+	case bool:
+		return v
+	case string:
+		return v
+	case []interface{}:
+		// Recursively convert array elements
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	default:
+		// For unknown types, try to convert to string
+		return fmt.Sprintf("%v", v)
+	}
 }
 
 // convertJsValueToGoType converts a js.Value to the appropriate Go type based on the ABI Type

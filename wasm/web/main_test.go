@@ -688,3 +688,375 @@ func TestConvertJsValueToGoType_FixedArraySizeMismatch(t *testing.T) {
 	}
 }
 
+// Testable version of UnpackMethodData for non-WASM testing
+func unpackMethodDataForTest(abiJSON string, methodName string, hexData string) ([]interface{}, error) {
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, err
+	}
+
+	method, exist := abiData.Methods[methodName]
+	if !exist {
+		return nil, fmt.Errorf("method '%s' not found", methodName)
+	}
+
+	// Decode hex string to bytes
+	if !strings.HasPrefix(hexData, "0x") && !strings.HasPrefix(hexData, "0X") {
+		hexData = "0x" + hexData
+	}
+	data, err := hexutil.Decode(hexData)
+	if err != nil {
+		return nil, err
+	}
+
+	// Unpack the return values using method.Outputs
+	unpacked, err := method.Outputs.Unpack(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return unpacked, nil
+}
+
+func TestUnpackMethodData_Uint256(t *testing.T) {
+	// Create ABI for a method that returns uint256
+	abiJSON := `[{
+		"name": "getValue",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "uint256"}]
+	}]`
+
+	// Pack a return value: 1000000000000000000 (1e18) = 0xde0b6b3a7640000
+	testValue := big.NewInt(1000000000000000000)
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	packed, err := abiData.Methods["getValue"].Outputs.Pack(testValue)
+	if err != nil {
+		t.Fatalf("Failed to pack return value: %v", err)
+	}
+
+	// Unpack the data
+	hexData := hexutil.Encode(packed)
+	unpacked, err := unpackMethodDataForTest(abiJSON, "getValue", hexData)
+	if err != nil {
+		t.Fatalf("Unpack failed: %v", err)
+	}
+
+	if len(unpacked) != 1 {
+		t.Fatalf("Expected 1 return value, got %d", len(unpacked))
+	}
+
+	unpackedVal, ok := unpacked[0].(*big.Int)
+	if !ok {
+		t.Fatalf("Expected *big.Int, got %T", unpacked[0])
+	}
+
+	if unpackedVal.Cmp(testValue) != 0 {
+		t.Errorf("Value mismatch: expected %s, got %s", testValue.String(), unpackedVal.String())
+	}
+}
+
+func TestUnpackMethodData_Address(t *testing.T) {
+	// Create ABI for a method that returns address
+	abiJSON := `[{
+		"name": "getAddress",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "address"}]
+	}]`
+
+	// Pack a return value
+	testAddr := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000000")
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	packed, err := abiData.Methods["getAddress"].Outputs.Pack(testAddr)
+	if err != nil {
+		t.Fatalf("Failed to pack return value: %v", err)
+	}
+
+	// Unpack the data
+	hexData := hexutil.Encode(packed)
+	unpacked, err := unpackMethodDataForTest(abiJSON, "getAddress", hexData)
+	if err != nil {
+		t.Fatalf("Unpack failed: %v", err)
+	}
+
+	if len(unpacked) != 1 {
+		t.Fatalf("Expected 1 return value, got %d", len(unpacked))
+	}
+
+	unpackedAddr, ok := unpacked[0].(common.Address)
+	if !ok {
+		t.Fatalf("Expected common.Address, got %T", unpacked[0])
+	}
+
+	if unpackedAddr != testAddr {
+		t.Errorf("Address mismatch: expected %s, got %s", testAddr.String(), unpackedAddr.String())
+	}
+}
+
+func TestUnpackMethodData_Bool(t *testing.T) {
+	// Create ABI for a method that returns bool
+	abiJSON := `[{
+		"name": "isActive",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "bool"}]
+	}]`
+
+	testCases := []bool{true, false}
+
+	for _, testValue := range testCases {
+		abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+		packed, err := abiData.Methods["isActive"].Outputs.Pack(testValue)
+		if err != nil {
+			t.Fatalf("Failed to pack return value: %v", err)
+		}
+
+		hexData := hexutil.Encode(packed)
+		unpacked, err := unpackMethodDataForTest(abiJSON, "isActive", hexData)
+		if err != nil {
+			t.Fatalf("Unpack failed: %v", err)
+		}
+
+		if len(unpacked) != 1 {
+			t.Fatalf("Expected 1 return value, got %d", len(unpacked))
+		}
+
+		unpackedBool, ok := unpacked[0].(bool)
+		if !ok {
+			t.Fatalf("Expected bool, got %T", unpacked[0])
+		}
+
+		if unpackedBool != testValue {
+			t.Errorf("Bool mismatch: expected %v, got %v", testValue, unpackedBool)
+		}
+	}
+}
+
+func TestUnpackMethodData_String(t *testing.T) {
+	// Create ABI for a method that returns string
+	abiJSON := `[{
+		"name": "getName",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "string"}]
+	}]`
+
+	testValue := "Hello, World!"
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	packed, err := abiData.Methods["getName"].Outputs.Pack(testValue)
+	if err != nil {
+		t.Fatalf("Failed to pack return value: %v", err)
+	}
+
+	hexData := hexutil.Encode(packed)
+	unpacked, err := unpackMethodDataForTest(abiJSON, "getName", hexData)
+	if err != nil {
+		t.Fatalf("Unpack failed: %v", err)
+	}
+
+	if len(unpacked) != 1 {
+		t.Fatalf("Expected 1 return value, got %d", len(unpacked))
+	}
+
+	unpackedStr, ok := unpacked[0].(string)
+	if !ok {
+		t.Fatalf("Expected string, got %T", unpacked[0])
+	}
+
+	if unpackedStr != testValue {
+		t.Errorf("String mismatch: expected %s, got %s", testValue, unpackedStr)
+	}
+}
+
+func TestUnpackMethodData_Bytes(t *testing.T) {
+	// Create ABI for a method that returns bytes
+	abiJSON := `[{
+		"name": "getData",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "bytes"}]
+	}]`
+
+	testValue := []byte{0x48, 0x65, 0x6c, 0x6c, 0x6f} // "Hello"
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	packed, err := abiData.Methods["getData"].Outputs.Pack(testValue)
+	if err != nil {
+		t.Fatalf("Failed to pack return value: %v", err)
+	}
+
+	hexData := hexutil.Encode(packed)
+	unpacked, err := unpackMethodDataForTest(abiJSON, "getData", hexData)
+	if err != nil {
+		t.Fatalf("Unpack failed: %v", err)
+	}
+
+	if len(unpacked) != 1 {
+		t.Fatalf("Expected 1 return value, got %d", len(unpacked))
+	}
+
+	unpackedBytes, ok := unpacked[0].([]byte)
+	if !ok {
+		t.Fatalf("Expected []byte, got %T", unpacked[0])
+	}
+
+	if !reflect.DeepEqual(unpackedBytes, testValue) {
+		t.Errorf("Bytes mismatch: expected %v, got %v", testValue, unpackedBytes)
+	}
+}
+
+func TestUnpackMethodData_MultipleReturns(t *testing.T) {
+	// Create ABI for a method that returns multiple values
+	abiJSON := `[{
+		"name": "getInfo",
+		"type": "function",
+		"inputs": [],
+		"outputs": [
+			{"name": "value", "type": "uint256"},
+			{"name": "flag", "type": "bool"},
+			{"name": "addr", "type": "address"}
+		]
+	}]`
+
+	testValue := big.NewInt(1000000000000000000)
+	testFlag := true
+	testAddr := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000000")
+
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	packed, err := abiData.Methods["getInfo"].Outputs.Pack(testValue, testFlag, testAddr)
+	if err != nil {
+		t.Fatalf("Failed to pack return values: %v", err)
+	}
+
+	hexData := hexutil.Encode(packed)
+	unpacked, err := unpackMethodDataForTest(abiJSON, "getInfo", hexData)
+	if err != nil {
+		t.Fatalf("Unpack failed: %v", err)
+	}
+
+	if len(unpacked) != 3 {
+		t.Fatalf("Expected 3 return values, got %d", len(unpacked))
+	}
+
+	// Check first return value (uint256)
+	unpackedVal, ok := unpacked[0].(*big.Int)
+	if !ok {
+		t.Fatalf("Expected *big.Int for first return, got %T", unpacked[0])
+	}
+	if unpackedVal.Cmp(testValue) != 0 {
+		t.Errorf("First value mismatch: expected %s, got %s", testValue.String(), unpackedVal.String())
+	}
+
+	// Check second return value (bool)
+	unpackedFlag, ok := unpacked[1].(bool)
+	if !ok {
+		t.Fatalf("Expected bool for second return, got %T", unpacked[1])
+	}
+	if unpackedFlag != testFlag {
+		t.Errorf("Second value mismatch: expected %v, got %v", testFlag, unpackedFlag)
+	}
+
+	// Check third return value (address)
+	unpackedAddr, ok := unpacked[2].(common.Address)
+	if !ok {
+		t.Fatalf("Expected common.Address for third return, got %T", unpacked[2])
+	}
+	if unpackedAddr != testAddr {
+		t.Errorf("Third value mismatch: expected %s, got %s", testAddr.String(), unpackedAddr.String())
+	}
+}
+
+func TestUnpackMethodData_Uint256Array(t *testing.T) {
+	// Create ABI for a method that returns uint256[]
+	abiJSON := `[{
+		"name": "getValues",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "uint256[]"}]
+	}]`
+
+	testValue := []*big.Int{
+		big.NewInt(1000000000000000000),
+		big.NewInt(2000000000000000000),
+		big.NewInt(3000000000000000000),
+	}
+
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	// Pack using the slice directly - the ABI library will handle it via reflect
+	packed, err := abiData.Methods["getValues"].Outputs.Pack(testValue)
+	if err != nil {
+		t.Fatalf("Failed to pack return value: %v", err)
+	}
+
+	hexData := hexutil.Encode(packed)
+	unpacked, err := unpackMethodDataForTest(abiJSON, "getValues", hexData)
+	if err != nil {
+		t.Fatalf("Unpack failed: %v", err)
+	}
+
+	if len(unpacked) != 1 {
+		t.Fatalf("Expected 1 return value, got %d", len(unpacked))
+	}
+
+	// The unpacked array can be []*big.Int or []interface{}
+	var unpackedArr []*big.Int
+	switch v := unpacked[0].(type) {
+	case []*big.Int:
+		unpackedArr = v
+	case []interface{}:
+		unpackedArr = make([]*big.Int, len(v))
+		for i, elem := range v {
+			val, ok := elem.(*big.Int)
+			if !ok {
+				t.Fatalf("Expected *big.Int at index %d, got %T", i, elem)
+			}
+			unpackedArr[i] = val
+		}
+	default:
+		t.Fatalf("Expected []*big.Int or []interface{}, got %T", unpacked[0])
+	}
+
+	if len(unpackedArr) != len(testValue) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValue), len(unpackedArr))
+	}
+
+	for i, unpackedVal := range unpackedArr {
+		expectedVal := testValue[i]
+		if unpackedVal.Cmp(expectedVal) != 0 {
+			t.Errorf("Element %d mismatch: expected %s, got %s", i, expectedVal.String(), unpackedVal.String())
+		}
+	}
+}
+
+func TestUnpackMethodData_InvalidMethod(t *testing.T) {
+	abiJSON := `[{
+		"name": "getValue",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "uint256"}]
+	}]`
+
+	_, err := unpackMethodDataForTest(abiJSON, "nonExistentMethod", "0x00")
+	if err == nil {
+		t.Fatal("Expected error for non-existent method, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestUnpackMethodData_InvalidHexData(t *testing.T) {
+	abiJSON := `[{
+		"name": "getValue",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "uint256"}]
+	}]`
+
+	_, err := unpackMethodDataForTest(abiJSON, "getValue", "invalid hex")
+	if err == nil {
+		t.Fatal("Expected error for invalid hex data, got nil")
+	}
+}
+
