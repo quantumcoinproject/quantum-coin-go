@@ -7,6 +7,10 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"math/big"
+	"strings"
+	"syscall/js"
+
 	"github.com/google/uuid"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -17,9 +21,6 @@ import (
 	ks "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/keystore"
 	wasm "github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
 	"golang.org/x/crypto/scrypt"
-	"math/big"
-	"strings"
-	"syscall/js"
 )
 
 type Transaction struct {
@@ -41,6 +42,7 @@ func main() {
 	js.Global().Set("Scrypt", js.FuncOf(Scrypt))
 	js.Global().Set("PublicKeyToAddress", js.FuncOf(PublicKeyToAddress))
 	js.Global().Set("TxnSigningHash", js.FuncOf(TxnSigningHash))
+	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash", js.FuncOf(TxnHash))
 	js.Global().Set("TxnData", js.FuncOf(TxnData))
 	js.Global().Set("ContractData", js.FuncOf(ContractData))
@@ -113,7 +115,31 @@ func IsValidAddress(this js.Value, args []js.Value) interface{} {
 func TxnSigningHash(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData(args)
 	if err != nil {
-		fmt.Println("TxnSigningHash err", err)
+		return nil
+	}
+
+	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+
+	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+
+	signerHash, err := signer.Hash(tx)
+	if err != nil {
+		return nil
+	}
+
+	var message strings.Builder
+	for i := 0; i < len(signerHash); i++ {
+		sh := signerHash[i]
+		message.WriteString(string(sh))
+	}
+	return message.String()
+}
+
+func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
+	ts, err := transactionData2(args)
+	if err != nil {
 		return nil
 	}
 
@@ -139,7 +165,6 @@ func TxnSigningHash(this js.Value, args []js.Value) interface{} {
 func TxnHash(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData(args)
 	if err != nil {
-		fmt.Println("txnhash err", err)
 		return nil
 	}
 
@@ -168,7 +193,6 @@ func TxnHash(this js.Value, args []js.Value) interface{} {
 func TxnData(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData(args)
 	if err != nil {
-		fmt.Println("TxnData err", err)
 		return nil
 	}
 
@@ -351,10 +375,45 @@ func transactionData(args []js.Value) (transaction Transaction, err error) {
 	var weiVal *big.Int
 	ethVal, err = ParseBigFloatInner(args[3].String())
 	if err != nil {
-		fmt.Println("ParseBigFloatInner", args[3].String(), "err", err)
 		return Transaction{}, err
 	}
 	weiVal = etherToWeiFloat(ethVal)
+
+	var gasString string
+	var gasUint64 uint64
+	fmt.Sscan(args[4].String(), &gasString, &gasUint64)
+	gasLimit := gasUint64
+
+	var chainIdString string
+	var chainIdInt64 int64
+	fmt.Sscan(args[5].String(), &chainIdString, &chainIdInt64)
+	chainId := big.NewInt(chainIdInt64)
+
+	dataString := js.Global().Get("Uint8Array").New(args[6])
+	data := make([]byte, dataString.Get("length").Int())
+	js.CopyBytesToGo(data, dataString)
+
+	transactionDetails := TransactionDetails{
+		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
+		Value: weiVal, Data: data, ChainId: chainId}
+
+	var t Transaction
+	t.Transaction = append(t.Transaction, transactionDetails)
+
+	return t, nil
+}
+
+func transactionData2(args []js.Value) (transaction Transaction, err error) {
+	fromAddress := common.HexToAddress(args[0].String())
+
+	var nonceString string
+	var nonceUint64 uint64
+	fmt.Sscan(args[1].String(), &nonceString, &nonceUint64)
+	nonce := nonceUint64
+
+	toAddress := common.HexToAddress(args[2].String())
+
+	weiVal := hexutil.DecodeBig(args[3].String())
 
 	var gasString string
 	var gasUint64 uint64
