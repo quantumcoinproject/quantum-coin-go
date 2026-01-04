@@ -42,7 +42,6 @@ func main() {
 	js.Global().Set("Scrypt", js.FuncOf(Scrypt))
 	js.Global().Set("PublicKeyToAddress", js.FuncOf(PublicKeyToAddress))
 	js.Global().Set("TxnSigningHash", js.FuncOf(TxnSigningHash))
-	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash", js.FuncOf(TxnHash))
 	js.Global().Set("TxnData", js.FuncOf(TxnData))
 	js.Global().Set("ContractData", js.FuncOf(ContractData))
@@ -59,6 +58,9 @@ func main() {
 	js.Global().Set("CombinePublicKeySignature", js.FuncOf(CombinePublicKeySignature))
 	js.Global().Set("PackMethodData", js.FuncOf(PackMethodDataWrapper))
 	js.Global().Set("UnpackMethodData", js.FuncOf(UnpackMethodDataWrapper))
+	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
+	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
+	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
 	<-done
 }
 
@@ -190,8 +192,71 @@ func TxnHash(this js.Value, args []js.Value) interface{} {
 	return signTx.Hash().String()
 }
 
+func TxnHash2(this js.Value, args []js.Value) interface{} {
+	ts, err := transactionData2(args)
+	if err != nil {
+		return nil
+	}
+
+	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+
+	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+
+	pubData := js.Global().Get("Uint8Array").New(args[7])
+	pubBytes := make([]byte, pubData.Get("length").Int())
+	js.CopyBytesToGo(pubBytes, pubData)
+
+	sigData := js.Global().Get("Uint8Array").New(args[8])
+	sigBytes := make([]byte, sigData.Get("length").Int())
+	js.CopyBytesToGo(sigBytes, sigData)
+
+	signTx, err := signTxHash(tx, signer, pubBytes, sigBytes)
+	if err != nil {
+		return nil
+	}
+
+	return signTx.Hash().String()
+}
+
 func TxnData(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData(args)
+	if err != nil {
+		return nil
+	}
+
+	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+
+	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+
+	pubData := js.Global().Get("Uint8Array").New(args[7])
+	pubBytes := make([]byte, pubData.Get("length").Int())
+	js.CopyBytesToGo(pubBytes, pubData)
+
+	sigData := js.Global().Get("Uint8Array").New(args[8])
+	sigBytes := make([]byte, sigData.Get("length").Int())
+	js.CopyBytesToGo(sigBytes, sigData)
+
+	signTx, err := signTxHash(tx, signer, pubBytes, sigBytes)
+	if err != nil {
+		return nil
+	}
+
+	signTxBinary, err := signTx.MarshalBinary()
+	if err != nil {
+		return nil
+	}
+
+	signTxEncode := hexutil.Encode(signTxBinary)
+
+	return signTxEncode
+}
+
+func TxnData2(this js.Value, args []js.Value) interface{} {
+	ts, err := transactionData2(args)
 	if err != nil {
 		return nil
 	}
