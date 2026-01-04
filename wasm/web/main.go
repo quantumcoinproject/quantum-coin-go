@@ -478,7 +478,10 @@ func transactionData2(args []js.Value) (transaction Transaction, err error) {
 
 	toAddress := common.HexToAddress(args[2].String())
 
-	weiVal := hexutil.DecodeBig(args[3].String())
+	weiVal, err := hexutil.DecodeBig(args[3].String())
+	if err != nil {
+		return Transaction{}, err
+	}
 
 	var gasString string
 	var gasUint64 uint64
