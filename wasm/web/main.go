@@ -534,7 +534,7 @@ func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 		remarks = make([]byte, remarksString.Get("length").Int())
 		js.CopyBytesToGo(remarks, remarksString)
 	} else {
-		data = nil
+		remarks = nil
 	}
 
 	transactionDetails := TransactionDetails2{
