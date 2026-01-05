@@ -6,6 +6,7 @@ package main
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -42,14 +43,14 @@ type Transaction2 struct {
 }
 
 type TransactionDetails2 struct {
-	FromAddress common.Address `json:"fromAddress"`
-	ToAddress   common.Address `json:"toAddress"`
-	Nonce       uint64         `json:"nonce"`
-	GasLimit    uint64         `json:"gasLimit"`
-	Value       *big.Int       `json:"value"`
-	Data        []byte         `json:"data"`
-	ChainId     *big.Int       `json:"chainId"`
-	Remarks     []byte         `json:"remarks"`
+	FromAddress common.Address  `json:"fromAddress"`
+	ToAddress   *common.Address `json:"toAddress"`
+	Nonce       uint64          `json:"nonce"`
+	GasLimit    uint64          `json:"gasLimit"`
+	Value       *big.Int        `json:"value"`
+	Data        []byte          `json:"data"`
+	ChainId     *big.Int        `json:"chainId"`
+	Remarks     []byte          `json:"remarks"`
 }
 
 func main() {
@@ -161,7 +162,7 @@ func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 	}
 
 	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
-		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
 		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
@@ -214,7 +215,7 @@ func TxnHash2(this js.Value, args []js.Value) interface{} {
 	}
 
 	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
-		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
 		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
@@ -277,7 +278,7 @@ func TxnData2(this js.Value, args []js.Value) interface{} {
 	}
 
 	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
-		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
 		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
@@ -491,7 +492,17 @@ func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 	fmt.Sscan(args[1].String(), &nonceString, &nonceUint64)
 	nonce := nonceUint64
 
-	toAddress := common.HexToAddress(args[2].String())
+	var toAddress *common.Address
+
+	if args[2].IsNull() || args[2].IsUndefined() {
+		toAddress = nil
+	} else {
+		if common.IsHexAddress(args[2].String()) == false {
+			return Transaction2{}, errors.New("invalid address")
+		}
+		toAddressTemp := common.HexToAddress(args[2].String())
+		toAddress = &toAddressTemp
+	}
 
 	weiVal, err := hexutil.DecodeBig(args[3].String())
 	if err != nil {
@@ -508,13 +519,23 @@ func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 	fmt.Sscan(args[5].String(), &chainIdString, &chainIdInt64)
 	chainId := big.NewInt(chainIdInt64)
 
-	dataString := js.Global().Get("Uint8Array").New(args[6])
-	data := make([]byte, dataString.Get("length").Int())
-	js.CopyBytesToGo(data, dataString)
+	var data []byte
+	if args[6].IsNull() == false && args[6].IsUndefined() == false {
+		dataString := js.Global().Get("Uint8Array").New(args[6])
+		data = make([]byte, dataString.Get("length").Int())
+		js.CopyBytesToGo(data, dataString)
+	} else {
+		data = nil
+	}
 
-	remarksString := js.Global().Get("Uint8Array").New(args[7])
-	remarks := make([]byte, remarksString.Get("length").Int())
-	js.CopyBytesToGo(remarks, remarksString)
+	var remarks []byte
+	if args[7].IsNull() == false && args[7].IsUndefined() == false {
+		remarksString := js.Global().Get("Uint8Array").New(args[7])
+		remarks = make([]byte, remarksString.Get("length").Int())
+		js.CopyBytesToGo(remarks, remarksString)
+	} else {
+		data = nil
+	}
 
 	transactionDetails := TransactionDetails2{
 		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
