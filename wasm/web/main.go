@@ -37,6 +37,21 @@ type TransactionDetails struct {
 	ChainId     *big.Int       `json:"chainId"`
 }
 
+type Transaction2 struct {
+	Transaction []TransactionDetails2 `json:"transaction"`
+}
+
+type TransactionDetails2 struct {
+	FromAddress common.Address `json:"fromAddress"`
+	ToAddress   common.Address `json:"toAddress"`
+	Nonce       uint64         `json:"nonce"`
+	GasLimit    uint64         `json:"gasLimit"`
+	Value       *big.Int       `json:"value"`
+	Data        []byte         `json:"data"`
+	ChainId     *big.Int       `json:"chainId"`
+	Remarks     []byte         `json:"remarks"`
+}
+
 func main() {
 	done := make(chan struct{}, 0)
 	js.Global().Set("Scrypt", js.FuncOf(Scrypt))
@@ -145,9 +160,9 @@ func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
@@ -198,9 +213,9 @@ func TxnHash2(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
@@ -261,9 +276,9 @@ func TxnData2(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
@@ -468,7 +483,7 @@ func transactionData(args []js.Value) (transaction Transaction, err error) {
 	return t, nil
 }
 
-func transactionData2(args []js.Value) (transaction Transaction, err error) {
+func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 	fromAddress := common.HexToAddress(args[0].String())
 
 	var nonceString string
@@ -480,7 +495,7 @@ func transactionData2(args []js.Value) (transaction Transaction, err error) {
 
 	weiVal, err := hexutil.DecodeBig(args[3].String())
 	if err != nil {
-		return Transaction{}, err
+		return Transaction2{}, err
 	}
 
 	var gasString string
@@ -497,11 +512,15 @@ func transactionData2(args []js.Value) (transaction Transaction, err error) {
 	data := make([]byte, dataString.Get("length").Int())
 	js.CopyBytesToGo(data, dataString)
 
-	transactionDetails := TransactionDetails{
-		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
-		Value: weiVal, Data: data, ChainId: chainId}
+	remarksString := js.Global().Get("Uint8Array").New(args[7])
+	remarks := make([]byte, remarksString.Get("length").Int())
+	js.CopyBytesToGo(remarks, remarksString)
 
-	var t Transaction
+	transactionDetails := TransactionDetails2{
+		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
+		Value: weiVal, Data: data, ChainId: chainId, Remarks: remarks}
+
+	var t Transaction2
 	t.Transaction = append(t.Transaction, transactionDetails)
 
 	return t, nil

@@ -77,6 +77,21 @@ func NewDefaultFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address
 	return tx
 }
 
+func NewDefaultFeeTransactionExtended(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, maxGasTier GasTier, data []byte, remarks []byte) *Transaction {
+	tx := NewTx(&DefaultFeeTx{
+		ChainID:    chainId,
+		Nonce:      nonce,
+		To:         to,
+		Value:      amount,
+		Data:       data,
+		Gas:        gasLimit,
+		MaxGasTier: maxGasTier,
+		Remarks:    remarks,
+	})
+
+	return tx
+}
+
 // copy creates a deep copy of the transaction data and initializes all fields.
 func (tx *DefaultFeeTx) copy() TxData {
 	cpy := &DefaultFeeTx{
