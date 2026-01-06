@@ -5,7 +5,13 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"math/big"
+	"strings"
+	"syscall/js"
+
 	"github.com/google/uuid"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -16,9 +22,6 @@ import (
 	ks "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/keystore"
 	wasm "github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
 	"golang.org/x/crypto/scrypt"
-	"math/big"
-	"strings"
-	"syscall/js"
 )
 
 type Transaction struct {
@@ -33,6 +36,21 @@ type TransactionDetails struct {
 	Value       *big.Int       `json:"value"`
 	Data        []byte         `json:"data"`
 	ChainId     *big.Int       `json:"chainId"`
+}
+
+type Transaction2 struct {
+	Transaction []TransactionDetails2 `json:"transaction"`
+}
+
+type TransactionDetails2 struct {
+	FromAddress common.Address  `json:"fromAddress"`
+	ToAddress   *common.Address `json:"toAddress"`
+	Nonce       uint64          `json:"nonce"`
+	GasLimit    uint64          `json:"gasLimit"`
+	Value       *big.Int        `json:"value"`
+	Data        []byte          `json:"data"`
+	ChainId     *big.Int        `json:"chainId"`
+	Remarks     []byte          `json:"remarks"`
 }
 
 func main() {
@@ -54,7 +72,34 @@ func main() {
 	js.Global().Set("PublicKeyFromSignature", js.FuncOf(PublicKeyFromSignature))
 	js.Global().Set("PublicKeyFromPrivateKey", js.FuncOf(PublicKeyFromPrivateKey))
 	js.Global().Set("CombinePublicKeySignature", js.FuncOf(CombinePublicKeySignature))
+	js.Global().Set("PackMethodData", js.FuncOf(PackMethodDataWrapper))
+	js.Global().Set("UnpackMethodData", js.FuncOf(UnpackMethodDataWrapper))
+	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
+	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
+	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
 	<-done
+}
+
+// PackMethodDataWrapper is a wrapper function for PackMethodData to be used with js.FuncOf
+func PackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 3 {
+		return nil
+	}
+	abiJSON := args[0].String()
+	methodName := args[1].String()
+	methodArgs := args[2:]
+	return PackMethodData(abiJSON, methodName, methodArgs)
+}
+
+// UnpackMethodDataWrapper is a wrapper function for UnpackMethodData to be used with js.FuncOf
+func UnpackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) != 3 {
+		return nil
+	}
+	abiJSON := args[0].String()
+	methodName := args[1].String()
+	hexData := args[2]
+	return UnpackMethodData(abiJSON, methodName, hexData)
 }
 
 func Scrypt(this js.Value, args []js.Value) interface{} {
@@ -88,7 +133,6 @@ func IsValidAddress(this js.Value, args []js.Value) interface{} {
 func TxnSigningHash(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData(args)
 	if err != nil {
-		fmt.Println("TxnSigningHash err", err)
 		return nil
 	}
 
@@ -111,10 +155,34 @@ func TxnSigningHash(this js.Value, args []js.Value) interface{} {
 	return message.String()
 }
 
+func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
+	ts, err := transactionData2(args)
+	if err != nil {
+		return nil
+	}
+
+	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
+
+	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+
+	signerHash, err := signer.Hash(tx)
+	if err != nil {
+		return nil
+	}
+
+	var message strings.Builder
+	for i := 0; i < len(signerHash); i++ {
+		sh := signerHash[i]
+		message.WriteString(string(sh))
+	}
+	return message.String()
+}
+
 func TxnHash(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData(args)
 	if err != nil {
-		fmt.Println("txnhash err", err)
 		return nil
 	}
 
@@ -140,16 +208,78 @@ func TxnHash(this js.Value, args []js.Value) interface{} {
 	return signTx.Hash().String()
 }
 
+func TxnHash2(this js.Value, args []js.Value) interface{} {
+	ts, err := transactionData2(args)
+	if err != nil {
+		return nil
+	}
+
+	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
+
+	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+
+	pubData := js.Global().Get("Uint8Array").New(args[7])
+	pubBytes := make([]byte, pubData.Get("length").Int())
+	js.CopyBytesToGo(pubBytes, pubData)
+
+	sigData := js.Global().Get("Uint8Array").New(args[8])
+	sigBytes := make([]byte, sigData.Get("length").Int())
+	js.CopyBytesToGo(sigBytes, sigData)
+
+	signTx, err := signTxHash(tx, signer, pubBytes, sigBytes)
+	if err != nil {
+		return nil
+	}
+
+	return signTx.Hash().String()
+}
+
 func TxnData(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData(args)
 	if err != nil {
-		fmt.Println("TxnData err", err)
 		return nil
 	}
 
 	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
 		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+
+	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+
+	pubData := js.Global().Get("Uint8Array").New(args[7])
+	pubBytes := make([]byte, pubData.Get("length").Int())
+	js.CopyBytesToGo(pubBytes, pubData)
+
+	sigData := js.Global().Get("Uint8Array").New(args[8])
+	sigBytes := make([]byte, sigData.Get("length").Int())
+	js.CopyBytesToGo(sigBytes, sigData)
+
+	signTx, err := signTxHash(tx, signer, pubBytes, sigBytes)
+	if err != nil {
+		return nil
+	}
+
+	signTxBinary, err := signTx.MarshalBinary()
+	if err != nil {
+		return nil
+	}
+
+	signTxEncode := hexutil.Encode(signTxBinary)
+
+	return signTxEncode
+}
+
+func TxnData2(this js.Value, args []js.Value) interface{} {
+	ts, err := transactionData2(args)
+	if err != nil {
+		return nil
+	}
+
+	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
+		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
@@ -326,7 +456,6 @@ func transactionData(args []js.Value) (transaction Transaction, err error) {
 	var weiVal *big.Int
 	ethVal, err = ParseBigFloatInner(args[3].String())
 	if err != nil {
-		fmt.Println("ParseBigFloatInner", args[3].String(), "err", err)
 		return Transaction{}, err
 	}
 	weiVal = etherToWeiFloat(ethVal)
@@ -350,6 +479,72 @@ func transactionData(args []js.Value) (transaction Transaction, err error) {
 		Value: weiVal, Data: data, ChainId: chainId}
 
 	var t Transaction
+	t.Transaction = append(t.Transaction, transactionDetails)
+
+	return t, nil
+}
+
+func transactionData2(args []js.Value) (transaction Transaction2, err error) {
+	fromAddress := common.HexToAddress(args[0].String())
+
+	var nonceString string
+	var nonceUint64 uint64
+	fmt.Sscan(args[1].String(), &nonceString, &nonceUint64)
+	nonce := nonceUint64
+
+	var toAddress *common.Address
+
+	if args[2].IsNull() || args[2].IsUndefined() {
+		toAddress = nil
+	} else {
+		if common.IsHexAddress(args[2].String()) == false {
+			return Transaction2{}, errors.New("invalid address")
+		}
+		toAddressTemp := common.HexToAddress(args[2].String())
+		toAddress = &toAddressTemp
+	}
+
+	var weiVal *big.Int
+	if args[3].IsNull() == false && args[3].IsUndefined() == false {
+		weiVal, err = hexutil.DecodeBig(args[3].String())
+		if err != nil {
+			return Transaction2{}, err
+		}
+	}
+
+	var gasString string
+	var gasUint64 uint64
+	fmt.Sscan(args[4].String(), &gasString, &gasUint64)
+	gasLimit := gasUint64
+
+	var chainIdString string
+	var chainIdInt64 int64
+	fmt.Sscan(args[5].String(), &chainIdString, &chainIdInt64)
+	chainId := big.NewInt(chainIdInt64)
+
+	var data []byte
+	if args[6].IsNull() == false && args[6].IsUndefined() == false {
+		dataString := js.Global().Get("Uint8Array").New(args[6])
+		data = make([]byte, dataString.Get("length").Int())
+		js.CopyBytesToGo(data, dataString)
+	} else {
+		data = nil
+	}
+
+	var remarks []byte
+	if args[7].IsNull() == false && args[7].IsUndefined() == false {
+		remarksString := js.Global().Get("Uint8Array").New(args[7])
+		remarks = make([]byte, remarksString.Get("length").Int())
+		js.CopyBytesToGo(remarks, remarksString)
+	} else {
+		remarks = nil
+	}
+
+	transactionDetails := TransactionDetails2{
+		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
+		Value: weiVal, Data: data, ChainId: chainId, Remarks: remarks}
+
+	var t Transaction2
 	t.Transaction = append(t.Transaction, transactionDetails)
 
 	return t, nil
@@ -455,6 +650,305 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 	}
 
 	return d.String()
+}
+
+// PackMethodData packs a Solidity method call with the given ABI, method name, and arguments.
+// It returns the transaction data as a JavaScript-compatible string that can be included in a transaction.
+//
+// Parameters:
+//   - abiJSON: The Solidity ABI file content as a JSON string
+//   - methodName: The name of the method to call
+//   - args: An array of js.Value representing the parameters to pass to the method
+//
+// Returns:
+//   - interface{}: The packed transaction data as a string, or nil on error
+func PackMethodData(abiJSON string, methodName string, args []js.Value) interface{} {
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil
+	}
+
+	method, exist := abiData.Methods[methodName]
+	if !exist {
+		return nil
+	}
+
+	if len(args) != len(method.Inputs) {
+		return nil
+	}
+
+	// Convert js.Value arguments to Go types based on ABI types
+	convertedArgs := make([]interface{}, len(args))
+	for i, arg := range args {
+		converted, err := convertJsValueToGoType(arg, method.Inputs[i].Type)
+		if err != nil {
+			return nil
+		}
+		convertedArgs[i] = converted
+	}
+
+	data, err := abiData.Pack(methodName, convertedArgs...)
+	if err != nil {
+		return nil
+	}
+
+	var d strings.Builder
+	for i := 0; i < len(data); i++ {
+		sh := data[i]
+		d.WriteString(string(sh))
+	}
+
+	return d.String()
+}
+
+// UnpackMethodData unpacks the return values of a Solidity method call.
+// It returns the unpacked values as a JSON string that can be parsed in JavaScript.
+//
+// Parameters:
+//   - abiJSON: The Solidity ABI file content as a JSON string
+//   - methodName: The name of the method whose return values to unpack
+//   - hexData: The hex-encoded return data as a js.Value (string, with or without 0x prefix)
+//
+// Returns:
+//   - interface{}: The unpacked return values as a JSON string, or nil on error
+func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) interface{} {
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil
+	}
+
+	method, exist := abiData.Methods[methodName]
+	if !exist {
+		return nil
+	}
+
+	// Get hex string from js.Value and decode to bytes
+	hexStr := hexData.String()
+	if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+		hexStr = "0x" + hexStr
+	}
+	data, err := hexutil.Decode(hexStr)
+	if err != nil {
+		return nil
+	}
+
+	// Unpack the return values using method.Outputs (not Inputs)
+	// Return values don't include method ID, just the raw return data
+	unpacked, err := method.Outputs.Unpack(data)
+	if err != nil {
+		return nil
+	}
+
+	// Convert unpacked values to JavaScript-compatible format
+	jsValues := make([]interface{}, len(unpacked))
+	for i, val := range unpacked {
+		jsValues[i] = convertGoTypeToJsValue(val)
+	}
+
+	// Return as JSON string
+	jsonData, err := json.Marshal(jsValues)
+	if err != nil {
+		return nil
+	}
+
+	return string(jsonData)
+}
+
+// convertGoTypeToJsValue converts a Go type to a JavaScript-compatible value
+func convertGoTypeToJsValue(val interface{}) interface{} {
+	switch v := val.(type) {
+	case common.Address:
+		// Convert address to hex string
+		return v.String()
+	case *big.Int:
+		// Convert big.Int to hex string
+		return hexutil.EncodeBig(v)
+	case []byte:
+		// Convert bytes to hex string
+		return hexutil.Encode(v)
+	case bool:
+		return v
+	case string:
+		return v
+	case []interface{}:
+		// Recursively convert array elements
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	default:
+		// For unknown types, try to convert to string
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// convertJsValueToGoType converts a js.Value to the appropriate Go type based on the ABI Type
+func convertJsValueToGoType(jsVal js.Value, abiType abi.Type) (interface{}, error) {
+	typeStr := abiType.String()
+
+	switch abiType.T {
+	case abi.AddressTy:
+		// Address type: convert from hex string
+		addrStr := jsVal.String()
+		if !common.IsHexAddress(addrStr) {
+			return nil, fmt.Errorf("invalid address: %s", addrStr)
+		}
+		return common.HexToAddress(addrStr), nil
+
+	case abi.UintTy:
+		// Unsigned integer types (uint8, uint256, etc.)
+		// Convert from hex string to big.Int
+		hexStr := jsVal.String()
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		val, err := hexutil.DecodeBig(hexStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid uint value: %s", hexStr)
+		}
+		return val, nil
+
+	case abi.IntTy:
+		// Signed integer types (int8, int256, etc.)
+		// Convert from hex string to big.Int
+		hexStr := jsVal.String()
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		val, err := hexutil.DecodeBig(hexStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid int value: %s", hexStr)
+		}
+		return val, nil
+
+	case abi.BoolTy:
+		// Boolean type
+		return jsVal.Bool(), nil
+
+	case abi.StringTy:
+		// String type
+		return jsVal.String(), nil
+
+	case abi.BytesTy:
+		// Dynamic bytes type
+		// Check if it's a Uint8Array
+		if jsVal.Type() == js.TypeObject {
+			uint8Array := js.Global().Get("Uint8Array")
+			if !uint8Array.IsUndefined() && jsVal.InstanceOf(uint8Array) {
+				bytes := make([]byte, jsVal.Get("length").Int())
+				js.CopyBytesToGo(bytes, jsVal)
+				return bytes, nil
+			}
+		}
+		// Fallback: treat as hex string
+		hexStr := jsVal.String()
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		return hexutil.Decode(hexStr)
+
+	case abi.FixedBytesTy:
+		// Fixed-size bytes type (bytes1, bytes32, etc.)
+		// Check if it's a Uint8Array
+		if jsVal.Type() == js.TypeObject {
+			uint8Array := js.Global().Get("Uint8Array")
+			if !uint8Array.IsUndefined() && jsVal.InstanceOf(uint8Array) {
+				bytes := make([]byte, abiType.Size)
+				js.CopyBytesToGo(bytes, jsVal)
+				return bytes, nil
+			}
+		}
+		// Fallback: treat as hex string
+		hexStr := jsVal.String()
+		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
+			hexStr = "0x" + hexStr
+		}
+		decoded, err := hexutil.Decode(hexStr)
+		if err != nil {
+			return nil, err
+		}
+		if len(decoded) != abiType.Size {
+			return nil, fmt.Errorf("fixed bytes size mismatch: expected %d, got %d", abiType.Size, len(decoded))
+		}
+		return decoded, nil
+
+	case abi.SliceTy:
+		// Dynamic array type (uint256[], address[], etc.)
+		// Check if it's a JavaScript array
+		if jsVal.Type() == js.TypeObject && jsVal.Get("length").Type() == js.TypeNumber {
+			length := jsVal.Get("length").Int()
+			result := make([]interface{}, length)
+			for i := 0; i < length; i++ {
+				elem, err := convertJsValueToGoType(jsVal.Index(i), *abiType.Elem)
+				if err != nil {
+					return nil, fmt.Errorf("failed to convert array element %d: %w", i, err)
+				}
+				result[i] = elem
+			}
+			return result, nil
+		}
+		return nil, fmt.Errorf("expected array for slice type %s", typeStr)
+
+	case abi.ArrayTy:
+		// Fixed-size array type (uint256[5], address[10], etc.)
+		// Check if it's a JavaScript array
+		if jsVal.Type() == js.TypeObject && jsVal.Get("length").Type() == js.TypeNumber {
+			length := jsVal.Get("length").Int()
+			if length != abiType.Size {
+				return nil, fmt.Errorf("array size mismatch: expected %d, got %d", abiType.Size, length)
+			}
+			result := make([]interface{}, length)
+			for i := 0; i < length; i++ {
+				elem, err := convertJsValueToGoType(jsVal.Index(i), *abiType.Elem)
+				if err != nil {
+					return nil, fmt.Errorf("failed to convert array element %d: %w", i, err)
+				}
+				result[i] = elem
+			}
+			return result, nil
+		}
+		return nil, fmt.Errorf("expected array for fixed array type %s", typeStr)
+
+	case abi.TupleTy:
+		// Tuple type - complex struct-like types
+		// This is more complex and would require parsing the tuple structure
+		// For now, we'll try to handle it as a JavaScript object
+		if jsVal.Type() == js.TypeObject {
+			result := make([]interface{}, len(abiType.TupleElems))
+			for i, elemType := range abiType.TupleElems {
+				// Try to get the field by index or by name
+				var fieldVal js.Value
+				if jsVal.Get("length").Type() == js.TypeNumber {
+					// Array-like access
+					fieldVal = jsVal.Index(i)
+				} else {
+					// Object-like access by name
+					fieldName := abiType.TupleRawNames[i]
+					fieldVal = jsVal.Get(fieldName)
+					if fieldVal.IsUndefined() {
+						// Try camelCase
+						fieldName = abi.ToCamelCase(fieldName)
+						fieldVal = jsVal.Get(fieldName)
+					}
+				}
+				if fieldVal.IsUndefined() {
+					return nil, fmt.Errorf("missing tuple field %d (%s)", i, abiType.TupleRawNames[i])
+				}
+				elem, err := convertJsValueToGoType(fieldVal, *elemType)
+				if err != nil {
+					return nil, fmt.Errorf("failed to convert tuple field %d: %w", i, err)
+				}
+				result[i] = elem
+			}
+			return result, nil
+		}
+		return nil, fmt.Errorf("expected object for tuple type %s", typeStr)
+
+	default:
+		// Fallback: try to convert as string for unknown types
+		return jsVal.String(), nil
+	}
 }
 
 func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {

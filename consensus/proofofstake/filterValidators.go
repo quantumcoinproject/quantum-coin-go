@@ -3,12 +3,13 @@ package proofofstake
 import (
 	"bytes"
 	"errors"
+	"math/big"
+	"sort"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"math/big"
-	"sort"
 )
 
 func filterValidators(consensusContext common.Hash, valDepMap *map[common.Address]*big.Int, blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2) (filteredValidators map[common.Address]bool,
@@ -149,7 +150,9 @@ func getMaxFilteredValidators(blockNumber uint64, consensusContext common.Hash, 
 
 	log.Trace("validator count after first pass", "filteredValidators", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
 
-	//Second pass, fill based no weighted sort order, but randomness based on consensus context. This ensures those with higher stake have a greater probability of being selected for validation.
+	//Second pass, fill based on weighted sort order (list is already sorted by stake wight, in the pass above),
+	//but add randomness based on consensus context.
+	//This ensures those with higher stake have a greater probability of being selected for validation, while maintaining a degree of randomness.
 	for _, validator := range validatorList {
 		_, ok := filteredValidators[validator]
 		if ok == true {
@@ -177,7 +180,7 @@ func getMaxFilteredValidators(blockNumber uint64, consensusContext common.Hash, 
 
 	log.Trace("validator count after second pass", "filteredValidators", len(filteredValidators), "depositValueSoFar", depositValueSoFar, "blockMinWeightedStake", blockMinWeightedStake)
 
-	//Third pass, fill by consensus context sort order, if the buffer is not full even after second pass. This is to ensure fairness even for validators with lower number of staked coins
+	//Third pass, fill by consensus context sort order, if the buffer is not full even after second pass. This is to ensure fairness even for validators with lower number of staked coins.
 	//Sort based on consensus context
 	sort.Slice(validatorList, func(i, j int) bool {
 		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
