@@ -504,9 +504,12 @@ func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 		toAddress = &toAddressTemp
 	}
 
-	weiVal, err := hexutil.DecodeBig(args[3].String())
-	if err != nil {
-		return Transaction2{}, err
+	var weiVal *big.Int
+	if args[3].IsNull() == false && args[3].IsUndefined() == false {
+		weiVal, err = hexutil.DecodeBig(args[3].String())
+		if err != nil {
+			return Transaction2{}, err
+		}
 	}
 
 	var gasString string
