@@ -690,6 +690,11 @@ func TestConvertJsValueToGoType_FixedArraySizeMismatch(t *testing.T) {
 
 // Testable version of UnpackMethodData for non-WASM testing
 func unpackMethodDataForTest(abiJSON string, methodName string, hexData string) ([]interface{}, error) {
+	// Validate method name is not empty
+	if strings.TrimSpace(methodName) == "" {
+		return nil, fmt.Errorf("method name cannot be empty")
+	}
+
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return nil, err
@@ -1057,6 +1062,102 @@ func TestUnpackMethodData_InvalidHexData(t *testing.T) {
 	_, err := unpackMethodDataForTest(abiJSON, "getValue", "invalid hex")
 	if err == nil {
 		t.Fatal("Expected error for invalid hex data, got nil")
+	}
+}
+
+// Testable version of PackMethodData for non-WASM testing
+func packMethodDataForTest(abiJSON string, methodName string, args []interface{}) ([]byte, error) {
+	// Validate method name is not empty
+	if strings.TrimSpace(methodName) == "" {
+		return nil, fmt.Errorf("method name cannot be empty")
+	}
+
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, err
+	}
+
+	method, exist := abiData.Methods[methodName]
+	if !exist {
+		return nil, fmt.Errorf("method '%s' not found", methodName)
+	}
+
+	if len(args) != len(method.Inputs) {
+		return nil, fmt.Errorf("argument count mismatch: expected %d, got %d", len(method.Inputs), len(args))
+	}
+
+	// Convert arguments to Go types based on ABI types
+	convertedArgs := make([]interface{}, len(args))
+	for i, arg := range args {
+		converted, err := convertValueToGoTypeForTest(arg, method.Inputs[i].Type)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert argument %d: %w", i, err)
+		}
+		convertedArgs[i] = converted
+	}
+
+	data, err := abiData.Pack(methodName, convertedArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack: %w", err)
+	}
+
+	return data, nil
+}
+
+func TestUnpackMethodData_EmptyMethodName(t *testing.T) {
+	abiJSON := `[{
+		"name": "getValue",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "uint256"}]
+	}]`
+
+	_, err := unpackMethodDataForTest(abiJSON, "", "0x00")
+	if err == nil {
+		t.Fatal("Expected error for empty method name, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+
+	// Test with whitespace-only method name
+	_, err = unpackMethodDataForTest(abiJSON, "   ", "0x00")
+	if err == nil {
+		t.Fatal("Expected error for whitespace-only method name, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+}
+
+func TestPackMethodData_EmptyMethodName(t *testing.T) {
+	abiJSON := `[{
+		"name": "getValue",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "uint256"}]
+	}]`
+
+	// Test with empty method name
+	_, err := packMethodDataForTest(abiJSON, "", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for empty method name, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+
+	// Test with whitespace-only method name
+	_, err = packMethodDataForTest(abiJSON, "   ", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for whitespace-only method name, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
 	}
 }
 

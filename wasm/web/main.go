@@ -663,6 +663,16 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 // Returns:
 //   - interface{}: The packed transaction data as a string, or a JavaScript Error on error
 func PackMethodData(abiJSON string, methodName string, args []js.Value) interface{} {
+	// Validate abiJSON name is not empty
+	if abiJSON == nil || strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("PackMethodData: abiJSON cannot be empty")
+	}
+
+	// Validate method name is not empty
+	if methodName == nil || strings.TrimSpace(methodName) == "" {
+		return js.Global().Get("Error").New("PackMethodData: method name cannot be empty")
+	}
+
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to parse ABI JSON: %v", err))
@@ -712,6 +722,16 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) interfac
 // Returns:
 //   - interface{}: The unpacked return values as a JSON string, or a JavaScript Error on error
 func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) interface{} {
+	// Validate abiJSON name is not empty
+	if abiJSON == nil || strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("PackMethodData: abiJSON cannot be empty")
+	}
+
+	// Validate method name is not empty
+	if methodName == nil || strings.TrimSpace(methodName) == "" {
+		return js.Global().Get("Error").New("UnpackMethodData: method name cannot be empty")
+	}
+
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to parse ABI JSON: %v", err))
