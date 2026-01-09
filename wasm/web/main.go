@@ -809,8 +809,45 @@ func convertGoTypeToJsValue(val interface{}) interface{} {
 		return v
 	case string:
 		return v
+	case []*big.Int:
+		// Convert []*big.Int to []string (hex strings)
+		// Handle typed slices first before []interface{} to avoid ambiguity
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	case []common.Address:
+		// Convert []common.Address to []string (hex strings)
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	case []bool:
+		// Convert []bool to []bool
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	case []string:
+		// Convert []string to []string
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	case [][]byte:
+		// Convert [][]byte to []string (hex strings)
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
 	case []interface{}:
-		// Recursively convert array elements
+		// Recursively convert array elements (for tuples, nested arrays, etc.)
+		// This should come after specific typed slices to handle generic cases
 		result := make([]interface{}, len(v))
 		for i, elem := range v {
 			result[i] = convertGoTypeToJsValue(elem)
