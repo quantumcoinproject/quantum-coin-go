@@ -83,7 +83,7 @@ func main() {
 // PackMethodDataWrapper is a wrapper function for PackMethodData to be used with js.FuncOf
 func PackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
 	if len(args) < 3 {
-		return nil
+		return js.Global().Get("Error").New("PackMethodData: insufficient arguments, expected at least 3")
 	}
 	abiJSON := args[0].String()
 	methodName := args[1].String()
@@ -94,7 +94,7 @@ func PackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
 // UnpackMethodDataWrapper is a wrapper function for UnpackMethodData to be used with js.FuncOf
 func UnpackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
 	if len(args) != 3 {
-		return nil
+		return js.Global().Get("Error").New("UnpackMethodData: invalid number of arguments, expected 3")
 	}
 	abiJSON := args[0].String()
 	methodName := args[1].String()
@@ -661,20 +661,20 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 //   - args: An array of js.Value representing the parameters to pass to the method
 //
 // Returns:
-//   - interface{}: The packed transaction data as a string, or nil on error
+//   - interface{}: The packed transaction data as a string, or a JavaScript Error on error
 func PackMethodData(abiJSON string, methodName string, args []js.Value) interface{} {
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to parse ABI JSON: %v", err))
 	}
 
 	method, exist := abiData.Methods[methodName]
 	if !exist {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: method '%s' not found in ABI", methodName))
 	}
 
 	if len(args) != len(method.Inputs) {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: argument count mismatch for method '%s', expected %d but got %d", methodName, len(method.Inputs), len(args)))
 	}
 
 	// Convert js.Value arguments to Go types based on ABI types
@@ -682,14 +682,14 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) interfac
 	for i, arg := range args {
 		converted, err := convertJsValueToGoType(arg, method.Inputs[i].Type)
 		if err != nil {
-			return nil
+			return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to convert argument %d for method '%s': %v", i, methodName, err))
 		}
 		convertedArgs[i] = converted
 	}
 
 	data, err := abiData.Pack(methodName, convertedArgs...)
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to pack method '%s': %v", methodName, err))
 	}
 
 	var d strings.Builder
@@ -710,16 +710,16 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) interfac
 //   - hexData: The hex-encoded return data as a js.Value (string, with or without 0x prefix)
 //
 // Returns:
-//   - interface{}: The unpacked return values as a JSON string, or nil on error
+//   - interface{}: The unpacked return values as a JSON string, or a JavaScript Error on error
 func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) interface{} {
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to parse ABI JSON: %v", err))
 	}
 
 	method, exist := abiData.Methods[methodName]
 	if !exist {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: method '%s' not found in ABI", methodName))
 	}
 
 	// Get hex string from js.Value and decode to bytes
@@ -729,14 +729,14 @@ func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) inter
 	}
 	data, err := hexutil.Decode(hexStr)
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to decode hex data: %v", err))
 	}
 
 	// Unpack the return values using method.Outputs (not Inputs)
 	// Return values don't include method ID, just the raw return data
 	unpacked, err := method.Outputs.Unpack(data)
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to unpack return data for method '%s': %v", methodName, err))
 	}
 
 	// Convert unpacked values to JavaScript-compatible format
@@ -748,7 +748,7 @@ func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) inter
 	// Return as JSON string
 	jsonData, err := json.Marshal(jsValues)
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to marshal unpacked data to JSON: %v", err))
 	}
 
 	return string(jsonData)
