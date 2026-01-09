@@ -665,6 +665,8 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 // Returns:
 //   - interface{}: The packed transaction data as a string, or a JavaScript Error on error
 func PackMethodData(abiJSON string, methodName string, args []js.Value) interface{} {
+	var err error
+
 	// Validate abiJSON is not empty
 	if strings.TrimSpace(abiJSON) == "" {
 		return js.Global().Get("Error").New("PackMethodData: abiJSON cannot be empty")
@@ -691,7 +693,6 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) interfac
 	}
 
 	var data []byte
-	var err error
 
 	// If no arguments, call Pack without arguments
 	if len(args) == 0 {
