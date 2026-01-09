@@ -1406,3 +1406,332 @@ func TestPackMethodData_MixedArguments(t *testing.T) {
 	}
 }
 
+// Testable version of convertGoTypeToJsValue for non-WASM testing
+func convertGoTypeToJsValueForTest(val interface{}) interface{} {
+	switch v := val.(type) {
+	case common.Address:
+		return v.String()
+	case *big.Int:
+		return hexutil.EncodeBig(v)
+	case []byte:
+		return hexutil.Encode(v)
+	case bool:
+		return v
+	case string:
+		return v
+	case []*big.Int:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case []common.Address:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case []bool:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case []string:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case [][]byte:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case []interface{}:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func TestConvertGoTypeToJsValue_BigIntArray(t *testing.T) {
+	// Test conversion of []*big.Int to array of hex strings
+	testValues := []*big.Int{
+		big.NewInt(1000000000000000000), // 1e18
+		big.NewInt(2000000000000000000), // 2e18
+		big.NewInt(3000000000000000000), // 3e18
+	}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		hexStr, ok := val.(string)
+		if !ok {
+			t.Fatalf("Expected string at index %d, got %T", i, val)
+		}
+
+		expectedHex := hexutil.EncodeBig(testValues[i])
+		if hexStr != expectedHex {
+			t.Errorf("Value mismatch at index %d: expected %s, got %s", i, expectedHex, hexStr)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_AddressArray(t *testing.T) {
+	// Test conversion of []common.Address to array of hex strings
+	testAddresses := []common.Address{
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001"),
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002"),
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000003"),
+	}
+
+	result := convertGoTypeToJsValueForTest(testAddresses)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testAddresses) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testAddresses), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		hexStr, ok := val.(string)
+		if !ok {
+			t.Fatalf("Expected string at index %d, got %T", i, val)
+		}
+
+		expectedHex := testAddresses[i].String()
+		if hexStr != expectedHex {
+			t.Errorf("Address mismatch at index %d: expected %s, got %s", i, expectedHex, hexStr)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_BoolArray(t *testing.T) {
+	// Test conversion of []bool to array of bools
+	testValues := []bool{true, false, true, false}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		boolVal, ok := val.(bool)
+		if !ok {
+			t.Fatalf("Expected bool at index %d, got %T", i, val)
+		}
+
+		if boolVal != testValues[i] {
+			t.Errorf("Bool mismatch at index %d: expected %v, got %v", i, testValues[i], boolVal)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_StringArray(t *testing.T) {
+	// Test conversion of []string to array of strings
+	testValues := []string{"hello", "world", "test"}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		strVal, ok := val.(string)
+		if !ok {
+			t.Fatalf("Expected string at index %d, got %T", i, val)
+		}
+
+		if strVal != testValues[i] {
+			t.Errorf("String mismatch at index %d: expected %s, got %s", i, testValues[i], strVal)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_BytesArray(t *testing.T) {
+	// Test conversion of [][]byte to array of hex strings
+	testValues := [][]byte{
+		{0x48, 0x65, 0x6c, 0x6c, 0x6f}, // "Hello"
+		{0x57, 0x6f, 0x72, 0x6c, 0x64}, // "World"
+		{0x54, 0x65, 0x73, 0x74},       // "Test"
+	}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		hexStr, ok := val.(string)
+		if !ok {
+			t.Fatalf("Expected string at index %d, got %T", i, val)
+		}
+
+		expectedHex := hexutil.Encode(testValues[i])
+		if hexStr != expectedHex {
+			t.Errorf("Bytes mismatch at index %d: expected %s, got %s", i, expectedHex, hexStr)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_InterfaceArray(t *testing.T) {
+	// Test conversion of []interface{} with mixed types
+	testValues := []interface{}{
+		big.NewInt(1000000000000000000),
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001"),
+		true,
+		"test",
+	}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	// Check first element (big.Int)
+	hexStr, ok := resultArray[0].(string)
+	if !ok {
+		t.Fatalf("Expected string for big.Int, got %T", resultArray[0])
+	}
+	expectedHex := hexutil.EncodeBig(testValues[0].(*big.Int))
+	if hexStr != expectedHex {
+		t.Errorf("BigInt mismatch: expected %s, got %s", expectedHex, hexStr)
+	}
+
+	// Check second element (address)
+	addrStr, ok := resultArray[1].(string)
+	if !ok {
+		t.Fatalf("Expected string for address, got %T", resultArray[1])
+	}
+	expectedAddr := testValues[1].(common.Address).String()
+	if addrStr != expectedAddr {
+		t.Errorf("Address mismatch: expected %s, got %s", expectedAddr, addrStr)
+	}
+
+	// Check third element (bool)
+	boolVal, ok := resultArray[2].(bool)
+	if !ok {
+		t.Fatalf("Expected bool, got %T", resultArray[2])
+	}
+	if boolVal != testValues[2] {
+		t.Errorf("Bool mismatch: expected %v, got %v", testValues[2], boolVal)
+	}
+
+	// Check fourth element (string)
+	strVal, ok := resultArray[3].(string)
+	if !ok {
+		t.Fatalf("Expected string, got %T", resultArray[3])
+	}
+	if strVal != testValues[3] {
+		t.Errorf("String mismatch: expected %s, got %s", testValues[3], strVal)
+	}
+}
+
+func TestConvertGoTypeToJsValue_NestedArrays(t *testing.T) {
+	// Test conversion of nested arrays ([]interface{} containing arrays)
+	innerArray1 := []*big.Int{
+		big.NewInt(1000000000000000000),
+		big.NewInt(2000000000000000000),
+	}
+	innerArray2 := []common.Address{
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001"),
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002"),
+	}
+
+	testValues := []interface{}{
+		innerArray1,
+		innerArray2,
+	}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != 2 {
+		t.Fatalf("Expected 2 elements, got %d", len(resultArray))
+	}
+
+	// Check first nested array ([]*big.Int)
+	firstArray, ok := resultArray[0].([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{} for first element, got %T", resultArray[0])
+	}
+
+	if len(firstArray) != 2 {
+		t.Fatalf("Expected 2 elements in first array, got %d", len(firstArray))
+	}
+
+	hexStr1, ok := firstArray[0].(string)
+	if !ok {
+		t.Fatalf("Expected string, got %T", firstArray[0])
+	}
+	expectedHex1 := hexutil.EncodeBig(innerArray1[0])
+	if hexStr1 != expectedHex1 {
+		t.Errorf("First nested big.Int mismatch: expected %s, got %s", expectedHex1, hexStr1)
+	}
+
+	// Check second nested array ([]common.Address)
+	secondArray, ok := resultArray[1].([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{} for second element, got %T", resultArray[1])
+	}
+
+	if len(secondArray) != 2 {
+		t.Fatalf("Expected 2 elements in second array, got %d", len(secondArray))
+	}
+
+	addrStr1, ok := secondArray[0].(string)
+	if !ok {
+		t.Fatalf("Expected string, got %T", secondArray[0])
+	}
+	expectedAddr1 := innerArray2[0].String()
+	if addrStr1 != expectedAddr1 {
+		t.Errorf("First nested address mismatch: expected %s, got %s", expectedAddr1, addrStr1)
+	}
+}
+
