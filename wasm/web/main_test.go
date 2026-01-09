@@ -1065,6 +1065,76 @@ func TestUnpackMethodData_InvalidHexData(t *testing.T) {
 	}
 }
 
+// convertToTypedSliceForTest converts []interface{} to the proper typed slice required by abi.Pack
+func convertToTypedSliceForTest(val interface{}, abiType abi.Type) interface{} {
+	// Only convert if it's a slice/array type and val is []interface{}
+	if abiType.T != abi.SliceTy && abiType.T != abi.ArrayTy {
+		return val
+	}
+
+	sliceVal, ok := val.([]interface{})
+	if !ok {
+		return val
+	}
+
+	// Convert based on element type
+	switch abiType.Elem.T {
+	case abi.AddressTy:
+		// Convert []interface{} to []common.Address
+		result := make([]common.Address, len(sliceVal))
+		for i, v := range sliceVal {
+			if addr, ok := v.(common.Address); ok {
+				result[i] = addr
+			}
+		}
+		return result
+
+	case abi.UintTy, abi.IntTy:
+		// Convert []interface{} to []*big.Int
+		result := make([]*big.Int, len(sliceVal))
+		for i, v := range sliceVal {
+			if bigVal, ok := v.(*big.Int); ok {
+				result[i] = bigVal
+			}
+		}
+		return result
+
+	case abi.BoolTy:
+		// Convert []interface{} to []bool
+		result := make([]bool, len(sliceVal))
+		for i, v := range sliceVal {
+			if boolVal, ok := v.(bool); ok {
+				result[i] = boolVal
+			}
+		}
+		return result
+
+	case abi.StringTy:
+		// Convert []interface{} to []string
+		result := make([]string, len(sliceVal))
+		for i, v := range sliceVal {
+			if strVal, ok := v.(string); ok {
+				result[i] = strVal
+			}
+		}
+		return result
+
+	case abi.BytesTy:
+		// Convert []interface{} to [][]byte
+		result := make([][]byte, len(sliceVal))
+		for i, v := range sliceVal {
+			if bytesVal, ok := v.([]byte); ok {
+				result[i] = bytesVal
+			}
+		}
+		return result
+
+	default:
+		// For other types, return as-is (might need nested conversion for nested arrays)
+		return val
+	}
+}
+
 // Testable version of PackMethodData for non-WASM testing
 func packMethodDataForTest(abiJSON string, methodName string, args []interface{}) ([]byte, error) {
 	// Validate method name is not empty
@@ -1086,17 +1156,26 @@ func packMethodDataForTest(abiJSON string, methodName string, args []interface{}
 		return nil, fmt.Errorf("argument count mismatch: expected %d, got %d", len(method.Inputs), len(args))
 	}
 
-	// Convert arguments to Go types based on ABI types
-	convertedArgs := make([]interface{}, len(args))
-	for i, arg := range args {
-		converted, err := convertValueToGoTypeForTest(arg, method.Inputs[i].Type)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert argument %d: %w", i, err)
+	var data []byte
+
+	// If no arguments, call Pack without arguments
+	if len(args) == 0 {
+		data, err = abiData.Pack(methodName)
+	} else {
+		// Convert arguments to Go types based on ABI types
+		convertedArgs := make([]interface{}, len(args))
+		for i, arg := range args {
+			converted, err := convertValueToGoTypeForTest(arg, method.Inputs[i].Type)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert argument %d: %w", i, err)
+			}
+			// Convert []interface{} to proper typed slice if needed
+			converted = convertToTypedSliceForTest(converted, method.Inputs[i].Type)
+			convertedArgs[i] = converted
 		}
-		convertedArgs[i] = converted
+		data, err = abiData.Pack(methodName, convertedArgs...)
 	}
 
-	data, err := abiData.Pack(methodName, convertedArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pack: %w", err)
 	}
@@ -1158,6 +1237,172 @@ func TestPackMethodData_EmptyMethodName(t *testing.T) {
 
 	if !strings.Contains(err.Error(), "cannot be empty") {
 		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+}
+
+func TestPackMethodData_ZeroArguments(t *testing.T) {
+	// Test packing a method with zero arguments (like name(), symbol(), etc.)
+	abiJSON := `[{
+		"name": "name",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "string"}]
+	}]`
+
+	// Pack with zero arguments
+	packed, err := packMethodDataForTest(abiJSON, "name", []interface{}{})
+	if err != nil {
+		t.Fatalf("Failed to pack zero-argument method: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify it contains the method selector (first 4 bytes)
+	if len(packed) < 4 {
+		t.Fatal("Packed data should contain method selector (at least 4 bytes)")
+	}
+
+	// Verify we can unpack it (should just be the method selector for zero-arg methods)
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	method := abiData.Methods["name"]
+	expectedSelector := method.ID
+	if !reflect.DeepEqual(packed[:4], expectedSelector) {
+		t.Errorf("Method selector mismatch: expected %x, got %x", expectedSelector, packed[:4])
+	}
+}
+
+func TestPackMethodData_AddressArray(t *testing.T) {
+	// Test packing a method with address[] argument (like getAmountsIn)
+	abiJSON := `[{
+		"name": "getAmountsIn",
+		"type": "function",
+		"inputs": [
+			{"name": "amountOut", "type": "uint256"},
+			{"name": "path", "type": "address[]"}
+		],
+		"outputs": [{"name": "amounts", "type": "uint256[]"}]
+	}]`
+
+	// Test addresses (32-byte addresses)
+	addr1 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	addr2 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002")
+
+	// Pack with address array
+	packed, err := packMethodDataForTest(abiJSON, "getAmountsIn", []interface{}{
+		"0xde0b6b3a7640000", // amountOut in hex
+		[]interface{}{addr1.String(), addr2.String()}, // path as []interface{} with address strings
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack method with address array: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify it contains the method selector
+	if len(packed) < 4 {
+		t.Fatal("Packed data should contain method selector (at least 4 bytes)")
+	}
+
+	// Verify we can unpack the arguments to verify correctness
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	method := abiData.Methods["getAmountsIn"]
+	expectedSelector := method.ID
+	if !reflect.DeepEqual(packed[:4], expectedSelector) {
+		t.Errorf("Method selector mismatch: expected %x, got %x", expectedSelector, packed[:4])
+	}
+}
+
+func TestPackMethodData_Uint256Array(t *testing.T) {
+	// Test packing a method with uint256[] argument
+	abiJSON := `[{
+		"name": "getAmounts",
+		"type": "function",
+		"inputs": [
+			{"name": "amounts", "type": "uint256[]"}
+		],
+		"outputs": [{"name": "", "type": "uint256[]"}]
+	}]`
+
+	// Test with uint256 array
+	testAmounts := []interface{}{
+		"0xde0b6b3a7640000", // 1 token
+		"0x1bc16d674ec80000", // 2 tokens
+		"0x29a2241af62c0000", // 3 tokens
+	}
+
+	packed, err := packMethodDataForTest(abiJSON, "getAmounts", []interface{}{
+		testAmounts,
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack method with uint256 array: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify it contains the method selector
+	if len(packed) < 4 {
+		t.Fatal("Packed data should contain method selector (at least 4 bytes)")
+	}
+
+	// Verify method selector
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	method := abiData.Methods["getAmounts"]
+	expectedSelector := method.ID
+	if !reflect.DeepEqual(packed[:4], expectedSelector) {
+		t.Errorf("Method selector mismatch: expected %x, got %x", expectedSelector, packed[:4])
+	}
+}
+
+func TestPackMethodData_MixedArguments(t *testing.T) {
+	// Test packing a method with mixed arguments including arrays
+	abiJSON := `[{
+		"name": "swapExactTokensForTokens",
+		"type": "function",
+		"inputs": [
+			{"name": "amountIn", "type": "uint256"},
+			{"name": "amountOutMin", "type": "uint256"},
+			{"name": "path", "type": "address[]"},
+			{"name": "to", "type": "address"},
+			{"name": "deadline", "type": "uint256"}
+		],
+		"outputs": [{"name": "amounts", "type": "uint256[]"}]
+	}]`
+
+	addr1 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	addr2 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002")
+	toAddr := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000003")
+
+	amountIn := "0xde0b6b3a7640000"        // 1 token
+	amountOutMin := "0xc9f2c9cd04674edea40000000" // Some minimum
+	deadline := "0x5f5e100"                 // Some deadline
+
+	packed, err := packMethodDataForTest(abiJSON, "swapExactTokensForTokens", []interface{}{
+		amountIn,
+		amountOutMin,
+		[]interface{}{addr1.String(), addr2.String()}, // path
+		toAddr.String(), // to
+		deadline,
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack method with mixed arguments: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify method selector
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	method := abiData.Methods["swapExactTokensForTokens"]
+	expectedSelector := method.ID
+	if !reflect.DeepEqual(packed[:4], expectedSelector) {
+		t.Errorf("Method selector mismatch: expected %x, got %x", expectedSelector, packed[:4])
 	}
 }
 

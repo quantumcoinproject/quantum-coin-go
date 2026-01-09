@@ -82,12 +82,14 @@ func main() {
 
 // PackMethodDataWrapper is a wrapper function for PackMethodData to be used with js.FuncOf
 func PackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
-	if len(args) < 3 {
-		return js.Global().Get("Error").New("PackMethodData: insufficient arguments, expected at least 3")
+	// Require at least 2 arguments: abiJSON and methodName
+	// Method arguments are optional (can be 0 or more)
+	if len(args) < 2 {
+		return js.Global().Get("Error").New("PackMethodData: insufficient arguments, expected at least 2 (abiJSON and methodName)")
 	}
 	abiJSON := args[0].String()
 	methodName := args[1].String()
-	methodArgs := args[2:]
+	methodArgs := args[2:] // This will be an empty slice for zero-argument methods
 	return PackMethodData(abiJSON, methodName, methodArgs)
 }
 
@@ -688,17 +690,26 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) interfac
 		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: argument count mismatch for method '%s', expected %d but got %d", methodName, len(method.Inputs), len(args)))
 	}
 
-	// Convert js.Value arguments to Go types based on ABI types
-	convertedArgs := make([]interface{}, len(args))
-	for i, arg := range args {
-		converted, err := convertJsValueToGoType(arg, method.Inputs[i].Type)
-		if err != nil {
-			return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to convert argument %d for method '%s': %v", i, methodName, err))
-		}
-		convertedArgs[i] = converted
-	}
+	var data []byte
+	var err error
 
-	data, err := abiData.Pack(methodName, convertedArgs...)
+	// If no arguments, call Pack without arguments
+	if len(args) == 0 {
+		data, err = abiData.Pack(methodName)
+	} else {
+		// Convert js.Value arguments to Go types based on ABI types
+		convertedArgs := make([]interface{}, len(args))
+		for i, arg := range args {
+			converted, err := convertJsValueToGoType(arg, method.Inputs[i].Type)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to convert argument %d for method '%s': %v", i, methodName, err))
+			}
+			// Convert []interface{} to proper typed slice if needed
+			converted = convertToTypedSlice(converted, method.Inputs[i].Type)
+			convertedArgs[i] = converted
+		}
+		data, err = abiData.Pack(methodName, convertedArgs...)
+	}
 	if err != nil {
 		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to pack method '%s': %v", methodName, err))
 	}
@@ -807,6 +818,76 @@ func convertGoTypeToJsValue(val interface{}) interface{} {
 	default:
 		// For unknown types, try to convert to string
 		return fmt.Sprintf("%v", v)
+	}
+}
+
+// convertToTypedSlice converts []interface{} to the proper typed slice required by abi.Pack
+func convertToTypedSlice(val interface{}, abiType abi.Type) interface{} {
+	// Only convert if it's a slice/array type and val is []interface{}
+	if abiType.T != abi.SliceTy && abiType.T != abi.ArrayTy {
+		return val
+	}
+
+	sliceVal, ok := val.([]interface{})
+	if !ok {
+		return val
+	}
+
+	// Convert based on element type
+	switch abiType.Elem.T {
+	case abi.AddressTy:
+		// Convert []interface{} to []common.Address
+		result := make([]common.Address, len(sliceVal))
+		for i, v := range sliceVal {
+			if addr, ok := v.(common.Address); ok {
+				result[i] = addr
+			}
+		}
+		return result
+
+	case abi.UintTy, abi.IntTy:
+		// Convert []interface{} to []*big.Int
+		result := make([]*big.Int, len(sliceVal))
+		for i, v := range sliceVal {
+			if bigVal, ok := v.(*big.Int); ok {
+				result[i] = bigVal
+			}
+		}
+		return result
+
+	case abi.BoolTy:
+		// Convert []interface{} to []bool
+		result := make([]bool, len(sliceVal))
+		for i, v := range sliceVal {
+			if boolVal, ok := v.(bool); ok {
+				result[i] = boolVal
+			}
+		}
+		return result
+
+	case abi.StringTy:
+		// Convert []interface{} to []string
+		result := make([]string, len(sliceVal))
+		for i, v := range sliceVal {
+			if strVal, ok := v.(string); ok {
+				result[i] = strVal
+			}
+		}
+		return result
+
+	case abi.BytesTy:
+		// Convert []interface{} to [][]byte
+		result := make([][]byte, len(sliceVal))
+		for i, v := range sliceVal {
+			if bytesVal, ok := v.([]byte); ok {
+				result[i] = bytesVal
+			}
+		}
+		return result
+
+	default:
+		// For other types, return as-is (might need nested conversion for nested arrays)
+		return val
 	}
 }
 
