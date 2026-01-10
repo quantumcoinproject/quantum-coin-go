@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -155,7 +156,7 @@ func printHelp() {
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil sethead BLOCK_NUMBER")
 	fmt.Println("      Set the following environment variables:")
-	fmt.Println("dputil sendrawtransaction RAW_TX_HEX")
+	fmt.Println("dputil sendrawtransaction RAW_TX_HEX_OR_FILE_PATH")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil peerlist")
@@ -2531,7 +2532,23 @@ func SendRawTransaction() error {
 		printHelp()
 		return errors.New("incorrect usage")
 	}
-	txRawHex := os.Args[2]
+	var txRawHex string
+	arg2 := os.Args[2]
+	if strings.HasPrefix(arg2, "0x") == false && common.IsHex(arg2) == false {
+		if fs.ValidPath(arg2) {
+			content, err := os.ReadFile(arg2)
+			if err != nil {
+				fmt.Println("ReadFile failed", "error", err, "file", arg2)
+			}
+			txRawHex = "0x" + common.Bytes2Hex(content)
+			fmt.Println("Raw Hex is: ", txRawHex)
+		} else {
+			return errors.New("invalid hex data or file path")
+		}
+	} else {
+		txRawHex = arg2
+	}
+
 	txHash, err := sendRawTransaction(txRawHex)
 	if err != nil {
 		fmt.Println("SendRawTransaction failed", "error", err)
