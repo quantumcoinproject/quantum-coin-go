@@ -50,6 +50,7 @@ jobs:
          rm ${{ github.workspace }}/build/dp-release/connect.sh
          rm ${{ github.workspace }}/build/dp-release/connectvalidator.sh
          cp ${{ github.workspace }}/resources/compact/*.sh ${{ github.workspace }}/build/dp-release/
+         chmod +x ${{ github.workspace }}/build/dp-release/*.sh
          cd ${{ github.workspace }}/build/dp-release && tar -czf ${{ github.workspace }}/build/qc-release-mac-compact-${{  github.ref_name }}.tar.gz .
          sha256sum ${{ github.workspace }}/build/qc-release-mac-compact-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-mac-compact-${{  github.ref_name }}.txt
 
