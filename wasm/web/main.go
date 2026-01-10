@@ -800,8 +800,8 @@ func convertGoTypeToJsValue(val interface{}) interface{} {
 		// Convert address to hex string
 		return v.String()
 	case *big.Int:
-		// Convert big.Int to hex string
-		return hexutil.EncodeBig(v)
+		// Convert big.Int to number string
+		return v.String()
 	case []byte:
 		// Convert bytes to hex string
 		return hexutil.Encode(v)
@@ -944,27 +944,41 @@ func convertJsValueToGoType(jsVal js.Value, abiType abi.Type) (interface{}, erro
 
 	case abi.UintTy:
 		// Unsigned integer types (uint8, uint256, etc.)
-		// Convert from hex string to big.Int
-		hexStr := jsVal.String()
-		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
-			hexStr = "0x" + hexStr
-		}
-		val, err := hexutil.DecodeBig(hexStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid uint value: %s", hexStr)
+		// Convert from number or BigInt to big.Int
+		var val *big.Int
+		if jsVal.Type() == js.TypeNumber {
+			// Regular JavaScript number - convert via float to preserve precision
+			numVal := jsVal.Float()
+			bigFloat := new(big.Float).SetFloat64(numVal)
+			val, _ = bigFloat.Int(nil)
+		} else {
+			// Try to parse as string (could be BigInt string or number string)
+			strVal := jsVal.String()
+			val = new(big.Int)
+			_, ok := val.SetString(strVal, 10)
+			if !ok {
+				return nil, fmt.Errorf("invalid uint value: %s", strVal)
+			}
 		}
 		return val, nil
 
 	case abi.IntTy:
 		// Signed integer types (int8, int256, etc.)
-		// Convert from hex string to big.Int
-		hexStr := jsVal.String()
-		if !strings.HasPrefix(hexStr, "0x") && !strings.HasPrefix(hexStr, "0X") {
-			hexStr = "0x" + hexStr
-		}
-		val, err := hexutil.DecodeBig(hexStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid int value: %s", hexStr)
+		// Convert from number or BigInt to big.Int
+		var val *big.Int
+		if jsVal.Type() == js.TypeNumber {
+			// Regular JavaScript number - convert via float to preserve precision
+			numVal := jsVal.Float()
+			bigFloat := new(big.Float).SetFloat64(numVal)
+			val, _ = bigFloat.Int(nil)
+		} else {
+			// Try to parse as string (could be BigInt string or number string)
+			strVal := jsVal.String()
+			val = new(big.Int)
+			_, ok := val.SetString(strVal, 10)
+			if !ok {
+				return nil, fmt.Errorf("invalid int value: %s", strVal)
+			}
 		}
 		return val, nil
 
