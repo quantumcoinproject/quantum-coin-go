@@ -82,19 +82,21 @@ func main() {
 
 // PackMethodDataWrapper is a wrapper function for PackMethodData to be used with js.FuncOf
 func PackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
-	if len(args) < 3 {
-		return nil
+	// Require at least 2 arguments: abiJSON and methodName
+	// Method arguments are optional (can be 0 or more)
+	if len(args) < 2 {
+		return js.Global().Get("Error").New("PackMethodData: insufficient arguments, expected at least 2 (abiJSON and methodName)")
 	}
 	abiJSON := args[0].String()
 	methodName := args[1].String()
-	methodArgs := args[2:]
+	methodArgs := args[2:] // This will be an empty slice for zero-argument methods
 	return PackMethodData(abiJSON, methodName, methodArgs)
 }
 
 // UnpackMethodDataWrapper is a wrapper function for UnpackMethodData to be used with js.FuncOf
 func UnpackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
 	if len(args) != 3 {
-		return nil
+		return js.Global().Get("Error").New("UnpackMethodData: invalid number of arguments, expected 3")
 	}
 	abiJSON := args[0].String()
 	methodName := args[1].String()
@@ -661,35 +663,56 @@ func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
 //   - args: An array of js.Value representing the parameters to pass to the method
 //
 // Returns:
-//   - interface{}: The packed transaction data as a string, or nil on error
+//   - interface{}: The packed transaction data as a string, or a JavaScript Error on error
 func PackMethodData(abiJSON string, methodName string, args []js.Value) interface{} {
+	var err error
+
+	// Validate abiJSON is not empty
+	if strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("PackMethodData: abiJSON cannot be empty")
+	}
+
+	// Validate method name is not empty
+	if strings.TrimSpace(methodName) == "" {
+		return js.Global().Get("Error").New("PackMethodData: method name cannot be empty")
+	}
+
+	// Parse ABI JSON
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to parse ABI JSON: %v", err))
 	}
 
 	method, exist := abiData.Methods[methodName]
 	if !exist {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: method '%s' not found in ABI", methodName))
 	}
 
 	if len(args) != len(method.Inputs) {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: argument count mismatch for method '%s', expected %d but got %d", methodName, len(method.Inputs), len(args)))
 	}
 
-	// Convert js.Value arguments to Go types based on ABI types
-	convertedArgs := make([]interface{}, len(args))
-	for i, arg := range args {
-		converted, err := convertJsValueToGoType(arg, method.Inputs[i].Type)
-		if err != nil {
-			return nil
+	var data []byte
+
+	// If no arguments, call Pack without arguments
+	if len(args) == 0 {
+		data, err = abiData.Pack(methodName)
+	} else {
+		// Convert js.Value arguments to Go types based on ABI types
+		convertedArgs := make([]interface{}, len(args))
+		for i, arg := range args {
+			converted, err := convertJsValueToGoType(arg, method.Inputs[i].Type)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to convert argument %d for method '%s': %v", i, methodName, err))
+			}
+			// Convert []interface{} to proper typed slice if needed
+			converted = convertToTypedSlice(converted, method.Inputs[i].Type)
+			convertedArgs[i] = converted
 		}
-		convertedArgs[i] = converted
+		data, err = abiData.Pack(methodName, convertedArgs...)
 	}
-
-	data, err := abiData.Pack(methodName, convertedArgs...)
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("PackMethodData: failed to pack method '%s': %v", methodName, err))
 	}
 
 	var d strings.Builder
@@ -710,16 +733,32 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) interfac
 //   - hexData: The hex-encoded return data as a js.Value (string, with or without 0x prefix)
 //
 // Returns:
-//   - interface{}: The unpacked return values as a JSON string, or nil on error
+//   - interface{}: The unpacked return values as a JSON string, or a JavaScript Error on error
 func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) interface{} {
+	// Validate abiJSON is not empty
+	if strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("UnpackMethodData: abiJSON cannot be empty")
+	}
+
+	// Validate method name is not empty
+	if strings.TrimSpace(methodName) == "" {
+		return js.Global().Get("Error").New("UnpackMethodData: method name cannot be empty")
+	}
+
+	// Validate hexData is not null/undefined
+	if hexData.IsNull() || hexData.IsUndefined() {
+		return js.Global().Get("Error").New("UnpackMethodData: hexData cannot be null or undefined")
+	}
+
+	// Parse ABI JSON
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to parse ABI JSON: %v", err))
 	}
 
 	method, exist := abiData.Methods[methodName]
 	if !exist {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: method '%s' not found in ABI", methodName))
 	}
 
 	// Get hex string from js.Value and decode to bytes
@@ -729,14 +768,14 @@ func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) inter
 	}
 	data, err := hexutil.Decode(hexStr)
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to decode hex data: %v", err))
 	}
 
 	// Unpack the return values using method.Outputs (not Inputs)
 	// Return values don't include method ID, just the raw return data
 	unpacked, err := method.Outputs.Unpack(data)
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to unpack return data for method '%s': %v", methodName, err))
 	}
 
 	// Convert unpacked values to JavaScript-compatible format
@@ -748,7 +787,7 @@ func UnpackMethodData(abiJSON string, methodName string, hexData js.Value) inter
 	// Return as JSON string
 	jsonData, err := json.Marshal(jsValues)
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New(fmt.Sprintf("UnpackMethodData: failed to marshal unpacked data to JSON: %v", err))
 	}
 
 	return string(jsonData)
@@ -770,8 +809,45 @@ func convertGoTypeToJsValue(val interface{}) interface{} {
 		return v
 	case string:
 		return v
+	case []*big.Int:
+		// Convert []*big.Int to []string (hex strings)
+		// Handle typed slices first before []interface{} to avoid ambiguity
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	case []common.Address:
+		// Convert []common.Address to []string (hex strings)
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	case []bool:
+		// Convert []bool to []bool
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	case []string:
+		// Convert []string to []string
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
+	case [][]byte:
+		// Convert [][]byte to []string (hex strings)
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValue(elem)
+		}
+		return result
 	case []interface{}:
-		// Recursively convert array elements
+		// Recursively convert array elements (for tuples, nested arrays, etc.)
+		// This should come after specific typed slices to handle generic cases
 		result := make([]interface{}, len(v))
 		for i, elem := range v {
 			result[i] = convertGoTypeToJsValue(elem)
@@ -780,6 +856,76 @@ func convertGoTypeToJsValue(val interface{}) interface{} {
 	default:
 		// For unknown types, try to convert to string
 		return fmt.Sprintf("%v", v)
+	}
+}
+
+// convertToTypedSlice converts []interface{} to the proper typed slice required by abi.Pack
+func convertToTypedSlice(val interface{}, abiType abi.Type) interface{} {
+	// Only convert if it's a slice/array type and val is []interface{}
+	if abiType.T != abi.SliceTy && abiType.T != abi.ArrayTy {
+		return val
+	}
+
+	sliceVal, ok := val.([]interface{})
+	if !ok {
+		return val
+	}
+
+	// Convert based on element type
+	switch abiType.Elem.T {
+	case abi.AddressTy:
+		// Convert []interface{} to []common.Address
+		result := make([]common.Address, len(sliceVal))
+		for i, v := range sliceVal {
+			if addr, ok := v.(common.Address); ok {
+				result[i] = addr
+			}
+		}
+		return result
+
+	case abi.UintTy, abi.IntTy:
+		// Convert []interface{} to []*big.Int
+		result := make([]*big.Int, len(sliceVal))
+		for i, v := range sliceVal {
+			if bigVal, ok := v.(*big.Int); ok {
+				result[i] = bigVal
+			}
+		}
+		return result
+
+	case abi.BoolTy:
+		// Convert []interface{} to []bool
+		result := make([]bool, len(sliceVal))
+		for i, v := range sliceVal {
+			if boolVal, ok := v.(bool); ok {
+				result[i] = boolVal
+			}
+		}
+		return result
+
+	case abi.StringTy:
+		// Convert []interface{} to []string
+		result := make([]string, len(sliceVal))
+		for i, v := range sliceVal {
+			if strVal, ok := v.(string); ok {
+				result[i] = strVal
+			}
+		}
+		return result
+
+	case abi.BytesTy:
+		// Convert []interface{} to [][]byte
+		result := make([][]byte, len(sliceVal))
+		for i, v := range sliceVal {
+			if bytesVal, ok := v.([]byte); ok {
+				result[i] = bytesVal
+			}
+		}
+		return result
+
+	default:
+		// For other types, return as-is (might need nested conversion for nested arrays)
+		return val
 	}
 }
 

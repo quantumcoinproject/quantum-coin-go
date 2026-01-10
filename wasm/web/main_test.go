@@ -690,6 +690,11 @@ func TestConvertJsValueToGoType_FixedArraySizeMismatch(t *testing.T) {
 
 // Testable version of UnpackMethodData for non-WASM testing
 func unpackMethodDataForTest(abiJSON string, methodName string, hexData string) ([]interface{}, error) {
+	// Validate method name is not empty
+	if strings.TrimSpace(methodName) == "" {
+		return nil, fmt.Errorf("method name cannot be empty")
+	}
+
 	abiData, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return nil, err
@@ -1057,6 +1062,676 @@ func TestUnpackMethodData_InvalidHexData(t *testing.T) {
 	_, err := unpackMethodDataForTest(abiJSON, "getValue", "invalid hex")
 	if err == nil {
 		t.Fatal("Expected error for invalid hex data, got nil")
+	}
+}
+
+// convertToTypedSliceForTest converts []interface{} to the proper typed slice required by abi.Pack
+func convertToTypedSliceForTest(val interface{}, abiType abi.Type) interface{} {
+	// Only convert if it's a slice/array type and val is []interface{}
+	if abiType.T != abi.SliceTy && abiType.T != abi.ArrayTy {
+		return val
+	}
+
+	sliceVal, ok := val.([]interface{})
+	if !ok {
+		return val
+	}
+
+	// Convert based on element type
+	switch abiType.Elem.T {
+	case abi.AddressTy:
+		// Convert []interface{} to []common.Address
+		result := make([]common.Address, len(sliceVal))
+		for i, v := range sliceVal {
+			if addr, ok := v.(common.Address); ok {
+				result[i] = addr
+			}
+		}
+		return result
+
+	case abi.UintTy, abi.IntTy:
+		// Convert []interface{} to []*big.Int
+		result := make([]*big.Int, len(sliceVal))
+		for i, v := range sliceVal {
+			if bigVal, ok := v.(*big.Int); ok {
+				result[i] = bigVal
+			}
+		}
+		return result
+
+	case abi.BoolTy:
+		// Convert []interface{} to []bool
+		result := make([]bool, len(sliceVal))
+		for i, v := range sliceVal {
+			if boolVal, ok := v.(bool); ok {
+				result[i] = boolVal
+			}
+		}
+		return result
+
+	case abi.StringTy:
+		// Convert []interface{} to []string
+		result := make([]string, len(sliceVal))
+		for i, v := range sliceVal {
+			if strVal, ok := v.(string); ok {
+				result[i] = strVal
+			}
+		}
+		return result
+
+	case abi.BytesTy:
+		// Convert []interface{} to [][]byte
+		result := make([][]byte, len(sliceVal))
+		for i, v := range sliceVal {
+			if bytesVal, ok := v.([]byte); ok {
+				result[i] = bytesVal
+			}
+		}
+		return result
+
+	default:
+		// For other types, return as-is (might need nested conversion for nested arrays)
+		return val
+	}
+}
+
+// Testable version of PackMethodData for non-WASM testing
+func packMethodDataForTest(abiJSON string, methodName string, args []interface{}) ([]byte, error) {
+	// Validate method name is not empty
+	if strings.TrimSpace(methodName) == "" {
+		return nil, fmt.Errorf("method name cannot be empty")
+	}
+
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, err
+	}
+
+	method, exist := abiData.Methods[methodName]
+	if !exist {
+		return nil, fmt.Errorf("method '%s' not found", methodName)
+	}
+
+	if len(args) != len(method.Inputs) {
+		return nil, fmt.Errorf("argument count mismatch: expected %d, got %d", len(method.Inputs), len(args))
+	}
+
+	var data []byte
+
+	// If no arguments, call Pack without arguments
+	if len(args) == 0 {
+		data, err = abiData.Pack(methodName)
+	} else {
+		// Convert arguments to Go types based on ABI types
+		convertedArgs := make([]interface{}, len(args))
+		for i, arg := range args {
+			converted, err := convertValueToGoTypeForTest(arg, method.Inputs[i].Type)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert argument %d: %w", i, err)
+			}
+			// Convert []interface{} to proper typed slice if needed
+			converted = convertToTypedSliceForTest(converted, method.Inputs[i].Type)
+			convertedArgs[i] = converted
+		}
+		data, err = abiData.Pack(methodName, convertedArgs...)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack: %w", err)
+	}
+
+	return data, nil
+}
+
+func TestUnpackMethodData_EmptyMethodName(t *testing.T) {
+	abiJSON := `[{
+		"name": "getValue",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "uint256"}]
+	}]`
+
+	_, err := unpackMethodDataForTest(abiJSON, "", "0x00")
+	if err == nil {
+		t.Fatal("Expected error for empty method name, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+
+	// Test with whitespace-only method name
+	_, err = unpackMethodDataForTest(abiJSON, "   ", "0x00")
+	if err == nil {
+		t.Fatal("Expected error for whitespace-only method name, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+}
+
+func TestPackMethodData_EmptyMethodName(t *testing.T) {
+	abiJSON := `[{
+		"name": "getValue",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "uint256"}]
+	}]`
+
+	// Test with empty method name
+	_, err := packMethodDataForTest(abiJSON, "", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for empty method name, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+
+	// Test with whitespace-only method name
+	_, err = packMethodDataForTest(abiJSON, "   ", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for whitespace-only method name, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("Expected 'cannot be empty' error, got: %v", err)
+	}
+}
+
+func TestPackMethodData_ZeroArguments(t *testing.T) {
+	// Test packing a method with zero arguments (like name(), symbol(), etc.)
+	abiJSON := `[{
+		"name": "name",
+		"type": "function",
+		"inputs": [],
+		"outputs": [{"name": "", "type": "string"}]
+	}]`
+
+	// Pack with zero arguments
+	packed, err := packMethodDataForTest(abiJSON, "name", []interface{}{})
+	if err != nil {
+		t.Fatalf("Failed to pack zero-argument method: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify it contains the method selector (first 4 bytes)
+	if len(packed) < 4 {
+		t.Fatal("Packed data should contain method selector (at least 4 bytes)")
+	}
+
+	// Verify we can unpack it (should just be the method selector for zero-arg methods)
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	method := abiData.Methods["name"]
+	expectedSelector := method.ID
+	if !reflect.DeepEqual(packed[:4], expectedSelector) {
+		t.Errorf("Method selector mismatch: expected %x, got %x", expectedSelector, packed[:4])
+	}
+}
+
+func TestPackMethodData_AddressArray(t *testing.T) {
+	// Test packing a method with address[] argument (like getAmountsIn)
+	abiJSON := `[{
+		"name": "getAmountsIn",
+		"type": "function",
+		"inputs": [
+			{"name": "amountOut", "type": "uint256"},
+			{"name": "path", "type": "address[]"}
+		],
+		"outputs": [{"name": "amounts", "type": "uint256[]"}]
+	}]`
+
+	// Test addresses (32-byte addresses)
+	addr1 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	addr2 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002")
+
+	// Pack with address array
+	packed, err := packMethodDataForTest(abiJSON, "getAmountsIn", []interface{}{
+		"0xde0b6b3a7640000", // amountOut in hex
+		[]interface{}{addr1.String(), addr2.String()}, // path as []interface{} with address strings
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack method with address array: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify it contains the method selector
+	if len(packed) < 4 {
+		t.Fatal("Packed data should contain method selector (at least 4 bytes)")
+	}
+
+	// Verify we can unpack the arguments to verify correctness
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	method := abiData.Methods["getAmountsIn"]
+	expectedSelector := method.ID
+	if !reflect.DeepEqual(packed[:4], expectedSelector) {
+		t.Errorf("Method selector mismatch: expected %x, got %x", expectedSelector, packed[:4])
+	}
+}
+
+func TestPackMethodData_Uint256Array(t *testing.T) {
+	// Test packing a method with uint256[] argument
+	abiJSON := `[{
+		"name": "getAmounts",
+		"type": "function",
+		"inputs": [
+			{"name": "amounts", "type": "uint256[]"}
+		],
+		"outputs": [{"name": "", "type": "uint256[]"}]
+	}]`
+
+	// Test with uint256 array
+	testAmounts := []interface{}{
+		"0xde0b6b3a7640000", // 1 token
+		"0x1bc16d674ec80000", // 2 tokens
+		"0x29a2241af62c0000", // 3 tokens
+	}
+
+	packed, err := packMethodDataForTest(abiJSON, "getAmounts", []interface{}{
+		testAmounts,
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack method with uint256 array: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify it contains the method selector
+	if len(packed) < 4 {
+		t.Fatal("Packed data should contain method selector (at least 4 bytes)")
+	}
+
+	// Verify method selector
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	method := abiData.Methods["getAmounts"]
+	expectedSelector := method.ID
+	if !reflect.DeepEqual(packed[:4], expectedSelector) {
+		t.Errorf("Method selector mismatch: expected %x, got %x", expectedSelector, packed[:4])
+	}
+}
+
+func TestPackMethodData_MixedArguments(t *testing.T) {
+	// Test packing a method with mixed arguments including arrays
+	abiJSON := `[{
+		"name": "swapExactTokensForTokens",
+		"type": "function",
+		"inputs": [
+			{"name": "amountIn", "type": "uint256"},
+			{"name": "amountOutMin", "type": "uint256"},
+			{"name": "path", "type": "address[]"},
+			{"name": "to", "type": "address"},
+			{"name": "deadline", "type": "uint256"}
+		],
+		"outputs": [{"name": "amounts", "type": "uint256[]"}]
+	}]`
+
+	addr1 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	addr2 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002")
+	toAddr := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000003")
+
+	amountIn := "0xde0b6b3a7640000"        // 1 token
+	amountOutMin := "0xc9f2c9cd04674edea40000000" // Some minimum
+	deadline := "0x5f5e100"                 // Some deadline
+
+	packed, err := packMethodDataForTest(abiJSON, "swapExactTokensForTokens", []interface{}{
+		amountIn,
+		amountOutMin,
+		[]interface{}{addr1.String(), addr2.String()}, // path
+		toAddr.String(), // to
+		deadline,
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack method with mixed arguments: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify method selector
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	method := abiData.Methods["swapExactTokensForTokens"]
+	expectedSelector := method.ID
+	if !reflect.DeepEqual(packed[:4], expectedSelector) {
+		t.Errorf("Method selector mismatch: expected %x, got %x", expectedSelector, packed[:4])
+	}
+}
+
+// Testable version of convertGoTypeToJsValue for non-WASM testing
+func convertGoTypeToJsValueForTest(val interface{}) interface{} {
+	switch v := val.(type) {
+	case common.Address:
+		return v.String()
+	case *big.Int:
+		return hexutil.EncodeBig(v)
+	case []byte:
+		return hexutil.Encode(v)
+	case bool:
+		return v
+	case string:
+		return v
+	case []*big.Int:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case []common.Address:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case []bool:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case []string:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case [][]byte:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	case []interface{}:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			result[i] = convertGoTypeToJsValueForTest(elem)
+		}
+		return result
+	default:
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+func TestConvertGoTypeToJsValue_BigIntArray(t *testing.T) {
+	// Test conversion of []*big.Int to array of hex strings
+	testValues := []*big.Int{
+		big.NewInt(1000000000000000000), // 1e18
+		big.NewInt(2000000000000000000), // 2e18
+		big.NewInt(3000000000000000000), // 3e18
+	}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		hexStr, ok := val.(string)
+		if !ok {
+			t.Fatalf("Expected string at index %d, got %T", i, val)
+		}
+
+		expectedHex := hexutil.EncodeBig(testValues[i])
+		if hexStr != expectedHex {
+			t.Errorf("Value mismatch at index %d: expected %s, got %s", i, expectedHex, hexStr)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_AddressArray(t *testing.T) {
+	// Test conversion of []common.Address to array of hex strings
+	testAddresses := []common.Address{
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001"),
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002"),
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000003"),
+	}
+
+	result := convertGoTypeToJsValueForTest(testAddresses)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testAddresses) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testAddresses), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		hexStr, ok := val.(string)
+		if !ok {
+			t.Fatalf("Expected string at index %d, got %T", i, val)
+		}
+
+		expectedHex := testAddresses[i].String()
+		if hexStr != expectedHex {
+			t.Errorf("Address mismatch at index %d: expected %s, got %s", i, expectedHex, hexStr)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_BoolArray(t *testing.T) {
+	// Test conversion of []bool to array of bools
+	testValues := []bool{true, false, true, false}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		boolVal, ok := val.(bool)
+		if !ok {
+			t.Fatalf("Expected bool at index %d, got %T", i, val)
+		}
+
+		if boolVal != testValues[i] {
+			t.Errorf("Bool mismatch at index %d: expected %v, got %v", i, testValues[i], boolVal)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_StringArray(t *testing.T) {
+	// Test conversion of []string to array of strings
+	testValues := []string{"hello", "world", "test"}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		strVal, ok := val.(string)
+		if !ok {
+			t.Fatalf("Expected string at index %d, got %T", i, val)
+		}
+
+		if strVal != testValues[i] {
+			t.Errorf("String mismatch at index %d: expected %s, got %s", i, testValues[i], strVal)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_BytesArray(t *testing.T) {
+	// Test conversion of [][]byte to array of hex strings
+	testValues := [][]byte{
+		{0x48, 0x65, 0x6c, 0x6c, 0x6f}, // "Hello"
+		{0x57, 0x6f, 0x72, 0x6c, 0x64}, // "World"
+		{0x54, 0x65, 0x73, 0x74},       // "Test"
+	}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	for i, val := range resultArray {
+		hexStr, ok := val.(string)
+		if !ok {
+			t.Fatalf("Expected string at index %d, got %T", i, val)
+		}
+
+		expectedHex := hexutil.Encode(testValues[i])
+		if hexStr != expectedHex {
+			t.Errorf("Bytes mismatch at index %d: expected %s, got %s", i, expectedHex, hexStr)
+		}
+	}
+}
+
+func TestConvertGoTypeToJsValue_InterfaceArray(t *testing.T) {
+	// Test conversion of []interface{} with mixed types
+	testValues := []interface{}{
+		big.NewInt(1000000000000000000),
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001"),
+		true,
+		"test",
+	}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != len(testValues) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
+	}
+
+	// Check first element (big.Int)
+	hexStr, ok := resultArray[0].(string)
+	if !ok {
+		t.Fatalf("Expected string for big.Int, got %T", resultArray[0])
+	}
+	expectedHex := hexutil.EncodeBig(testValues[0].(*big.Int))
+	if hexStr != expectedHex {
+		t.Errorf("BigInt mismatch: expected %s, got %s", expectedHex, hexStr)
+	}
+
+	// Check second element (address)
+	addrStr, ok := resultArray[1].(string)
+	if !ok {
+		t.Fatalf("Expected string for address, got %T", resultArray[1])
+	}
+	expectedAddr := testValues[1].(common.Address).String()
+	if addrStr != expectedAddr {
+		t.Errorf("Address mismatch: expected %s, got %s", expectedAddr, addrStr)
+	}
+
+	// Check third element (bool)
+	boolVal, ok := resultArray[2].(bool)
+	if !ok {
+		t.Fatalf("Expected bool, got %T", resultArray[2])
+	}
+	if boolVal != testValues[2] {
+		t.Errorf("Bool mismatch: expected %v, got %v", testValues[2], boolVal)
+	}
+
+	// Check fourth element (string)
+	strVal, ok := resultArray[3].(string)
+	if !ok {
+		t.Fatalf("Expected string, got %T", resultArray[3])
+	}
+	if strVal != testValues[3] {
+		t.Errorf("String mismatch: expected %s, got %s", testValues[3], strVal)
+	}
+}
+
+func TestConvertGoTypeToJsValue_NestedArrays(t *testing.T) {
+	// Test conversion of nested arrays ([]interface{} containing arrays)
+	innerArray1 := []*big.Int{
+		big.NewInt(1000000000000000000),
+		big.NewInt(2000000000000000000),
+	}
+	innerArray2 := []common.Address{
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001"),
+		common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002"),
+	}
+
+	testValues := []interface{}{
+		innerArray1,
+		innerArray2,
+	}
+
+	result := convertGoTypeToJsValueForTest(testValues)
+
+	resultArray, ok := result.([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{}, got %T", result)
+	}
+
+	if len(resultArray) != 2 {
+		t.Fatalf("Expected 2 elements, got %d", len(resultArray))
+	}
+
+	// Check first nested array ([]*big.Int)
+	firstArray, ok := resultArray[0].([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{} for first element, got %T", resultArray[0])
+	}
+
+	if len(firstArray) != 2 {
+		t.Fatalf("Expected 2 elements in first array, got %d", len(firstArray))
+	}
+
+	hexStr1, ok := firstArray[0].(string)
+	if !ok {
+		t.Fatalf("Expected string, got %T", firstArray[0])
+	}
+	expectedHex1 := hexutil.EncodeBig(innerArray1[0])
+	if hexStr1 != expectedHex1 {
+		t.Errorf("First nested big.Int mismatch: expected %s, got %s", expectedHex1, hexStr1)
+	}
+
+	// Check second nested array ([]common.Address)
+	secondArray, ok := resultArray[1].([]interface{})
+	if !ok {
+		t.Fatalf("Expected []interface{} for second element, got %T", resultArray[1])
+	}
+
+	if len(secondArray) != 2 {
+		t.Fatalf("Expected 2 elements in second array, got %d", len(secondArray))
+	}
+
+	addrStr1, ok := secondArray[0].(string)
+	if !ok {
+		t.Fatalf("Expected string, got %T", secondArray[0])
+	}
+	expectedAddr1 := innerArray2[0].String()
+	if addrStr1 != expectedAddr1 {
+		t.Errorf("First nested address mismatch: expected %s, got %s", expectedAddr1, addrStr1)
 	}
 }
 
