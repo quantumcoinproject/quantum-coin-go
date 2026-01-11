@@ -2536,11 +2536,12 @@ func SendRawTransaction() error {
 	arg2 := os.Args[2]
 	if strings.HasPrefix(arg2, "0x") == false && common.IsHex(arg2) == false {
 		if fs.ValidPath(arg2) {
+			fmt.Println("Reading file", arg2)
 			content, err := os.ReadFile(arg2)
 			if err != nil {
 				fmt.Println("ReadFile failed", "error", err, "file", arg2)
 			}
-			txRawHex = "0x" + common.Bytes2Hex(content)
+			txRawHex = string(content)
 			fmt.Println("Raw Hex is: ", txRawHex)
 		} else {
 			return errors.New("invalid hex data or file path")
