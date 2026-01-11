@@ -12,6 +12,7 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 )
 
@@ -1747,3 +1748,550 @@ func TestConvertGoTypeToJsValue_NestedArrays(t *testing.T) {
 	}
 }
 
+// Testable version of PackCreateContractData for non-WASM testing
+func packCreateContractDataForTest(abiJSON string, bytecode string, args []interface{}) ([]byte, error) {
+	// Validate abiJSON is not empty
+	if strings.TrimSpace(abiJSON) == "" {
+		return nil, fmt.Errorf("abiJSON cannot be empty")
+	}
+
+	// Validate bytecode is not empty
+	if strings.TrimSpace(bytecode) == "" {
+		return nil, fmt.Errorf("bytecode cannot be empty")
+	}
+
+	// Decode bytecode from hex string
+	bytecodeBytes, err := hexutil.Decode(bytecode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode bytecode: %w", err)
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ABI JSON: %w", err)
+	}
+
+	// Check if constructor exists in ABI
+	constructorInputs := abiData.Constructor.Inputs
+
+	// Validate argument count matches constructor inputs
+	if len(args) != len(constructorInputs) {
+		return nil, fmt.Errorf("argument count mismatch: expected %d, got %d", len(constructorInputs), len(args))
+	}
+
+	var constructorData []byte
+
+	// If no arguments (parameterless constructor), call Pack with empty string and no arguments
+	if len(args) == 0 {
+		constructorData, err = abiData.Pack("")
+	} else {
+		// Convert arguments to Go types based on constructor input types
+		convertedArgs := make([]interface{}, len(args))
+		for i, arg := range args {
+			converted, err := convertValueToGoTypeForTest(arg, constructorInputs[i].Type)
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert argument %d: %w", i, err)
+			}
+			// Convert []interface{} to proper typed slice if needed
+			converted = convertToTypedSliceForTest(converted, constructorInputs[i].Type)
+			convertedArgs[i] = converted
+		}
+		// Use empty string "" as method name for constructor
+		constructorData, err = abiData.Pack("", convertedArgs...)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to pack constructor: %w", err)
+	}
+
+	// Combine bytecode with constructor data: bytecode + constructor parameters
+	finalData := append(bytecodeBytes, constructorData...)
+
+	return finalData, nil
+}
+
+func TestPackCreateContractData_ParameterlessConstructor(t *testing.T) {
+	// Test packing a parameterless constructor
+	abiJSON := `[{
+		"type": "constructor",
+		"inputs": [],
+		"stateMutability": "nonpayable"
+	}]`
+
+	bytecode := "0x6080604052348015600f57600080fd5b506004361060325760003560e01c8063"
+
+	// Pack with no constructor arguments
+	packed, err := packCreateContractDataForTest(abiJSON, bytecode, []interface{}{})
+	if err != nil {
+		t.Fatalf("Failed to pack parameterless constructor: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify bytecode is at the beginning
+	expectedBytecode, _ := hexutil.Decode(bytecode)
+	if len(packed) < len(expectedBytecode) {
+		t.Fatal("Packed data should contain bytecode")
+	}
+
+	if !reflect.DeepEqual(packed[:len(expectedBytecode)], expectedBytecode) {
+		t.Errorf("Bytecode mismatch: expected %x, got %x", expectedBytecode, packed[:len(expectedBytecode)])
+	}
+
+	// For parameterless constructor, there should be no additional data after bytecode
+	if len(packed) != len(expectedBytecode) {
+		t.Errorf("Expected packed data length %d, got %d (parameterless constructor should only have bytecode)", len(expectedBytecode), len(packed))
+	}
+}
+
+func TestPackCreateContractData_ConstructorWithParameters(t *testing.T) {
+	// Test packing a constructor with parameters
+	abiJSON := `[{
+		"type": "constructor",
+		"inputs": [
+			{"name": "a", "type": "uint256"},
+			{"name": "b", "type": "uint256"}
+		],
+		"stateMutability": "nonpayable"
+	}]`
+
+	bytecode := "0x6080604052348015600f57600080fd5b506004361060325760003560e01c8063"
+
+	// Pack with constructor arguments
+	packed, err := packCreateContractDataForTest(abiJSON, bytecode, []interface{}{
+		"1", // a
+		"2", // b
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack constructor with parameters: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify bytecode is at the beginning
+	expectedBytecode, _ := hexutil.Decode(bytecode)
+	if len(packed) < len(expectedBytecode) {
+		t.Fatal("Packed data should contain bytecode")
+	}
+
+	if !reflect.DeepEqual(packed[:len(expectedBytecode)], expectedBytecode) {
+		t.Errorf("Bytecode mismatch: expected %x, got %x", expectedBytecode, packed[:len(expectedBytecode)])
+	}
+
+	// Verify constructor data follows bytecode
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	expectedConstructorData, _ := abiData.Pack("", big.NewInt(1), big.NewInt(2))
+	if len(packed) != len(expectedBytecode)+len(expectedConstructorData) {
+		t.Errorf("Expected packed data length %d, got %d", len(expectedBytecode)+len(expectedConstructorData), len(packed))
+	}
+
+	if !reflect.DeepEqual(packed[len(expectedBytecode):], expectedConstructorData) {
+		t.Errorf("Constructor data mismatch: expected %x, got %x", expectedConstructorData, packed[len(expectedBytecode):])
+	}
+}
+
+func TestPackCreateContractData_EmptyAbiJSON(t *testing.T) {
+	bytecode := "0x6080604052348015600f57600080fd5b506004361060325760003560e01c8063"
+
+	// Test with empty abiJSON
+	_, err := packCreateContractDataForTest("", bytecode, []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for empty abiJSON, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "abiJSON cannot be empty") {
+		t.Errorf("Expected 'abiJSON cannot be empty' error, got: %v", err)
+	}
+
+	// Test with whitespace-only abiJSON
+	_, err = packCreateContractDataForTest("   ", bytecode, []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for whitespace-only abiJSON, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "abiJSON cannot be empty") {
+		t.Errorf("Expected 'abiJSON cannot be empty' error, got: %v", err)
+	}
+}
+
+func TestPackCreateContractData_EmptyBytecode(t *testing.T) {
+	abiJSON := `[{
+		"type": "constructor",
+		"inputs": [],
+		"stateMutability": "nonpayable"
+	}]`
+
+	// Test with empty bytecode
+	_, err := packCreateContractDataForTest(abiJSON, "", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for empty bytecode, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "bytecode cannot be empty") {
+		t.Errorf("Expected 'bytecode cannot be empty' error, got: %v", err)
+	}
+
+	// Test with whitespace-only bytecode
+	_, err = packCreateContractDataForTest(abiJSON, "   ", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for whitespace-only bytecode, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "bytecode cannot be empty") {
+		t.Errorf("Expected 'bytecode cannot be empty' error, got: %v", err)
+	}
+}
+
+func TestPackCreateContractData_InvalidBytecode(t *testing.T) {
+	abiJSON := `[{
+		"type": "constructor",
+		"inputs": [],
+		"stateMutability": "nonpayable"
+	}]`
+
+	// Test with invalid hex bytecode
+	_, err := packCreateContractDataForTest(abiJSON, "0xinvalid", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for invalid bytecode, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "failed to decode bytecode") {
+		t.Errorf("Expected 'failed to decode bytecode' error, got: %v", err)
+	}
+}
+
+func TestPackCreateContractData_ArgumentCountMismatch(t *testing.T) {
+	abiJSON := `[{
+		"type": "constructor",
+		"inputs": [
+			{"name": "a", "type": "uint256"},
+			{"name": "b", "type": "uint256"}
+		],
+		"stateMutability": "nonpayable"
+	}]`
+
+	bytecode := "0x6080604052348015600f57600080fd5b506004361060325760003560e01c8063"
+
+	// Test with too few arguments
+	_, err := packCreateContractDataForTest(abiJSON, bytecode, []interface{}{"1"})
+	if err == nil {
+		t.Fatal("Expected error for too few arguments, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "argument count mismatch") {
+		t.Errorf("Expected 'argument count mismatch' error, got: %v", err)
+	}
+
+	// Test with too many arguments
+	_, err = packCreateContractDataForTest(abiJSON, bytecode, []interface{}{"1", "2", "3"})
+	if err == nil {
+		t.Fatal("Expected error for too many arguments, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "argument count mismatch") {
+		t.Errorf("Expected 'argument count mismatch' error, got: %v", err)
+	}
+}
+
+func TestPackCreateContractData_ConstructorWithAddress(t *testing.T) {
+	// Test packing a constructor with address parameter
+	abiJSON := `[{
+		"type": "constructor",
+		"inputs": [
+			{"name": "owner", "type": "address"}
+		],
+		"stateMutability": "nonpayable"
+	}]`
+
+	bytecode := "0x6080604052348015600f57600080fd5b506004361060325760003560e01c8063"
+	ownerAddr := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+
+	// Pack with address argument
+	packed, err := packCreateContractDataForTest(abiJSON, bytecode, []interface{}{
+		ownerAddr.String(),
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack constructor with address: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify bytecode is at the beginning
+	expectedBytecode, _ := hexutil.Decode(bytecode)
+	if !reflect.DeepEqual(packed[:len(expectedBytecode)], expectedBytecode) {
+		t.Errorf("Bytecode mismatch")
+	}
+
+	// Verify constructor data follows bytecode
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	expectedConstructorData, _ := abiData.Pack("", ownerAddr)
+	if !reflect.DeepEqual(packed[len(expectedBytecode):], expectedConstructorData) {
+		t.Errorf("Constructor data mismatch")
+	}
+}
+
+func TestPackCreateContractData_ConstructorWithArray(t *testing.T) {
+	// Test packing a constructor with array parameter
+	abiJSON := `[{
+		"type": "constructor",
+		"inputs": [
+			{"name": "values", "type": "uint256[]"}
+		],
+		"stateMutability": "nonpayable"
+	}]`
+
+	bytecode := "0x6080604052348015600f57600080fd5b506004361060325760003560e01c8063"
+
+	// Pack with array argument
+	testValues := []interface{}{
+		"1000000000000000000", // 1 token
+		"2000000000000000000", // 2 tokens
+		"3000000000000000000", // 3 tokens
+	}
+
+	packed, err := packCreateContractDataForTest(abiJSON, bytecode, []interface{}{
+		testValues,
+	})
+	if err != nil {
+		t.Fatalf("Failed to pack constructor with array: %v", err)
+	}
+
+	if len(packed) == 0 {
+		t.Fatal("Packed data should not be empty")
+	}
+
+	// Verify bytecode is at the beginning
+	expectedBytecode, _ := hexutil.Decode(bytecode)
+	if !reflect.DeepEqual(packed[:len(expectedBytecode)], expectedBytecode) {
+		t.Errorf("Bytecode mismatch")
+	}
+
+	// Verify constructor data follows bytecode
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	expectedValues := []*big.Int{
+		big.NewInt(1000000000000000000),
+		big.NewInt(2000000000000000000),
+		big.NewInt(3000000000000000000),
+	}
+	expectedConstructorData, _ := abiData.Pack("", expectedValues)
+	if !reflect.DeepEqual(packed[len(expectedBytecode):], expectedConstructorData) {
+		t.Errorf("Constructor data mismatch")
+	}
+}
+
+// Testable version of CreateAddress for non-WASM testing
+func createAddressForTest(address common.Address, nonce uint64) common.Address {
+	return crypto.CreateAddress(address, nonce)
+}
+
+// Testable version of CreateAddress2 for non-WASM testing
+func createAddress2ForTest(address common.Address, salt [common.HashLength]byte, initHash []byte) common.Address {
+	return crypto.CreateAddress2(address, salt, initHash)
+}
+
+func TestCreateAddress_Basic(t *testing.T) {
+	// Test basic CreateAddress functionality
+	address := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	nonce := uint64(0)
+
+	result := createAddressForTest(address, nonce)
+	if result == (common.Address{}) {
+		t.Fatal("CreateAddress should not return zero address")
+	}
+
+	// Test with different nonce
+	nonce2 := uint64(1)
+	result2 := createAddressForTest(address, nonce2)
+	if result == result2 {
+		t.Error("CreateAddress should produce different addresses for different nonces")
+	}
+}
+
+func TestCreateAddress_WithNonce(t *testing.T) {
+	// Test CreateAddress with various nonces
+	address := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+
+	testCases := []struct {
+		nonce  uint64
+		desc   string
+	}{
+		{0, "nonce 0"},
+		{1, "nonce 1"},
+		{42, "nonce 42"},
+		{100, "nonce 100"},
+		{1000, "nonce 1000"},
+	}
+
+	results := make(map[uint64]common.Address)
+	for _, tc := range testCases {
+		result := createAddressForTest(address, tc.nonce)
+		if result == (common.Address{}) {
+			t.Errorf("CreateAddress with %s should not return zero address", tc.desc)
+		}
+		results[tc.nonce] = result
+	}
+
+	// Verify all results are unique
+	for i := 0; i < len(testCases); i++ {
+		for j := i + 1; j < len(testCases); j++ {
+			if results[testCases[i].nonce] == results[testCases[j].nonce] {
+				t.Errorf("CreateAddress should produce different addresses for nonces %d and %d", testCases[i].nonce, testCases[j].nonce)
+			}
+		}
+	}
+}
+
+func TestCreateAddress_DifferentAddresses(t *testing.T) {
+	// Test that different base addresses produce different results
+	nonce := uint64(0)
+
+	address1 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	address2 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002")
+
+	result1 := createAddressForTest(address1, nonce)
+	result2 := createAddressForTest(address2, nonce)
+
+	if result1 == result2 {
+		t.Error("CreateAddress should produce different addresses for different base addresses")
+	}
+}
+
+func TestCreateAddress_Consistency(t *testing.T) {
+	// Test that CreateAddress produces consistent results for same inputs
+	address := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	nonce := uint64(42)
+
+	result1 := createAddressForTest(address, nonce)
+	result2 := createAddressForTest(address, nonce)
+
+	if result1 != result2 {
+		t.Error("CreateAddress should produce the same address for the same inputs")
+	}
+}
+
+func TestCreateAddress2_Basic(t *testing.T) {
+	// Test basic CreateAddress2 functionality
+	address := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	var salt [common.HashLength]byte
+	copy(salt[:], common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001").Bytes())
+	initHash := crypto.Keccak256([]byte("test init code"))
+
+	result := createAddress2ForTest(address, salt, initHash)
+	if result == (common.Address{}) {
+		t.Fatal("CreateAddress2 should not return zero address")
+	}
+}
+
+func TestCreateAddress2_WithDifferentSalts(t *testing.T) {
+	// Test CreateAddress2 with different salts
+	address := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	initHash := crypto.Keccak256([]byte("test init code"))
+
+	salts := []string{
+		"0x0000000000000000000000000000000000000000000000000000000000000001",
+		"0x0000000000000000000000000000000000000000000000000000000000000002",
+		"0xcafebabe00000000000000000000000000000000000000000000000000000000",
+		"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+	}
+
+	results := make(map[string]common.Address)
+	for _, saltStr := range salts {
+		saltHash := common.HexToHash(saltStr)
+		var salt [common.HashLength]byte
+		copy(salt[:], saltHash.Bytes())
+
+		result := createAddress2ForTest(address, salt, initHash)
+		if result == (common.Address{}) {
+			t.Errorf("CreateAddress2 with salt %s should not return zero address", saltStr)
+		}
+		results[saltStr] = result
+	}
+
+	// Verify all results are unique
+	saltList := make([]string, 0, len(salts))
+	for k := range results {
+		saltList = append(saltList, k)
+	}
+	for i := 0; i < len(saltList); i++ {
+		for j := i + 1; j < len(saltList); j++ {
+			if results[saltList[i]] == results[saltList[j]] {
+				t.Errorf("CreateAddress2 should produce different addresses for salts %s and %s", saltList[i], saltList[j])
+			}
+		}
+	}
+}
+
+func TestCreateAddress2_WithDifferentInitHashes(t *testing.T) {
+	// Test CreateAddress2 with different init hashes
+	address := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	var salt [common.HashLength]byte
+	copy(salt[:], common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001").Bytes())
+
+	initHashes := [][]byte{
+		crypto.Keccak256([]byte("init code 1")),
+		crypto.Keccak256([]byte("init code 2")),
+		crypto.Keccak256([]byte("different init code")),
+		[]byte{0x00, 0x01, 0x02, 0x03},
+	}
+
+	results := make(map[string]common.Address)
+	for i, initHash := range initHashes {
+		result := createAddress2ForTest(address, salt, initHash)
+		if result == (common.Address{}) {
+			t.Errorf("CreateAddress2 with initHash %d should not return zero address", i)
+		}
+		key := hexutil.Encode(initHash)
+		results[key] = result
+	}
+
+	// Verify all results are unique
+	hashList := make([]string, 0, len(initHashes))
+	for k := range results {
+		hashList = append(hashList, k)
+	}
+	for i := 0; i < len(hashList); i++ {
+		for j := i + 1; j < len(hashList); j++ {
+			if results[hashList[i]] == results[hashList[j]] {
+				t.Errorf("CreateAddress2 should produce different addresses for different init hashes")
+			}
+		}
+	}
+}
+
+func TestCreateAddress2_WithDifferentAddresses(t *testing.T) {
+	// Test that different base addresses produce different results
+	var salt [common.HashLength]byte
+	copy(salt[:], common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001").Bytes())
+	initHash := crypto.Keccak256([]byte("test init code"))
+
+	address1 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	address2 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002")
+
+	result1 := createAddress2ForTest(address1, salt, initHash)
+	result2 := createAddress2ForTest(address2, salt, initHash)
+
+	if result1 == result2 {
+		t.Error("CreateAddress2 should produce different addresses for different base addresses")
+	}
+}
+
+func TestCreateAddress2_Consistency(t *testing.T) {
+	// Test that CreateAddress2 produces consistent results for same inputs
+	address := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
+	var salt [common.HashLength]byte
+	copy(salt[:], common.HexToHash("0xcafebabe00000000000000000000000000000000000000000000000000000000").Bytes())
+	initHash := crypto.Keccak256([]byte("consistent test init code"))
+
+	result1 := createAddress2ForTest(address, salt, initHash)
+	result2 := createAddress2ForTest(address, salt, initHash)
+
+	if result1 != result2 {
+		t.Error("CreateAddress2 should produce the same address for the same inputs")
+	}
+}

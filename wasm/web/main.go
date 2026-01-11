@@ -74,6 +74,9 @@ func main() {
 	js.Global().Set("CombinePublicKeySignature", js.FuncOf(CombinePublicKeySignature))
 	js.Global().Set("PackMethodData", js.FuncOf(PackMethodDataWrapper))
 	js.Global().Set("UnpackMethodData", js.FuncOf(UnpackMethodDataWrapper))
+	js.Global().Set("PackCreateContractData", js.FuncOf(PackCreateContractDataWrapper))
+	js.Global().Set("CreateAddress", js.FuncOf(CreateAddressWrapper))
+	js.Global().Set("CreateAddress2", js.FuncOf(CreateAddress2Wrapper))
 	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
 	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
@@ -102,6 +105,19 @@ func UnpackMethodDataWrapper(this js.Value, args []js.Value) interface{} {
 	methodName := args[1].String()
 	hexData := args[2]
 	return UnpackMethodData(abiJSON, methodName, hexData)
+}
+
+// PackCreateContractDataWrapper is a wrapper function for PackCreateContractData to be used with js.FuncOf
+func PackCreateContractDataWrapper(this js.Value, args []js.Value) interface{} {
+	// Require at least 2 arguments: abiJSON and bytecode
+	// Constructor arguments are optional (can be 0 or more)
+	if len(args) < 2 {
+		return js.Global().Get("Error").New("PackCreateContractData: insufficient arguments, expected at least 2 (abiJSON and bytecode)")
+	}
+	abiJSON := args[0].String()
+	bytecode := args[1].String()
+	constructorArgs := args[2:] // This will be an empty slice for parameterless constructors
+	return PackCreateContractData(abiJSON, bytecode, constructorArgs)
 }
 
 func Scrypt(this js.Value, args []js.Value) interface{} {
@@ -726,6 +742,80 @@ func PackMethodData(abiJSON string, methodName string, args []js.Value) interfac
 	return d.String()
 }
 
+// PackCreateContractData packs constructor data for contract creation
+// Supports both parameterless constructors and constructors with parameters
+// The bytecode is prepended to the constructor parameters
+func PackCreateContractData(abiJSON string, bytecode string, args []js.Value) interface{} {
+	var err error
+
+	// Validate abiJSON is not empty
+	if strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("PackCreateContractData: abiJSON cannot be empty")
+	}
+
+	// Validate bytecode is not empty
+	if strings.TrimSpace(bytecode) == "" {
+		return js.Global().Get("Error").New("PackCreateContractData: bytecode cannot be empty")
+	}
+
+	// Decode bytecode from hex string
+	bytecodeBytes, err := hexutil.Decode(bytecode)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("PackCreateContractData: failed to decode bytecode: %v", err))
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("PackCreateContractData: failed to parse ABI JSON: %v", err))
+	}
+
+	// Check if constructor exists in ABI
+	// If no constructor is defined, Constructor.Inputs will be empty
+	constructorInputs := abiData.Constructor.Inputs
+
+	// Validate argument count matches constructor inputs
+	if len(args) != len(constructorInputs) {
+		return js.Global().Get("Error").New(fmt.Sprintf("PackCreateContractData: argument count mismatch for constructor, expected %d but got %d", len(constructorInputs), len(args)))
+	}
+
+	var constructorData []byte
+
+	// If no arguments (parameterless constructor), call Pack with empty string and no arguments
+	if len(args) == 0 {
+		constructorData, err = abiData.Pack("")
+	} else {
+		// Convert js.Value arguments to Go types based on constructor input types
+		convertedArgs := make([]interface{}, len(args))
+		for i, arg := range args {
+			converted, err := convertJsValueToGoType(arg, constructorInputs[i].Type)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("PackCreateContractData: failed to convert argument %d for constructor: %v", i, err))
+			}
+			// Convert []interface{} to proper typed slice if needed
+			converted = convertToTypedSlice(converted, constructorInputs[i].Type)
+			convertedArgs[i] = converted
+		}
+		// Use empty string "" as method name for constructor
+		constructorData, err = abiData.Pack("", convertedArgs...)
+	}
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("PackCreateContractData: failed to pack constructor: %v", err))
+	}
+
+	// Combine bytecode with constructor data: bytecode + constructor parameters
+	// This is the format required for contract creation transactions
+	finalData := append(bytecodeBytes, constructorData...)
+
+	var d strings.Builder
+	for i := 0; i < len(finalData); i++ {
+		sh := finalData[i]
+		d.WriteString(string(sh))
+	}
+
+	return d.String()
+}
+
 // UnpackMethodData unpacks the return values of a Solidity method call.
 // It returns the unpacked values as a JSON string that can be parsed in JavaScript.
 //
@@ -1169,4 +1259,66 @@ func CombinePublicKeySignature(this js.Value, args []js.Value) interface{} {
 	}
 
 	return common.Bytes2Hex(combinedSignatureBytes)
+}
+
+// CreateAddressWrapper is a wrapper function for CreateAddress to be used with js.FuncOf
+func CreateAddressWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) != 2 {
+		return js.Global().Get("Error").New("CreateAddress: invalid number of arguments, expected 2 (address and nonce)")
+	}
+
+	addressStr := args[0].String()
+	if !common.IsHexAddress(addressStr) {
+		return js.Global().Get("Error").New("CreateAddress: invalid address format")
+	}
+
+	address := common.HexToAddress(addressStr)
+
+	nonceStr := args[1].String()
+	var nonce uint64
+	_, err := fmt.Sscanf(nonceStr, "%d", &nonce)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("CreateAddress: failed to parse nonce: %v", err))
+	}
+
+	result := crypto.CreateAddress(address, nonce)
+	return result.String()
+}
+
+// CreateAddress2Wrapper is a wrapper function for CreateAddress2 to be used with js.FuncOf
+func CreateAddress2Wrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) != 3 {
+		return js.Global().Get("Error").New("CreateAddress2: invalid number of arguments, expected 3 (address, salt, and initHash)")
+	}
+
+	addressStr := args[0].String()
+	if !common.IsHexAddress(addressStr) {
+		return js.Global().Get("Error").New("CreateAddress2: invalid address format")
+	}
+
+	address := common.HexToAddress(addressStr)
+
+	// Decode salt from hex string
+	saltStr := args[1].String()
+	saltBytes, err := hexutil.Decode(saltStr)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("CreateAddress2: failed to decode salt: %v", err))
+	}
+
+	if len(saltBytes) != common.HashLength {
+		return js.Global().Get("Error").New(fmt.Sprintf("CreateAddress2: salt must be %d bytes, got %d", common.HashLength, len(saltBytes)))
+	}
+
+	var salt [common.HashLength]byte
+	copy(salt[:], saltBytes)
+
+	// Decode initHash from hex string
+	initHashStr := args[2].String()
+	initHash, err := hexutil.Decode(initHashStr)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("CreateAddress2: failed to decode initHash: %v", err))
+	}
+
+	result := crypto.CreateAddress2(address, salt, initHash)
+	return result.String()
 }
