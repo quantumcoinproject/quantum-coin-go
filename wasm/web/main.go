@@ -512,6 +512,8 @@ func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 		if err != nil {
 			return Transaction2{}, err
 		}
+	} else {
+		weiVal = big.NewInt(0)
 	}
 
 	var gasString string
