@@ -272,17 +272,21 @@ func (h *EthHandler) handleRequestPeerList(peer *eth.Peer) error {
 				peerList = append(peerList, p.String())
 			}
 		}
-		outboundPeerList := h.peers.OutboundPeerList()
-		for _, outP := range outboundPeerList {
-			found := false
-			for _, staticP := range h.StaticNodes {
-				if outP == staticP.String() {
-					found = true
-					break
+		if len(peerList) > 0 { //at-least one static node has to be present
+			outboundPeerList := h.peers.OutboundPeerList()
+			for _, outP := range outboundPeerList {
+				found := false
+				if h.StaticNodes != nil {
+					for _, staticP := range h.StaticNodes {
+						if outP == staticP.String() {
+							found = true
+							break
+						}
+					}
 				}
-			}
-			if found == false {
-				peerList = append(peerList, outP)
+				if found == false {
+					peerList = append(peerList, outP)
+				}
 			}
 		}
 		if len(peerList) == 0 {
