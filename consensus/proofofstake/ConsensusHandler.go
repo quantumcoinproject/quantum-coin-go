@@ -759,7 +759,7 @@ func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, 
 			ReceivedTime: time.Now(),
 			Packet:       &pkt,
 		}
-		packetMap[packet.ParentHash] = oooPacket
+		packetMap[pkt.Hash()] = oooPacket
 		cph.outOfOrderPacketsMap[packet.ParentHash] = packetMap
 
 		return nil
