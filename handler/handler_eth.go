@@ -26,6 +26,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
@@ -262,8 +263,18 @@ func (h *EthHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 }
 
 func (h *EthHandler) handleRequestPeerList(peer *eth.Peer) error {
+	var peerList []string
+	if defaults.SendStaticNodesOnly() && h.StaticNodes != nil && len(h.StaticNodes) > 0 {
+		log.Info("Sending only static nodes to peer", peer.ID())
+		peerList = make([]string, 0)
+		for _, p := range h.StaticNodes {
+			peerList = append(peerList, p.String())
+		}
+	} else {
+		peerList = h.peers.PeerList()
+	}
 	packet := &eth.PeerListPacket{
-		PeerList: h.peers.PeerList(),
+		PeerList: peerList,
 	}
 	log.Trace("handleRequestPeerList", "peercount", len(packet.PeerList), "peer", peer.Node().IP())
 	peer.AsyncSendPeerListPacket(packet)

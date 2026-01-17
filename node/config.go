@@ -422,7 +422,6 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
-	c.warnOnce(w, "Found deprecated node list file %s, please use the TOML config file instead.", path)
 
 	// Load the nodes from the config file.
 	var nodelist []string
@@ -443,6 +442,8 @@ func (c *Config) parsePersistentNodes(w *bool, path string) []*enode.Node {
 		}
 		nodes = append(nodes, node)
 	}
+	c.warnOnce(w, "Found node list file %s, node count in file: %d", path, len(nodes))
+
 	return nodes
 }
 
