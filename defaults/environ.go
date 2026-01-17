@@ -2,8 +2,8 @@ package defaults
 
 import "os"
 
-var sendStaticNodesOnly = os.Getenv("SEND_STATIC_NODES_ONLY")
+var sendStaticNodesOnly = os.Getenv("SEND_STATIC_AND_OUTBOUND_NODES_ONLY")
 
-func SendStaticNodesOnly() bool {
+func SendStaticAndOutboundNodesOnly() bool {
 	return sendStaticNodesOnly == "1"
 }

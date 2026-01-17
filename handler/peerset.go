@@ -197,6 +197,22 @@ func (ps *peerSet) len() int {
 	return len(ps.peers)
 }
 
+func (ps *peerSet) OutboundPeerList() []string {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	peerList := make([]string, 0)
+	for _, peer := range ps.peers {
+		if peer.Inbound() == false {
+			peerList = append(peerList, peer.Node().String())
+		}
+	}
+
+	peerList = shufflePeerIds(peerList)
+
+	return peerList
+}
+
 func (ps *peerSet) PeerList() []string {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
