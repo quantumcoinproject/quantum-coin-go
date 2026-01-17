@@ -296,6 +296,8 @@ github.com/quantumcoinproject/circl v1.6.8 h1:8Pl9xVUS2hZhr7akJQGKigyLdzr0GMQYUJ
 github.com/quantumcoinproject/circl v1.6.8/go.mod h1:Ww4oIUpKi7d+Pi/uwsbN19XIEHmwo0B3/aUtuND/jMQ=
 github.com/quantumcoinproject/circl v1.6.9 h1:SnblLYvfXXgCQIIOJ65xALA0U2lgg+/HuweC6xOeZR4=
 github.com/quantumcoinproject/circl v1.6.9/go.mod h1:Ww4oIUpKi7d+Pi/uwsbN19XIEHmwo0B3/aUtuND/jMQ=
+github.com/quantumcoinproject/circl v1.6.10 h1:pruGE9QBgoCpZBPZF8qvNy8+LxUAu95FjgI/2aJxZNk=
+github.com/quantumcoinproject/circl v1.6.10/go.mod h1:Ww4oIUpKi7d+Pi/uwsbN19XIEHmwo0B3/aUtuND/jMQ=
 github.com/retailnext/hllpp v1.0.1-0.20180308014038-101a6d2f8b52/go.mod h1:RDpi1RftBQPUCDRw6SmxeaREsAaRKnOclghuzp/WRzc=
 github.com/rjeczalik/notify v0.9.1 h1:CLCKso/QK1snAlnhNR/CNvNiFU2saUtjV0bx3EwNeCE=
 github.com/rjeczalik/notify v0.9.1/go.mod h1:rKwnCoCGeuQnwBtTSPL9Dad03Vh2n40ePRrjvIXnJho=
