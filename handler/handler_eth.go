@@ -265,7 +265,7 @@ func (h *EthHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 func (h *EthHandler) handleRequestPeerList(peer *eth.Peer) error {
 	var peerList []string
 	if defaults.SendStaticNodesOnly() && h.StaticNodes != nil && len(h.StaticNodes) > 0 {
-		log.Info("Sending only static nodes to peer", peer.ID())
+		log.Info("Sending only static nodes to peer", "peer", peer.ID())
 		peerList = make([]string, 0)
 		for _, p := range h.StaticNodes {
 			peerList = append(peerList, p.String())
