@@ -1424,6 +1424,8 @@ func convertGoTypeToJsValueForTest(val interface{}) interface{} {
 	switch v := val.(type) {
 	case common.Address:
 		return v.String()
+	case common.Hash:
+		return v.Hex()
 	case *big.Int:
 		return v.String()
 	case []byte:
@@ -2293,5 +2295,726 @@ func TestCreateAddress2_Consistency(t *testing.T) {
 
 	if result1 != result2 {
 		t.Error("CreateAddress2 should produce the same address for the same inputs")
+	}
+}
+
+// encodeEventLogForTest is a testable version of EncodeEventLog
+func encodeEventLogForTest(abiJSON string, eventName string, values []interface{}) ([]string, string, error) {
+	// Validate inputs
+	if strings.TrimSpace(abiJSON) == "" {
+		return nil, "", fmt.Errorf("abiJSON cannot be empty")
+	}
+	if strings.TrimSpace(eventName) == "" {
+		return nil, "", fmt.Errorf("eventName cannot be empty")
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to parse ABI JSON: %v", err)
+	}
+
+	// Get event from ABI
+	event, exist := abiData.Events[eventName]
+	if !exist {
+		return nil, "", fmt.Errorf("event '%s' not found in ABI", eventName)
+	}
+
+	// Validate argument count
+	if len(values) != len(event.Inputs) {
+		return nil, "", fmt.Errorf("argument count mismatch: expected %d, got %d", len(event.Inputs), len(values))
+	}
+
+	// Separate indexed and non-indexed arguments
+	var indexedArgs []interface{}
+	var indexedTypes []abi.Argument
+	var nonIndexedArgs []interface{}
+	var nonIndexedTypes []abi.Argument
+
+	for i, input := range event.Inputs {
+		converted, err := convertValueToGoTypeForTest(values[i], input.Type)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to convert argument %d: %v", i, err)
+		}
+		converted = convertToTypedSliceForTest(converted, input.Type)
+
+		if input.Indexed {
+			indexedArgs = append(indexedArgs, converted)
+			indexedTypes = append(indexedTypes, input)
+		} else {
+			nonIndexedArgs = append(nonIndexedArgs, converted)
+			nonIndexedTypes = append(nonIndexedTypes, input)
+		}
+	}
+
+	// Encode topics
+	topics := make([]string, 0)
+
+	// First topic is the event signature hash (unless anonymous)
+	if !event.Anonymous {
+		topics = append(topics, event.ID.Hex())
+	}
+
+	// Pack indexed parameters into topics
+	for i, indexedArg := range indexedArgs {
+		topic, err := packIndexedValueForTest(indexedArg, indexedTypes[i].Type)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to pack indexed argument %d: %v", i, err)
+		}
+		topics = append(topics, common.BytesToHash(topic).Hex())
+	}
+
+	// Pack non-indexed parameters into data
+	var dataBytes []byte
+	if len(nonIndexedArgs) > 0 {
+		nonIndexedInputs := abi.Arguments(nonIndexedTypes)
+		dataBytes, err = nonIndexedInputs.Pack(nonIndexedArgs...)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to pack non-indexed arguments: %v", err)
+		}
+	}
+
+	dataStr := hexutil.Encode(dataBytes)
+	return topics, dataStr, nil
+}
+
+// decodeEventLogForTest is a testable version of DecodeEventLog
+func decodeEventLogForTest(abiJSON string, eventName string, topics []string, data string) (map[string]interface{}, error) {
+	// Validate inputs
+	if strings.TrimSpace(abiJSON) == "" {
+		return nil, fmt.Errorf("abiJSON cannot be empty")
+	}
+	if strings.TrimSpace(eventName) == "" {
+		return nil, fmt.Errorf("eventName cannot be empty")
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ABI JSON: %v", err)
+	}
+
+	// Get event from ABI
+	event, exist := abiData.Events[eventName]
+	if !exist {
+		return nil, fmt.Errorf("event '%s' not found in ABI", eventName)
+	}
+
+	// Parse topics array
+	if len(topics) == 0 {
+		return nil, fmt.Errorf("topics array cannot be empty")
+	}
+
+	// Extract topic hashes
+	topicHashes := make([]common.Hash, len(topics))
+	for i, topicStr := range topics {
+		if !strings.HasPrefix(topicStr, "0x") && !strings.HasPrefix(topicStr, "0X") {
+			topicStr = "0x" + topicStr
+		}
+		topicHash := common.HexToHash(topicStr)
+		topicHashes[i] = topicHash
+	}
+
+	// Verify first topic matches event ID (unless anonymous)
+	if !event.Anonymous {
+		if len(topicHashes) == 0 || topicHashes[0] != event.ID {
+			return nil, fmt.Errorf("first topic does not match event signature")
+		}
+	}
+
+	// Separate indexed and non-indexed inputs
+	var indexedInputs []abi.Argument
+	var nonIndexedInputs []abi.Argument
+	for _, input := range event.Inputs {
+		if input.Indexed {
+			indexedInputs = append(indexedInputs, input)
+		} else {
+			nonIndexedInputs = append(nonIndexedInputs, input)
+		}
+	}
+
+	// Decode indexed parameters from topics
+	indexedStart := 0
+	if !event.Anonymous {
+		indexedStart = 1 // Skip event signature topic
+	}
+
+	resultMap := make(map[string]interface{})
+
+	// Decode indexed parameters
+	if len(indexedInputs) > 0 {
+		if len(topicHashes)-indexedStart < len(indexedInputs) {
+			return nil, fmt.Errorf("insufficient topics for indexed parameters")
+		}
+
+		for i, indexedInput := range indexedInputs {
+			topicHash := topicHashes[indexedStart+i]
+			decoded, err := unpackIndexedValueForTest(topicHash, indexedInput.Type)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unpack indexed parameter '%s': %v", indexedInput.Name, err)
+			}
+			resultMap[indexedInput.Name] = convertGoTypeToJsValueForTest(decoded)
+		}
+	}
+
+	// Decode non-indexed parameters from data
+	if len(nonIndexedInputs) > 0 {
+		if data == "" || data == "0x" {
+			// Empty data, return default values
+			for _, nonIndexedInput := range nonIndexedInputs {
+				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValueForTest(getDefaultValueForTest(nonIndexedInput.Type))
+			}
+		} else {
+			if !strings.HasPrefix(data, "0x") && !strings.HasPrefix(data, "0X") {
+				data = "0x" + data
+			}
+			dataBytes, err := hexutil.Decode(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode data: %v", err)
+			}
+
+			nonIndexedArgs := abi.Arguments(nonIndexedInputs)
+			unpacked, err := nonIndexedArgs.Unpack(dataBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unpack non-indexed parameters: %v", err)
+			}
+
+			for i, nonIndexedInput := range nonIndexedInputs {
+				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValueForTest(unpacked[i])
+			}
+		}
+	}
+
+	return resultMap, nil
+}
+
+// packIndexedValueForTest packs an indexed event parameter value into a 32-byte topic
+func packIndexedValueForTest(value interface{}, argType abi.Type) ([]byte, error) {
+	// Create a single-argument Arguments to use its Pack method
+	args := abi.Arguments{abi.Argument{Type: argType}}
+	packed, err := args.Pack(value)
+	if err != nil {
+		return nil, err
+	}
+
+	switch argType.T {
+	case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		// Dynamic types: hash with Keccak256
+		return crypto.Keccak256(packed), nil
+	default:
+		// Value types: use first 32 bytes
+		if len(packed) < 32 {
+			padded := make([]byte, 32)
+			copy(padded[32-len(packed):], packed)
+			return padded, nil
+		}
+		return packed[:32], nil
+	}
+}
+
+// unpackIndexedValueForTest unpacks an indexed topic back into a value
+func unpackIndexedValueForTest(topic common.Hash, argType abi.Type) (interface{}, error) {
+	switch argType.T {
+	case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		// Dynamic types: return the hash (cannot reconstruct original)
+		return topic, nil
+	default:
+		// Value types: unpack from topic bytes
+		args := abi.Arguments{abi.Argument{Type: argType}}
+		unpacked, err := args.Unpack(topic.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		if len(unpacked) > 0 {
+			return unpacked[0], nil
+		}
+		return nil, fmt.Errorf("failed to unpack indexed value")
+	}
+}
+
+// getDefaultValueForTest returns a default value for a given ABI type
+func getDefaultValueForTest(argType abi.Type) interface{} {
+	switch argType.T {
+	case abi.UintTy, abi.IntTy:
+		return big.NewInt(0)
+	case abi.AddressTy:
+		return common.Address{}
+	case abi.BoolTy:
+		return false
+	case abi.StringTy:
+		return ""
+	case abi.BytesTy:
+		return []byte{}
+	default:
+		return nil
+	}
+}
+
+
+func TestEncodeEventLog_Basic(t *testing.T) {
+	// Test encoding a simple event with indexed and non-indexed parameters
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "from", "type": "address", "indexed": true},
+			{"name": "to", "type": "address", "indexed": true},
+			{"name": "value", "type": "uint256", "indexed": false}
+		]
+	}]`
+
+	from := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	to := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Transfer", []interface{}{from, to, value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 3 topics: event signature + 2 indexed parameters
+	if len(topics) != 3 {
+		t.Fatalf("Expected 3 topics, got %d", len(topics))
+	}
+
+	// Verify event signature topic
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	event := abiData.Events["Transfer"]
+	if topics[0] != event.ID.Hex() {
+		t.Errorf("First topic should be event signature, expected %s, got %s", event.ID.Hex(), topics[0])
+	}
+
+	// Verify data is not empty
+	if data == "" || data == "0x" {
+		t.Error("Data should not be empty for non-indexed parameters")
+	}
+}
+
+func TestEncodeEventLog_AllIndexed(t *testing.T) {
+	// Test encoding an event with all indexed parameters
+	abiJSON := `[{
+		"name": "Approval",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "owner", "type": "address", "indexed": true},
+			{"name": "spender", "type": "address", "indexed": true},
+			{"name": "value", "type": "uint256", "indexed": true}
+		]
+	}]`
+
+	owner := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	spender := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Approval", []interface{}{owner, spender, value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 4 topics: event signature + 3 indexed parameters
+	if len(topics) != 4 {
+		t.Fatalf("Expected 4 topics, got %d", len(topics))
+	}
+
+	// Data should be empty (0x) since all parameters are indexed
+	if data != "0x" {
+		t.Errorf("Data should be empty for all-indexed event, got %s", data)
+	}
+}
+
+func TestEncodeEventLog_AllNonIndexed(t *testing.T) {
+	// Test encoding an event with all non-indexed parameters
+	abiJSON := `[{
+		"name": "Received",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "sender", "type": "address", "indexed": false},
+			{"name": "amount", "type": "uint256", "indexed": false}
+		]
+	}]`
+
+	sender := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	amount := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Received", []interface{}{sender, amount})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 1 topic: event signature only
+	if len(topics) != 1 {
+		t.Fatalf("Expected 1 topic, got %d", len(topics))
+	}
+
+	// Data should not be empty
+	if data == "" || data == "0x" {
+		t.Error("Data should not be empty for non-indexed parameters")
+	}
+}
+
+func TestEncodeEventLog_Anonymous(t *testing.T) {
+	// Test encoding an anonymous event
+	abiJSON := `[{
+		"name": "AnonymousEvent",
+		"type": "event",
+		"anonymous": true,
+		"inputs": [
+			{"name": "value", "type": "uint256", "indexed": true}
+		]
+	}]`
+
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "AnonymousEvent", []interface{}{value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 1 topic: only the indexed parameter (no event signature)
+	if len(topics) != 1 {
+		t.Fatalf("Expected 1 topic for anonymous event, got %d", len(topics))
+	}
+
+	// Data should be empty
+	if data != "0x" {
+		t.Errorf("Data should be empty, got %s", data)
+	}
+}
+
+func TestEncodeEventLog_StringIndexed(t *testing.T) {
+	// Test encoding an event with indexed string (should be hashed)
+	abiJSON := `[{
+		"name": "StringEvent",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "message", "type": "string", "indexed": true}
+		]
+	}]`
+
+	message := "Hello, World!"
+
+	topics, _, err := encodeEventLogForTest(abiJSON, "StringEvent", []interface{}{message})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 2 topics: event signature + hashed string
+	if len(topics) != 2 {
+		t.Fatalf("Expected 2 topics, got %d", len(topics))
+	}
+
+	// Verify the string is hashed (topic should be Keccak256 hash of ABI-packed string)
+	// For indexed strings, we hash the ABI-packed value, not raw bytes
+	stringType := createStringType()
+	args := abi.Arguments{abi.Argument{Type: stringType}}
+	packed, err := args.Pack(message)
+	if err != nil {
+		t.Fatalf("Failed to pack string: %v", err)
+	}
+	expectedHash := crypto.Keccak256Hash(packed)
+	if topics[1] != expectedHash.Hex() {
+		t.Errorf("String should be hashed, expected %s, got %s", expectedHash.Hex(), topics[1])
+	}
+}
+
+func TestDecodeEventLog_Basic(t *testing.T) {
+	// Test decoding a simple event
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "from", "type": "address", "indexed": true},
+			{"name": "to", "type": "address", "indexed": true},
+			{"name": "value", "type": "uint256", "indexed": false}
+		]
+	}]`
+
+	// First encode the event
+	from := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	to := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Transfer", []interface{}{from, to, value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Then decode it
+	decoded, err := decodeEventLogForTest(abiJSON, "Transfer", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	// Verify decoded values
+	if decoded["from"] != from {
+		t.Errorf("Decoded 'from' mismatch: expected %s, got %v", from, decoded["from"])
+	}
+	if decoded["to"] != to {
+		t.Errorf("Decoded 'to' mismatch: expected %s, got %v", to, decoded["to"])
+	}
+	// Value is non-indexed, so it's in data
+	decodedValue, ok := decoded["value"].(string)
+	if !ok {
+		t.Fatalf("Decoded 'value' should be string, got %T", decoded["value"])
+	}
+	if decodedValue != value {
+		t.Errorf("Decoded 'value' mismatch: expected %s, got %s", value, decodedValue)
+	}
+}
+
+func TestDecodeEventLog_AllIndexed(t *testing.T) {
+	// Test decoding an event with all indexed parameters
+	abiJSON := `[{
+		"name": "Approval",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "owner", "type": "address", "indexed": true},
+			{"name": "spender", "type": "address", "indexed": true},
+			{"name": "value", "type": "uint256", "indexed": true}
+		]
+	}]`
+
+	owner := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	spender := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Approval", []interface{}{owner, spender, value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	decoded, err := decodeEventLogForTest(abiJSON, "Approval", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	// Verify all indexed parameters are decoded correctly
+	if decoded["owner"] != owner {
+		t.Errorf("Decoded 'owner' mismatch: expected %s, got %v", owner, decoded["owner"])
+	}
+	if decoded["spender"] != spender {
+		t.Errorf("Decoded 'spender' mismatch: expected %s, got %v", spender, decoded["spender"])
+	}
+	decodedValue, ok := decoded["value"].(string)
+	if !ok {
+		t.Fatalf("Decoded 'value' should be string, got %T", decoded["value"])
+	}
+	if decodedValue != value {
+		t.Errorf("Decoded 'value' mismatch: expected %s, got %s", value, decodedValue)
+	}
+}
+
+func TestDecodeEventLog_Anonymous(t *testing.T) {
+	// Test decoding an anonymous event
+	abiJSON := `[{
+		"name": "AnonymousEvent",
+		"type": "event",
+		"anonymous": true,
+		"inputs": [
+			{"name": "value", "type": "uint256", "indexed": true}
+		]
+	}]`
+
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "AnonymousEvent", []interface{}{value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	decoded, err := decodeEventLogForTest(abiJSON, "AnonymousEvent", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	decodedValue, ok := decoded["value"].(string)
+	if !ok {
+		t.Fatalf("Decoded 'value' should be string, got %T", decoded["value"])
+	}
+	if decodedValue != value {
+		t.Errorf("Decoded 'value' mismatch: expected %s, got %s", value, decodedValue)
+	}
+}
+
+func TestDecodeEventLog_StringIndexed(t *testing.T) {
+	// Test decoding an event with indexed string (returns hash, not original value)
+	abiJSON := `[{
+		"name": "StringEvent",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "message", "type": "string", "indexed": true}
+		]
+	}]`
+
+	message := "Hello, World!"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "StringEvent", []interface{}{message})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	decoded, err := decodeEventLogForTest(abiJSON, "StringEvent", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	// For indexed strings, we get the hash back (as a string), not the original value
+	// convertGoTypeToJsValueForTest converts common.Hash to string via .Hex()
+	decodedHashStr, ok := decoded["message"].(string)
+	if !ok {
+		t.Fatalf("Decoded 'message' should be string (hash hex), got %T", decoded["message"])
+	}
+
+	// Calculate expected hash (ABI-packed string, then hashed)
+	stringType := createStringType()
+	args := abi.Arguments{abi.Argument{Type: stringType}}
+	packed, err := args.Pack(message)
+	if err != nil {
+		t.Fatalf("Failed to pack string: %v", err)
+	}
+	expectedHash := crypto.Keccak256Hash(packed)
+	if decodedHashStr != expectedHash.Hex() {
+		t.Errorf("Decoded hash mismatch: expected %s, got %s", expectedHash.Hex(), decodedHashStr)
+	}
+}
+
+func TestEncodeEventLog_InvalidEventName(t *testing.T) {
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": []
+	}]`
+
+	_, _, err := encodeEventLogForTest(abiJSON, "NonExistentEvent", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for non-existent event, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestEncodeEventLog_ArgumentMismatch(t *testing.T) {
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "from", "type": "address", "indexed": true},
+			{"name": "to", "type": "address", "indexed": true}
+		]
+	}]`
+
+	_, _, err := encodeEventLogForTest(abiJSON, "Transfer", []interface{}{"0x01"})
+	if err == nil {
+		t.Fatal("Expected error for argument count mismatch, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "argument count mismatch") {
+		t.Errorf("Expected 'argument count mismatch' error, got: %v", err)
+	}
+}
+
+func TestDecodeEventLog_InvalidEventName(t *testing.T) {
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": []
+	}]`
+
+	_, err := decodeEventLogForTest(abiJSON, "NonExistentEvent", []string{"0x00"}, "0x")
+	if err == nil {
+		t.Fatal("Expected error for non-existent event, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestDecodeEventLog_InvalidTopicSignature(t *testing.T) {
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "from", "type": "address", "indexed": true}
+		]
+	}]`
+
+	// Use wrong event signature in first topic
+	wrongTopics := []string{"0x0000000000000000000000000000000000000000000000000000000000000000", "0x00"}
+
+	_, err := decodeEventLogForTest(abiJSON, "Transfer", wrongTopics, "0x")
+	if err == nil {
+		t.Fatal("Expected error for invalid topic signature, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "does not match event signature") {
+		t.Errorf("Expected 'does not match event signature' error, got: %v", err)
+	}
+}
+
+func TestEncodeDecodeEventLog_RoundTrip(t *testing.T) {
+	// Test that encoding and decoding produces the same values
+	abiJSON := `[{
+		"name": "ComplexEvent",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "indexedAddr", "type": "address", "indexed": true},
+			{"name": "indexedValue", "type": "uint256", "indexed": true},
+			{"name": "nonIndexedAddr", "type": "address", "indexed": false},
+			{"name": "nonIndexedValue", "type": "uint256", "indexed": false},
+			{"name": "flag", "type": "bool", "indexed": false}
+		]
+	}]`
+
+	indexedAddr := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	indexedValue := "1000000000000000000"
+	nonIndexedAddr := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	nonIndexedValue := "2000000000000000000"
+	flag := true
+
+	values := []interface{}{indexedAddr, indexedValue, nonIndexedAddr, nonIndexedValue, flag}
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "ComplexEvent", values)
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	decoded, err := decodeEventLogForTest(abiJSON, "ComplexEvent", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	// Verify all values match
+	if decoded["indexedAddr"] != indexedAddr {
+		t.Errorf("indexedAddr mismatch: expected %s, got %v", indexedAddr, decoded["indexedAddr"])
+	}
+	decodedIndexedValue, _ := decoded["indexedValue"].(string)
+	if decodedIndexedValue != indexedValue {
+		t.Errorf("indexedValue mismatch: expected %s, got %s", indexedValue, decodedIndexedValue)
+	}
+	if decoded["nonIndexedAddr"] != nonIndexedAddr {
+		t.Errorf("nonIndexedAddr mismatch: expected %s, got %v", nonIndexedAddr, decoded["nonIndexedAddr"])
+	}
+	decodedNonIndexedValue, _ := decoded["nonIndexedValue"].(string)
+	if decodedNonIndexedValue != nonIndexedValue {
+		t.Errorf("nonIndexedValue mismatch: expected %s, got %s", nonIndexedValue, decodedNonIndexedValue)
+	}
+	decodedFlag, _ := decoded["flag"].(bool)
+	if decodedFlag != flag {
+		t.Errorf("flag mismatch: expected %v, got %v", flag, decodedFlag)
 	}
 }

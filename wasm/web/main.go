@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 	"syscall/js"
 
@@ -77,6 +78,8 @@ func main() {
 	js.Global().Set("PackCreateContractData", js.FuncOf(PackCreateContractDataWrapper))
 	js.Global().Set("CreateAddress", js.FuncOf(CreateAddressWrapper))
 	js.Global().Set("CreateAddress2", js.FuncOf(CreateAddress2Wrapper))
+	js.Global().Set("EncodeEventLog", js.FuncOf(EncodeEventLogWrapper))
+	js.Global().Set("DecodeEventLog", js.FuncOf(DecodeEventLogWrapper))
 	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
 	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
@@ -1321,4 +1324,308 @@ func CreateAddress2Wrapper(this js.Value, args []js.Value) interface{} {
 
 	result := crypto.CreateAddress2(address, salt, initHash)
 	return result.String()
+}
+
+// EncodeEventLogWrapper is a wrapper function for EncodeEventLog to be used with js.FuncOf
+func EncodeEventLogWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 2 {
+		return js.Global().Get("Error").New("EncodeEventLog: insufficient arguments, expected at least 2 (abiJSON and eventName)")
+	}
+	abiJSON := args[0].String()
+	eventName := args[1].String()
+	values := args[2:] // Event parameter values
+	return EncodeEventLog(abiJSON, eventName, values)
+}
+
+// DecodeEventLogWrapper is a wrapper function for DecodeEventLog to be used with js.FuncOf
+func DecodeEventLogWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) != 4 {
+		return js.Global().Get("Error").New("DecodeEventLog: invalid number of arguments, expected 4 (abiJSON, eventName, topics, data)")
+	}
+	abiJSON := args[0].String()
+	eventName := args[1].String()
+	topics := args[2] // Array of topic strings
+	data := args[3]    // Data string
+	return DecodeEventLog(abiJSON, eventName, topics, data)
+}
+
+// EncodeEventLog encodes event parameters into topics and data according to the ABI specification.
+// Returns an object with topics (string array) and data (string).
+func EncodeEventLog(abiJSON string, eventName string, values []js.Value) interface{} {
+	// Validate inputs
+	if strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("EncodeEventLog: abiJSON cannot be empty")
+	}
+	if strings.TrimSpace(eventName) == "" {
+		return js.Global().Get("Error").New("EncodeEventLog: eventName cannot be empty")
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: failed to parse ABI JSON: %v", err))
+	}
+
+	// Get event from ABI
+	event, exist := abiData.Events[eventName]
+	if !exist {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: event '%s' not found in ABI", eventName))
+	}
+
+	// Validate argument count
+	if len(values) != len(event.Inputs) {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: argument count mismatch for event '%s', expected %d but got %d", eventName, len(event.Inputs), len(values)))
+	}
+
+	// Separate indexed and non-indexed arguments
+	var indexedArgs []interface{}
+	var indexedTypes []abi.Argument
+	var nonIndexedArgs []interface{}
+	var nonIndexedTypes []abi.Argument
+
+	for i, input := range event.Inputs {
+		converted, err := convertJsValueToGoType(values[i], input.Type)
+		if err != nil {
+			return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: failed to convert argument %d for event '%s': %v", i, eventName, err))
+		}
+		converted = convertToTypedSlice(converted, input.Type)
+
+		if input.Indexed {
+			indexedArgs = append(indexedArgs, converted)
+			indexedTypes = append(indexedTypes, input)
+		} else {
+			nonIndexedArgs = append(nonIndexedArgs, converted)
+			nonIndexedTypes = append(nonIndexedTypes, input)
+		}
+	}
+
+	// Encode topics
+	topics := make([]string, 0)
+	
+	// First topic is the event signature hash (unless anonymous)
+	if !event.Anonymous {
+		topics = append(topics, event.ID.Hex())
+	}
+
+	// Pack indexed parameters into topics
+	for i, indexedArg := range indexedArgs {
+		topic, err := packIndexedValue(indexedArg, indexedTypes[i].Type)
+		if err != nil {
+			return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: failed to pack indexed argument %d: %v", i, err))
+		}
+		topics = append(topics, common.BytesToHash(topic).Hex())
+	}
+
+	// Pack non-indexed parameters into data
+	var dataBytes []byte
+	if len(nonIndexedArgs) > 0 {
+		nonIndexedInputs := abi.Arguments(nonIndexedTypes)
+		dataBytes, err = nonIndexedInputs.Pack(nonIndexedArgs...)
+		if err != nil {
+			return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: failed to pack non-indexed arguments: %v", err))
+		}
+	}
+
+	// Create result object
+	result := js.Global().Get("Object").New()
+	
+	// Convert topics array to JavaScript array
+	topicsArray := js.Global().Get("Array").New(len(topics))
+	for i, topic := range topics {
+		topicsArray.SetIndex(i, topic)
+	}
+	result.Set("topics", topicsArray)
+	
+	// Set data as hex string
+	if len(dataBytes) > 0 {
+		result.Set("data", hexutil.Encode(dataBytes))
+	} else {
+		result.Set("data", "0x")
+	}
+
+	return result
+}
+
+// DecodeEventLog decodes event log topics and data back into event parameters.
+// Returns a JSON string with the decoded values.
+func DecodeEventLog(abiJSON string, eventName string, topics js.Value, data js.Value) interface{} {
+	// Validate inputs
+	if strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("DecodeEventLog: abiJSON cannot be empty")
+	}
+	if strings.TrimSpace(eventName) == "" {
+		return js.Global().Get("Error").New("DecodeEventLog: eventName cannot be empty")
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to parse ABI JSON: %v", err))
+	}
+
+	// Get event from ABI
+	event, exist := abiData.Events[eventName]
+	if !exist {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: event '%s' not found in ABI", eventName))
+	}
+
+	// Parse topics array
+	topicsLength := topics.Get("length").Int()
+	if topicsLength == 0 {
+		return js.Global().Get("Error").New("DecodeEventLog: topics array cannot be empty")
+	}
+
+	// Extract topic hashes
+	topicHashes := make([]common.Hash, topicsLength)
+	for i := 0; i < topicsLength; i++ {
+		topicStr := topics.Index(i).String()
+		if !strings.HasPrefix(topicStr, "0x") && !strings.HasPrefix(topicStr, "0X") {
+			topicStr = "0x" + topicStr
+		}
+		topicHash := common.HexToHash(topicStr)
+		topicHashes[i] = topicHash
+	}
+
+	// Verify first topic matches event ID (unless anonymous)
+	if !event.Anonymous {
+		if len(topicHashes) == 0 || topicHashes[0] != event.ID {
+			return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: first topic does not match event signature for '%s'", eventName))
+		}
+	}
+
+	// Separate indexed and non-indexed inputs
+	var indexedInputs []abi.Argument
+	var nonIndexedInputs []abi.Argument
+	for _, input := range event.Inputs {
+		if input.Indexed {
+			indexedInputs = append(indexedInputs, input)
+		} else {
+			nonIndexedInputs = append(nonIndexedInputs, input)
+		}
+	}
+
+	// Decode indexed parameters from topics
+	indexedStart := 0
+	if !event.Anonymous {
+		indexedStart = 1 // Skip event signature topic
+	}
+	
+	resultMap := make(map[string]interface{})
+	
+	// Decode indexed parameters
+	if len(indexedInputs) > 0 {
+		if len(topicHashes)-indexedStart < len(indexedInputs) {
+			return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: insufficient topics for indexed parameters, expected %d but got %d", len(indexedInputs), len(topicHashes)-indexedStart))
+		}
+		
+		for i, indexedInput := range indexedInputs {
+			topicHash := topicHashes[indexedStart+i]
+			decoded, err := unpackIndexedValue(topicHash, indexedInput.Type)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to unpack indexed parameter '%s': %v", indexedInput.Name, err))
+			}
+			resultMap[indexedInput.Name] = convertGoTypeToJsValue(decoded)
+		}
+	}
+
+	// Decode non-indexed parameters from data
+	if len(nonIndexedInputs) > 0 {
+		dataStr := data.String()
+		if dataStr == "" || dataStr == "0x" {
+			// Empty data, return default values
+			for _, nonIndexedInput := range nonIndexedInputs {
+				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValue(getDefaultValue(nonIndexedInput.Type))
+			}
+		} else {
+			if !strings.HasPrefix(dataStr, "0x") && !strings.HasPrefix(dataStr, "0X") {
+				dataStr = "0x" + dataStr
+			}
+			dataBytes, err := hexutil.Decode(dataStr)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to decode data: %v", err))
+			}
+			
+			nonIndexedArgs := abi.Arguments(nonIndexedInputs)
+			unpacked, err := nonIndexedArgs.Unpack(dataBytes)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to unpack non-indexed parameters: %v", err))
+			}
+			
+			for i, nonIndexedInput := range nonIndexedInputs {
+				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValue(unpacked[i])
+			}
+		}
+	}
+
+	// Return as JSON string
+	jsonData, err := json.Marshal(resultMap)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to marshal result to JSON: %v", err))
+	}
+
+	return string(jsonData)
+}
+
+// packIndexedValue packs an indexed event parameter value into a 32-byte topic.
+// For value types, it pads to 32 bytes. For dynamic types (string, bytes, arrays), it hashes with Keccak256.
+func packIndexedValue(value interface{}, argType abi.Type) ([]byte, error) {
+	// Create a single-argument Arguments to use its Pack method
+	args := abi.Arguments{abi.Argument{Type: argType}}
+	packed, err := args.Pack(value)
+	if err != nil {
+		return nil, err
+	}
+
+	switch argType.T {
+	case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		// Dynamic types: hash with Keccak256
+		return crypto.Keccak256(packed), nil
+	default:
+		// Value types: use first 32 bytes (should already be 32 bytes for value types)
+		if len(packed) < 32 {
+			padded := make([]byte, 32)
+			copy(padded[32-len(packed):], packed)
+			return padded, nil
+		}
+		return packed[:32], nil
+	}
+}
+
+// unpackIndexedValue unpacks an indexed topic back into a value.
+// For dynamic types, it returns the hash (cannot reconstruct original value).
+func unpackIndexedValue(topic common.Hash, argType abi.Type) (interface{}, error) {
+	switch argType.T {
+	case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		// Dynamic types: return the hash (cannot reconstruct original)
+		return topic, nil
+	default:
+		// Value types: unpack from topic bytes using Arguments.Unpack
+		args := abi.Arguments{abi.Argument{Type: argType}}
+		unpacked, err := args.Unpack(topic.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		if len(unpacked) > 0 {
+			return unpacked[0], nil
+		}
+		return nil, fmt.Errorf("failed to unpack indexed value")
+	}
+}
+
+// getDefaultValue returns a default value for a given ABI type
+func getDefaultValue(argType abi.Type) interface{} {
+	switch argType.T {
+	case abi.UintTy, abi.IntTy:
+		return big.NewInt(0)
+	case abi.AddressTy:
+		return common.Address{}
+	case abi.BoolTy:
+		return false
+	case abi.StringTy:
+		return ""
+	case abi.BytesTy:
+		return []byte{}
+	default:
+		return nil
+	}
 }
