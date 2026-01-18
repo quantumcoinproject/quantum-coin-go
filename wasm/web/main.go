@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"reflect"
 	"strings"
 	"syscall/js"
 
@@ -1345,7 +1344,7 @@ func DecodeEventLogWrapper(this js.Value, args []js.Value) interface{} {
 	abiJSON := args[0].String()
 	eventName := args[1].String()
 	topics := args[2] // Array of topic strings
-	data := args[3]    // Data string
+	data := args[3]   // Data string
 	return DecodeEventLog(abiJSON, eventName, topics, data)
 }
 
@@ -1401,7 +1400,7 @@ func EncodeEventLog(abiJSON string, eventName string, values []js.Value) interfa
 
 	// Encode topics
 	topics := make([]string, 0)
-	
+
 	// First topic is the event signature hash (unless anonymous)
 	if !event.Anonymous {
 		topics = append(topics, event.ID.Hex())
@@ -1428,14 +1427,14 @@ func EncodeEventLog(abiJSON string, eventName string, values []js.Value) interfa
 
 	// Create result object
 	result := js.Global().Get("Object").New()
-	
+
 	// Convert topics array to JavaScript array
 	topicsArray := js.Global().Get("Array").New(len(topics))
 	for i, topic := range topics {
 		topicsArray.SetIndex(i, topic)
 	}
 	result.Set("topics", topicsArray)
-	
+
 	// Set data as hex string
 	if len(dataBytes) > 0 {
 		result.Set("data", hexutil.Encode(dataBytes))
@@ -1509,15 +1508,15 @@ func DecodeEventLog(abiJSON string, eventName string, topics js.Value, data js.V
 	if !event.Anonymous {
 		indexedStart = 1 // Skip event signature topic
 	}
-	
+
 	resultMap := make(map[string]interface{})
-	
+
 	// Decode indexed parameters
 	if len(indexedInputs) > 0 {
 		if len(topicHashes)-indexedStart < len(indexedInputs) {
 			return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: insufficient topics for indexed parameters, expected %d but got %d", len(indexedInputs), len(topicHashes)-indexedStart))
 		}
-		
+
 		for i, indexedInput := range indexedInputs {
 			topicHash := topicHashes[indexedStart+i]
 			decoded, err := unpackIndexedValue(topicHash, indexedInput.Type)
@@ -1544,13 +1543,13 @@ func DecodeEventLog(abiJSON string, eventName string, topics js.Value, data js.V
 			if err != nil {
 				return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to decode data: %v", err))
 			}
-			
+
 			nonIndexedArgs := abi.Arguments(nonIndexedInputs)
 			unpacked, err := nonIndexedArgs.Unpack(dataBytes)
 			if err != nil {
 				return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to unpack non-indexed parameters: %v", err))
 			}
-			
+
 			for i, nonIndexedInput := range nonIndexedInputs {
 				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValue(unpacked[i])
 			}
