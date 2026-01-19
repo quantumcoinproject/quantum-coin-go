@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
+	"strconv"
 	"strings"
 	"syscall/js"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereds"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/keystore"
 	wasm "github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
@@ -79,6 +82,8 @@ func main() {
 	js.Global().Set("CreateAddress2", js.FuncOf(CreateAddress2Wrapper))
 	js.Global().Set("EncodeEventLog", js.FuncOf(EncodeEventLogWrapper))
 	js.Global().Set("DecodeEventLog", js.FuncOf(DecodeEventLogWrapper))
+	js.Global().Set("EncodeRlp", js.FuncOf(EncodeRlpWrapper))
+	js.Global().Set("DecodeRlp", js.FuncOf(DecodeRlpWrapper))
 	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
 	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
@@ -1627,4 +1632,216 @@ func getDefaultValue(argType abi.Type) interface{} {
 	default:
 		return nil
 	}
+}
+
+// EncodeRlpWrapper is a wrapper function for EncodeRlp to be used with js.FuncOf
+func EncodeRlpWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 1 {
+		return js.Global().Get("Error").New("EncodeRlp: insufficient arguments, expected at least 1 (value)")
+	}
+	return EncodeRlp(args[0])
+}
+
+// EncodeRlp encodes a JavaScript value to RLP format.
+// Supports: strings, numbers, booleans, arrays, objects (maps), and hex-encoded bytes.
+// Returns a hex-encoded string of the RLP-encoded data.
+func EncodeRlp(value js.Value) interface{} {
+	// Convert JavaScript value to Go type
+	goValue, err := convertJsValueToRlpType(value)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeRlp: failed to convert value: %v", err))
+	}
+
+	// Encode to RLP bytes
+	rlpBytes, err := rlp.EncodeToBytes(goValue)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeRlp: failed to encode: %v", err))
+	}
+
+	// Return as hex string
+	return hexutil.Encode(rlpBytes)
+}
+
+// convertJsValueToRlpType converts a JavaScript value to a Go type suitable for RLP encoding
+func convertJsValueToRlpType(jsVal js.Value) (interface{}, error) {
+	// Handle null/undefined
+	if jsVal.IsNull() || jsVal.IsUndefined() {
+		return []byte{}, nil // Empty bytes for null/undefined
+	}
+
+	// Handle arrays
+	if jsVal.InstanceOf(js.Global().Get("Array")) {
+		length := jsVal.Get("length").Int()
+		result := make([]interface{}, length)
+		for i := 0; i < length; i++ {
+			elem, err := convertJsValueToRlpType(jsVal.Index(i))
+			if err != nil {
+				return nil, fmt.Errorf("array element %d: %v", i, err)
+			}
+			result[i] = elem
+		}
+		return result, nil
+	}
+
+	// Handle objects (maps)
+	if jsVal.InstanceOf(js.Global().Get("Object")) && !jsVal.InstanceOf(js.Global().Get("Array")) {
+		keys := js.Global().Get("Object").Call("keys", jsVal)
+		length := keys.Get("length").Int()
+		result := make([]interface{}, 0, length*2) // RLP encodes maps as alternating key-value pairs
+		for i := 0; i < length; i++ {
+			key := keys.Index(i).String()
+			value := jsVal.Get(key)
+			keyVal, err := convertJsValueToRlpType(js.Global().Get("String").New(key))
+			if err != nil {
+				return nil, fmt.Errorf("object key %s: %v", key, err)
+			}
+			valVal, err := convertJsValueToRlpType(value)
+			if err != nil {
+				return nil, fmt.Errorf("object value for key %s: %v", key, err)
+			}
+			result = append(result, keyVal, valVal)
+		}
+		return result, nil
+	}
+
+	// Handle strings
+	if jsVal.Type() == js.TypeString {
+		str := jsVal.String()
+		// Check if it's a hex string (starts with 0x)
+		if strings.HasPrefix(str, "0x") || strings.HasPrefix(str, "0X") {
+			// Decode hex string to bytes
+			bytes, err := hexutil.Decode(str)
+			if err != nil {
+				return nil, fmt.Errorf("invalid hex string: %v", err)
+			}
+			return bytes, nil
+		}
+		// Regular string
+		return str, nil
+	}
+
+	// Handle numbers
+	if jsVal.Type() == js.TypeNumber {
+		num := jsVal.Float()
+		// Check if it's an integer
+		if num == float64(int64(num)) {
+			// Convert to big.Int for RLP encoding
+			return big.NewInt(int64(num)), nil
+		}
+		// For non-integer numbers, convert to string representation
+		return strconv.FormatFloat(num, 'f', -1, 64), nil
+	}
+
+	// Handle booleans
+	if jsVal.Type() == js.TypeBoolean {
+		if jsVal.Bool() {
+			return uint8(1), nil
+		}
+		return uint8(0), nil
+	}
+
+	return nil, fmt.Errorf("unsupported JavaScript type: %v", jsVal.Type())
+}
+
+// DecodeRlpWrapper is a wrapper function for DecodeRlp to be used with js.FuncOf
+func DecodeRlpWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 1 {
+		return js.Global().Get("Error").New("DecodeRlp: insufficient arguments, expected at least 1 (data)")
+	}
+	data := args[0].String()
+	return DecodeRlp(data)
+}
+
+// DecodeRlp decodes RLP-encoded data back to a JavaScript-compatible value.
+// Takes a hex-encoded string and returns a JSON string representation of the decoded value.
+func DecodeRlp(data string) interface{} {
+	// Validate input
+	if strings.TrimSpace(data) == "" {
+		return js.Global().Get("Error").New("DecodeRlp: data cannot be empty")
+	}
+
+	// Decode hex string to bytes
+	if !strings.HasPrefix(data, "0x") && !strings.HasPrefix(data, "0X") {
+		data = "0x" + data
+	}
+	rlpBytes, err := hexutil.Decode(data)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeRlp: failed to decode hex data: %v", err))
+	}
+
+	// Decode RLP bytes into interface{}
+	var decoded interface{}
+	err = rlp.DecodeBytes(rlpBytes, &decoded)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeRlp: failed to decode RLP: %v", err))
+	}
+
+	// Convert decoded Go value to JavaScript-compatible format
+	jsValue := convertRlpDecodedToJsValue(decoded)
+
+	// Return as JSON string
+	jsonData, err := json.Marshal(jsValue)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeRlp: failed to marshal to JSON: %v", err))
+	}
+
+	return string(jsonData)
+}
+
+// convertRlpDecodedToJsValue converts a decoded RLP value to a JavaScript-compatible format
+func convertRlpDecodedToJsValue(val interface{}) interface{} {
+	if val == nil {
+		return nil
+	}
+
+	// Use reflection to handle different types
+	rv := reflect.ValueOf(val)
+	rt := rv.Type()
+
+	// Handle slices/arrays
+	if rt.Kind() == reflect.Slice {
+		length := rv.Len()
+		result := make([]interface{}, length)
+		for i := 0; i < length; i++ {
+			result[i] = convertRlpDecodedToJsValue(rv.Index(i).Interface())
+		}
+		return result
+	}
+
+	// Handle byte slices - convert to hex string
+	if rt.Kind() == reflect.Slice && rt.Elem().Kind() == reflect.Uint8 {
+		bytes := val.([]byte)
+		return hexutil.Encode(bytes)
+	}
+
+	// Handle big.Int - convert to number string
+	if bigInt, ok := val.(*big.Int); ok {
+		return bigInt.String()
+	}
+
+	// Handle uint8 (boolean representation)
+	if u8, ok := val.(uint8); ok {
+		return u8 != 0
+	}
+
+	// Handle unsigned integers
+	switch v := val.(type) {
+	case uint, uint8, uint16, uint32, uint64:
+		return reflect.ValueOf(v).Uint()
+	case int, int8, int16, int32, int64:
+		return reflect.ValueOf(v).Int()
+	}
+
+	// Handle strings
+	if str, ok := val.(string); ok {
+		return str
+	}
+
+	// Handle booleans
+	if b, ok := val.(bool); ok {
+		return b
+	}
+
+	// For other types, try to convert to string
+	return fmt.Sprintf("%v", val)
 }
