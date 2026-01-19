@@ -1669,6 +1669,22 @@ func convertJsValueToRlpType(jsVal js.Value) (interface{}, error) {
 		return []byte{}, nil // Empty bytes for null/undefined
 	}
 
+	// Handle strings FIRST (before objects) to avoid String objects being treated as regular objects
+	if jsVal.Type() == js.TypeString {
+		str := jsVal.String()
+		// Check if it's a hex string (starts with 0x)
+		if strings.HasPrefix(str, "0x") || strings.HasPrefix(str, "0X") {
+			// Decode hex string to bytes
+			bytes, err := hexutil.Decode(str)
+			if err != nil {
+				return nil, fmt.Errorf("invalid hex string: %v", err)
+			}
+			return bytes, nil
+		}
+		// Regular string
+		return str, nil
+	}
+
 	// Handle arrays
 	if jsVal.InstanceOf(js.Global().Get("Array")) {
 		length := jsVal.Get("length").Int()
@@ -1683,18 +1699,31 @@ func convertJsValueToRlpType(jsVal js.Value) (interface{}, error) {
 		return result, nil
 	}
 
-	// Handle objects (maps)
+	// Handle objects (maps) - but exclude String objects which are already handled above
+	// Check if it's a String object instance (which would have been handled as TypeString above)
+	// Only process plain objects, not String/Number/Boolean objects
 	if jsVal.InstanceOf(js.Global().Get("Object")) && !jsVal.InstanceOf(js.Global().Get("Array")) {
+		// Check if it's a String object - if so, extract the primitive value
+		if jsVal.InstanceOf(js.Global().Get("String")) {
+			str := jsVal.String()
+			if strings.HasPrefix(str, "0x") || strings.HasPrefix(str, "0X") {
+				bytes, err := hexutil.Decode(str)
+				if err != nil {
+					return nil, fmt.Errorf("invalid hex string: %v", err)
+				}
+				return bytes, nil
+			}
+			return str, nil
+		}
+		
 		keys := js.Global().Get("Object").Call("keys", jsVal)
 		length := keys.Get("length").Int()
 		result := make([]interface{}, 0, length*2) // RLP encodes maps as alternating key-value pairs
 		for i := 0; i < length; i++ {
 			key := keys.Index(i).String()
 			value := jsVal.Get(key)
-			keyVal, err := convertJsValueToRlpType(js.Global().Get("String").New(key))
-			if err != nil {
-				return nil, fmt.Errorf("object key %s: %v", key, err)
-			}
+			// Pass key as a string directly, not wrapped in String object
+			keyVal := key // Use string directly for RLP encoding
 			valVal, err := convertJsValueToRlpType(value)
 			if err != nil {
 				return nil, fmt.Errorf("object value for key %s: %v", key, err)
@@ -1702,22 +1731,6 @@ func convertJsValueToRlpType(jsVal js.Value) (interface{}, error) {
 			result = append(result, keyVal, valVal)
 		}
 		return result, nil
-	}
-
-	// Handle strings
-	if jsVal.Type() == js.TypeString {
-		str := jsVal.String()
-		// Check if it's a hex string (starts with 0x)
-		if strings.HasPrefix(str, "0x") || strings.HasPrefix(str, "0X") {
-			// Decode hex string to bytes
-			bytes, err := hexutil.Decode(str)
-			if err != nil {
-				return nil, fmt.Errorf("invalid hex string: %v", err)
-			}
-			return bytes, nil
-		}
-		// Regular string
-		return str, nil
 	}
 
 	// Handle numbers

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -3469,6 +3470,56 @@ func TestEncodeRlp_HexString(t *testing.T) {
 	expectedStr := "Hello"
 	if decodedStr != expectedStr {
 		t.Errorf("Decoded string mismatch: expected %s, got %s", expectedStr, decodedStr)
+	}
+}
+
+func TestEncodeRlp_HexString_NoInfiniteRecursion(t *testing.T) {
+	// Test the specific case that was causing infinite recursion
+	// This test ensures that encoding a hex string doesn't cause infinite recursion
+	// The bug was that hex strings were being treated as objects, causing recursion
+	value := "0x48656c6c6f" // "Hello" in hex - this was the exact value from example 6
+
+	// This should complete quickly without infinite recursion
+	// If there's infinite recursion, the test will hang or timeout
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Verify it's a valid hex string
+	if !strings.HasPrefix(encoded, "0x") {
+		t.Errorf("Encoded value should start with 0x, got %s", encoded)
+	}
+
+	// Verify the encoded value is not empty
+	if len(encoded) < 3 {
+		t.Errorf("Encoded value should have content, got %s", encoded)
+	}
+
+	// Decode and verify round-trip
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be a string
+	decodedStr, ok := decoded.(string)
+	if !ok {
+		t.Fatalf("Decoded value should be string, got %T", decoded)
+	}
+
+	// The decoded string should be "Hello" (the ASCII representation of the hex bytes)
+	expectedStr := "Hello"
+	if decodedStr != expectedStr {
+		t.Errorf("Decoded string mismatch: expected %s, got %s", expectedStr, decodedStr)
+	}
+
+	// Verify the encoded hex string decodes to the expected bytes
+	// The hex string "0x48656c6c6f" should decode to []byte{0x48, 0x65, 0x6c, 0x6c, 0x6f} = "Hello"
+	expectedBytes := []byte{0x48, 0x65, 0x6c, 0x6c, 0x6f}
+	actualBytes := []byte(decodedStr)
+	if !bytes.Equal(actualBytes, expectedBytes) {
+		t.Errorf("Decoded bytes mismatch: expected %v, got %v", expectedBytes, actualBytes)
 	}
 }
 
