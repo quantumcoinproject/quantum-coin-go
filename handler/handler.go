@@ -35,6 +35,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/event"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p"
+	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
@@ -86,6 +87,7 @@ type HandlerConfig struct {
 	Whitelist              map[uint64]common.Hash    // Hard coded whitelist for sync challenged
 	ConsensusPacketHandler *ConsensusPacketHandler
 	RebroadcastCount       int
+	StaticNodes            []*enode.Node
 }
 
 type ConsensusHandler interface {
@@ -151,6 +153,7 @@ type P2PHandler struct {
 	rebroadcastLock            sync.Mutex
 	rebroadcastLastCleanupTime time.Time
 	consensusPacketHelper      *ConsensusPacketHelper
+	StaticNodes                []*enode.Node
 }
 
 var lock = &sync.Mutex{}
@@ -205,6 +208,7 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		rebroadcastMap:             make(map[common.Hash]int64),
 		rebroadcastLastCleanupTime: time.Now(),
 		consensusPacketHelper:      NewConsensusPacketHelper(config.Chain),
+		StaticNodes:                config.StaticNodes,
 	}
 	if h.rebroadcastCount == 0 {
 		log.Info("Rebroadcast count is 0, overriding to 1")

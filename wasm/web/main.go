@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
+	"strconv"
 	"strings"
 	"syscall/js"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereds"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/keystore"
 	wasm "github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
@@ -77,6 +80,10 @@ func main() {
 	js.Global().Set("PackCreateContractData", js.FuncOf(PackCreateContractDataWrapper))
 	js.Global().Set("CreateAddress", js.FuncOf(CreateAddressWrapper))
 	js.Global().Set("CreateAddress2", js.FuncOf(CreateAddress2Wrapper))
+	js.Global().Set("EncodeEventLog", js.FuncOf(EncodeEventLogWrapper))
+	js.Global().Set("DecodeEventLog", js.FuncOf(DecodeEventLogWrapper))
+	js.Global().Set("EncodeRlp", js.FuncOf(EncodeRlpWrapper))
+	js.Global().Set("DecodeRlp", js.FuncOf(DecodeRlpWrapper))
 	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
 	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
@@ -1321,4 +1328,533 @@ func CreateAddress2Wrapper(this js.Value, args []js.Value) interface{} {
 
 	result := crypto.CreateAddress2(address, salt, initHash)
 	return result.String()
+}
+
+// EncodeEventLogWrapper is a wrapper function for EncodeEventLog to be used with js.FuncOf
+func EncodeEventLogWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 2 {
+		return js.Global().Get("Error").New("EncodeEventLog: insufficient arguments, expected at least 2 (abiJSON and eventName)")
+	}
+	abiJSON := args[0].String()
+	eventName := args[1].String()
+	values := args[2:] // Event parameter values
+	return EncodeEventLog(abiJSON, eventName, values)
+}
+
+// DecodeEventLogWrapper is a wrapper function for DecodeEventLog to be used with js.FuncOf
+func DecodeEventLogWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) != 4 {
+		return js.Global().Get("Error").New("DecodeEventLog: invalid number of arguments, expected 4 (abiJSON, eventName, topics, data)")
+	}
+	abiJSON := args[0].String()
+	eventName := args[1].String()
+	topics := args[2] // Array of topic strings
+	data := args[3]   // Data string
+	return DecodeEventLog(abiJSON, eventName, topics, data)
+}
+
+// EncodeEventLog encodes event parameters into topics and data according to the ABI specification.
+// Returns an object with topics (string array) and data (string).
+func EncodeEventLog(abiJSON string, eventName string, values []js.Value) interface{} {
+	// Validate inputs
+	if strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("EncodeEventLog: abiJSON cannot be empty")
+	}
+	if strings.TrimSpace(eventName) == "" {
+		return js.Global().Get("Error").New("EncodeEventLog: eventName cannot be empty")
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: failed to parse ABI JSON: %v", err))
+	}
+
+	// Get event from ABI
+	event, exist := abiData.Events[eventName]
+	if !exist {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: event '%s' not found in ABI", eventName))
+	}
+
+	// Validate argument count
+	if len(values) != len(event.Inputs) {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: argument count mismatch for event '%s', expected %d but got %d", eventName, len(event.Inputs), len(values)))
+	}
+
+	// Separate indexed and non-indexed arguments
+	var indexedArgs []interface{}
+	var indexedTypes []abi.Argument
+	var nonIndexedArgs []interface{}
+	var nonIndexedTypes []abi.Argument
+
+	for i, input := range event.Inputs {
+		converted, err := convertJsValueToGoType(values[i], input.Type)
+		if err != nil {
+			return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: failed to convert argument %d for event '%s': %v", i, eventName, err))
+		}
+		converted = convertToTypedSlice(converted, input.Type)
+
+		if input.Indexed {
+			indexedArgs = append(indexedArgs, converted)
+			indexedTypes = append(indexedTypes, input)
+		} else {
+			nonIndexedArgs = append(nonIndexedArgs, converted)
+			nonIndexedTypes = append(nonIndexedTypes, input)
+		}
+	}
+
+	// Encode topics
+	topics := make([]string, 0)
+
+	// First topic is the event signature hash (unless anonymous)
+	if !event.Anonymous {
+		topics = append(topics, event.ID.Hex())
+	}
+
+	// Pack indexed parameters into topics
+	for i, indexedArg := range indexedArgs {
+		topic, err := packIndexedValue(indexedArg, indexedTypes[i].Type)
+		if err != nil {
+			return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: failed to pack indexed argument %d: %v", i, err))
+		}
+		topics = append(topics, common.BytesToHash(topic).Hex())
+	}
+
+	// Pack non-indexed parameters into data
+	var dataBytes []byte
+	if len(nonIndexedArgs) > 0 {
+		nonIndexedInputs := abi.Arguments(nonIndexedTypes)
+		dataBytes, err = nonIndexedInputs.Pack(nonIndexedArgs...)
+		if err != nil {
+			return js.Global().Get("Error").New(fmt.Sprintf("EncodeEventLog: failed to pack non-indexed arguments: %v", err))
+		}
+	}
+
+	// Create result object
+	result := js.Global().Get("Object").New()
+
+	// Convert topics array to JavaScript array
+	topicsArray := js.Global().Get("Array").New(len(topics))
+	for i, topic := range topics {
+		topicsArray.SetIndex(i, topic)
+	}
+	result.Set("topics", topicsArray)
+
+	// Set data as hex string
+	if len(dataBytes) > 0 {
+		result.Set("data", hexutil.Encode(dataBytes))
+	} else {
+		result.Set("data", "0x")
+	}
+
+	return result
+}
+
+// DecodeEventLog decodes event log topics and data back into event parameters.
+// Returns a JSON string with the decoded values.
+func DecodeEventLog(abiJSON string, eventName string, topics js.Value, data js.Value) interface{} {
+	// Validate inputs
+	if strings.TrimSpace(abiJSON) == "" {
+		return js.Global().Get("Error").New("DecodeEventLog: abiJSON cannot be empty")
+	}
+	if strings.TrimSpace(eventName) == "" {
+		return js.Global().Get("Error").New("DecodeEventLog: eventName cannot be empty")
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to parse ABI JSON: %v", err))
+	}
+
+	// Get event from ABI
+	event, exist := abiData.Events[eventName]
+	if !exist {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: event '%s' not found in ABI", eventName))
+	}
+
+	// Parse topics array
+	topicsLength := topics.Get("length").Int()
+	if topicsLength == 0 {
+		return js.Global().Get("Error").New("DecodeEventLog: topics array cannot be empty")
+	}
+
+	// Extract topic hashes
+	topicHashes := make([]common.Hash, topicsLength)
+	for i := 0; i < topicsLength; i++ {
+		topicStr := topics.Index(i).String()
+		if !strings.HasPrefix(topicStr, "0x") && !strings.HasPrefix(topicStr, "0X") {
+			topicStr = "0x" + topicStr
+		}
+		topicHash := common.HexToHash(topicStr)
+		topicHashes[i] = topicHash
+	}
+
+	// Verify first topic matches event ID (unless anonymous)
+	if !event.Anonymous {
+		if len(topicHashes) == 0 || topicHashes[0] != event.ID {
+			return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: first topic does not match event signature for '%s'", eventName))
+		}
+	}
+
+	// Separate indexed and non-indexed inputs
+	var indexedInputs []abi.Argument
+	var nonIndexedInputs []abi.Argument
+	for _, input := range event.Inputs {
+		if input.Indexed {
+			indexedInputs = append(indexedInputs, input)
+		} else {
+			nonIndexedInputs = append(nonIndexedInputs, input)
+		}
+	}
+
+	// Decode indexed parameters from topics
+	indexedStart := 0
+	if !event.Anonymous {
+		indexedStart = 1 // Skip event signature topic
+	}
+
+	resultMap := make(map[string]interface{})
+
+	// Decode indexed parameters
+	if len(indexedInputs) > 0 {
+		if len(topicHashes)-indexedStart < len(indexedInputs) {
+			return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: insufficient topics for indexed parameters, expected %d but got %d", len(indexedInputs), len(topicHashes)-indexedStart))
+		}
+
+		for i, indexedInput := range indexedInputs {
+			topicHash := topicHashes[indexedStart+i]
+			decoded, err := unpackIndexedValue(topicHash, indexedInput.Type)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to unpack indexed parameter '%s': %v", indexedInput.Name, err))
+			}
+			resultMap[indexedInput.Name] = convertGoTypeToJsValue(decoded)
+		}
+	}
+
+	// Decode non-indexed parameters from data
+	if len(nonIndexedInputs) > 0 {
+		dataStr := data.String()
+		if dataStr == "" || dataStr == "0x" {
+			// Empty data, return default values
+			for _, nonIndexedInput := range nonIndexedInputs {
+				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValue(getDefaultValue(nonIndexedInput.Type))
+			}
+		} else {
+			if !strings.HasPrefix(dataStr, "0x") && !strings.HasPrefix(dataStr, "0X") {
+				dataStr = "0x" + dataStr
+			}
+			dataBytes, err := hexutil.Decode(dataStr)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to decode data: %v", err))
+			}
+
+			nonIndexedArgs := abi.Arguments(nonIndexedInputs)
+			unpacked, err := nonIndexedArgs.Unpack(dataBytes)
+			if err != nil {
+				return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to unpack non-indexed parameters: %v", err))
+			}
+
+			for i, nonIndexedInput := range nonIndexedInputs {
+				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValue(unpacked[i])
+			}
+		}
+	}
+
+	// Return as JSON string
+	jsonData, err := json.Marshal(resultMap)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeEventLog: failed to marshal result to JSON: %v", err))
+	}
+
+	return string(jsonData)
+}
+
+// packIndexedValue packs an indexed event parameter value into a 32-byte topic.
+// For value types, it pads to 32 bytes. For dynamic types (string, bytes, arrays), it hashes with Keccak256.
+func packIndexedValue(value interface{}, argType abi.Type) ([]byte, error) {
+	// Create a single-argument Arguments to use its Pack method
+	args := abi.Arguments{abi.Argument{Type: argType}}
+	packed, err := args.Pack(value)
+	if err != nil {
+		return nil, err
+	}
+
+	switch argType.T {
+	case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		// Dynamic types: hash with Keccak256
+		return crypto.Keccak256(packed), nil
+	default:
+		// Value types: use first 32 bytes (should already be 32 bytes for value types)
+		if len(packed) < 32 {
+			padded := make([]byte, 32)
+			copy(padded[32-len(packed):], packed)
+			return padded, nil
+		}
+		return packed[:32], nil
+	}
+}
+
+// unpackIndexedValue unpacks an indexed topic back into a value.
+// For dynamic types, it returns the hash (cannot reconstruct original value).
+func unpackIndexedValue(topic common.Hash, argType abi.Type) (interface{}, error) {
+	switch argType.T {
+	case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		// Dynamic types: return the hash (cannot reconstruct original)
+		return topic, nil
+	default:
+		// Value types: unpack from topic bytes using Arguments.Unpack
+		args := abi.Arguments{abi.Argument{Type: argType}}
+		unpacked, err := args.Unpack(topic.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		if len(unpacked) > 0 {
+			return unpacked[0], nil
+		}
+		return nil, fmt.Errorf("failed to unpack indexed value")
+	}
+}
+
+// getDefaultValue returns a default value for a given ABI type
+func getDefaultValue(argType abi.Type) interface{} {
+	switch argType.T {
+	case abi.UintTy, abi.IntTy:
+		return big.NewInt(0)
+	case abi.AddressTy:
+		return common.Address{}
+	case abi.BoolTy:
+		return false
+	case abi.StringTy:
+		return ""
+	case abi.BytesTy:
+		return []byte{}
+	default:
+		return nil
+	}
+}
+
+// EncodeRlpWrapper is a wrapper function for EncodeRlp to be used with js.FuncOf
+func EncodeRlpWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 1 {
+		return js.Global().Get("Error").New("EncodeRlp: insufficient arguments, expected at least 1 (value)")
+	}
+	return EncodeRlp(args[0])
+}
+
+// EncodeRlp encodes a JavaScript value to RLP format.
+// Supports: strings, numbers, booleans, arrays, objects (maps), and hex-encoded bytes.
+// Returns a hex-encoded string of the RLP-encoded data.
+func EncodeRlp(value js.Value) interface{} {
+	// Convert JavaScript value to Go type
+	goValue, err := convertJsValueToRlpType(value)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeRlp: failed to convert value: %v", err))
+	}
+
+	// Encode to RLP bytes
+	rlpBytes, err := rlp.EncodeToBytes(goValue)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("EncodeRlp: failed to encode: %v", err))
+	}
+
+	// Return as hex string
+	return hexutil.Encode(rlpBytes)
+}
+
+// convertJsValueToRlpType converts a JavaScript value to a Go type suitable for RLP encoding
+func convertJsValueToRlpType(jsVal js.Value) (interface{}, error) {
+	// Handle null/undefined
+	if jsVal.IsNull() || jsVal.IsUndefined() {
+		return []byte{}, nil // Empty bytes for null/undefined
+	}
+
+	// Handle strings FIRST (before objects) to avoid String objects being treated as regular objects
+	if jsVal.Type() == js.TypeString {
+		str := jsVal.String()
+		// Check if it's a hex string (starts with 0x)
+		if strings.HasPrefix(str, "0x") || strings.HasPrefix(str, "0X") {
+			// Decode hex string to bytes
+			bytes, err := hexutil.Decode(str)
+			if err != nil {
+				return nil, fmt.Errorf("invalid hex string: %v", err)
+			}
+			return bytes, nil
+		}
+		// Regular string
+		return str, nil
+	}
+
+	// Handle arrays
+	if jsVal.InstanceOf(js.Global().Get("Array")) {
+		length := jsVal.Get("length").Int()
+		result := make([]interface{}, length)
+		for i := 0; i < length; i++ {
+			elem, err := convertJsValueToRlpType(jsVal.Index(i))
+			if err != nil {
+				return nil, fmt.Errorf("array element %d: %v", i, err)
+			}
+			result[i] = elem
+		}
+		return result, nil
+	}
+
+	// Handle objects (maps) - but exclude String objects which are already handled above
+	// Check if it's a String object instance (which would have been handled as TypeString above)
+	// Only process plain objects, not String/Number/Boolean objects
+	if jsVal.InstanceOf(js.Global().Get("Object")) && !jsVal.InstanceOf(js.Global().Get("Array")) {
+		// Check if it's a String object - if so, extract the primitive value
+		if jsVal.InstanceOf(js.Global().Get("String")) {
+			str := jsVal.String()
+			if strings.HasPrefix(str, "0x") || strings.HasPrefix(str, "0X") {
+				bytes, err := hexutil.Decode(str)
+				if err != nil {
+					return nil, fmt.Errorf("invalid hex string: %v", err)
+				}
+				return bytes, nil
+			}
+			return str, nil
+		}
+		
+		keys := js.Global().Get("Object").Call("keys", jsVal)
+		length := keys.Get("length").Int()
+		result := make([]interface{}, 0, length*2) // RLP encodes maps as alternating key-value pairs
+		for i := 0; i < length; i++ {
+			key := keys.Index(i).String()
+			value := jsVal.Get(key)
+			// Pass key as a string directly, not wrapped in String object
+			keyVal := key // Use string directly for RLP encoding
+			valVal, err := convertJsValueToRlpType(value)
+			if err != nil {
+				return nil, fmt.Errorf("object value for key %s: %v", key, err)
+			}
+			result = append(result, keyVal, valVal)
+		}
+		return result, nil
+	}
+
+	// Handle numbers
+	if jsVal.Type() == js.TypeNumber {
+		num := jsVal.Float()
+		// Check if it's an integer
+		if num == float64(int64(num)) {
+			// Convert to big.Int for RLP encoding
+			return big.NewInt(int64(num)), nil
+		}
+		// For non-integer numbers, convert to string representation
+		return strconv.FormatFloat(num, 'f', -1, 64), nil
+	}
+
+	// Handle booleans
+	if jsVal.Type() == js.TypeBoolean {
+		if jsVal.Bool() {
+			return uint8(1), nil
+		}
+		return uint8(0), nil
+	}
+
+	return nil, fmt.Errorf("unsupported JavaScript type: %v", jsVal.Type())
+}
+
+// DecodeRlpWrapper is a wrapper function for DecodeRlp to be used with js.FuncOf
+func DecodeRlpWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) < 1 {
+		return js.Global().Get("Error").New("DecodeRlp: insufficient arguments, expected at least 1 (data)")
+	}
+	data := args[0].String()
+	return DecodeRlp(data)
+}
+
+// DecodeRlp decodes RLP-encoded data back to a JavaScript-compatible value.
+// Takes a hex-encoded string and returns a JSON string representation of the decoded value.
+func DecodeRlp(data string) interface{} {
+	// Validate input
+	if strings.TrimSpace(data) == "" {
+		return js.Global().Get("Error").New("DecodeRlp: data cannot be empty")
+	}
+
+	// Decode hex string to bytes
+	if !strings.HasPrefix(data, "0x") && !strings.HasPrefix(data, "0X") {
+		data = "0x" + data
+	}
+	rlpBytes, err := hexutil.Decode(data)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeRlp: failed to decode hex data: %v", err))
+	}
+
+	// Decode RLP bytes into interface{}
+	var decoded interface{}
+	err = rlp.DecodeBytes(rlpBytes, &decoded)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeRlp: failed to decode RLP: %v", err))
+	}
+
+	// Convert decoded Go value to JavaScript-compatible format
+	jsValue := convertRlpDecodedToJsValue(decoded)
+
+	// Return as JSON string
+	jsonData, err := json.Marshal(jsValue)
+	if err != nil {
+		return js.Global().Get("Error").New(fmt.Sprintf("DecodeRlp: failed to marshal to JSON: %v", err))
+	}
+
+	return string(jsonData)
+}
+
+// convertRlpDecodedToJsValue converts a decoded RLP value to a JavaScript-compatible format
+func convertRlpDecodedToJsValue(val interface{}) interface{} {
+	if val == nil {
+		return nil
+	}
+
+	// Use reflection to handle different types
+	rv := reflect.ValueOf(val)
+	rt := rv.Type()
+
+	// Handle slices/arrays
+	if rt.Kind() == reflect.Slice {
+		length := rv.Len()
+		result := make([]interface{}, length)
+		for i := 0; i < length; i++ {
+			result[i] = convertRlpDecodedToJsValue(rv.Index(i).Interface())
+		}
+		return result
+	}
+
+	// Handle byte slices - convert to hex string
+	if rt.Kind() == reflect.Slice && rt.Elem().Kind() == reflect.Uint8 {
+		bytes := val.([]byte)
+		return hexutil.Encode(bytes)
+	}
+
+	// Handle big.Int - convert to number string
+	if bigInt, ok := val.(*big.Int); ok {
+		return bigInt.String()
+	}
+
+	// Handle uint8 (boolean representation)
+	if u8, ok := val.(uint8); ok {
+		return u8 != 0
+	}
+
+	// Handle unsigned integers
+	switch v := val.(type) {
+	case uint, uint8, uint16, uint32, uint64:
+		return reflect.ValueOf(v).Uint()
+	case int, int8, int16, int32, int64:
+		return reflect.ValueOf(v).Int()
+	}
+
+	// Handle strings
+	if str, ok := val.(string); ok {
+		return str
+	}
+
+	// Handle booleans
+	if b, ok := val.(bool); ok {
+		return b
+	}
+
+	// For other types, try to convert to string
+	return fmt.Sprintf("%v", val)
 }

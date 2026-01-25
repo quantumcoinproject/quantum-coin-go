@@ -4,6 +4,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -13,6 +14,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 )
 
@@ -89,17 +91,43 @@ func (m *mockJsValue) IsUndefined() bool {
 	return m.valueType == jsTypeUndefined
 }
 
+func (m *mockJsValue) IsNull() bool {
+	return m.valueType == jsTypeUndefined // For testing, treat undefined as null
+}
+
 func (m *mockJsValue) InstanceOf(constructor interface{}) bool {
-	// For testing, we'll check if it's a Uint8Array by checking if it has a length and numeric indices
+	// For testing, we need to handle Array and Object constructors
+	// In the real implementation, constructor would be js.Global().Get("Array") or js.Global().Get("Object")
+	// For testing, we'll use string comparison or type checking
+
+	// If it's an object type with arrayVal set, it's an Array
 	if m.valueType == jsTypeObject && m.arrayVal != nil {
-		// Check if all elements are numbers (bytes)
+		// Check if constructor is "Array" (we'll pass a string for testing)
+		if str, ok := constructor.(string); ok {
+			return str == "Array"
+		}
+		// Also check for Uint8Array (all elements are numbers)
+		allNumbers := true
 		for _, v := range m.arrayVal {
 			if _, ok := v.(float64); !ok {
-				return false
+				allNumbers = false
+				break
 			}
 		}
-		return true
+		if allNumbers {
+			return true // Uint8Array
+		}
+		return true // Array
 	}
+
+	// If it's an object type with objectVal set, it's an Object (not Array)
+	if m.valueType == jsTypeObject && m.objectVal != nil {
+		if str, ok := constructor.(string); ok {
+			return str == "Object"
+		}
+		return true // Object
+	}
+
 	return false
 }
 
@@ -186,10 +214,10 @@ func createArrayType(elemType abi.Type, size int) abi.Type {
 func convertValueToGoTypeForTest(val interface{}, abiType abi.Type) (interface{}, error) {
 	// Convert our test value to a format that can work with the conversion logic
 	// For actual testing, we'd need to run this in a WASM environment or mock js.Value properly
-	
+
 	// For now, let's create a simplified test that validates the logic with direct type conversions
 	// This is a workaround since js.Value can't be easily mocked
-	
+
 	switch abiType.T {
 	case abi.AddressTy:
 		addrStr, ok := val.(string)
@@ -200,7 +228,7 @@ func convertValueToGoTypeForTest(val interface{}, abiType abi.Type) (interface{}
 			return nil, fmt.Errorf("invalid address: %s", addrStr)
 		}
 		return common.HexToAddress(addrStr), nil
-		
+
 	case abi.UintTy, abi.IntTy:
 		// Convert from number to big.Int
 		switch v := val.(type) {
@@ -225,21 +253,21 @@ func convertValueToGoTypeForTest(val interface{}, abiType abi.Type) (interface{}
 		default:
 			return nil, fmt.Errorf("unsupported type for int/uint: %T", val)
 		}
-		
+
 	case abi.BoolTy:
 		b, ok := val.(bool)
 		if !ok {
 			return nil, fmt.Errorf("expected bool")
 		}
 		return b, nil
-		
+
 	case abi.StringTy:
 		s, ok := val.(string)
 		if !ok {
 			return nil, fmt.Errorf("expected string")
 		}
 		return s, nil
-		
+
 	case abi.BytesTy:
 		var bytes []byte
 		switch v := val.(type) {
@@ -258,7 +286,7 @@ func convertValueToGoTypeForTest(val interface{}, abiType abi.Type) (interface{}
 			return nil, fmt.Errorf("unsupported type for bytes: %T", val)
 		}
 		return bytes, nil
-		
+
 	case abi.FixedBytesTy:
 		var bytes []byte
 		switch v := val.(type) {
@@ -280,7 +308,7 @@ func convertValueToGoTypeForTest(val interface{}, abiType abi.Type) (interface{}
 			return nil, fmt.Errorf("fixed bytes size mismatch: expected %d, got %d", abiType.Size, len(bytes))
 		}
 		return bytes, nil
-		
+
 	case abi.SliceTy:
 		arr, ok := val.([]interface{})
 		if !ok {
@@ -295,7 +323,7 @@ func convertValueToGoTypeForTest(val interface{}, abiType abi.Type) (interface{}
 			result[i] = converted
 		}
 		return result, nil
-		
+
 	case abi.ArrayTy:
 		arr, ok := val.([]interface{})
 		if !ok {
@@ -313,7 +341,7 @@ func convertValueToGoTypeForTest(val interface{}, abiType abi.Type) (interface{}
 			result[i] = converted
 		}
 		return result, nil
-		
+
 	default:
 		return nil, fmt.Errorf("unsupported ABI type: %d", abiType.T)
 	}
@@ -327,22 +355,22 @@ func TestConvertJsValueToGoType_Address(t *testing.T) {
 		t.Fatalf("Test address is not valid: %s (length: %d)", testAddr, len(testAddr))
 	}
 	expectedAddr := common.HexToAddress(testAddr)
-	
+
 	abiType := createAddressType()
 	result, err := convertValueToGoTypeForTest(testAddr, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	addr, ok := result.(common.Address)
 	if !ok {
 		t.Fatalf("Expected common.Address, got %T", result)
 	}
-	
+
 	if addr != expectedAddr {
 		t.Errorf("Address mismatch: expected %s, got %s", expectedAddr.String(), addr.String())
 	}
-	
+
 	// Verify round-trip: convert back to string and check
 	addrStr := addr.String()
 	if addrStr != testAddr {
@@ -354,22 +382,22 @@ func TestConvertJsValueToGoType_Uint256(t *testing.T) {
 	// Test with number string (1e18 in decimal)
 	testValue := "1000000000000000000"
 	abiType := createUintType(256)
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	bigVal, ok := result.(*big.Int)
 	if !ok {
 		t.Fatalf("Expected *big.Int, got %T", result)
 	}
-	
+
 	expectedVal := big.NewInt(1000000000000000000)
 	if bigVal.Cmp(expectedVal) != 0 {
 		t.Errorf("Value mismatch: expected %s, got %s", expectedVal.String(), bigVal.String())
 	}
-	
+
 	// Verify round-trip: convert back to number string and check
 	numStr := bigVal.String()
 	if numStr != testValue {
@@ -381,22 +409,22 @@ func TestConvertJsValueToGoType_Int256(t *testing.T) {
 	// Test with number string for negative number
 	testValue := "-1"
 	abiType := createIntType(256)
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	bigVal, ok := result.(*big.Int)
 	if !ok {
 		t.Fatalf("Expected *big.Int, got %T", result)
 	}
-	
+
 	expectedVal := big.NewInt(-1)
 	if bigVal.Cmp(expectedVal) != 0 {
 		t.Errorf("Value mismatch: expected %s, got %s", expectedVal.String(), bigVal.String())
 	}
-	
+
 	// Verify round-trip: convert back to number string and check
 	numStr := bigVal.String()
 	if numStr != testValue {
@@ -406,24 +434,24 @@ func TestConvertJsValueToGoType_Int256(t *testing.T) {
 
 func TestConvertJsValueToGoType_Bool(t *testing.T) {
 	testCases := []bool{true, false}
-	
+
 	abiType := createBoolType()
-	
+
 	for _, testValue := range testCases {
 		result, err := convertValueToGoTypeForTest(testValue, abiType)
 		if err != nil {
 			t.Fatalf("Conversion failed for %v: %v", testValue, err)
 		}
-		
+
 		boolVal, ok := result.(bool)
 		if !ok {
 			t.Fatalf("Expected bool, got %T", result)
 		}
-		
+
 		if boolVal != testValue {
 			t.Errorf("Value mismatch: expected %v, got %v", testValue, boolVal)
 		}
-		
+
 		// Verify round-trip
 		if boolVal != testValue {
 			t.Errorf("Round-trip failed: expected %v, got %v", testValue, boolVal)
@@ -434,21 +462,21 @@ func TestConvertJsValueToGoType_Bool(t *testing.T) {
 func TestConvertJsValueToGoType_String(t *testing.T) {
 	testValue := "Hello, World!"
 	abiType := createStringType()
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	strVal, ok := result.(string)
 	if !ok {
 		t.Fatalf("Expected string, got %T", result)
 	}
-	
+
 	if strVal != testValue {
 		t.Errorf("Value mismatch: expected %s, got %s", testValue, strVal)
 	}
-	
+
 	// Verify round-trip
 	if strVal != testValue {
 		t.Errorf("Round-trip failed: expected %s, got %s", testValue, strVal)
@@ -459,21 +487,21 @@ func TestConvertJsValueToGoType_Bytes(t *testing.T) {
 	testValue := "0x48656c6c6f" // "Hello" in hex
 	expectedBytes, _ := hexutil.Decode(testValue)
 	abiType := createBytesType()
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	bytesVal, ok := result.([]byte)
 	if !ok {
 		t.Fatalf("Expected []byte, got %T", result)
 	}
-	
+
 	if !reflect.DeepEqual(bytesVal, expectedBytes) {
 		t.Errorf("Value mismatch: expected %v, got %v", expectedBytes, bytesVal)
 	}
-	
+
 	// Verify round-trip: convert back to hex and check
 	hexStr := hexutil.Encode(bytesVal)
 	if hexStr != testValue {
@@ -486,17 +514,17 @@ func TestConvertJsValueToGoType_BytesWithoutPrefix(t *testing.T) {
 	expectedValue := "0x" + testValue
 	expectedBytes, _ := hexutil.Decode(expectedValue)
 	abiType := createBytesType()
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	bytesVal, ok := result.([]byte)
 	if !ok {
 		t.Fatalf("Expected []byte, got %T", result)
 	}
-	
+
 	if !reflect.DeepEqual(bytesVal, expectedBytes) {
 		t.Errorf("Value mismatch: expected %v, got %v", expectedBytes, bytesVal)
 	}
@@ -506,25 +534,25 @@ func TestConvertJsValueToGoType_FixedBytes32(t *testing.T) {
 	testValue := "0x" + strings.Repeat("01", 32) // 32 bytes
 	expectedBytes, _ := hexutil.Decode(testValue)
 	abiType := createFixedBytesType(32)
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	bytesVal, ok := result.([]byte)
 	if !ok {
 		t.Fatalf("Expected []byte, got %T", result)
 	}
-	
+
 	if len(bytesVal) != 32 {
 		t.Errorf("Expected 32 bytes, got %d", len(bytesVal))
 	}
-	
+
 	if !reflect.DeepEqual(bytesVal, expectedBytes) {
 		t.Errorf("Value mismatch: expected %v, got %v", expectedBytes, bytesVal)
 	}
-	
+
 	// Verify round-trip
 	hexStr := hexutil.Encode(bytesVal)
 	if hexStr != testValue {
@@ -540,42 +568,42 @@ func TestConvertJsValueToGoType_Uint256Array(t *testing.T) {
 		"2000000000000000000",
 		"3000000000000000000",
 	}
-	
+
 	elemType := createUintType(256)
 	abiType := createSliceType(elemType)
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	arrVal, ok := result.([]interface{})
 	if !ok {
 		t.Fatalf("Expected []interface{}, got %T", result)
 	}
-	
+
 	if len(arrVal) != len(testValue) {
 		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValue), len(arrVal))
 	}
-	
+
 	// Verify each element
 	expectedValues := []*big.Int{
 		big.NewInt(1000000000000000000),
 		big.NewInt(2000000000000000000),
 		big.NewInt(3000000000000000000),
 	}
-	
+
 	for i, elem := range arrVal {
 		bigVal, ok := elem.(*big.Int)
 		if !ok {
 			t.Fatalf("Expected *big.Int at index %d, got %T", i, elem)
 		}
-		
+
 		expectedVal := expectedValues[i]
 		if bigVal.Cmp(expectedVal) != 0 {
 			t.Errorf("Element %d mismatch: expected %s, got %s", i, expectedVal.String(), bigVal.String())
 		}
-		
+
 		// Verify round-trip: convert back to number string and check
 		numStr := bigVal.String()
 		if numStr != testValue[i].(string) {
@@ -597,36 +625,36 @@ func TestConvertJsValueToGoType_AddressArray(t *testing.T) {
 			t.Fatalf("Test address %d is not valid: %s (length: %d)", i, addr, len(addr.(string)))
 		}
 	}
-	
+
 	elemType := createAddressType()
 	abiType := createSliceType(elemType)
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	arrVal, ok := result.([]interface{})
 	if !ok {
 		t.Fatalf("Expected []interface{}, got %T", result)
 	}
-	
+
 	if len(arrVal) != len(testValue) {
 		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValue), len(arrVal))
 	}
-	
+
 	// Verify each element
 	for i, elem := range arrVal {
 		addr, ok := elem.(common.Address)
 		if !ok {
 			t.Fatalf("Expected common.Address at index %d, got %T", i, elem)
 		}
-		
+
 		expectedAddr := common.HexToAddress(testValue[i].(string))
 		if addr != expectedAddr {
 			t.Errorf("Element %d mismatch: expected %s, got %s", i, expectedAddr.String(), addr.String())
 		}
-		
+
 		// Verify round-trip
 		addrStr := addr.String()
 		if addrStr != testValue[i].(string) {
@@ -642,37 +670,37 @@ func TestConvertJsValueToGoType_FixedArray(t *testing.T) {
 		"200",
 		"300",
 	}
-	
+
 	elemType := createUintType(256)
 	abiType := createArrayType(elemType, 3)
-	
+
 	result, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err != nil {
 		t.Fatalf("Conversion failed: %v", err)
 	}
-	
+
 	arrVal, ok := result.([]interface{})
 	if !ok {
 		t.Fatalf("Expected []interface{}, got %T", result)
 	}
-	
+
 	if len(arrVal) != 3 {
 		t.Fatalf("Array length mismatch: expected 3, got %d", len(arrVal))
 	}
-	
+
 	// Verify each element
 	expectedValues := []*big.Int{
 		big.NewInt(100),
 		big.NewInt(200),
 		big.NewInt(300),
 	}
-	
+
 	for i, elem := range arrVal {
 		bigVal, ok := elem.(*big.Int)
 		if !ok {
 			t.Fatalf("Expected *big.Int at index %d, got %T", i, elem)
 		}
-		
+
 		expectedVal := expectedValues[i]
 		if bigVal.Cmp(expectedVal) != 0 {
 			t.Errorf("Element %d mismatch: expected %s, got %s", i, expectedVal.String(), bigVal.String())
@@ -687,15 +715,15 @@ func TestConvertJsValueToGoType_FixedArraySizeMismatch(t *testing.T) {
 		"200",
 		// Missing third element
 	}
-	
+
 	elemType := createUintType(256)
 	abiType := createArrayType(elemType, 3)
-	
+
 	_, err := convertValueToGoTypeForTest(testValue, abiType)
 	if err == nil {
 		t.Fatal("Expected error for array size mismatch, got nil")
 	}
-	
+
 	if !strings.Contains(err.Error(), "array size mismatch") {
 		t.Errorf("Expected 'array size mismatch' error, got: %v", err)
 	}
@@ -1304,7 +1332,7 @@ func TestPackMethodData_AddressArray(t *testing.T) {
 
 	// Pack with address array
 	packed, err := packMethodDataForTest(abiJSON, "getAmountsIn", []interface{}{
-		"1000000000000000000", // amountOut as number string
+		"1000000000000000000",                         // amountOut as number string
 		[]interface{}{addr1.String(), addr2.String()}, // path as []interface{} with address strings
 	})
 	if err != nil {
@@ -1391,9 +1419,9 @@ func TestPackMethodData_MixedArguments(t *testing.T) {
 	addr2 := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000002")
 	toAddr := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000003")
 
-	amountIn := "1000000000000000000"        // 1 token
+	amountIn := "1000000000000000000"              // 1 token
 	amountOutMin := "1000000000000000000000000000" // Some minimum
-	deadline := "100000000"                 // Some deadline
+	deadline := "100000000"                        // Some deadline
 
 	packed, err := packMethodDataForTest(abiJSON, "swapExactTokensForTokens", []interface{}{
 		amountIn,
@@ -1424,6 +1452,8 @@ func convertGoTypeToJsValueForTest(val interface{}) interface{} {
 	switch v := val.(type) {
 	case common.Address:
 		return v.String()
+	case common.Hash:
+		return v.Hex()
 	case *big.Int:
 		return v.String()
 	case []byte:
@@ -1492,7 +1522,7 @@ func TestConvertGoTypeToJsValue_BigIntArray(t *testing.T) {
 		t.Fatalf("Array length mismatch: expected %d, got %d", len(testValues), len(resultArray))
 	}
 
-		for i, val := range resultArray {
+	for i, val := range resultArray {
 		numStr, ok := val.(string)
 		if !ok {
 			t.Fatalf("Expected string at index %d, got %T", i, val)
@@ -2118,8 +2148,8 @@ func TestCreateAddress_WithNonce(t *testing.T) {
 	address := common.HexToAddress("0x0000000000000000000000000000000000000000000000000000000000000001")
 
 	testCases := []struct {
-		nonce  uint64
-		desc   string
+		nonce uint64
+		desc  string
 	}{
 		{0, "nonce 0"},
 		{1, "nonce 1"},
@@ -2293,5 +2323,1400 @@ func TestCreateAddress2_Consistency(t *testing.T) {
 
 	if result1 != result2 {
 		t.Error("CreateAddress2 should produce the same address for the same inputs")
+	}
+}
+
+// encodeEventLogForTest is a testable version of EncodeEventLog
+func encodeEventLogForTest(abiJSON string, eventName string, values []interface{}) ([]string, string, error) {
+	// Validate inputs
+	if strings.TrimSpace(abiJSON) == "" {
+		return nil, "", fmt.Errorf("abiJSON cannot be empty")
+	}
+	if strings.TrimSpace(eventName) == "" {
+		return nil, "", fmt.Errorf("eventName cannot be empty")
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to parse ABI JSON: %v", err)
+	}
+
+	// Get event from ABI
+	event, exist := abiData.Events[eventName]
+	if !exist {
+		return nil, "", fmt.Errorf("event '%s' not found in ABI", eventName)
+	}
+
+	// Validate argument count
+	if len(values) != len(event.Inputs) {
+		return nil, "", fmt.Errorf("argument count mismatch: expected %d, got %d", len(event.Inputs), len(values))
+	}
+
+	// Separate indexed and non-indexed arguments
+	var indexedArgs []interface{}
+	var indexedTypes []abi.Argument
+	var nonIndexedArgs []interface{}
+	var nonIndexedTypes []abi.Argument
+
+	for i, input := range event.Inputs {
+		converted, err := convertValueToGoTypeForTest(values[i], input.Type)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to convert argument %d: %v", i, err)
+		}
+		converted = convertToTypedSliceForTest(converted, input.Type)
+
+		if input.Indexed {
+			indexedArgs = append(indexedArgs, converted)
+			indexedTypes = append(indexedTypes, input)
+		} else {
+			nonIndexedArgs = append(nonIndexedArgs, converted)
+			nonIndexedTypes = append(nonIndexedTypes, input)
+		}
+	}
+
+	// Encode topics
+	topics := make([]string, 0)
+
+	// First topic is the event signature hash (unless anonymous)
+	if !event.Anonymous {
+		topics = append(topics, event.ID.Hex())
+	}
+
+	// Pack indexed parameters into topics
+	for i, indexedArg := range indexedArgs {
+		topic, err := packIndexedValueForTest(indexedArg, indexedTypes[i].Type)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to pack indexed argument %d: %v", i, err)
+		}
+		topics = append(topics, common.BytesToHash(topic).Hex())
+	}
+
+	// Pack non-indexed parameters into data
+	var dataBytes []byte
+	if len(nonIndexedArgs) > 0 {
+		nonIndexedInputs := abi.Arguments(nonIndexedTypes)
+		dataBytes, err = nonIndexedInputs.Pack(nonIndexedArgs...)
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to pack non-indexed arguments: %v", err)
+		}
+	}
+
+	dataStr := hexutil.Encode(dataBytes)
+	return topics, dataStr, nil
+}
+
+// decodeEventLogForTest is a testable version of DecodeEventLog
+func decodeEventLogForTest(abiJSON string, eventName string, topics []string, data string) (map[string]interface{}, error) {
+	// Validate inputs
+	if strings.TrimSpace(abiJSON) == "" {
+		return nil, fmt.Errorf("abiJSON cannot be empty")
+	}
+	if strings.TrimSpace(eventName) == "" {
+		return nil, fmt.Errorf("eventName cannot be empty")
+	}
+
+	// Parse ABI JSON
+	abiData, err := abi.JSON(strings.NewReader(abiJSON))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse ABI JSON: %v", err)
+	}
+
+	// Get event from ABI
+	event, exist := abiData.Events[eventName]
+	if !exist {
+		return nil, fmt.Errorf("event '%s' not found in ABI", eventName)
+	}
+
+	// Parse topics array
+	if len(topics) == 0 {
+		return nil, fmt.Errorf("topics array cannot be empty")
+	}
+
+	// Extract topic hashes
+	topicHashes := make([]common.Hash, len(topics))
+	for i, topicStr := range topics {
+		if !strings.HasPrefix(topicStr, "0x") && !strings.HasPrefix(topicStr, "0X") {
+			topicStr = "0x" + topicStr
+		}
+		topicHash := common.HexToHash(topicStr)
+		topicHashes[i] = topicHash
+	}
+
+	// Verify first topic matches event ID (unless anonymous)
+	if !event.Anonymous {
+		if len(topicHashes) == 0 || topicHashes[0] != event.ID {
+			return nil, fmt.Errorf("first topic does not match event signature")
+		}
+	}
+
+	// Separate indexed and non-indexed inputs
+	var indexedInputs []abi.Argument
+	var nonIndexedInputs []abi.Argument
+	for _, input := range event.Inputs {
+		if input.Indexed {
+			indexedInputs = append(indexedInputs, input)
+		} else {
+			nonIndexedInputs = append(nonIndexedInputs, input)
+		}
+	}
+
+	// Decode indexed parameters from topics
+	indexedStart := 0
+	if !event.Anonymous {
+		indexedStart = 1 // Skip event signature topic
+	}
+
+	resultMap := make(map[string]interface{})
+
+	// Decode indexed parameters
+	if len(indexedInputs) > 0 {
+		if len(topicHashes)-indexedStart < len(indexedInputs) {
+			return nil, fmt.Errorf("insufficient topics for indexed parameters")
+		}
+
+		for i, indexedInput := range indexedInputs {
+			topicHash := topicHashes[indexedStart+i]
+			decoded, err := unpackIndexedValueForTest(topicHash, indexedInput.Type)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unpack indexed parameter '%s': %v", indexedInput.Name, err)
+			}
+			resultMap[indexedInput.Name] = convertGoTypeToJsValueForTest(decoded)
+		}
+	}
+
+	// Decode non-indexed parameters from data
+	if len(nonIndexedInputs) > 0 {
+		if data == "" || data == "0x" {
+			// Empty data, return default values
+			for _, nonIndexedInput := range nonIndexedInputs {
+				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValueForTest(getDefaultValueForTest(nonIndexedInput.Type))
+			}
+		} else {
+			if !strings.HasPrefix(data, "0x") && !strings.HasPrefix(data, "0X") {
+				data = "0x" + data
+			}
+			dataBytes, err := hexutil.Decode(data)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode data: %v", err)
+			}
+
+			nonIndexedArgs := abi.Arguments(nonIndexedInputs)
+			unpacked, err := nonIndexedArgs.Unpack(dataBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to unpack non-indexed parameters: %v", err)
+			}
+
+			for i, nonIndexedInput := range nonIndexedInputs {
+				resultMap[nonIndexedInput.Name] = convertGoTypeToJsValueForTest(unpacked[i])
+			}
+		}
+	}
+
+	return resultMap, nil
+}
+
+// packIndexedValueForTest packs an indexed event parameter value into a 32-byte topic
+func packIndexedValueForTest(value interface{}, argType abi.Type) ([]byte, error) {
+	// Create a single-argument Arguments to use its Pack method
+	args := abi.Arguments{abi.Argument{Type: argType}}
+	packed, err := args.Pack(value)
+	if err != nil {
+		return nil, err
+	}
+
+	switch argType.T {
+	case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		// Dynamic types: hash with Keccak256
+		return crypto.Keccak256(packed), nil
+	default:
+		// Value types: use first 32 bytes
+		if len(packed) < 32 {
+			padded := make([]byte, 32)
+			copy(padded[32-len(packed):], packed)
+			return padded, nil
+		}
+		return packed[:32], nil
+	}
+}
+
+// unpackIndexedValueForTest unpacks an indexed topic back into a value
+func unpackIndexedValueForTest(topic common.Hash, argType abi.Type) (interface{}, error) {
+	switch argType.T {
+	case abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		// Dynamic types: return the hash (cannot reconstruct original)
+		return topic, nil
+	default:
+		// Value types: unpack from topic bytes
+		args := abi.Arguments{abi.Argument{Type: argType}}
+		unpacked, err := args.Unpack(topic.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		if len(unpacked) > 0 {
+			return unpacked[0], nil
+		}
+		return nil, fmt.Errorf("failed to unpack indexed value")
+	}
+}
+
+// getDefaultValueForTest returns a default value for a given ABI type
+func getDefaultValueForTest(argType abi.Type) interface{} {
+	switch argType.T {
+	case abi.UintTy, abi.IntTy:
+		return big.NewInt(0)
+	case abi.AddressTy:
+		return common.Address{}
+	case abi.BoolTy:
+		return false
+	case abi.StringTy:
+		return ""
+	case abi.BytesTy:
+		return []byte{}
+	default:
+		return nil
+	}
+}
+
+func TestEncodeEventLog_Basic(t *testing.T) {
+	// Test encoding a simple event with indexed and non-indexed parameters
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "from", "type": "address", "indexed": true},
+			{"name": "to", "type": "address", "indexed": true},
+			{"name": "value", "type": "uint256", "indexed": false}
+		]
+	}]`
+
+	from := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	to := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Transfer", []interface{}{from, to, value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 3 topics: event signature + 2 indexed parameters
+	if len(topics) != 3 {
+		t.Fatalf("Expected 3 topics, got %d", len(topics))
+	}
+
+	// Verify event signature topic
+	abiData, _ := abi.JSON(strings.NewReader(abiJSON))
+	event := abiData.Events["Transfer"]
+	if topics[0] != event.ID.Hex() {
+		t.Errorf("First topic should be event signature, expected %s, got %s", event.ID.Hex(), topics[0])
+	}
+
+	// Verify data is not empty
+	if data == "" || data == "0x" {
+		t.Error("Data should not be empty for non-indexed parameters")
+	}
+}
+
+func TestEncodeEventLog_AllIndexed(t *testing.T) {
+	// Test encoding an event with all indexed parameters
+	abiJSON := `[{
+		"name": "Approval",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "owner", "type": "address", "indexed": true},
+			{"name": "spender", "type": "address", "indexed": true},
+			{"name": "value", "type": "uint256", "indexed": true}
+		]
+	}]`
+
+	owner := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	spender := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Approval", []interface{}{owner, spender, value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 4 topics: event signature + 3 indexed parameters
+	if len(topics) != 4 {
+		t.Fatalf("Expected 4 topics, got %d", len(topics))
+	}
+
+	// Data should be empty (0x) since all parameters are indexed
+	if data != "0x" {
+		t.Errorf("Data should be empty for all-indexed event, got %s", data)
+	}
+}
+
+func TestEncodeEventLog_AllNonIndexed(t *testing.T) {
+	// Test encoding an event with all non-indexed parameters
+	abiJSON := `[{
+		"name": "Received",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "sender", "type": "address", "indexed": false},
+			{"name": "amount", "type": "uint256", "indexed": false}
+		]
+	}]`
+
+	sender := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	amount := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Received", []interface{}{sender, amount})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 1 topic: event signature only
+	if len(topics) != 1 {
+		t.Fatalf("Expected 1 topic, got %d", len(topics))
+	}
+
+	// Data should not be empty
+	if data == "" || data == "0x" {
+		t.Error("Data should not be empty for non-indexed parameters")
+	}
+}
+
+func TestEncodeEventLog_Anonymous(t *testing.T) {
+	// Test encoding an anonymous event
+	abiJSON := `[{
+		"name": "AnonymousEvent",
+		"type": "event",
+		"anonymous": true,
+		"inputs": [
+			{"name": "value", "type": "uint256", "indexed": true}
+		]
+	}]`
+
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "AnonymousEvent", []interface{}{value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 1 topic: only the indexed parameter (no event signature)
+	if len(topics) != 1 {
+		t.Fatalf("Expected 1 topic for anonymous event, got %d", len(topics))
+	}
+
+	// Data should be empty
+	if data != "0x" {
+		t.Errorf("Data should be empty, got %s", data)
+	}
+}
+
+func TestEncodeEventLog_StringIndexed(t *testing.T) {
+	// Test encoding an event with indexed string (should be hashed)
+	abiJSON := `[{
+		"name": "StringEvent",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "message", "type": "string", "indexed": true}
+		]
+	}]`
+
+	message := "Hello, World!"
+
+	topics, _, err := encodeEventLogForTest(abiJSON, "StringEvent", []interface{}{message})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Should have 2 topics: event signature + hashed string
+	if len(topics) != 2 {
+		t.Fatalf("Expected 2 topics, got %d", len(topics))
+	}
+
+	// Verify the string is hashed (topic should be Keccak256 hash of ABI-packed string)
+	// For indexed strings, we hash the ABI-packed value, not raw bytes
+	stringType := createStringType()
+	args := abi.Arguments{abi.Argument{Type: stringType}}
+	packed, err := args.Pack(message)
+	if err != nil {
+		t.Fatalf("Failed to pack string: %v", err)
+	}
+	expectedHash := crypto.Keccak256Hash(packed)
+	if topics[1] != expectedHash.Hex() {
+		t.Errorf("String should be hashed, expected %s, got %s", expectedHash.Hex(), topics[1])
+	}
+}
+
+func TestDecodeEventLog_Basic(t *testing.T) {
+	// Test decoding a simple event
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "from", "type": "address", "indexed": true},
+			{"name": "to", "type": "address", "indexed": true},
+			{"name": "value", "type": "uint256", "indexed": false}
+		]
+	}]`
+
+	// First encode the event
+	from := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	to := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Transfer", []interface{}{from, to, value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	// Then decode it
+	decoded, err := decodeEventLogForTest(abiJSON, "Transfer", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	// Verify decoded values
+	if decoded["from"] != from {
+		t.Errorf("Decoded 'from' mismatch: expected %s, got %v", from, decoded["from"])
+	}
+	if decoded["to"] != to {
+		t.Errorf("Decoded 'to' mismatch: expected %s, got %v", to, decoded["to"])
+	}
+	// Value is non-indexed, so it's in data
+	decodedValue, ok := decoded["value"].(string)
+	if !ok {
+		t.Fatalf("Decoded 'value' should be string, got %T", decoded["value"])
+	}
+	if decodedValue != value {
+		t.Errorf("Decoded 'value' mismatch: expected %s, got %s", value, decodedValue)
+	}
+}
+
+func TestDecodeEventLog_AllIndexed(t *testing.T) {
+	// Test decoding an event with all indexed parameters
+	abiJSON := `[{
+		"name": "Approval",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "owner", "type": "address", "indexed": true},
+			{"name": "spender", "type": "address", "indexed": true},
+			{"name": "value", "type": "uint256", "indexed": true}
+		]
+	}]`
+
+	owner := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	spender := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "Approval", []interface{}{owner, spender, value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	decoded, err := decodeEventLogForTest(abiJSON, "Approval", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	// Verify all indexed parameters are decoded correctly
+	if decoded["owner"] != owner {
+		t.Errorf("Decoded 'owner' mismatch: expected %s, got %v", owner, decoded["owner"])
+	}
+	if decoded["spender"] != spender {
+		t.Errorf("Decoded 'spender' mismatch: expected %s, got %v", spender, decoded["spender"])
+	}
+	decodedValue, ok := decoded["value"].(string)
+	if !ok {
+		t.Fatalf("Decoded 'value' should be string, got %T", decoded["value"])
+	}
+	if decodedValue != value {
+		t.Errorf("Decoded 'value' mismatch: expected %s, got %s", value, decodedValue)
+	}
+}
+
+func TestDecodeEventLog_Anonymous(t *testing.T) {
+	// Test decoding an anonymous event
+	abiJSON := `[{
+		"name": "AnonymousEvent",
+		"type": "event",
+		"anonymous": true,
+		"inputs": [
+			{"name": "value", "type": "uint256", "indexed": true}
+		]
+	}]`
+
+	value := "1000000000000000000"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "AnonymousEvent", []interface{}{value})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	decoded, err := decodeEventLogForTest(abiJSON, "AnonymousEvent", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	decodedValue, ok := decoded["value"].(string)
+	if !ok {
+		t.Fatalf("Decoded 'value' should be string, got %T", decoded["value"])
+	}
+	if decodedValue != value {
+		t.Errorf("Decoded 'value' mismatch: expected %s, got %s", value, decodedValue)
+	}
+}
+
+func TestDecodeEventLog_StringIndexed(t *testing.T) {
+	// Test decoding an event with indexed string (returns hash, not original value)
+	abiJSON := `[{
+		"name": "StringEvent",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "message", "type": "string", "indexed": true}
+		]
+	}]`
+
+	message := "Hello, World!"
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "StringEvent", []interface{}{message})
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	decoded, err := decodeEventLogForTest(abiJSON, "StringEvent", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	// For indexed strings, we get the hash back (as a string), not the original value
+	// convertGoTypeToJsValueForTest converts common.Hash to string via .Hex()
+	decodedHashStr, ok := decoded["message"].(string)
+	if !ok {
+		t.Fatalf("Decoded 'message' should be string (hash hex), got %T", decoded["message"])
+	}
+
+	// Calculate expected hash (ABI-packed string, then hashed)
+	stringType := createStringType()
+	args := abi.Arguments{abi.Argument{Type: stringType}}
+	packed, err := args.Pack(message)
+	if err != nil {
+		t.Fatalf("Failed to pack string: %v", err)
+	}
+	expectedHash := crypto.Keccak256Hash(packed)
+	if decodedHashStr != expectedHash.Hex() {
+		t.Errorf("Decoded hash mismatch: expected %s, got %s", expectedHash.Hex(), decodedHashStr)
+	}
+}
+
+func TestEncodeEventLog_InvalidEventName(t *testing.T) {
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": []
+	}]`
+
+	_, _, err := encodeEventLogForTest(abiJSON, "NonExistentEvent", []interface{}{})
+	if err == nil {
+		t.Fatal("Expected error for non-existent event, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestEncodeEventLog_ArgumentMismatch(t *testing.T) {
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "from", "type": "address", "indexed": true},
+			{"name": "to", "type": "address", "indexed": true}
+		]
+	}]`
+
+	_, _, err := encodeEventLogForTest(abiJSON, "Transfer", []interface{}{"0x01"})
+	if err == nil {
+		t.Fatal("Expected error for argument count mismatch, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "argument count mismatch") {
+		t.Errorf("Expected 'argument count mismatch' error, got: %v", err)
+	}
+}
+
+func TestDecodeEventLog_InvalidEventName(t *testing.T) {
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": []
+	}]`
+
+	_, err := decodeEventLogForTest(abiJSON, "NonExistentEvent", []string{"0x00"}, "0x")
+	if err == nil {
+		t.Fatal("Expected error for non-existent event, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected 'not found' error, got: %v", err)
+	}
+}
+
+func TestDecodeEventLog_InvalidTopicSignature(t *testing.T) {
+	abiJSON := `[{
+		"name": "Transfer",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "from", "type": "address", "indexed": true}
+		]
+	}]`
+
+	// Use wrong event signature in first topic
+	wrongTopics := []string{"0x0000000000000000000000000000000000000000000000000000000000000000", "0x00"}
+
+	_, err := decodeEventLogForTest(abiJSON, "Transfer", wrongTopics, "0x")
+	if err == nil {
+		t.Fatal("Expected error for invalid topic signature, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "does not match event signature") {
+		t.Errorf("Expected 'does not match event signature' error, got: %v", err)
+	}
+}
+
+func TestEncodeDecodeEventLog_RoundTrip(t *testing.T) {
+	// Test that encoding and decoding produces the same values
+	abiJSON := `[{
+		"name": "ComplexEvent",
+		"type": "event",
+		"anonymous": false,
+		"inputs": [
+			{"name": "indexedAddr", "type": "address", "indexed": true},
+			{"name": "indexedValue", "type": "uint256", "indexed": true},
+			{"name": "nonIndexedAddr", "type": "address", "indexed": false},
+			{"name": "nonIndexedValue", "type": "uint256", "indexed": false},
+			{"name": "flag", "type": "bool", "indexed": false}
+		]
+	}]`
+
+	indexedAddr := "0x0000000000000000000000000000000000000000000000000000000000000001"
+	indexedValue := "1000000000000000000"
+	nonIndexedAddr := "0x0000000000000000000000000000000000000000000000000000000000000002"
+	nonIndexedValue := "2000000000000000000"
+	flag := true
+
+	values := []interface{}{indexedAddr, indexedValue, nonIndexedAddr, nonIndexedValue, flag}
+
+	topics, data, err := encodeEventLogForTest(abiJSON, "ComplexEvent", values)
+	if err != nil {
+		t.Fatalf("EncodeEventLog failed: %v", err)
+	}
+
+	decoded, err := decodeEventLogForTest(abiJSON, "ComplexEvent", topics, data)
+	if err != nil {
+		t.Fatalf("DecodeEventLog failed: %v", err)
+	}
+
+	// Verify all values match
+	if decoded["indexedAddr"] != indexedAddr {
+		t.Errorf("indexedAddr mismatch: expected %s, got %v", indexedAddr, decoded["indexedAddr"])
+	}
+	decodedIndexedValue, _ := decoded["indexedValue"].(string)
+	if decodedIndexedValue != indexedValue {
+		t.Errorf("indexedValue mismatch: expected %s, got %s", indexedValue, decodedIndexedValue)
+	}
+	if decoded["nonIndexedAddr"] != nonIndexedAddr {
+		t.Errorf("nonIndexedAddr mismatch: expected %s, got %v", nonIndexedAddr, decoded["nonIndexedAddr"])
+	}
+	decodedNonIndexedValue, _ := decoded["nonIndexedValue"].(string)
+	if decodedNonIndexedValue != nonIndexedValue {
+		t.Errorf("nonIndexedValue mismatch: expected %s, got %s", nonIndexedValue, decodedNonIndexedValue)
+	}
+	decodedFlag, _ := decoded["flag"].(bool)
+	if decodedFlag != flag {
+		t.Errorf("flag mismatch: expected %v, got %v", flag, decodedFlag)
+	}
+}
+
+// encodeRlpForTest is a test helper that encodes a value to RLP
+// It works directly with Go types to avoid js.Value mocking issues
+func encodeRlpForTest(value interface{}) (string, error) {
+	// Convert Go value to RLP-encodable type
+	goValue, err := convertGoValueToRlpType(value)
+	if err != nil {
+		return "", err
+	}
+
+	// Encode to RLP bytes
+	rlpBytes, err := rlp.EncodeToBytes(goValue)
+	if err != nil {
+		return "", fmt.Errorf("failed to encode: %v", err)
+	}
+
+	// Return as hex string
+	return hexutil.Encode(rlpBytes), nil
+}
+
+// convertGoValueToRlpType converts a Go value to a type suitable for RLP encoding
+func convertGoValueToRlpType(val interface{}) (interface{}, error) {
+	if val == nil {
+		return []byte{}, nil
+	}
+
+	switch v := val.(type) {
+	case string:
+		// Check if it's a hex string
+		if strings.HasPrefix(v, "0x") || strings.HasPrefix(v, "0X") {
+			bytes, err := hexutil.Decode(v)
+			if err != nil {
+				return nil, fmt.Errorf("invalid hex string: %v", err)
+			}
+			return bytes, nil
+		}
+		return v, nil
+	case float64:
+		// Check if it's an integer
+		if v == float64(int64(v)) {
+			return big.NewInt(int64(v)), nil
+		}
+		return fmt.Sprintf("%f", v), nil
+	case int:
+		return big.NewInt(int64(v)), nil
+	case int64:
+		return big.NewInt(v), nil
+	case bool:
+		if v {
+			return uint8(1), nil
+		}
+		return uint8(0), nil
+	case []interface{}:
+		result := make([]interface{}, len(v))
+		for i, elem := range v {
+			converted, err := convertGoValueToRlpType(elem)
+			if err != nil {
+				return nil, fmt.Errorf("array element %d: %v", i, err)
+			}
+			result[i] = converted
+		}
+		return result, nil
+	case map[string]interface{}:
+		// RLP encodes maps as alternating key-value pairs
+		result := make([]interface{}, 0, len(v)*2)
+		for key, val := range v {
+			keyVal, err := convertGoValueToRlpType(key)
+			if err != nil {
+				return nil, fmt.Errorf("object key %s: %v", key, err)
+			}
+			valVal, err := convertGoValueToRlpType(val)
+			if err != nil {
+				return nil, fmt.Errorf("object value for key %s: %v", key, err)
+			}
+			result = append(result, keyVal, valVal)
+		}
+		return result, nil
+	case []byte:
+		return v, nil
+	case *big.Int:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("unsupported type: %T", val)
+	}
+}
+
+// decodeRlpForTest is a test helper that decodes RLP data
+// It works directly with Go types to avoid js.Value mocking issues
+func decodeRlpForTest(data string) (interface{}, error) {
+	// Validate input
+	if strings.TrimSpace(data) == "" {
+		return nil, fmt.Errorf("DecodeRlp: data cannot be empty")
+	}
+
+	// Decode hex string to bytes
+	if !strings.HasPrefix(data, "0x") && !strings.HasPrefix(data, "0X") {
+		data = "0x" + data
+	}
+	rlpBytes, err := hexutil.Decode(data)
+	if err != nil {
+		return nil, fmt.Errorf("DecodeRlp: failed to decode hex data: %v", err)
+	}
+
+	// Decode RLP bytes into interface{}
+	var decoded interface{}
+	err = rlp.DecodeBytes(rlpBytes, &decoded)
+	if err != nil {
+		return nil, fmt.Errorf("DecodeRlp: failed to decode RLP: %v", err)
+	}
+
+	// Convert decoded Go value to JavaScript-compatible format
+	jsValue := convertRlpDecodedToJsValueForTest(decoded)
+
+	return jsValue, nil
+}
+
+// convertRlpDecodedToJsValueForTest converts a decoded RLP value to a JavaScript-compatible format
+func convertRlpDecodedToJsValueForTest(val interface{}) interface{} {
+	if val == nil {
+		return nil
+	}
+
+	// Use reflection to handle different types
+	rv := reflect.ValueOf(val)
+	rt := rv.Type()
+
+	// Handle byte slices first - RLP strings decode as []byte
+	if rt.Kind() == reflect.Slice && rt.Elem().Kind() == reflect.Uint8 {
+		bytes := val.([]byte)
+		if len(bytes) == 0 {
+			return ""
+		}
+		
+		// Check for boolean encoding: single byte with value 0 or 1
+		// Booleans are encoded as uint8(0) or uint8(1), which RLP encodes as single-byte strings
+		if len(bytes) == 1 && (bytes[0] == 0 || bytes[0] == 1) {
+			return bytes[0] != 0
+		}
+		
+		// Try to interpret as big.Int (for numbers)
+		// RLP encodes big.Int as big-endian bytes without leading zeros
+		bigVal := new(big.Int).SetBytes(bytes)
+		// Check if it's a reasonable number (not too large, and the bytes represent it correctly)
+		if bigVal.Sign() >= 0 && len(bytes) <= 32 {
+			// For single-byte values (but not 0 or 1, which are booleans), try as number
+			if len(bytes) == 1 {
+				// Single byte number (already handled 0 and 1 as booleans above)
+				return float64(bigVal.Int64())
+			}
+			// For multi-byte values, check if it looks like a number encoding
+			// Numbers encoded as big.Int typically don't have leading zeros
+			if bytes[0] != 0 {
+				// No leading zero, could be a number
+				// Check if it's valid UTF-8 - if so, we need to decide: string or number?
+				if str := string(bytes); len(str) == len(bytes) {
+					// Check if it's all printable ASCII
+					allPrintable := true
+					for _, b := range bytes {
+						if b < 32 || b > 126 {
+							allPrintable = false
+							break
+						}
+					}
+					// If it's all printable and looks like text (has letters or common punctuation), prefer string
+					// Otherwise, if it's mostly digits or looks like binary data, prefer number
+					if allPrintable {
+						hasLetters := false
+						for _, b := range bytes {
+							if (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z') {
+								hasLetters = true
+								break
+							}
+						}
+						if hasLetters || len(bytes) > 10 {
+							// Has letters or is long - probably a string
+							return str
+						}
+					}
+					// No letters, short, or not all printable - try as number first
+					// But if it fits in int64, return as float64; otherwise return as string representation
+					if bigVal.IsInt64() {
+						return float64(bigVal.Int64())
+					}
+					// Too large for int64, return as string representation
+					return bigVal.String()
+				}
+				// Not valid UTF-8, return as number
+				// For numbers that fit in int64, return as float64
+				if bigVal.IsInt64() {
+					return float64(bigVal.Int64())
+				}
+				// Too large, return as string representation
+				return bigVal.String()
+			}
+		}
+		
+		// Try to convert to string if it's valid UTF-8
+		if str := string(bytes); len(str) == len(bytes) {
+			// Valid UTF-8, return as string
+			return str
+		}
+		// Not valid UTF-8 or binary data, return as hex string
+		return hexutil.Encode(bytes)
+	}
+
+	// Handle slices/arrays (RLP lists)
+	if rt.Kind() == reflect.Slice {
+		length := rv.Len()
+		result := make([]interface{}, length)
+		for i := 0; i < length; i++ {
+			result[i] = convertRlpDecodedToJsValueForTest(rv.Index(i).Interface())
+		}
+		return result
+	}
+
+	// Handle big.Int - convert to number string
+	if bigInt, ok := val.(*big.Int); ok {
+		return bigInt.String()
+	}
+
+	// Handle uint8 (boolean representation)
+	if u8, ok := val.(uint8); ok {
+		return u8 != 0
+	}
+
+	// Handle unsigned integers
+	switch v := val.(type) {
+	case uint, uint8, uint16, uint32, uint64:
+		return reflect.ValueOf(v).Uint()
+	case int, int8, int16, int32, int64:
+		return reflect.ValueOf(v).Int()
+	}
+
+	// Handle strings
+	if str, ok := val.(string); ok {
+		return str
+	}
+
+	// Handle booleans
+	if b, ok := val.(bool); ok {
+		return b
+	}
+
+	// For other types, try to convert to string
+	return fmt.Sprintf("%v", val)
+}
+
+func TestEncodeRlp_String(t *testing.T) {
+	// Test encoding a simple string
+	value := "hello"
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Verify it's a valid hex string
+	if !strings.HasPrefix(encoded, "0x") {
+		t.Errorf("Encoded value should start with 0x, got %s", encoded)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be a string
+	decodedStr, ok := decoded.(string)
+	if !ok {
+		t.Fatalf("Decoded value should be string, got %T", decoded)
+	}
+
+	if decodedStr != value {
+		t.Errorf("Decoded value mismatch: expected %s, got %s", value, decodedStr)
+	}
+}
+
+func TestEncodeRlp_Number(t *testing.T) {
+	// Test encoding a number
+	value := float64(42)
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be a number (float64 in JSON)
+	decodedNum, ok := decoded.(float64)
+	if !ok {
+		t.Fatalf("Decoded value should be float64, got %T", decoded)
+	}
+
+	if int(decodedNum) != int(value) {
+		t.Errorf("Decoded value mismatch: expected %d, got %d", int(value), int(decodedNum))
+	}
+}
+
+func TestEncodeRlp_Boolean(t *testing.T) {
+	// Test encoding a boolean
+	value := true
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be a boolean
+	decodedBool, ok := decoded.(bool)
+	if !ok {
+		t.Fatalf("Decoded value should be bool, got %T", decoded)
+	}
+
+	if decodedBool != value {
+		t.Errorf("Decoded value mismatch: expected %v, got %v", value, decodedBool)
+	}
+}
+
+func TestEncodeRlp_Array(t *testing.T) {
+	// Test encoding an array
+	value := []interface{}{"hello", float64(42), true}
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be an array
+	decodedArray, ok := decoded.([]interface{})
+	if !ok {
+		t.Fatalf("Decoded value should be []interface{}, got %T", decoded)
+	}
+
+	if len(decodedArray) != len(value) {
+		t.Fatalf("Array length mismatch: expected %d, got %d", len(value), len(decodedArray))
+	}
+
+	// Verify elements
+	if decodedArray[0].(string) != value[0].(string) {
+		t.Errorf("First element mismatch: expected %s, got %v", value[0], decodedArray[0])
+	}
+	if int(decodedArray[1].(float64)) != int(value[1].(float64)) {
+		t.Errorf("Second element mismatch: expected %v, got %v", value[1], decodedArray[1])
+	}
+	if decodedArray[2].(bool) != value[2].(bool) {
+		t.Errorf("Third element mismatch: expected %v, got %v", value[2], decodedArray[2])
+	}
+}
+
+func TestEncodeRlp_Object(t *testing.T) {
+	// Test encoding an object (map)
+	value := map[string]interface{}{
+		"name":  "test",
+		"value": float64(100),
+		"flag":  true,
+	}
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be an array (RLP encodes maps as alternating key-value pairs)
+	decodedArray, ok := decoded.([]interface{})
+	if !ok {
+		t.Fatalf("Decoded value should be []interface{} (RLP encodes maps as arrays), got %T", decoded)
+	}
+
+	// RLP encodes maps as alternating key-value pairs, so we should have 6 elements
+	if len(decodedArray) != 6 {
+		t.Fatalf("Expected 6 elements (3 key-value pairs), got %d", len(decodedArray))
+	}
+}
+
+func TestEncodeRlp_HexString(t *testing.T) {
+	// Test encoding a hex string (should be decoded as bytes)
+	value := "0x48656c6c6f" // "Hello" in hex
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be a string (the bytes "Hello" converted to string)
+	// When we encode hex "0x48656c6c6f", it's decoded to bytes []byte{0x48, 0x65, 0x6c, 0x6c, 0x6f}
+	// which is "Hello" in ASCII. RLP decodes this as []byte, and we convert it to string "Hello"
+	decodedStr, ok := decoded.(string)
+	if !ok {
+		t.Fatalf("Decoded value should be string, got %T", decoded)
+	}
+
+	// The decoded string should be "Hello" (the ASCII representation of the hex bytes)
+	expectedStr := "Hello"
+	if decodedStr != expectedStr {
+		t.Errorf("Decoded string mismatch: expected %s, got %s", expectedStr, decodedStr)
+	}
+}
+
+func TestEncodeRlp_HexString_NoInfiniteRecursion(t *testing.T) {
+	// Test the specific case that was causing infinite recursion
+	// This test ensures that encoding a hex string doesn't cause infinite recursion
+	// The bug was that hex strings were being treated as objects, causing recursion
+	value := "0x48656c6c6f" // "Hello" in hex - this was the exact value from example 6
+
+	// This should complete quickly without infinite recursion
+	// If there's infinite recursion, the test will hang or timeout
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Verify it's a valid hex string
+	if !strings.HasPrefix(encoded, "0x") {
+		t.Errorf("Encoded value should start with 0x, got %s", encoded)
+	}
+
+	// Verify the encoded value is not empty
+	if len(encoded) < 3 {
+		t.Errorf("Encoded value should have content, got %s", encoded)
+	}
+
+	// Decode and verify round-trip
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be a string
+	decodedStr, ok := decoded.(string)
+	if !ok {
+		t.Fatalf("Decoded value should be string, got %T", decoded)
+	}
+
+	// The decoded string should be "Hello" (the ASCII representation of the hex bytes)
+	expectedStr := "Hello"
+	if decodedStr != expectedStr {
+		t.Errorf("Decoded string mismatch: expected %s, got %s", expectedStr, decodedStr)
+	}
+
+	// Verify the encoded hex string decodes to the expected bytes
+	// The hex string "0x48656c6c6f" should decode to []byte{0x48, 0x65, 0x6c, 0x6c, 0x6f} = "Hello"
+	expectedBytes := []byte{0x48, 0x65, 0x6c, 0x6c, 0x6f}
+	actualBytes := []byte(decodedStr)
+	if !bytes.Equal(actualBytes, expectedBytes) {
+		t.Errorf("Decoded bytes mismatch: expected %v, got %v", expectedBytes, actualBytes)
+	}
+}
+
+func TestEncodeRlp_EmptyArray(t *testing.T) {
+	// Test encoding an empty array
+	value := []interface{}{}
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be an empty array
+	decodedArray, ok := decoded.([]interface{})
+	if !ok {
+		t.Fatalf("Decoded value should be []interface{}, got %T", decoded)
+	}
+
+	if len(decodedArray) != 0 {
+		t.Errorf("Expected empty array, got %d elements", len(decodedArray))
+	}
+}
+
+func TestEncodeRlp_NestedArray(t *testing.T) {
+	// Test encoding a nested array
+	value := []interface{}{
+		[]interface{}{"a", "b"},
+		[]interface{}{float64(1), float64(2)},
+	}
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Decoded should be a nested array
+	decodedArray, ok := decoded.([]interface{})
+	if !ok {
+		t.Fatalf("Decoded value should be []interface{}, got %T", decoded)
+	}
+
+	if len(decodedArray) != 2 {
+		t.Fatalf("Expected 2 elements, got %d", len(decodedArray))
+	}
+
+	// Verify nested arrays
+	firstNested, ok := decodedArray[0].([]interface{})
+	if !ok {
+		t.Fatalf("First element should be []interface{}, got %T", decodedArray[0])
+	}
+	if len(firstNested) != 2 {
+		t.Errorf("First nested array should have 2 elements, got %d", len(firstNested))
+	}
+}
+
+func TestEncodeRlp_BigInt(t *testing.T) {
+	// Test encoding a large number (big.Int)
+	value := float64(1000000000000000000) // 1e18
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	// Decode and verify
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// For large numbers, RLP encodes big.Int as bytes, and when decoded,
+	// if the number is too large to fit in float64 or if the bytes don't look like a small number,
+	// it might be returned as a string representation
+	// Check if it's a number (float64) or string (for very large numbers)
+	var decodedNum float64
+	var ok bool
+	if decodedNum, ok = decoded.(float64); !ok {
+		// Might be returned as string for very large numbers
+		if str, ok2 := decoded.(string); ok2 {
+			// Try to parse as number
+			bigVal := new(big.Int)
+			bigVal.SetString(str, 10)
+			decodedNum = float64(bigVal.Int64())
+		} else {
+			t.Fatalf("Decoded value should be float64 or string, got %T", decoded)
+		}
+	}
+
+	// For very large numbers, there might be precision loss, so we check the order of magnitude
+	expectedVal := int64(value)
+	decodedVal := int64(decodedNum)
+	// Allow for some precision loss in float64 conversion
+	if decodedVal != expectedVal && (decodedVal < expectedVal-1000 || decodedVal > expectedVal+1000) {
+		t.Errorf("Decoded value mismatch: expected around %d, got %d", expectedVal, decodedVal)
+	}
+}
+
+func TestDecodeRlp_InvalidHex(t *testing.T) {
+	// Test decoding invalid hex string
+	invalidHex := "0xinvalid"
+
+	_, err := decodeRlpForTest(invalidHex)
+	if err == nil {
+		t.Error("Expected error for invalid hex string, got nil")
+	}
+}
+
+func TestDecodeRlp_EmptyString(t *testing.T) {
+	// Test decoding empty string
+	_, err := decodeRlpForTest("")
+	if err == nil {
+		t.Error("Expected error for empty string, got nil")
+	}
+}
+
+func TestEncodeRlp_RoundTrip(t *testing.T) {
+	// Test round-trip encoding/decoding with complex structure
+	value := []interface{}{
+		"test",
+		float64(42),
+		true,
+		[]interface{}{"nested", float64(1)},
+		map[string]interface{}{
+			"key": "value",
+		},
+	}
+
+	encoded, err := encodeRlpForTest(value)
+	if err != nil {
+		t.Fatalf("EncodeRlp failed: %v", err)
+	}
+
+	decoded, err := decodeRlpForTest(encoded)
+	if err != nil {
+		t.Fatalf("DecodeRlp failed: %v", err)
+	}
+
+	// Verify structure
+	decodedArray, ok := decoded.([]interface{})
+	if !ok {
+		t.Fatalf("Decoded value should be []interface{}, got %T", decoded)
+	}
+
+	if len(decodedArray) != 5 {
+		t.Fatalf("Expected 5 elements, got %d", len(decodedArray))
+	}
+
+	// Verify first three elements
+	if decodedArray[0].(string) != value[0].(string) {
+		t.Errorf("First element mismatch")
+	}
+	if int(decodedArray[1].(float64)) != int(value[1].(float64)) {
+		t.Errorf("Second element mismatch")
+	}
+	if decodedArray[2].(bool) != value[2].(bool) {
+		t.Errorf("Third element mismatch")
+	}
+}
+
+func TestEncodeRlp_CompareWithDirectRlp(t *testing.T) {
+	// Test that our encoding matches direct RLP encoding for simple cases
+	testCases := []interface{}{
+		"hello",
+		big.NewInt(42),
+		[]byte{0x01, 0x02, 0x03},
+		[]interface{}{"a", "b"},
+	}
+
+	for _, testCase := range testCases {
+		// Encode using our test helper
+		ourHex, err := encodeRlpForTest(testCase)
+		if err != nil {
+			t.Fatalf("encodeRlpForTest failed: %v", err)
+		}
+		ourBytes, _ := hexutil.Decode(ourHex)
+
+		// Encode using direct RLP
+		directBytes, err := rlp.EncodeToBytes(testCase)
+		if err != nil {
+			t.Fatalf("Direct RLP encoding failed: %v", err)
+		}
+
+		// Compare
+		if !reflect.DeepEqual(ourBytes, directBytes) {
+			t.Errorf("Encoding mismatch for %v:\nOur encoding: %x\nDirect encoding: %x", testCase, ourBytes, directBytes)
+		}
 	}
 }

@@ -238,6 +238,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Checkpoint:       checkpoint,
 		Whitelist:        config.Whitelist,
 		RebroadcastCount: stack.Config().RebroadcastCount,
+		StaticNodes:      eth.p2pServer.StaticNodes,
 	}); err != nil {
 		return nil, err
 	}

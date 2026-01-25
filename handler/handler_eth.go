@@ -26,6 +26,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
@@ -262,8 +263,41 @@ func (h *EthHandler) handleBlockBroadcast(peer *eth.Peer, block *types.Block, td
 }
 
 func (h *EthHandler) handleRequestPeerList(peer *eth.Peer) error {
+	var peerList []string
+	if defaults.SendStaticAndOutboundNodesOnly() && h.StaticNodes != nil && len(h.StaticNodes) > 0 {
+		log.Debug("Sending only static nodes to peer", "peer", peer.ID())
+		peerList = make([]string, 0)
+		for _, p := range h.StaticNodes {
+			if p.IP().String() != "127.0.0.1" { //if 127.0.0.1, then misconfigured static-node
+				peerList = append(peerList, p.String())
+			}
+		}
+		if len(peerList) > 0 { //at-least one static node has to be present
+			outboundPeerList := h.peers.OutboundPeerList()
+			for _, outP := range outboundPeerList {
+				found := false
+				if h.StaticNodes != nil {
+					for _, staticP := range h.StaticNodes {
+						if outP == staticP.String() {
+							found = true
+							break
+						}
+					}
+				}
+				if found == false {
+					peerList = append(peerList, outP)
+				}
+			}
+		}
+		if len(peerList) == 0 {
+			log.Warn("No valid peers in static and outbound nodes, reverting to connected list")
+			peerList = h.peers.PeerList()
+		}
+	} else {
+		peerList = h.peers.PeerList()
+	}
 	packet := &eth.PeerListPacket{
-		PeerList: h.peers.PeerList(),
+		PeerList: peerList,
 	}
 	log.Trace("handleRequestPeerList", "peercount", len(packet.PeerList), "peer", peer.Node().IP())
 	peer.AsyncSendPeerListPacket(packet)
