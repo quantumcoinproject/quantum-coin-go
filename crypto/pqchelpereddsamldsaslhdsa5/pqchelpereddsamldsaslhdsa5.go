@@ -1,3 +1,5 @@
+// Package pqchelpereddsamldsaslhdsa5 provides helpers for NIST ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) hybrid PQC.
+// Post-quantum cryptography in hybrid mode; level-5 parameter set.
 package pqchelpereddsamldsaslhdsa5
 
 import (

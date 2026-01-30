@@ -1,3 +1,7 @@
+// Package hybridedsfull implements full-size hybrid post-quantum (PQC) signatures for QuantumCoin.
+// Combines classical Ed25519 with NIST-standardized PQC (Dilithium + SPHINCS+) in hybrid mode.
+// Full variant; use for contexts requiring maximum PQC assurance and NIST standard compliance.
+// Dilithium/SPHINCS+ are part of the NIST PQC standardization track (standardized as ML-DSA/SLH-DSA).
 package hybridedsfull
 
 import (

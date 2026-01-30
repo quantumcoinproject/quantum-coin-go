@@ -1,3 +1,6 @@
+// Package pqchelpereds provides helpers for hybrid post-quantum (PQC) signatures used by QuantumCoin.
+// Wraps hybrid Ed25519 + NIST Dilithium + SPHINCS+ (compact) for key generation, signing, and verification.
+// PQC is used in hybrid mode: classical + NIST-standardized post-quantum for quantum resistance.
 package pqchelpereds
 
 import (
@@ -10,6 +13,7 @@ import (
 
 const (
 	CRYPTO_MESSAGE_LEN             = 32
+	// CRYPTO_COMPACT_SIGNATURE_BYTES: hybrid PQC compact sig size (Ed25519 + NIST Dilithium + SPHINCS+).
 	CRYPTO_COMPACT_SIGNATURE_BYTES = 2 + 64 + 2420 + 40 + CRYPTO_MESSAGE_LEN //2558
 )
 

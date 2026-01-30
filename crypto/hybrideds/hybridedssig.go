@@ -1,3 +1,7 @@
+// Package hybrideds implements hybrid post-quantum (PQC) signatures for QuantumCoin.
+// It combines classical Ed25519 with NIST-standardized PQC (Dilithium + SPHINCS+) in hybrid mode,
+// providing security against both classical and quantum adversaries. Compact signature variant.
+// Dilithium/SPHINCS+ are part of the NIST PQC standardization track (standardized as ML-DSA/SLH-DSA).
 package hybrideds
 
 import (
@@ -22,8 +26,10 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
+// CRYPTO_SIGNATURE_BYTES is the size of the hybrid PQC compact signature (Ed25519 + NIST PQC Dilithium/SPHINCS+).
 const CRYPTO_SIGNATURE_BYTES = hybrideds.CompactSigLength
 
+// HybridedsSig implements hybrid post-quantum signatures: classical Ed25519 + NIST PQC in hybrid mode.
 type HybridedsSig struct {
 	sigName                      string
 	publicKeyLength              int
