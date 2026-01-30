@@ -1,3 +1,6 @@
+// Package proofofstake implements QuantumCoin's proof-of-stake consensus.
+// Consensus packets are signed using hybrid post-quantum (PQC) signatures:
+// NIST-standardized PQC in hybrid mode (e.g. Ed25519 + Dilithium/SPHINCS+ or ML-DSA/SLH-DSA).
 package proofofstake
 
 import (
@@ -793,6 +796,7 @@ func shouldSignFull(blockNumber uint64) bool {
 }
 
 func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNumber uint64) error {
+	// Require minimum hybrid PQC signature length (NIST PQC in hybrid mode).
 	if packet == nil || packet.ConsensusData == nil || len(packet.ConsensusData) < 1 || packet.Signature == nil || len(packet.Signature) < hybrideds.CRYPTO_SIGNATURE_BYTES {
 		log.Debug("processPacket nil")
 		return errors.New("nil packet")

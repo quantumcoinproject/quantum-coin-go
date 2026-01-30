@@ -1,3 +1,7 @@
+// Package hybrideddsamldsaslhdsa implements hybrid post-quantum (PQC) signatures using NIST standards.
+// Combines classical Ed25519 with ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) in hybrid mode.
+// QuantumCoin uses this NIST-standardized PQC hybrid (ML-DSA + SLH-DSA + Ed25519) for
+// quantum-resistant consensus and transactions, ensuring long-term security.
 package hybrideddsamldsaslhdsa
 
 import (

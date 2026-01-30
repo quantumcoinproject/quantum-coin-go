@@ -1,3 +1,15 @@
+// Package cryptobase provides QuantumCoin's unified crypto backend.
+//
+// QuantumCoin uses post-quantum cryptography (PQC) in hybrid mode: every signature
+// combines a classical algorithm (e.g. Ed25519) with NIST-standardized PQC algorithms.
+// This project implements the NIST PQC standards for quantum-resistant security.
+// Supported PQC schemes include:
+//   - Dilithium + SPHINCS+ (NIST PQC standardization)
+//   - ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) — NIST-standardized post-quantum signatures
+//
+// Hybrid PQC ensures security against both classical and quantum adversaries while
+// retaining compatibility and defense-in-depth. All signature algorithm IDs and
+// dynamic signer/verifier logic route through this package.
 package cryptobase
 
 import (
@@ -21,6 +33,9 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
+// Default and named hybrid PQC signature algorithms (NIST-standardized post-quantum in hybrid mode).
+// Each algorithm pairs Ed25519 with NIST PQC signatures (Dilithium/SPHINCS+ or ML-DSA/SLH-DSA).
+// These are the concrete implementations used by dynamic signing/verification paths below.
 var SigAlg = hybrideds.CreateHybridedsSig()
 var SigAlgHybridEds = hybrideds.CreateHybridedsSig()
 var SigAlgHybridEdsFull = hybridedsfull.CreateHybridedsfullSig()

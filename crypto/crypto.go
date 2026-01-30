@@ -22,17 +22,22 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+// SignatureAlgorithmType identifies which hybrid post-quantum (PQC) signature scheme is used.
+// QuantumCoin uses NIST-standardized PQC in hybrid mode: Ed25519 + a NIST PQC signature.
+// ML-DSA (FIPS 204) and SLH-DSA (FIPS 205) are the primary NIST PQC standards used.
+// The Dilithium/SPHINCS+ variants map to the same NIST PQC standardization track.
+// This hybrid approach provides quantum-resistance while maintaining classical security.
 type SignatureAlgorithmType byte
 
-const DILITHIUM_ED25519_SPHINCS_COMPACT_ID SignatureAlgorithmType = 1
+const DILITHIUM_ED25519_SPHINCS_COMPACT_ID SignatureAlgorithmType = 1 // Hybrid: Ed25519 + NIST Dilithium + SPHINCS+ (compact)
 
-const DILITHIUM_ED25519_SPHINCS_FULL_ID SignatureAlgorithmType = 2
+const DILITHIUM_ED25519_SPHINCS_FULL_ID SignatureAlgorithmType = 2 // Hybrid: Ed25519 + NIST Dilithium + SPHINCS+ (full)
 
-const MLDSA_ED25519_SLHDSA_COMPACT_ID SignatureAlgorithmType = 3
+const MLDSA_ED25519_SLHDSA_COMPACT_ID SignatureAlgorithmType = 3 // Hybrid: Ed25519 + NIST ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) compact
 
-const MLDSA_ED25519_SLHDSA_FULL_ID SignatureAlgorithmType = 4
+const MLDSA_ED25519_SLHDSA_FULL_ID SignatureAlgorithmType = 4 // Hybrid: Ed25519 + NIST ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) full
 
-const MLDSA_ED25519_SLHDSA_5_ID SignatureAlgorithmType = 5
+const MLDSA_ED25519_SLHDSA_5_ID SignatureAlgorithmType = 5 // Hybrid: Ed25519 + NIST ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) level 5 (maximum security)
 
 type SigningContext byte
 

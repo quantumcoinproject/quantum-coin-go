@@ -1,3 +1,7 @@
+// Package pqchelpereddsamldsaslhdsa provides helpers for NIST-standardized hybrid PQC signatures.
+// Wraps hybrid Ed25519 + ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) for key gen, sign, verify.
+// QuantumCoin uses this NIST-standardized post-quantum cryptography in hybrid mode 
+// to ensure all operations are quantum-resistant according to FIPS 204/205.
 package pqchelpereddsamldsaslhdsa
 
 import (

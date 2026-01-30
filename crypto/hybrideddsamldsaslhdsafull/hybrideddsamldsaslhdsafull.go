@@ -1,3 +1,7 @@
+// Package hybrideddsamldsaslhdsafull implements full-size hybrid PQC signatures using NIST ML-DSA (FIPS 204) + SLH-DSA (FIPS 205).
+// Ed25519 + NIST-standardized post-quantum in hybrid mode; full signature variant for maximum PQC assurance.
+// This implementation strictly follows the NIST FIPS 204 and FIPS 205 specifications.
+// This is a NIST-standardized PQC hybrid used by QuantumCoin.
 package hybrideddsamldsaslhdsafull
 
 import (

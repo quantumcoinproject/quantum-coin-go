@@ -18,7 +18,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereds"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereds" // hybrid PQC (NIST) helper for compact signatures
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"

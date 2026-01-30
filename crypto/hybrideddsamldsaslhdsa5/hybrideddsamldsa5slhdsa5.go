@@ -1,3 +1,7 @@
+// Package hybrideddsamldsaslhdsa5 implements hybrid PQC signatures with NIST ML-DSA (FIPS 204) + SLH-DSA (FIPS 205).
+// Ed25519 + post-quantum in hybrid mode; level-5 parameter set for higher security (NIST Security Level 5).
+// This provides the highest level of quantum-resistance standardized by NIST.
+// These signatures are NIST-standardized PQC in hybrid mode for QuantumCoin.
 package hybrideddsamldsaslhdsa5
 
 import (
