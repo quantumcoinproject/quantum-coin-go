@@ -11,15 +11,15 @@
 | Component | PQC Algorithm | NIST Standard | Classical Algorithm | Hybrid |
 |-----------|---------------|---------------|---------------------|--------|
 | **Signatures** | ML-DSA-44/87, SLH-DSA-SHAKE-256f/s | FIPS 204, FIPS 205 | ed25519 | Yes |
-| **Key Establishment** | Kyber512 (ML-KEM-512), ML-KEM-768 | FIPS 203 | X25519 | Hybrid after `KemSwitchTime` |
+| **Key Establishment** | ML-KEM-768 | FIPS 203 | X25519 | Yes |
 
-All **PQC-signature operations** use hybrid constructions combining post-quantum and classical algorithms, ensuring security against both quantum and classical attackers. KEMs are **time-gated** (hybrid after `KemSwitchTime`).
+All **PQC-signature operations** use hybrid constructions combining post-quantum and classical algorithms, ensuring security against both quantum and classical attackers.
 
 ---
 
 ## Post-Quantum Cryptography
 
-QuantumCoin uses **hybrid constructions** (PQC + classical) for signatures and **time-gated hybrid KEMs** for node-to-node key establishment, so the system remains secure against both classical attackers and quantum-capable adversaries. Hybrid mode also provides a hedge if any single primitive is weakened. See: [NIST PQC FAQs](https://csrc.nist.gov/projects/post-quantum-cryptography/faqs).
+QuantumCoin uses **hybrid constructions** (PQC + classical) so the system remains secure against both classical attackers and quantum-capable adversaries. Hybrid mode also provides a hedge if any single primitive is weakened. See: [NIST PQC FAQs](https://csrc.nist.gov/projects/post-quantum-cryptography/faqs).
 
 **Algorithms used (NIST standard names):**
 - **Signatures:** **ML-DSA** (Module-Lattice Digital Signature Algorithm; standardized from Dilithium; [FIPS 204](https://csrc.nist.gov/pubs/fips/204/final)), **SLH-DSA** (Stateless Hash-Based Digital Signature Algorithm; standardized from SPHINCS+; [FIPS 205](https://csrc.nist.gov/pubs/fips/205/final)), plus **ed25519** in a hybrid combiner.
@@ -105,7 +105,7 @@ Requires a Go toolchain compatible with the version declared in [`go.mod`](./go.
 Build the node binary:
 
 ```bash
-go build -o ./build/dp ./cmd/dp
+go build -o ./build ./...
 ```
 
 ### Running the Node
