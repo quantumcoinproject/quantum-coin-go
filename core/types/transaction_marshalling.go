@@ -189,7 +189,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		}
 		itx.Data = *dec.Data
 		if dec.Remarks != nil {
-			itx.Remarks = *dec.Data
+			itx.Remarks = *dec.Remarks
 			if len(itx.Remarks) > MAX_REMARKS_LENGTH {
 				return errors.New("verify remarks failed")
 			}
@@ -272,7 +272,7 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 		itx.Data = *dec.Data
 
 		if dec.Remarks != nil {
-			itx.Remarks = *dec.Data
+			itx.Remarks = *dec.Remarks
 			if len(itx.Remarks) > MAX_REMARKS_LENGTH {
 				return errors.New("verify remarks failed")
 			}

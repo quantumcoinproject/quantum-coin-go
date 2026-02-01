@@ -7,6 +7,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"math/big"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -18,15 +28,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
-	"io"
-	"math/big"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
 )
 
 const LastInternalBlockKey = "internal-last-block"
@@ -241,10 +242,9 @@ func (c *PrimordialCache) downloadBlocks(startBlockNumber int64) {
 
 					msg, err := tx.AsMessage(types.NewLondonSigner(chainID))
 					if err != nil {
-						log.Error("PrimordialCache AsMessage", "error", err)
-						delayNumber = int64(3000 * time.Millisecond)
-						blockTimer.Reset(time.Duration(delayNumber))
-						continue
+						log.Error("PrimordialCache AsMessage", "error", err, "tx", tx.Hash(), "block", block.Number())
+						time.Sleep(time.Duration(1000 * time.Millisecond))
+						panic("PrimordialCache unexpected error")
 					}
 
 					fromAddress := msg.From().HexLower()
