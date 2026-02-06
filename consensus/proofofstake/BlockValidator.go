@@ -115,7 +115,7 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 
 	validator, err = sigAlg.PublicKeyToAddress(pubKey)
 	if err != nil {
-		log.Trace("invalid 3", "err", err)
+		log.Debug("invalid 3", "err", err)
 		resultsChan <- &PacketParseResult{err: err}
 		return
 	}
@@ -154,7 +154,7 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 			resultsChan <- &PacketParseResult{err: err}
 			return
 		}
-		log.Trace("parseconsensuspackets propose", "details.Round", details.Round)
+		log.Debug("parseconsensuspackets propose", "details.Round", details.Round)
 		packetDetail := &PacketParseResult{
 			packetType:      packetType,
 			proposalDetails: &details,
@@ -272,7 +272,7 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 	close(ch)
 
 	wg.Wait()
-	log.Trace("ParseConsensusPacket list time taken", "elapsed", time.Since(startTime))
+	log.Debug("ParseConsensusPacket list time taken", "elapsed", time.Since(startTime))
 
 	for index, packetParseResult := range results {
 		if packetParseResult.err != nil {
@@ -293,16 +293,16 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 
 		if packetParseResult.packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK {
 			details := packetParseResult.proposalDetails
-			log.Trace("parseconsensuspackets propose", "details.Round", details.Round)
+			log.Debug("parseconsensuspackets propose", "details.Round", details.Round)
 
 			packetMap := packetRoundMap[details.Round]
 			pktTest, ok := packetMap.proposalDetailsMap[packetParseResult.validator]
 			if ok == true {
-				log.Trace("duplicate proposal packet", "validator", packetParseResult.validator, "details.Round", details.Round,
+				log.Debug("duplicate proposal packet", "validator", packetParseResult.validator, "details.Round", details.Round,
 					"txn count", len(details.Txns), "pktTest.Round", pktTest.Round, "len(pktTest.Txns)", len(pktTest.Txns), "index", index, "len(*consensusPackets)", len(*consensusPackets))
 				return nil, errors.New("duplicate proposal packet")
 			} else {
-				log.Trace("proposal packet", "validator", packetParseResult.validator, "Round", details.Round, "count", len(details.Txns), "index", index)
+				log.Debug("proposal packet", "validator", packetParseResult.validator, "Round", details.Round, "count", len(details.Txns), "index", index)
 			}
 			proposalDetails := &ProposalDetails{
 				Round: details.Round,
@@ -327,12 +327,12 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 			}
 			proposalAckDetails.ProposalHash.CopyFrom(details.ProposalHash)
 			if proposalAckDetails.ProposalAckVoteType != VOTE_TYPE_NIL && proposalAckDetails.ProposalAckVoteType != VOTE_TYPE_OK {
-				log.Trace("proposalAckDetails.ProposalAckVoteType", "ProposalAckVoteType", proposalAckDetails.ProposalAckVoteType)
+				log.Debug("proposalAckDetails.ProposalAckVoteType", "ProposalAckVoteType", proposalAckDetails.ProposalAckVoteType)
 				return nil, errors.New("invalid vote type a")
 			}
 
 			if details.Round == MAX_ROUND && proposalAckDetails.ProposalAckVoteType != VOTE_TYPE_NIL {
-				log.Trace("proposalAckDetails.ProposalAckVoteType", "ProposalAckVoteType", proposalAckDetails.ProposalAckVoteType)
+				log.Debug("proposalAckDetails.ProposalAckVoteType", "ProposalAckVoteType", proposalAckDetails.ProposalAckVoteType)
 				return nil, errors.New("invalid vote type expecting nil")
 			}
 
@@ -387,14 +387,14 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 
 	var proposalHash common.Hash
 	if voteType == VOTE_TYPE_OK {
-		log.Trace("GetCombinedTxnHash a", "parentHash", parentHash, "round", round, "count", len(txns))
+		log.Debug("GetCombinedTxnHash a", "parentHash", parentHash, "round", round, "count", len(txns))
 		if blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
 			proposalHash = GetCombinedTxnHashWithTime(parentHash, round, txns, proposedBlockTime)
 		} else {
 			proposalHash = GetCombinedTxnHash(parentHash, round, txns)
 		}
 	} else {
-		log.Trace("GetCombinedTxnHash b", "parentHash", parentHash, "round", round)
+		log.Debug("GetCombinedTxnHash b", "parentHash", parentHash, "round", round)
 		proposalHash.CopyFrom(getNilVoteProposalHash(parentHash, round))
 		if txns != nil && len(txns) > 0 {
 			return errors.New("invalid transactions with nil vote")
@@ -410,12 +410,12 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 		if proposalAckDetails.Round != round {
 			return errors.New("invalid round f")
 		}
-		log.Trace("val dep", "val", v, "depositValue", depositValue, "ProposalAckVoteType", proposalAckDetails.ProposalAckVoteType, "ProposalHash", proposalAckDetails.ProposalHash)
+		log.Debug("val dep", "val", v, "depositValue", depositValue, "ProposalAckVoteType", proposalAckDetails.ProposalAckVoteType, "ProposalHash", proposalAckDetails.ProposalHash)
 
 		if proposalAckDetails.ProposalAckVoteType == VOTE_TYPE_NIL {
 			if proposalAckDetails.ProposalHash.IsEqualTo(proposalHash) == false { //can be OK VOTE as well
 				if voteType != VOTE_TYPE_OK { //can be ok VOTE as well
-					log.Trace("proposal hash 2", "proposalHash", proposalHash, "proposalAckDetails.ProposalHash", proposalAckDetails.ProposalHash)
+					log.Debug("proposal hash 2", "proposalHash", proposalHash, "proposalAckDetails.ProposalHash", proposalAckDetails.ProposalHash)
 					return errors.New("invalid proposal hash")
 				}
 				continue
@@ -424,7 +424,7 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 		} else if proposalAckDetails.ProposalAckVoteType == VOTE_TYPE_OK {
 			if proposalAckDetails.ProposalHash.IsEqualTo(proposalHash) == false {
 				if voteType != VOTE_TYPE_NIL { //can be NIL VOTE as well
-					log.Trace("proposal hash 1", "proposalHash", proposalHash, "proposalAckDetails.ProposalHash", proposalAckDetails.ProposalHash, "voteType", voteType)
+					log.Debug("proposal hash 1", "proposalHash", proposalHash, "proposalAckDetails.ProposalHash", proposalAckDetails.ProposalHash, "voteType", voteType)
 				}
 				continue
 			}
@@ -439,7 +439,7 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 		}
 	}
 
-	log.Trace("ValidatePackets", "minDepositRequired", minDepositRequired, "okVotesDepositValue", okVotesDepositValue, "nilVotesDepositValue", nilVotesDepositValue,
+	log.Debug("ValidatePackets", "minDepositRequired", minDepositRequired, "okVotesDepositValue", okVotesDepositValue, "nilVotesDepositValue", nilVotesDepositValue,
 		"voteType", voteType, "proposalAckDetails", len(packetMap.proposalAckDetailsMap), "txns", len(txns))
 	var precommitHash common.Hash
 	if voteType == VOTE_TYPE_NIL {
@@ -521,7 +521,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	if blockConsensusData.SlashedBlockProposers != nil {
 		for _, proposer := range blockConsensusData.SlashedBlockProposers {
 			nilVotedProposers[proposer] = true
-			log.Trace("proposer slashed", "proposer", proposer)
+			log.Debug("proposer slashed", "proposer", proposer)
 		}
 	}
 
@@ -548,25 +548,25 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 
 	for v, _ := range filteredValidators {
 		filteredValidatorDepositMap[v] = valMap[v]
-		log.Trace("ValidateBlockConsensusDataInner", "validator", v, "deposit value after filtering", valMap[v], "blockNumber", blockNumber)
+		log.Debug("ValidateBlockConsensusDataInner", "validator", v, "deposit value after filtering", valMap[v], "blockNumber", blockNumber)
 	}
 
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		for valAddr, valDetails := range *valDetailsMap {
 			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidatorDepositMap
 				delete(*valDetailsMap, valAddr)
-				log.Trace("ValidateBlockConsensusDataInner ValidationPaused remove", "validator", valAddr, "blockNumber", blockNumber)
+				log.Debug("ValidateBlockConsensusDataInner ValidationPaused remove", "validator", valAddr, "blockNumber", blockNumber)
 				continue
 			}
 			_, ok := filteredValidatorDepositMap[valAddr]
 			if ok == false {
-				log.Trace("ValidateBlockConsensusDataInner filteredValidatorDepositMap remove", "validator", valAddr, "blockNumber", blockNumber)
+				log.Debug("ValidateBlockConsensusDataInner filteredValidatorDepositMap remove", "validator", valAddr, "blockNumber", blockNumber)
 				delete(*valDetailsMap, valAddr)
 			}
 		}
 	}
 
-	log.Trace("ValidateBlockConsensusDataInner before getBlockProposer", "len(filteredValidatorDepositMap)",
+	log.Debug("ValidateBlockConsensusDataInner before getBlockProposer", "len(filteredValidatorDepositMap)",
 		len(filteredValidatorDepositMap), "len(valDetailsMap)", len(*valDetailsMap), "blockNumber", blockNumber, "consensusContext", consensusContext)
 	roundBlockValidators := make(map[byte]common.Address)
 	for r := byte(1); r <= blockConsensusData.Round; r++ {
@@ -574,7 +574,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		if err != nil {
 			return err
 		}
-		log.Trace("roundBlockValidators[r]", "r", r, "roundBlockValidators[r]", roundBlockValidators[r])
+		log.Debug("roundBlockValidators[r]", "r", r, "roundBlockValidators[r]", roundBlockValidators[r])
 	}
 
 	if blockAdditionalConsensusData.ConsensusPackets == nil {
@@ -617,7 +617,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 
 			_, ok := packetRoundMap[r]
 			if ok == false {
-				log.Trace("could not find packetMap for round", "r", r)
+				log.Debug("could not find packetMap for round", "r", r)
 				return errors.New("could not find packetMap for round")
 			}
 		}
@@ -643,7 +643,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 
 		if blockConsensusData.ProposalHash.IsEqualTo(ZERO_HASH) {
-			log.Trace("ValidateBlockConsensusData ProposalHash zero_hash")
+			log.Debug("ValidateBlockConsensusData ProposalHash zero_hash")
 			return errors.New("ValidateBlockConsensusData ProposalHash zero_hash")
 		}
 
@@ -661,7 +661,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 				for _, txn := range txns {
 					_, ok := selectedTxnsMap[txn]
 					if ok == false {
-						log.Trace("ValidateBlockConsensusData txn", "txn", txn)
+						log.Debug("ValidateBlockConsensusData txn", "txn", txn)
 						return errors.New("ValidateBlockConsensusData txns should be a subset of blockConsensusData.SelectedTransactions")
 					}
 				}
@@ -672,12 +672,12 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 			for r := byte(1); r < blockConsensusData.Round; r++ {
 				_, ok := nilVotedProposers[roundBlockValidators[r]]
 				if ok == false {
-					log.Trace("NilVotesProposer 2", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash)
+					log.Debug("NilVotesProposer 2", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash)
 					return errors.New("nilVotedProposers 2")
 				}
 			}
 			if len(blockConsensusData.SlashedBlockProposers) < int(blockConsensusData.Round-1) {
-				log.Trace("SlashedBlockProposers", "len(nilVotedProposers)", len(nilVotedProposers), "int(blockConsensusData.Round)", int(blockConsensusData.Round))
+				log.Debug("SlashedBlockProposers", "len(nilVotedProposers)", len(nilVotedProposers), "int(blockConsensusData.Round)", int(blockConsensusData.Round))
 				return errors.New("ValidateBlockConsensusData SlashedBlockProposers length")
 			}
 		}
@@ -689,7 +689,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 
 	} else {
-		log.Trace("ValidateBlockConsensusData unexpected vote type", "vote type", blockConsensusData.VoteType)
+		log.Debug("ValidateBlockConsensusData unexpected vote type", "vote type", blockConsensusData.VoteType)
 		return errors.New("ValidateBlockConsensusData unexpected vote type")
 	}
 
