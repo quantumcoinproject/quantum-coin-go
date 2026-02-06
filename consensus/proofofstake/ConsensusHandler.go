@@ -473,7 +473,7 @@ func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (boo
 	nextValidationBlock := valDetails.LastNiLBlock.Uint64() + OFFLINE_VALIDATOR_DEFER_COUNT
 	result := currentBlockNumber >= nextValidationBlock
 
-	log.Info("canValidate", "validator", valDetails.Validator, "result", result, "currentBlockNumber", currentBlockNumber, "LastNiLBlock", valDetails.LastNiLBlock,
+	log.Debug("canValidate", "validator", valDetails.Validator, "result", result, "currentBlockNumber", currentBlockNumber, "LastNiLBlock", valDetails.LastNiLBlock,
 		"NilBlockCount", valDetails.NilBlockCount, "nextValidationBlock", nextValidationBlock)
 
 	return result, nextValidationBlock
@@ -508,7 +508,7 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool
 
 	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
 	result := currentBlockNumber >= nextProposalBlock
-	log.Info("canPropose", "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount,
+	log.Debug("canPropose", "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount,
 		"slotsMissed", slotsMissed, "blockDelay", blockDelay, "nextProposalBlock", nextProposalBlock, "maxBlockDelay", maxBlockDelay,
 		"currentBlockNumber", currentBlockNumber, "canPropose", result, "validator", valDetails.Validator)
 	return result, nextProposalBlock
@@ -603,6 +603,8 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 			return err
 		}
 		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
+		log.Debug("initializeBlockStateIfRequired", "blockContext", blockContext, "post consensusContext", blockStateDetails.consensusContext, "blockContext", blockContext[:],
+			"preFilterValidatorCount", preFilterValidatorCount, "blockNumber", blockNumber)
 	} else {
 		blockStateDetails.consensusContext = parentHash
 	}

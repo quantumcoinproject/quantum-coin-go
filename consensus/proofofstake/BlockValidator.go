@@ -783,6 +783,8 @@ func ValidateBlockConsensusData(block *types.Block, validatorDepositMap *map[com
 			return err
 		}
 		consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
+		log.Debug("consensusContext", "blockContext", blockContext, "post consensusContext", consensusContext, "blockContext[:]", len(blockContext),
+			"preFilterValidatorCount", preFilterValidatorCount, "block", header.Number.Uint64())
 	}
 
 	return ValidateBlockConsensusDataInner(txnList, header.ParentHash, blockConsensusData, blockAdditionalConsensusData, validatorDepositMap, header.Number.Uint64(), valDetailsMap, consensusContext)
