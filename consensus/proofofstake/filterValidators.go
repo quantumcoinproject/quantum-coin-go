@@ -44,6 +44,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 				validatorsDepositMap[val] = depositValue
 			}
 		}
+		log.Trace("filterValidators before normalizeDeposit", "val", val, "depositValue", depositValue, "block", blockNumber)
 		totalDepositValue = common.SafeAddBigInt(totalDepositValue, depositValue)
 		valCount = valCount + 1
 	}
@@ -79,6 +80,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	for val, _ := range filteredValidators {
 		depositValue := validatorsDepositMap[val]
 		filteredDepositValue = common.SafeAddBigInt(filteredDepositValue, depositValue)
+		log.Trace("filterValidators after normalizeDeposit", "val", val, "depositValue", depositValue, "block", blockNumber)
 	}
 
 	if filteredDepositValue.Cmp(MIN_BLOCK_DEPOSIT) == -1 {
