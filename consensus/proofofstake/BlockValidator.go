@@ -548,6 +548,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 
 	for v, _ := range filteredValidators {
 		filteredValidatorDepositMap[v] = valMap[v]
+		log.Trace("ValidateBlockConsensusDataInner", "validator", v, "deposit value after filtering", valMap[v])
 	}
 
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
