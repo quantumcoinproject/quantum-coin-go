@@ -100,7 +100,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	blockMinWeightedProposalsRequired = common.SafeRelativePercentageBigInt(filteredDepositValue, minPercentage)
 
 	log.Debug("filteredValidators", "val count", len(filteredValidators), "filteredDepositValue",
-		filteredDepositValue, "blockMinWeightedProposalsRequired", blockMinWeightedProposalsRequired, "origValCount", origValCount)
+		filteredDepositValue, "blockMinWeightedProposalsRequired", blockMinWeightedProposalsRequired, "origValCount", origValCount, "blockNumber", blockNumber)
 
 	return filteredValidators, filteredDepositValue, blockMinWeightedProposalsRequired, nil
 }

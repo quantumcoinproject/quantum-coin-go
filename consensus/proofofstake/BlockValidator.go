@@ -548,22 +548,26 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 
 	for v, _ := range filteredValidators {
 		filteredValidatorDepositMap[v] = valMap[v]
-		log.Trace("ValidateBlockConsensusDataInner", "validator", v, "deposit value after filtering", valMap[v])
+		log.Trace("ValidateBlockConsensusDataInner", "validator", v, "deposit value after filtering", valMap[v], "blockNumber", blockNumber)
 	}
 
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
 		for valAddr, valDetails := range *valDetailsMap {
 			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidatorDepositMap
 				delete(*valDetailsMap, valAddr)
+				log.Trace("ValidateBlockConsensusDataInner ValidationPaused remove", "validator", valAddr, "blockNumber", blockNumber)
 				continue
 			}
 			_, ok := filteredValidatorDepositMap[valAddr]
 			if ok == false {
+				log.Trace("ValidateBlockConsensusDataInner filteredValidatorDepositMap remove", "validator", valAddr, "blockNumber", blockNumber)
 				delete(*valDetailsMap, valAddr)
 			}
 		}
 	}
 
+	log.Trace("ValidateBlockConsensusDataInner before getBlockProposer", "len(filteredValidatorDepositMap)",
+		len(filteredValidatorDepositMap), "len(valDetailsMap)", len(*valDetailsMap), "blockNumber", blockNumber, "consensusContext", consensusContext)
 	roundBlockValidators := make(map[byte]common.Address)
 	for r := byte(1); r <= blockConsensusData.Round; r++ {
 		roundBlockValidators[r], err = getBlockProposer(parentHash, &filteredValidatorDepositMap, r, valDetailsMap, blockNumber, consensusContext)
