@@ -556,7 +556,12 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 		} else {
 			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}, blockBytes).Bytes()
 			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}, blockBytes).Bytes()
-			log.Debug("sort.Slice", "vi", vi, "vj", vj, "validators[i]", validators[i], "validators[j]", validators[i])
+			val := bytes.Compare(vi, vj)
+			if val == 0 {
+				log.Debug("getBlockProposerV2 before sort", "vi", vi, "vj", vj, "contextHash.Bytes()", contextHash.Bytes(), "validators[i].Bytes()", validators[i].Bytes(),
+					"[]byte{round}", []byte{round}, "blockBytes", blockBytes)
+				panic("hello")
+			}
 			return bytes.Compare(vi, vj) == -1
 		}
 	})
