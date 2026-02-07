@@ -38,6 +38,7 @@ type PacketParseResult struct {
 }
 
 var MAX_PACKETS_SAFETY_LIMIT = (MAX_VALIDATORS * 3 * int(MAX_ROUND+1)) + 2 //number 3 is the three phases of BFT, number 2 is proposals for each round and MAX_ROUND+1 is to account for any unknowns, instead of just using MAX_ROUND
+var ErrorBlock = uint64(3443526)
 
 func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *eth.ConsensusPacket, filteredValidatorDepositMap map[common.Address]*big.Int,
 	blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, consensusContext common.Hash, resultsChan chan *PacketParseResult) {
@@ -150,9 +151,11 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 		}
 		if blockProposer.IsEqualTo(validator) == false {
 			log.Warn("invalid block proposer", "expected", blockProposer, "actual", validator)
-			err = errors.New("invalid block proposer")
-			resultsChan <- &PacketParseResult{err: err}
-			return
+			if blockNumber != ErrorBlock {
+				err = errors.New("invalid block proposer")
+				resultsChan <- &PacketParseResult{err: err}
+				return
+			}
 		}
 		log.Debug("parseconsensuspackets propose", "details.Round", details.Round)
 		packetDetail := &PacketParseResult{
@@ -613,7 +616,9 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 				_, ok := nilVotedProposers[roundBlockValidators[r]]
 				if ok == false {
 					log.Warn("NilVotesProposer doesn't match expected", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash, "expected proposer", slashedBlockProposer)
-					return errors.New("nilVotedProposers 1")
+					if blockNumber != ErrorBlock {
+						return errors.New("nilVotedProposers 1")
+					}
 				}
 			}
 
@@ -641,7 +646,11 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 
 		if blockConsensusData.BlockProposer.IsEqualTo(roundBlockValidators[blockConsensusData.Round]) == false {
-			return errors.New("ValidateBlockConsensusData BlockProposer true")
+			log.Warn("ValidateBlockConsensusData BlockProposer mismatch", "blockConsensusData.BlockProposer", blockConsensusData.BlockProposer,
+				"roundBlockValidators[blockConsensusData.Round]", roundBlockValidators[blockConsensusData.Round])
+			if blockNumber != ErrorBlock {
+				return errors.New("ValidateBlockConsensusData BlockProposer true")
+			}
 		}
 
 		if blockConsensusData.ProposalHash.IsEqualTo(ZERO_HASH) {
@@ -674,8 +683,10 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 			for r := byte(1); r < blockConsensusData.Round; r++ {
 				_, ok := nilVotedProposers[roundBlockValidators[r]]
 				if ok == false {
-					log.Debug("NilVotesProposer 2", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash)
-					return errors.New("nilVotedProposers 2")
+					log.Warn("NilVotesProposer 2", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash)
+					if blockNumber != ErrorBlock {
+						return errors.New("nilVotedProposers 2")
+					}
 				}
 			}
 			if len(blockConsensusData.SlashedBlockProposers) < int(blockConsensusData.Round-1) {

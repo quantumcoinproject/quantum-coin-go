@@ -154,6 +154,7 @@ type P2PHandler struct {
 	rebroadcastLastCleanupTime time.Time
 	consensusPacketHelper      *ConsensusPacketHelper
 	StaticNodes                []*enode.Node
+	StaticNodeMap              map[string]bool
 }
 
 var lock = &sync.Mutex{}
@@ -210,6 +211,14 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		consensusPacketHelper:      NewConsensusPacketHelper(config.Chain),
 		StaticNodes:                config.StaticNodes,
 	}
+	h.StaticNodeMap = make(map[string]bool)
+	if h.StaticNodes != nil {
+		for _, node := range h.StaticNodes {
+			h.StaticNodeMap[node.IP().String()] = true
+			h.StaticNodeMap[node.ID().String()] = true
+		}
+	}
+
 	if h.rebroadcastCount == 0 {
 		log.Info("Rebroadcast count is 0, overriding to 1")
 		h.rebroadcastCount = 1
@@ -513,9 +522,19 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 			log.Debug("Propagating dangling block", "number", block.Number(), "hash", hash)
 			return
 		}
+		//Send to all static nodes first
+		for _, peer := range peers {
+			if h.StaticNodeMap[peer.ID()] == true {
+				peer.AsyncSendNewBlock(block, td)
+			}
+		}
+
 		// Send the block to a subset of our peers
 		transfer := peers[:h.getSendCount(len(peers))]
 		for _, peer := range transfer {
+			if h.StaticNodeMap[peer.ID()] == true {
+				continue //we already send to static nodes above
+			}
 			peer.AsyncSendNewBlock(block, td)
 		}
 		log.Write(logLevel, "Propagated block", "number", block.NumberU64(), "hash", hash, "recipients", len(transfer), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))

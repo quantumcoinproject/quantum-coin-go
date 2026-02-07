@@ -172,6 +172,7 @@ func (h *EthHandler) handleHeaders(peer *eth.Peer, headers []*types.Header) erro
 	}
 	// Filter out any explicitly requested headers, deliver the rest to the Downloader
 	filter := len(headers) == 1
+	log.Debug("handleHeaders Before filtering headers", "peer", peer.RemoteAddr(), "headers", len(headers))
 	if filter {
 		// If it's a potential sync progress check, validate the content and advertised chain weight
 		if p.syncDrop != nil && headers[0].Number.Uint64() == h.checkpointNumber {

@@ -986,7 +986,17 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	}
 
 	// Assemble and return the final block for sealing
-	return types.NewBlock(header, txs, receipts, trie.NewStackTrie(nil)), nil
+	block := types.NewBlock(header, txs, receipts, trie.NewStackTrie(nil))
+
+	//Verify block once more before sealing, so that non-validator path is tested
+	err = c.VerifyBlock(chain, block)
+	if err != nil {
+		log.Warn("FinalizeAndAssembleWithConsensus VerifyBlock", "error", err)
+		return nil, err
+	}
+	log.Debug("FinalizeAndAssembleWithConsensus VerifyBlock ok")
+
+	return block, nil
 }
 
 // Authorize injects a private key into the consensus engine to mint new blocks
