@@ -542,14 +542,13 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	blockBytes := common.Uint64ToBytes(blockNumber)
 
 	validators := make([]common.Address, len(selectedValMap))
-	j := 0
+	k := 0
 	valStr := ""
 	valHashMap := make(map[common.Hash]common.Address)
 	for valAddr, _ := range selectedValMap {
-		validators[j] = valAddr
-		j = j + 1
+		validators[k] = valAddr
 		log.Debug("getBlockProposerV2 before sort", "validator", valAddr)
-		valStr = valStr + "," + validators[j].Hex()
+		valStr = valStr + "," + valAddr.Hex()
 		valHash := crypto.Keccak256Hash(contextHash.Bytes(), valAddr.Bytes(), []byte{round}, common.Uint64ToBytes(blockNumber))
 		_, ok := valHashMap[valHash]
 		if ok {
@@ -557,6 +556,7 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 			panic("hash collision check failed")
 		}
 		valHashMap[valHash] = valAddr
+		k = k + 1
 	}
 	log.Debug("getBlockProposerV2", "contextHash", contextHash, "round", round, "blockBytes", blockBytes, "valStr", valStr)
 
@@ -588,6 +588,8 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 
 	log.Debug("getBlockProposerV2 final", "proposer", proposer, "round", round, "contextHash", contextHash, "valCount selected", len(validators), "valcount before", len(*validatorMap),
 		"OfflineValidatorV4StartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, "blockBytes", blockBytes, "valArr hash after sort", common.BytesToHash(valArrAfter).Hex())
+	
+	panic("exit")
 
 	return proposer, nil
 }
