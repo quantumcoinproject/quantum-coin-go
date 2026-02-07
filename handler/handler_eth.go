@@ -33,10 +33,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
 
-const REBROADCAST_CLEANUP_MILLI_SECONDS = 300000
-const REBROADCAST_CLEANUP_TIMER_MILLI_SECONDS = 900000
-const REBROADCAST_MIN_DELAY_PACKET_HASH = 30000
-
 // EthHandler implements the eth.Backend interface to handle the various network
 // packets that are sent as replies or broadcasts.
 type EthHandler P2PHandler
@@ -311,50 +307,15 @@ func (h *EthHandler) handlePeerList(peer *eth.Peer, packet *eth.PeerListPacket) 
 	return h.handlePeerListFn(packet.PeerList)
 }
 
-func (h *EthHandler) ShouldRebroadcastIfYesSetFlag(packetHash common.Hash) bool {
-	h.rebroadcastLock.Lock()
-	defer h.rebroadcastLock.Unlock()
-
-	lastRebroadCast, ok := h.rebroadcastMap[packetHash]
-	if ok == false {
-		h.rebroadcastMap[packetHash] = time.Now().UnixNano()
-
-		//Lazy cleanup
-		if Elapsed(h.rebroadcastLastCleanupTime) > REBROADCAST_CLEANUP_TIMER_MILLI_SECONDS {
-			log.Debug("Cleaning up rebroadcast queue")
-			for k, v := range h.rebroadcastMap {
-				start := v / int64(time.Millisecond)
-				end := time.Now().UnixNano() / int64(time.Millisecond)
-				diff := end - start
-				if diff > REBROADCAST_CLEANUP_MILLI_SECONDS {
-					log.Debug("Cleaning up rebroadcast packet hash", "packetHash", k.Hex())
-					delete(h.rebroadcastMap, k)
-				}
-			}
-			h.rebroadcastLastCleanupTime = time.Now()
-		}
-
-		log.Trace("ShouldRebroadcastIfYesSetFlag true first time", "packet", packetHash.Hex())
-		return true
-	}
-
-	start := lastRebroadCast / int64(time.Millisecond)
-	end := time.Now().UnixNano() / int64(time.Millisecond)
-	diff := end - start
-	if diff > REBROADCAST_MIN_DELAY_PACKET_HASH {
-		h.rebroadcastMap[packetHash] = time.Now().UnixNano()
-		log.Trace("ShouldRebroadcastIfYesSetFlag true", "packet", packetHash.Hex())
-		return true
-	}
-
-	log.Trace("ShouldRebroadcastIfYesSetFlag false", "packet", packetHash.Hex())
-	return false
-}
-
 func (h *EthHandler) rebroadcast(incomingPeerId string, packet *eth.ConsensusPacket) {
 	log.Trace("rebroadcast", "packet", packet.Hash().Hex(), "rebroadcastCount", h.rebroadcastCount)
 
 	if h.consensusHandler.Handler.ShouldRebroadCast(packet, incomingPeerId) == false {
+		return
+	}
+
+	if defaults.SkipRebroadcastConsensusPackets() {
+		log.Debug("Skip rebroadcast consensus packet")
 		return
 	}
 
@@ -374,11 +335,4 @@ func (h *EthHandler) rebroadcast(incomingPeerId string, packet *eth.ConsensusPac
 		log.Trace("Rebroadcast ConsensusPacket", "incoming peer", incomingPeerId, "outgoing peer", p.ID(), "parentHash", packet.ParentHash, "packetHash", packet.Hash())
 		p.AsyncSendConsensusPacket(packet)
 	}
-}
-
-func Elapsed(startTime time.Time) int64 {
-	end := time.Now().UnixNano() / int64(time.Millisecond)
-	start := startTime.UnixNano() / int64(time.Millisecond)
-	diff := end - start
-	return diff
 }
