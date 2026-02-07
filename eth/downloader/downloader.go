@@ -803,14 +803,13 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 }
 
 func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (commonAncestor uint64, err error) {
-	//from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 	var from int64
 	if localHeight > MaxAncestor {
 		from = int64(localHeight - MaxAncestor)
 	}
 	count := 2
 	skip := 0
-	max := localHeight + 16
+	maxVal := localHeight + 16
 
 	p.log.Trace("Span searching for common ancestor (new)", "count", count, "from", from, "skip", skip)
 	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
@@ -852,10 +851,10 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			// Check if a common ancestor was found
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
-				log.Debug("findAncestorSpanSearch", "header received", headers[i].Number.Uint64(), "i", i, "from", from, "max", max, "hash", headers[i].Hash())
+				log.Debug("findAncestorSpanSearch", "header received", headers[i].Number.Uint64(), "i", i, "from", from, "maxVal", maxVal, "hash", headers[i].Hash())
 				// Skip any headers that underflow/overflow our requested set
-				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > max {
-					log.Debug("findAncestorSpanSearch not in range", "header", headers[i].Number.Uint64(), "i", i, "from", from, "max", max)
+				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > maxVal {
+					log.Debug("findAncestorSpanSearch not in range", "header", headers[i].Number.Uint64(), "i", i, "from", from, "maxVal", maxVal)
 					continue
 				}
 				// Otherwise check if we already know the header or not
@@ -875,7 +874,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 					number, hash = n, h
 					break
 				}
-				log.Debug("findAncestorSpanSearch header not known", "header", headers[i].Number.Uint64(), "i", i, "from", from, "max", max)
+				log.Debug("findAncestorSpanSearch header not known", "header", headers[i].Number.Uint64(), "i", i, "from", from, "maxVal", maxVal)
 			}
 
 		case <-timeout:
