@@ -810,7 +810,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 	}
 	count := 2
 	skip := 0
-	max := uint64(16)
+	max := localHeight + 16
 
 	p.log.Trace("Span searching for common ancestor (new)", "count", count, "from", from, "skip", skip)
 	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
@@ -842,7 +842,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			// Make sure the peer's reply conforms to the request
 			for i, header := range headers {
 				expectNumber := from + int64(i)*int64(skip+1)
-				log.Debug("findAncestorSpanSearch", "header", headers[i].Number.Uint64(), "expectNumber", expectNumber)
+				log.Debug("findAncestorSpanSearch", "header received", headers[i].Number.Uint64(), "expectNumber", expectNumber, "hash", headers[i].Hash())
 				if number := header.Number.Int64(); number != expectNumber {
 					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", expectNumber, "received", number)
 					return 0, fmt.Errorf("%w: %v", errInvalidChain, errors.New("head headers broke chain ordering"))
@@ -852,7 +852,7 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			// Check if a common ancestor was found
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
-				log.Debug("findAncestorSpanSearch", "header", headers[i].Number.Uint64(), "i", i, "from", from, "max", max)
+				log.Debug("findAncestorSpanSearch", "header received", headers[i].Number.Uint64(), "i", i, "from", from, "max", max, "hash", headers[i].Hash())
 				// Skip any headers that underflow/overflow our requested set
 				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > max {
 					log.Debug("findAncestorSpanSearch not in range", "header", headers[i].Number.Uint64(), "i", i, "from", from, "max", max)
