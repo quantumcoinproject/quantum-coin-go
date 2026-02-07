@@ -556,11 +556,19 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 		} else {
 			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}, blockBytes).Bytes()
 			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}, blockBytes).Bytes()
+			log.Debug("sort.Slice", "vi", vi, "vj", vj, "validators[i]", validators[i], "validators[j]", validators[i])
 			return bytes.Compare(vi, vj) == -1
 		}
 	})
 
 	proposer = validators[0]
+
+	sort.Slice(validators, func(i, j int) bool {
+		vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
+		vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
+		return bytes.Compare(vi, vj) == -1
+	})
+	log.Warn("getBlockProposerV2 alt", "proposer", proposer, "before OfflineValidatorV4StartBlock", validators[0])
 
 	valArrAfter := make([]byte, 0)
 	for i, valAddr := range validators {
