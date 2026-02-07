@@ -610,7 +610,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 			if r < MAX_ROUND {
 				_, ok := nilVotedProposers[roundBlockValidators[r]]
 				if ok == false {
-					log.Info("NilVotesProposer 1", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash)
+					log.Info("NilVotesProposer doesn't match expected", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash)
 					return errors.New("nilVotedProposers 1")
 				}
 			}

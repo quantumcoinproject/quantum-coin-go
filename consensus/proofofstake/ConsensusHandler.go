@@ -481,6 +481,7 @@ func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (boo
 
 func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
 	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
+		log.Debug("canPropose no nil block", "currentBlockNumber", currentBlockNumber, "canPropose", true, "validator", valDetails.Validator)
 		return true, currentBlockNumber
 	}
 
