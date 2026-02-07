@@ -370,7 +370,7 @@ func (p *Peer) SendBlockHeaders(headers []*types.Header) error {
 
 // ReplyBlockHeaders is the eth/66 version of SendBlockHeaders.
 func (p *Peer) ReplyBlockHeaders(id uint64, headers []*types.Header) error {
-	log.Info("ReplyBlockHeaders", "id", p.id, "headers", len(headers))
+	log.Trace("ReplyBlockHeaders", "id", p.id, "headers", len(headers))
 	return p2p.Send(p.rw, BlockHeadersMsg, BlockHeadersPacket66{
 		RequestId:          id,
 		BlockHeadersPacket: headers,
@@ -385,7 +385,7 @@ func (p *Peer) SendBlockBodiesRLP(bodies []rlp.RawValue) error {
 
 // ReplyBlockBodiesRLP is the eth/66 version of SendBlockBodiesRLP.
 func (p *Peer) ReplyBlockBodiesRLP(id uint64, bodies []rlp.RawValue) error {
-	log.Info("ReplyBlockBodiesRLP", "id", p.id)
+	log.Trace("ReplyBlockBodiesRLP", "id", p.id)
 	// Not packed into BlockBodiesPacket to avoid RLP decoding
 	return p2p.Send(p.rw, BlockBodiesMsg, BlockBodiesRLPPacket66{
 		RequestId:            id,
