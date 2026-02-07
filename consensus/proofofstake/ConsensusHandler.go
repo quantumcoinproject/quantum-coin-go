@@ -539,16 +539,25 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 		}
 	}
 
+	blockBytes := common.Uint64ToBytes(blockNumber)
+
 	validators := make([]common.Address, len(selectedValMap))
 	j := 0
 	valStr := ""
+	valHashMap := make(map[common.Hash]common.Address)
 	for valAddr, _ := range selectedValMap {
 		validators[j] = valAddr
 		j = j + 1
 		log.Debug("getBlockProposerV2 before sort", "validator", valAddr)
 		valStr = valStr + "," + validators[j].Hex()
+		valHash := crypto.Keccak256Hash(contextHash.Bytes(), valAddr.Bytes(), []byte{round}, common.Uint64ToBytes(blockNumber))
+		_, ok := valHashMap[valHash]
+		if ok {
+			log.Debug("getBlockProposerV2 hash check", "valAddr", valAddr, "other valAddr", valHashMap[valHash])
+			panic("hash collision check failed")
+		}
+		valHashMap[valHash] = valAddr
 	}
-	blockBytes := common.Uint64ToBytes(blockNumber)
 	log.Debug("getBlockProposerV2", "contextHash", contextHash, "round", round, "blockBytes", blockBytes, "valStr", valStr)
 
 	sort.Slice(validators, func(i, j int) bool {
@@ -563,7 +572,7 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 			if val == 0 {
 				log.Debug("getBlockProposerV2 before sort", "vi", vi, "vj", vj, "contextHash.Bytes()", contextHash.Bytes(), "validators[i].Bytes()", validators[i].Bytes(),
 					"[]byte{round}", []byte{round}, "blockBytes", blockBytes)
-				panic("hello")
+				panic("hash collision")
 			}
 			return bytes.Compare(vi, vj) == -1
 		}
