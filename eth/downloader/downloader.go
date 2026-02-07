@@ -64,6 +64,8 @@ var (
 	PeerErrorLock sync.Mutex
 	PeerErrorMap  = make(map[string]uint)
 	PeerMaxErrors = uint(16)
+
+	MaxAncestor = uint64(5)
 )
 
 var (
@@ -754,7 +756,7 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
 	// Figure out the valid ancestor range to prevent rewrite attacks
 	var (
-		floor        = int64(-1)
+		//floor        = int64(-1)
 		localHeight  uint64
 		remoteHeight = remoteHeader.Number.Uint64()
 	)
@@ -767,30 +769,38 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	default:
 		localHeight = d.lightchain.CurrentHeader().Number.Uint64()
 	}
-	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
+	var ancestor uint64
+	if localHeight > MaxAncestor {
+		ancestor = 1
+	} else {
+		ancestor = localHeight - MaxAncestor
+	}
+	p.log.Debug("Common ancestor", "local", localHeight, "remote", remoteHeight, "ancestor", ancestor)
 
-	// Recap floor value for binary search
-	maxForkAncestry := fullMaxForkAncestry
-	if localHeight >= maxForkAncestry {
-		// We're above the max reorg threshold, find the earliest fork point
-		floor = int64(localHeight - maxForkAncestry)
-	}
-	ancestor, err := d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
-	if err == nil {
-		return ancestor, nil
-	}
-	// The returned error was not nil.
-	// If the error returned does not reflect that a common ancestor was not found, return it.
-	// If the error reflects that a common ancestor was not found, continue to binary search,
-	// where the error value will be reassigned.
-	if !errors.Is(err, errNoAncestorFound) {
-		return 0, err
-	}
+	/*
+		// Recap floor value for binary search
+		maxForkAncestry := fullMaxForkAncestry
+		if localHeight >= maxForkAncestry {
+			// We're above the max reorg threshold, find the earliest fork point
+			floor = int64(localHeight - maxForkAncestry)
+		}
+		ancestor, err := d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
+		if err == nil {
+			return ancestor, nil
+		}
+		// The returned error was not nil.
+		// If the error returned does not reflect that a common ancestor was not found, return it.
+		// If the error reflects that a common ancestor was not found, continue to binary search,
+		// where the error value will be reassigned.
+		if !errors.Is(err, errNoAncestorFound) {
+			return 0, err
+		}
 
-	ancestor, err = d.findAncestorBinarySearch(p, mode, remoteHeight, floor)
-	if err != nil {
-		return 0, err
-	}
+		ancestor, err = d.findAncestorBinarySearch(p, mode, remoteHeight, floor)
+		if err != nil {
+			return 0, err
+		}*/
+
 	return ancestor, nil
 }
 
