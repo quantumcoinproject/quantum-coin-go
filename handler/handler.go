@@ -28,6 +28,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/forkid"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/downloader"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/fetcher"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
@@ -514,6 +515,10 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
+		if defaults.SkipPropagateBlock() {
+			log.Write(logLevel, "Skipping propagate block", "number", block.NumberU64())
+			return
+		}
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
 		var td *big.Int
 		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
