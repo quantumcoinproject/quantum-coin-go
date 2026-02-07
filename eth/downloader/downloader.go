@@ -20,6 +20,11 @@ package downloader
 import (
 	"errors"
 	"fmt"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
@@ -32,10 +37,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
-	"math/big"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 var (
@@ -894,6 +895,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 
 		ttl := d.peers.rates.TargetTimeout()
 		timeout := time.After(ttl)
+		log.Debug("ttl timeout", "ttl", ttl)
 
 		go p.peer.RequestHeadersByNumber(check, 1, 0, false)
 
@@ -912,7 +914,11 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 				// Make sure the peer actually gave something valid
 				headers := packet.(*headerPack).headers
 				if len(headers) != 1 {
-					p.log.Warn("Multiple headers for single request", "headers", len(headers))
+					if len(headers) == 0 {
+						p.log.Warn("Zero headers arrived", "PeerId", packet.PeerId())
+					} else {
+						p.log.Warn("Multiple headers for single request", "headers", len(headers), "PeerId", packet.PeerId())
+					}
 					return 0, fmt.Errorf("%w: multiple headers (%d) for single request", errBadPeer, len(headers))
 				}
 				arrived = true
@@ -947,7 +953,7 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 				hash = h
 
 			case <-timeout:
-				p.log.Debug("Waiting for search header timed out", "elapsed", ttl)
+				p.log.Debug("Waiting for search header timed out", "elapsed", ttl, "peer", p.id)
 				return 0, errTimeout
 
 			case <-d.bodyCh:
