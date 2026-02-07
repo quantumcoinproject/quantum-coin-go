@@ -543,6 +543,7 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	for valAddr, _ := range selectedValMap {
 		validators[j] = valAddr
 		j = j + 1
+		log.Debug("getBlockProposerV2 before sort", "validator", valAddr)
 	}
 	blockBytes := common.Uint64ToBytes(blockNumber)
 
@@ -559,8 +560,15 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	})
 
 	proposer = validators[0]
-	log.Debug("getBlockProposerV2", "proposer", proposer, "round", round, "contextHash", contextHash, "valCount selected", len(validators), "valcount before", len(*validatorMap),
-		"OfflineValidatorV4StartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock)
+
+	valArrAfter := make([]byte, 0)
+	for i, valAddr := range validators {
+		valArrAfter = append(valArrAfter, valAddr.Bytes()...)
+		log.Debug("getBlockProposerV2 after sort", "validator", valAddr, "i", i)
+	}
+
+	log.Debug("getBlockProposerV2 final", "proposer", proposer, "round", round, "contextHash", contextHash, "valCount selected", len(validators), "valcount before", len(*validatorMap),
+		"OfflineValidatorV4StartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, "blockBytes", blockBytes, "valArr hash after sort", common.BytesToHash(valArrAfter).Hex())
 
 	return proposer, nil
 }
