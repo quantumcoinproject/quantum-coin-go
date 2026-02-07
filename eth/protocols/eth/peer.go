@@ -19,6 +19,7 @@ package eth
 import (
 	"math/big"
 	"math/rand"
+	"runtime/debug"
 	"sync"
 
 	mapset "github.com/deckarep/golang-set"
@@ -465,6 +466,7 @@ func (p *Peer) RequestHeadersByHash(origin common.Hash, amount int, skip int, re
 // RequestHeadersByNumber fetches a batch of blocks' headers corresponding to the
 // specified header query, based on the number of an origin block.
 func (p *Peer) RequestHeadersByNumber(origin uint64, amount int, skip int, reverse bool) error {
+	debug.PrintStack()
 	p.Log().Debug("Fetching batch of headers", "count", amount, "fromnum", origin, "skip", skip, "reverse", reverse)
 	query := GetBlockHeadersPacket{
 		Origin:  HashOrNumber{Number: origin},

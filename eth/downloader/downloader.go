@@ -710,6 +710,7 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 		count    int
 		MaxCount = MaxHeaderFetch / 16
 	)
+
 	// requestHead is the highest block that we will ask for. If requestHead is not offset,
 	// the highest block that we will get is 16 blocks back from head, which means we
 	// will fetch 14 or 15 blocks unnecessarily in the case the height difference
@@ -782,6 +783,8 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		log.Debug("findAncestor findAncestorSpanSearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
 		return ancestor, nil
 	}
+	log.Debug("findAncestor findAncestorSpanSearch error", "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor, "err", err)
+
 	// The returned error was not nil.
 	// If the error returned does not reflect that a common ancestor was not found, return it.
 	// If the error reflects that a common ancestor was not found, continue to binary search,
@@ -792,6 +795,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 
 	ancestor, err = d.findAncestorBinarySearch(p, mode, remoteHeight, floor)
 	if err != nil {
+		log.Debug("findAncestor findAncestorBinarySearch error", "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor, "err", err)
 		return 0, err
 	}
 	log.Debug("findAncestor findAncestorBinarySearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
@@ -799,9 +803,16 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 }
 
 func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (commonAncestor uint64, err error) {
-	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
+	//from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
+	var from int64
+	if localHeight > MaxAncestor {
+		from = int64(localHeight - MaxAncestor)
+	}
+	count := 2
+	skip := 0
+	max := uint64(16)
 
-	p.log.Trace("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
+	p.log.Trace("Span searching for common ancestor (new)", "count", count, "from", from, "skip", skip)
 	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
 
 	// Wait for the remote response to the head fetch
