@@ -569,10 +569,11 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 				delete(*valDetailsMap, valAddr)
 			}
 		}
+
+		log.Debug("ValidateBlockConsensusDataInner before getBlockProposer", "len(filteredValidatorDepositMap)",
+			len(filteredValidatorDepositMap), "len(valDetailsMap)", len(*valDetailsMap), "blockNumber", blockNumber, "consensusContext", consensusContext)
 	}
 
-	log.Debug("ValidateBlockConsensusDataInner before getBlockProposer", "len(filteredValidatorDepositMap)",
-		len(filteredValidatorDepositMap), "len(valDetailsMap)", len(*valDetailsMap), "blockNumber", blockNumber, "consensusContext", consensusContext)
 	roundBlockValidators := make(map[byte]common.Address)
 	for r := byte(1); r <= blockConsensusData.Round; r++ {
 		roundBlockValidators[r], err = getBlockProposer(parentHash, &filteredValidatorDepositMap, r, valDetailsMap, blockNumber, consensusContext)
