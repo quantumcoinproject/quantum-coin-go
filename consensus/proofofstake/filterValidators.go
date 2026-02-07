@@ -16,6 +16,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	filteredDepositValue *big.Int, blockMinWeightedProposalsRequired *big.Int, err error) {
 
 	validatorsDepositMap := *valDepMap
+	origValCount := len(validatorsDepositMap)
 
 	totalDepositValue := big.NewInt(0)
 	valCount := 0
@@ -44,6 +45,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 				validatorsDepositMap[val] = depositValue
 			}
 		}
+		log.Debug("filterValidators before normalizeDeposit", "val", val, "depositValue", depositValue, "block", blockNumber)
 		totalDepositValue = common.SafeAddBigInt(totalDepositValue, depositValue)
 		valCount = valCount + 1
 	}
@@ -79,6 +81,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	for val, _ := range filteredValidators {
 		depositValue := validatorsDepositMap[val]
 		filteredDepositValue = common.SafeAddBigInt(filteredDepositValue, depositValue)
+		log.Debug("filterValidators after normalizeDeposit", "val", val, "depositValue", depositValue, "block", blockNumber)
 	}
 
 	if filteredDepositValue.Cmp(MIN_BLOCK_DEPOSIT) == -1 {
@@ -95,6 +98,9 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	}
 
 	blockMinWeightedProposalsRequired = common.SafeRelativePercentageBigInt(filteredDepositValue, minPercentage)
+
+	log.Debug("filteredValidators", "val count", len(filteredValidators), "filteredDepositValue",
+		filteredDepositValue, "blockMinWeightedProposalsRequired", blockMinWeightedProposalsRequired, "origValCount", origValCount, "blockNumber", blockNumber)
 
 	return filteredValidators, filteredDepositValue, blockMinWeightedProposalsRequired, nil
 }
@@ -241,7 +247,6 @@ func normalizeDeposit(blockNumber uint64, valDepMap *map[common.Address]*big.Int
 			depMap[val] = maxCoins
 			hasChanges = true
 			log.Debug("normalizeDeposit first round", "val", val, "amt", amt, "reduction", reduction, "coinsReduced", coinsReduced, "maxCoins", maxCoins)
-
 		}
 		if valDetailsMap[val].NilBlockCount.Uint64() == 0 {
 			nonOfflineCoinsAfterReduction = common.SafeAddBigInt(nonOfflineCoinsAfterReduction, depMap[val])

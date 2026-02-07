@@ -430,7 +430,7 @@ func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[c
 	i := 0
 	for k, _ := range *filteredValidatorDepositMap {
 		validators[i].CopyFrom(k)
-		log.Trace("getBlockProposer validator", "v", validators[i], "i", i)
+		log.Debug("getBlockProposer validator", "v", validators[i], "i", i)
 		i = i + 1
 	}
 
@@ -441,7 +441,7 @@ func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[c
 	})
 
 	proposer = validators[0]
-	log.Trace("getBlockProposer", "proposer", proposer, "round", round)
+	log.Debug("getBlockProposer", "proposer", proposer, "round", round)
 
 	return proposer, nil
 }
@@ -481,6 +481,7 @@ func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (boo
 
 func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
 	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
+		log.Debug("canPropose no nil block", "currentBlockNumber", currentBlockNumber, "canPropose", true, "validator", valDetails.Validator)
 		return true, currentBlockNumber
 	}
 
@@ -524,6 +525,7 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	selectedValMap := make(map[common.Address]*ValidatorDetailsV2)
 	for valAddr, valDetails := range *validatorMap {
 		canProp, _ := canPropose(valDetails, blockNumber)
+		log.Debug("getBlockProposerV2", "valAddr", valAddr, "canPropose", canProp)
 		if canProp == false {
 			continue
 		}
@@ -558,7 +560,9 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	})
 
 	proposer = validators[0]
-	log.Debug("getBlockProposerV2", "proposer", proposer, "round", round, "contextHash", contextHash, "valCount", len(validators))
+
+	log.Debug("getBlockProposerV2 final", "proposer", proposer, "round", round, "contextHash", contextHash, "valCount selected", len(validators), "valcount before", len(*validatorMap),
+		"OfflineValidatorV4StartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, "blockBytes", blockBytes)
 
 	return proposer, nil
 }
@@ -601,6 +605,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 			return err
 		}
 		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
+		log.Debug("initializeBlockStateIfRequired", "blockContext", blockContext, "post consensusContext", blockStateDetails.consensusContext, "blockContext", blockContext[:], "blockNumber", blockNumber)
 	} else {
 		blockStateDetails.consensusContext = parentHash
 	}
@@ -697,7 +702,7 @@ func (cph *ConsensusHandler) initializeNewBlockRound(newRoundReason NewRoundReas
 	}
 
 	if blockRoundDetails.Round > 1 {
-		log.Trace("initializeNewBlockRound", "currentRound", blockStateDetails.currentRound, "Address", cph.account.Address)
+		log.Debug("initializeNewBlockRound", "currentRound", blockStateDetails.currentRound, "Address", cph.account.Address)
 	}
 
 	proposer, err := getBlockProposer(cph.currentParentHash, &blockStateDetails.filteredValidatorsDepositMap, blockRoundDetails.Round,
@@ -719,7 +724,7 @@ func (cph *ConsensusHandler) isBlockProposer(parentHash common.Hash, filteredVal
 	blockProposer, err := getBlockProposer(parentHash, filteredValidatorDepositMap, round, blockStateDetails.validatorDetailsMap, blockStateDetails.blockNumber, blockStateDetails.consensusContext)
 
 	if err != nil {
-		log.Trace("isBlockProposer", "err", err)
+		log.Debug("isBlockProposer", "err", err)
 		return false, err
 	}
 	return blockProposer.IsEqualTo(cph.account.Address), nil
@@ -740,7 +745,7 @@ func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, 
 	}
 
 	if cph.initialized == false || HasExceededTimeThreshold(cph.initTime, STARTUP_DELAY_MS) == false {
-		log.Trace("received consensus packet, but consensus is not ready yet")
+		log.Debug("received consensus packet, but consensus is not ready yet")
 		cph.peerHandler.HandleConsensusPacket(packet, fromPeerId)
 		return nil
 	}
@@ -769,11 +774,11 @@ func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, 
 	}
 
 	if err != nil {
-		log.Trace("HandleConsensusPacket error", "err", err, "fromPeerId", fromPeerId)
+		log.Debug("HandleConsensusPacket error", "err", err, "fromPeerId", fromPeerId)
 	} else {
 		err = cph.peerHandler.HandleConsensusPacket(packet, fromPeerId)
 		if err != nil {
-			log.Trace("HandleConsensusPacket peerHandler", "error", err, "fromPeerId", fromPeerId)
+			log.Debug("HandleConsensusPacket peerHandler", "error", err, "fromPeerId", fromPeerId)
 			return err
 		}
 	}
@@ -858,7 +863,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 		return InvalidPacketErr
 	}
 
-	log.Trace("processPacket", "validator", validator, "packetType", packetType)
+	log.Debug("processPacket", "validator", validator, "packetType", packetType)
 	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK {
 		return cph.handleProposeBlockPacket(validator, packet, false)
 	} else if packetType == CONSENSUS_PACKET_TYPE_ACK_BLOCK_PROPOSAL {
@@ -888,18 +893,18 @@ func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash, bl
 						ReceivedTime: pkt.ReceivedTime,
 					})
 				} else {
-					log.Trace("processOutOfOrderPackets A", "err", err)
+					log.Debug("processOutOfOrderPackets A", "err", err)
 				}
 			} else {
-				log.Trace("processOutOfOrderPackets mismatch", "packet parentHash", pkt.Packet.ParentHash, "current parentHash", parentHash)
+				log.Debug("processOutOfOrderPackets mismatch", "packet parentHash", pkt.Packet.ParentHash, "current parentHash", parentHash)
 			}
 		}
 
 		if len(unprocessedPackets) == 0 {
-			log.Trace("processOutOfOrderPackets none")
+			log.Debug("processOutOfOrderPackets none")
 			delete(cph.outOfOrderPacketsMap, key)
 		} else {
-			log.Trace("processOutOfOrderPackets", "count", len(unprocessedPackets))
+			log.Debug("processOutOfOrderPackets", "count", len(unprocessedPackets))
 			packetMap := cph.outOfOrderPacketsMap[parentHash]
 			for i := 0; i < len(unprocessedPackets); i++ {
 				pkt := unprocessedPackets[i]
@@ -1012,7 +1017,7 @@ func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (bloc
 
 		roundPktCount = roundPktCount + len(blockRoundDetails.proposalAckPackets) + len(blockRoundDetails.precommitPackets) + len(blockRoundDetails.commitPackets)
 		if roundPktCount == 0 {
-			log.Trace("consensusdata", "Address", cph.account.Address, "currentRound", blockStateDetails.currentRound, "r", r)
+			log.Debug("consensusdata", "Address", cph.account.Address, "currentRound", blockStateDetails.currentRound, "r", r)
 			return nil, nil, errors.New("no consensus packets for round")
 		}
 
@@ -1027,7 +1032,7 @@ func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (bloc
 			}
 		}
 
-		log.Trace("consensusdata", "Address", cph.account.Address, "currentRound", blockStateDetails.currentRound, "r", r, "roundPktCount", roundPktCount)
+		log.Debug("consensusdata", "Address", cph.account.Address, "currentRound", blockStateDetails.currentRound, "r", r, "roundPktCount", roundPktCount)
 	}
 
 	blockAdditionalConsensusData.ConsensusPackets = make([]eth.ConsensusPacket, len(consensusPackets))
@@ -1140,7 +1145,7 @@ func GetCombinedTxnHash(parentHash common.Hash, round byte, txns []common.Hash) 
 	}
 
 	hash := crypto.Keccak256Hash(data, parentHash.Bytes(), []byte{round})
-	log.Trace("GetCombinedTxnHash", "parentHash", parentHash, "round", round, "txn count", len(txns), "hash", hash)
+	log.Debug("GetCombinedTxnHash", "parentHash", parentHash, "round", round, "txn count", len(txns), "hash", hash)
 	return hash
 }
 
@@ -1162,7 +1167,7 @@ func GetCombinedTxnHashWithTime(parentHash common.Hash, round byte, txns []commo
 	}
 
 	hash := crypto.Keccak256Hash(data, parentHash.Bytes(), []byte{round}, common.Uint64ToBytes(proposedBlockTime))
-	log.Trace("GetCombinedTxnHash", "parentHash", parentHash, "round", round, "txn count", len(txns), "proposedBlockTime", proposedBlockTime, "hash", hash)
+	log.Debug("GetCombinedTxnHash", "parentHash", parentHash, "round", round, "txn count", len(txns), "proposedBlockTime", proposedBlockTime, "hash", hash)
 	return hash
 }
 
@@ -1170,7 +1175,7 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 	cph.innerPacketLock.Lock()
 	defer cph.innerPacketLock.Unlock()
 
-	log.Trace("validator proposal", "validator", validator, "self", cph.account.Address, "hash", packet.ParentHash)
+	log.Debug("validator proposal", "validator", validator, "self", cph.account.Address, "hash", packet.ParentHash)
 	blockStateDetails, ok := cph.blockStateDetailsMap[packet.ParentHash]
 	if ok == false {
 		return UnknownParentHashErr
@@ -1197,7 +1202,7 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 
 	err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &proposalDetails)
 	if err != nil {
-		log.Trace("handleProposeTransactionsPacket8", "error", err)
+		log.Debug("handleProposeTransactionsPacket8", "error", err)
 		return err
 	}
 
@@ -1206,13 +1211,13 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 	}
 
 	if blockRoundDetails.state >= BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS {
-		log.Trace("handleProposeBlockPacket BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS")
+		log.Debug("handleProposeBlockPacket BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS")
 		return OutOfOrderPackerErr
 	}
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[validator]
 	if ok == false {
-		log.Trace("handleProposeTransactionsPacket6")
+		log.Debug("handleProposeTransactionsPacket6")
 		return errors.New("invalid validator")
 	}
 
@@ -1249,11 +1254,11 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 	for i := 0; i < len(proposalDetails.Txns); i++ {
 		exists, err := cph.doesFinalizedTransactionExistFn(proposalDetails.Txns[i])
 		if err != nil {
-			log.Trace("doesFinalizedTransactionExistFn", "err", err)
+			log.Debug("doesFinalizedTransactionExistFn", "err", err)
 			return err
 		}
 		if exists {
-			log.Trace("doesFinalizedTransactionExistFn true", proposalDetails.Txns[i].Hex())
+			log.Debug("doesFinalizedTransactionExistFn true", proposalDetails.Txns[i].Hex())
 			return errors.New("transaction already finalized")
 		}
 		blockRoundDetails.proposalTxns[i].CopyFrom(proposalDetails.Txns[i])
@@ -1274,7 +1279,7 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 		if len(unknownTxns) > 0 {
 			err = cph.p2pHandler.RequestTransactions(unknownTxns)
 			if err != nil {
-				log.Trace("RequestTransactions error", "err", err)
+				log.Debug("RequestTransactions error", "err", err)
 			}
 		} else {
 			blockRoundDetails.state = BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS
@@ -1342,12 +1347,12 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 
 	err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], proposalAckDetails)
 	if err != nil {
-		log.Trace("handleAckBlockProposalPacket err5", "err", err)
+		log.Debug("handleAckBlockProposalPacket err5", "err", err)
 		return err
 	}
 
 	if proposalAckDetails.Round != blockStateDetails.currentRound {
-		log.Trace("handleAckBlockProposalPacket", "Round", proposalAckDetails.Round, "currentRound", blockStateDetails.currentRound)
+		log.Debug("handleAckBlockProposalPacket", "Round", proposalAckDetails.Round, "currentRound", blockStateDetails.currentRound)
 		if proposalAckDetails.Round > blockStateDetails.currentRound {
 			blockStateDetails.highestProposalRoundSeen = proposalAckDetails.Round
 			cph.blockStateDetailsMap[packet.ParentHash] = blockStateDetails
@@ -1356,17 +1361,17 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 	}
 
 	if proposalAckDetails.ProposalAckVoteType != VOTE_TYPE_OK && proposalAckDetails.ProposalAckVoteType != VOTE_TYPE_NIL {
-		log.Trace("proposalAckDetails.ProposalAckVoteType", "ProposalAckVoteType", proposalAckDetails.ProposalAckVoteType)
+		log.Debug("proposalAckDetails.ProposalAckVoteType", "ProposalAckVoteType", proposalAckDetails.ProposalAckVoteType)
 		return errors.New("invalid vote type c")
 	}
 
 	if proposalAckDetails.Round >= MAX_ROUND && proposalAckDetails.ProposalAckVoteType != VOTE_TYPE_NIL {
-		log.Trace("invalid vote type d", "validator", validator)
+		log.Debug("invalid vote type d", "validator", validator)
 		return errors.New("invalid vote type, expected nil vote")
 	}
 
 	if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS || blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PRECOMMITS {
-		log.Trace("handleAckBlockProposalPacket waiting")
+		log.Debug("handleAckBlockProposalPacket waiting")
 	} else if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
 	} else if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_COMMITS {
 
@@ -1394,17 +1399,17 @@ func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.
 	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
 	pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 	if err != nil {
-		log.Trace("invalid 1", "err", err)
+		log.Debug("invalid 1", "err", err)
 		return 0, ZERO_ADDRESS, err
 	}
 	if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
-		log.Trace("invalid 2")
+		log.Debug("invalid 2")
 		return 0, ZERO_ADDRESS, InvalidPacketErr
 	}
 
 	validator, err := sigAlg.PublicKeyToAddress(pubKey)
 	if err != nil {
-		log.Trace("invalid 3", "err", err)
+		log.Debug("invalid 3", "err", err)
 		return 0, ZERO_ADDRESS, err
 	}
 
@@ -1421,7 +1426,7 @@ func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.
 
 		err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
 		if err != nil {
-			log.Trace("invalid 4", "err", err)
+			log.Debug("invalid 4", "err", err)
 			return 0, ZERO_ADDRESS, err
 		}
 
@@ -1431,7 +1436,7 @@ func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.
 
 		err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
 		if err != nil {
-			log.Trace("invalid 5", "err", err)
+			log.Debug("invalid 5", "err", err)
 			return 0, ZERO_ADDRESS, err
 		}
 
@@ -1441,7 +1446,7 @@ func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.
 
 		err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
 		if err != nil {
-			log.Trace("invalid 6", "err", err)
+			log.Debug("invalid 6", "err", err)
 			return 0, ZERO_ADDRESS, err
 		}
 
@@ -1451,14 +1456,14 @@ func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.
 
 		err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], &details)
 		if err != nil {
-			log.Trace("invalid 7", "err", err)
+			log.Debug("invalid 7", "err", err)
 			return 0, ZERO_ADDRESS, err
 		}
 
 		return details.Round, validator, nil
 	}
 
-	log.Trace("invalid 8", "err", err, "packetType", packetType)
+	log.Debug("invalid 8", "err", err, "packetType", packetType)
 
 	return 0, ZERO_ADDRESS, InvalidPacketErr
 }
@@ -1474,14 +1479,14 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
 				round, validator, err := parsePacket(pkt.Packet, blockNumber)
 				if err != nil {
-					log.Trace("parsePacket", "err", err)
+					log.Debug("parsePacket", "err", err)
 					continue
 				}
 				if round <= blockStateDetails.currentRound {
 					continue
 				}
 				valMap[validator] = true
-				log.Trace("shouldMoveToNextRoundProposalAcks", "valInGreaterRound", validator)
+				log.Debug("shouldMoveToNextRoundProposalAcks", "valInGreaterRound", validator)
 			}
 		}
 	}
@@ -1494,13 +1499,13 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 			_, ok1 := blockRoundDetails.validatorProposalAcks[val]
 			if ok1 == true {
 				currentRoundDepositSoFar = common.SafeAddBigInt(depositAmount, currentRoundDepositSoFar)
-				log.Trace("currentRoundDepositSoFar received packet", "val", val, "depositAmount", depositAmount, "currentRoundDepositSoFar", currentRoundDepositSoFar)
+				log.Debug("currentRoundDepositSoFar received packet", "val", val, "depositAmount", depositAmount, "currentRoundDepositSoFar", currentRoundDepositSoFar)
 			} else {
-				log.Trace("currentRoundDepositSoFar did not receive packet from validator", "val", val)
+				log.Debug("currentRoundDepositSoFar did not receive packet from validator", "val", val)
 			}
 		} else {
 			totalGreaterRoundDepositCount = common.SafeAddBigInt(depositAmount, totalGreaterRoundDepositCount)
-			log.Trace("totalGreaterRoundDepositCount", "val", val, "depositAmount", depositAmount, "totalGreaterRoundDepositCount", totalGreaterRoundDepositCount)
+			log.Debug("totalGreaterRoundDepositCount", "val", val, "depositAmount", depositAmount, "totalGreaterRoundDepositCount", totalGreaterRoundDepositCount)
 		}
 	}
 
@@ -1544,7 +1549,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
 	if HasExceededTimeThreshold(blockRoundDetails.precommitInitTime, int64(ACK_BLOCK_TIMEOUT_MS*int(blockRoundDetails.Round))) == false {
-		log.Trace("shouldMoveToNextRoundPrecommit time not met", "blockRoundDetails.precommitInitTime", blockRoundDetails.precommitInitTime)
+		log.Debug("shouldMoveToNextRoundPrecommit time not met", "blockRoundDetails.precommitInitTime", blockRoundDetails.precommitInitTime)
 		return false, nil
 	}
 
@@ -1556,7 +1561,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
 				round, validator, err := parsePacket(pkt.Packet, blockNumber)
 				if err != nil {
-					log.Trace("parsePacket", "err", err)
+					log.Debug("parsePacket", "err", err)
 					continue
 				}
 				packetType := getPacketType(pkt.Packet)
@@ -1567,7 +1572,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 					continue
 				}
 				valMap[validator] = true
-				log.Trace("shouldMoveToNextRound", "valInGreaterRound", validator)
+				log.Debug("shouldMoveToNextRound", "valInGreaterRound", validator)
 			}
 		}
 	}
@@ -1579,7 +1584,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 		_, okCommit := valCommitMap[val]
 		if okCommit {
 			currentRoundCommitsDepositSoFar = common.SafeAddBigInt(depositAmount, currentRoundCommitsDepositSoFar)
-			log.Trace("currentRoundCommitsDepositSoFar", "val", val, "depositAmount", depositAmount, "currentRoundCommitsDepositSoFar", currentRoundCommitsDepositSoFar)
+			log.Debug("currentRoundCommitsDepositSoFar", "val", val, "depositAmount", depositAmount, "currentRoundCommitsDepositSoFar", currentRoundCommitsDepositSoFar)
 			continue
 		}
 
@@ -1588,13 +1593,13 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 			_, ok1 := blockRoundDetails.validatorPrecommits[val]
 			if ok1 == true {
 				currentRoundDepositSoFar = common.SafeAddBigInt(depositAmount, currentRoundDepositSoFar)
-				log.Trace("currentRoundDepositSoFar", "val", val, "depositAmount", depositAmount, "currentRoundDepositSoFar", currentRoundDepositSoFar)
+				log.Debug("currentRoundDepositSoFar", "val", val, "depositAmount", depositAmount, "currentRoundDepositSoFar", currentRoundDepositSoFar)
 			} else {
-				log.Trace("currentRoundDepositSoFar val no", "val", val)
+				log.Debug("currentRoundDepositSoFar val no", "val", val)
 			}
 		} else {
 			totalGreaterRoundDepositCount = common.SafeAddBigInt(depositAmount, totalGreaterRoundDepositCount)
-			log.Trace("totalGreaterRoundDepositCount", "val", val, "depositAmount", depositAmount, "totalGreaterRoundDepositCount", totalGreaterRoundDepositCount)
+			log.Debug("totalGreaterRoundDepositCount", "val", val, "depositAmount", depositAmount, "totalGreaterRoundDepositCount", totalGreaterRoundDepositCount)
 		}
 	}
 
@@ -1604,7 +1609,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 	}
 
 	balanceDepositVotesRequiredCurrentRound := common.SafeSubBigInt(blockStateDetails.blockMinWeightedProposalsRequired, currentRoundDepositSoFar)
-	log.Trace("shouldMoveNextRound",
+	log.Debug("shouldMoveNextRound",
 		"blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired,
 		"balanceDepositVotesRequiredCurrentRound", balanceDepositVotesRequiredCurrentRound,
 		"currentRoundDepositSoFar", currentRoundDepositSoFar,
@@ -1644,7 +1649,7 @@ func (cph *ConsensusHandler) handlePrecommitPacket(validator common.Address, pac
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[validator]
 	if ok == false {
-		log.Trace("handleProposeTransactionsPacket6")
+		log.Debug("handleProposeTransactionsPacket6")
 		return errors.New("invalid validator")
 	}
 
@@ -1661,7 +1666,7 @@ func (cph *ConsensusHandler) handlePrecommitPacket(validator common.Address, pac
 
 	_, ok = blockRoundDetails.validatorProposalAcks[validator]
 	if ok == false {
-		log.Trace("did not receive proposal ack from validator")
+		log.Debug("did not receive proposal ack from validator")
 	}
 
 	var startIndex int
@@ -1675,17 +1680,17 @@ func (cph *ConsensusHandler) handlePrecommitPacket(validator common.Address, pac
 
 	err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], precommitDetails)
 	if err != nil {
-		log.Trace("handlePrecommitPacket err5", "error", err)
+		log.Debug("handlePrecommitPacket err5", "error", err)
 		return err
 	}
 
 	if precommitDetails.Round != blockStateDetails.currentRound {
-		log.Trace("handlePrecommitPacket OutOfOrderPackerErr", "round", precommitDetails.Round, "currentRound", blockStateDetails.currentRound)
+		log.Debug("handlePrecommitPacket OutOfOrderPackerErr", "round", precommitDetails.Round, "currentRound", blockStateDetails.currentRound)
 		return OutOfOrderPackerErr
 	}
 
 	if precommitDetails.PrecommitHash.IsEqualTo(blockRoundDetails.precommitHash) == false {
-		log.Trace("precommit error", "incoming", precommitDetails.PrecommitHash, "expected", blockRoundDetails.precommitHash, "me", cph.account.Address, "validator", validator)
+		log.Debug("precommit error", "incoming", precommitDetails.PrecommitHash, "expected", blockRoundDetails.precommitHash, "me", cph.account.Address, "validator", validator)
 		return errors.New("invalid Precommit Hash")
 	}
 
@@ -1693,14 +1698,14 @@ func (cph *ConsensusHandler) handlePrecommitPacket(validator common.Address, pac
 	if self {
 		blockRoundDetails.selfPrecommited = true
 		blockRoundDetails.selfPrecommitPacket = packet
-		log.Trace("self precomitted")
+		log.Debug("self precomitted")
 	}
 
 	if blockRoundDetails.selfPrecommited {
 		totalVotesDepositCount := big.NewInt(0)
 		for val, _ := range blockRoundDetails.validatorPrecommits {
 			totalVotesDepositCount = common.SafeAddBigInt(totalVotesDepositCount, blockStateDetails.filteredValidatorsDepositMap[val])
-			log.Trace("Precommits", "validator", val, "deposit", blockStateDetails.filteredValidatorsDepositMap[val])
+			log.Debug("Precommits", "validator", val, "deposit", blockStateDetails.filteredValidatorsDepositMap[val])
 		}
 
 		log.Debug("handlePrecommitPacket", "totalVotesDepositCount", totalVotesDepositCount, "blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired)
@@ -1715,7 +1720,7 @@ func (cph *ConsensusHandler) handlePrecommitPacket(validator common.Address, pac
 
 	blockStateDetails.blockRoundMap[blockStateDetails.currentRound] = blockRoundDetails
 	cph.blockStateDetailsMap[packet.ParentHash] = blockStateDetails
-	log.Trace("handlePrecommitPacket done", "ParentHash", packet.ParentHash)
+	log.Debug("handlePrecommitPacket done", "ParentHash", packet.ParentHash)
 
 	return nil
 }
@@ -1745,7 +1750,7 @@ func (cph *ConsensusHandler) handleCommitPacket(validator common.Address, packet
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[validator]
 	if ok == false {
-		log.Trace("handleProposeTransactionsPacket6")
+		log.Debug("handleProposeTransactionsPacket6")
 		return errors.New("invalid validator")
 	}
 
@@ -1775,7 +1780,7 @@ func (cph *ConsensusHandler) handleCommitPacket(validator common.Address, packet
 
 	err := rlp.DecodeBytes(packet.ConsensusData[startIndex:], commitDetails)
 	if err != nil {
-		log.Trace("handlePrecommitPacket err5", "err", err)
+		log.Debug("handlePrecommitPacket err5", "err", err)
 		return err
 	}
 
@@ -1799,7 +1804,7 @@ func (cph *ConsensusHandler) handleCommitPacket(validator common.Address, packet
 		totalVotesDepositCount := big.NewInt(0)
 		for val, _ := range blockRoundDetails.validatorCommits {
 			totalVotesDepositCount = common.SafeAddBigInt(totalVotesDepositCount, blockStateDetails.filteredValidatorsDepositMap[val])
-			log.Trace("Commits", "validator", val, "deposit", blockStateDetails.filteredValidatorsDepositMap[val])
+			log.Debug("Commits", "validator", val, "deposit", blockStateDetails.filteredValidatorsDepositMap[val])
 		}
 
 		log.Debug("handleCommitPacket", "totalVotesDepositCount", totalVotesDepositCount, "blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired)
@@ -1953,7 +1958,7 @@ func (cph *ConsensusHandler) proposeBlock(parentHash common.Hash, txns []common.
 	}
 	proposalDetails.BlockTime = GetProposalTime(blockNumber)
 
-	log.Trace("ProposeBlock with txns", "count", len(proposalDetails.Txns))
+	log.Debug("ProposeBlock with txns", "count", len(proposalDetails.Txns))
 
 	data, err := rlp.EncodeToBytes(proposalDetails)
 
@@ -2004,7 +2009,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
 	if blockRoundDetails.selfAckd == true {
-		log.Trace("ackBlockProposalTimeout selfAckd", "parentHash", parentHash)
+		log.Debug("ackBlockProposalTimeout selfAckd", "parentHash", parentHash)
 	} else {
 		if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
 		} else {
@@ -2047,7 +2052,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 		blockRoundDetails.selfAckPacket = packet
 		blockRoundDetails.selfAckProposalVoteType = proposalAckDetails.ProposalAckVoteType
 		blockRoundDetails.blockVoteType = VOTE_TYPE_NIL
-		log.Trace("blockVoteType a3", "parentHash", parentHash)
+		log.Debug("blockVoteType a3", "parentHash", parentHash)
 	}
 
 	okVotes := 0
@@ -2058,7 +2063,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 	totalVotesDepositCount := big.NewInt(0)
 
 	for val, ack := range blockRoundDetails.validatorProposalAcks {
-		log.Trace("validatorProposalAcks", "validator", val, "deposit", blockStateDetails.filteredValidatorsDepositMap[val], "voteType", ack.ProposalAckVoteType)
+		log.Debug("validatorProposalAcks", "validator", val, "deposit", blockStateDetails.filteredValidatorsDepositMap[val], "voteType", ack.ProposalAckVoteType)
 		if ack.ProposalAckVoteType == VOTE_TYPE_OK {
 			if ack.ProposalHash.IsEqualTo(blockRoundDetails.proposalHash) {
 				okVotes = okVotes + 1
@@ -2136,7 +2141,7 @@ func (cph *ConsensusHandler) broadcastPreviousRoundPackets(parentHash common.Has
 		for i := byte(1); i < blockRoundDetails.Round; i = i + 1 {
 			prevBlockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 			if prevBlockRoundDetails.selfAckd {
-				log.Trace("Broadcasting selfAckPacket", "parentHash", parentHash, "round", i)
+				log.Debug("Broadcasting selfAckPacket", "parentHash", parentHash, "round", i)
 				err := cph.broadCast(prevBlockRoundDetails.selfAckPacket)
 				if err != nil {
 					log.Error("broadcastPreviousRoundPackets", "err", err)
@@ -2150,7 +2155,7 @@ func (cph *ConsensusHandler) broadcastPreviousRoundPackets(parentHash common.Has
 }
 
 func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
-	log.Trace("ackBlockProposal")
+	log.Debug("ackBlockProposal")
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
@@ -2178,7 +2183,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 			for i := 0; i < len(blockRoundDetails.blockProposalDetails.Txns); i++ {
 				_, txnExists := blockRoundDetails.selfKnownTransactions[blockRoundDetails.blockProposalDetails.Txns[i]]
 				if txnExists == false {
-					log.Trace("===============ackBlockProposal unknown txns", "hash", blockRoundDetails.blockProposalDetails.Txns[i])
+					log.Debug("===============ackBlockProposal unknown txns", "hash", blockRoundDetails.blockProposalDetails.Txns[i])
 					unknownTxns = append(unknownTxns, blockRoundDetails.blockProposalDetails.Txns[i])
 				}
 			}
@@ -2242,7 +2247,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 	totalVotesDepositCount := big.NewInt(0)
 
 	for val, ack := range blockRoundDetails.validatorProposalAcks {
-		log.Trace("validatorProposalAcks", "validator", val, "deposit", blockStateDetails.filteredValidatorsDepositMap[val], "voteType", ack.ProposalAckVoteType)
+		log.Debug("validatorProposalAcks", "validator", val, "deposit", blockStateDetails.filteredValidatorsDepositMap[val], "voteType", ack.ProposalAckVoteType)
 		if ack.ProposalAckVoteType == VOTE_TYPE_OK {
 			if ack.ProposalHash.IsEqualTo(blockRoundDetails.proposalHash) {
 				okVotesCount = okVotesCount + 1
@@ -2256,7 +2261,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 			nilVotesDepositCount = common.SafeAddBigInt(nilVotesDepositCount, blockStateDetails.filteredValidatorsDepositMap[val])
 			totalVotesDepositCount = common.SafeAddBigInt(totalVotesDepositCount, blockStateDetails.filteredValidatorsDepositMap[val])
 		} else {
-			log.Trace("unexpected")
+			log.Debug("unexpected")
 			return errors.New("unexpected")
 		}
 	}
@@ -2270,13 +2275,13 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 		blockRoundDetails.precommitInitTime = time.Now()
 		blockRoundDetails.precommitHash.CopyFrom(getOkVotePreCommitHash(parentHash, blockRoundDetails.proposalHash, blockStateDetails.currentRound))
 		blockRoundDetails.blockVoteType = VOTE_TYPE_OK
-		log.Trace("blockVoteType a1", "parentHash", parentHash)
+		log.Debug("blockVoteType a1", "parentHash", parentHash)
 		blockStateDetails.ackProposalTime = Elapsed(blockStateDetails.initTime)
 	} else if nilVotesDepositCount.Cmp(blockStateDetails.blockMinWeightedProposalsRequired) >= 0 { //handle timeout differently? for nil votes, it is ok to accept NIL vote even if self vote is OK
 		blockRoundDetails.state = BLOCK_STATE_WAITING_FOR_PRECOMMITS
 		blockRoundDetails.precommitInitTime = time.Now()
 		blockRoundDetails.precommitHash.CopyFrom(getNilVotePreCommitHash(parentHash, blockStateDetails.currentRound))
-		log.Trace("blockVoteType a2", "parentHash", parentHash)
+		log.Debug("blockVoteType a2", "parentHash", parentHash)
 		blockRoundDetails.blockVoteType = VOTE_TYPE_NIL
 	} else {
 		if totalVotesDepositCount.Cmp(blockStateDetails.totalBlockDepositValue) >= 0 ||
@@ -2287,7 +2292,7 @@ func (cph *ConsensusHandler) ackBlockProposal(parentHash common.Hash) error {
 			if err != nil {
 				return err
 			}
-			log.Trace("blockVoteType a3", "parentHash", parentHash)
+			log.Debug("blockVoteType a3", "parentHash", parentHash)
 			return nil
 		} else {
 			ok, err := cph.shouldMoveToNextRoundProposalAcks(parentHash, blockStateDetails.blockNumber)
@@ -2330,7 +2335,7 @@ func (cph *ConsensusHandler) precommitBlock(parentHash common.Hash) error {
 	}
 
 	if blockRoundDetails.selfPrecommited == true {
-		log.Trace("precommitBlock broadcast")
+		log.Debug("precommitBlock broadcast")
 		cph.broadCast(blockRoundDetails.selfAckPacket)
 		cph.broadCast(blockRoundDetails.selfPrecommitPacket)
 		return cph.handlePrecommitPacket(cph.account.Address, blockRoundDetails.selfPrecommitPacket, true)
@@ -2363,7 +2368,7 @@ func (cph *ConsensusHandler) precommitBlock(parentHash common.Hash) error {
 	err = cph.handlePrecommitPacket(cph.account.Address, packet, true)
 
 	if err != nil {
-		log.Trace("precommitBlock handlePrecommitPacket error", err)
+		log.Debug("precommitBlock handlePrecommitPacket error", err)
 		return err
 	}
 
@@ -2417,7 +2422,7 @@ func (cph *ConsensusHandler) commitBlock(parentHash common.Hash) error {
 	err = cph.handleCommitPacket(cph.account.Address, packet, true)
 
 	if err != nil {
-		log.Trace("commitBlock handleCommitPacket error", "err", err)
+		log.Debug("commitBlock handleCommitPacket error", "err", err)
 		return err
 	}
 
@@ -2429,13 +2434,13 @@ func (cph *ConsensusHandler) shouldBreakglassNilVote(blockNumber uint64) bool {
 
 	datadir := node.DefaultDataDir()
 	hashFilePath := filepath.Join(datadir, blockNumStr)
-	log.Trace("shouldBreakglassNilVote", "path", hashFilePath, "blockNumber", blockNumber)
+	log.Debug("shouldBreakglassNilVote", "path", hashFilePath, "blockNumber", blockNumber)
 
 	_, err := os.Stat(hashFilePath)
 
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			log.Trace("shouldBreakglassNilVote nilvote not found", "blockNumStr", blockNumStr)
+			log.Debug("shouldBreakglassNilVote nilvote not found", "blockNumStr", blockNumStr)
 		}
 		return false
 	}
@@ -2454,10 +2459,10 @@ func (cph *ConsensusHandler) DoesPreviousHashMatch(parentHash common.Hash) (bool
 
 	datadir := node.DefaultDataDir()
 	hashFilePath := filepath.Join(datadir, "previoushash.txt")
-	log.Trace("DoesPreviousHashMatch", "path", hashFilePath, "parentHash", parentHash)
+	log.Debug("DoesPreviousHashMatch", "path", hashFilePath, "parentHash", parentHash)
 
 	if _, err := os.Stat(hashFilePath); errors.Is(err, os.ErrNotExist) {
-		log.Trace("DoesPreviousHashMatch previous hash not found")
+		log.Debug("DoesPreviousHashMatch previous hash not found")
 		return false, nil
 	}
 
@@ -2472,7 +2477,7 @@ func (cph *ConsensusHandler) DoesPreviousHashMatch(parentHash common.Hash) (bool
 		return true, nil
 	}
 
-	log.Trace("Previous doesn't match current parentHash, is ok to proceed with consensus", "previous", hash.Hex(), "current parentHash", parentHash.Hex())
+	log.Debug("Previous doesn't match current parentHash, is ok to proceed with consensus", "previous", hash.Hex(), "current parentHash", parentHash.Hex())
 	return false, nil
 }
 
@@ -2517,7 +2522,7 @@ func (cph *ConsensusHandler) SaveHash(parentHash common.Hash) error {
 }
 
 func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []common.Hash, blockNumber uint64) error {
-	log.Trace("HandleConsensus start")
+	log.Debug("HandleConsensus start")
 	cph.outerPacketLock.Lock()
 	defer cph.outerPacketLock.Unlock()
 
@@ -2539,7 +2544,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 
 	cph.SetLatestBlockNumber(blockNumber)
 	if defaults.IsCryptoBreakglassMode(blockNumber) {
-		log.Trace("IsCryptoBreakglassMode mode is set")
+		log.Debug("IsCryptoBreakglassMode mode is set")
 		defaults.SetCryptoSigningMode(byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID))
 	}
 
@@ -2697,7 +2702,7 @@ func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data 
 		log.Debug("createConsensusPacket", "parentHash", parentHash, "fullSign", fullSign)
 		signature, err = cph.signFnWithContext(cph.account, accounts.MimetypeProofOfStake, dataToSign, signContext)
 	} else {
-		log.Trace("createConsensusPacket", "parentHash", parentHash, "fullSign", fullSign)
+		log.Debug("createConsensusPacket", "parentHash", parentHash, "fullSign", fullSign)
 		sigAlg := byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID)
 		if blockNumber >= defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
 			sigAlg = byte(crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)
@@ -2705,7 +2710,7 @@ func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data 
 		signature, err = cph.signFn(cph.account, accounts.MimetypeProofOfStake, dataToSign, sigAlg)
 	}
 	if err != nil {
-		log.Trace("createConsensusPacket signAndSend failed", "err", err)
+		log.Debug("createConsensusPacket signAndSend failed", "err", err)
 		return nil, err
 	}
 
@@ -2762,14 +2767,14 @@ func (cph *ConsensusHandler) broadCast(packet *eth.ConsensusPacket) error {
 	lastSent, ok := cph.packetHashLastSentMap[hash]
 	if ok == false {
 		cph.packetHashLastSentMap[hash] = time.Now()
-		log.Trace("Broadcasting packet", "hash", hash, "packetType", packetType)
+		log.Debug("Broadcasting packet", "hash", hash, "packetType", packetType)
 	} else {
 		elapsed := Elapsed(lastSent)
 		if elapsed > BROADCAST_RESEND_DELAY {
 			cph.packetHashLastSentMap[hash] = time.Now()
-			log.Trace("Rebroadcasting packet", "hash", hash, "packetType", packetType)
+			log.Debug("Rebroadcasting packet", "hash", hash, "packetType", packetType)
 		} else {
-			log.Trace("Skipping broadcasting packet", "hash", hash, "packetType", packetType)
+			log.Debug("Skipping broadcasting packet", "hash", hash, "packetType", packetType)
 			return nil
 		}
 	}
@@ -2851,14 +2856,14 @@ func (cph *ConsensusHandler) requestConsensusData(blockStateDetails *BlockStateD
 	lastSent, ok := cph.packetHashLastSentMap[hash]
 	if ok == false {
 		cph.packetHashLastSentMap[hash] = time.Now()
-		log.Trace("requestConsensusData packet", "hash", hash)
+		log.Debug("requestConsensusData packet", "hash", hash)
 	} else {
 		elapsed := Elapsed(lastSent)
 		if elapsed > BROADCAST_RESEND_DELAY*3 {
 			cph.packetHashLastSentMap[hash] = time.Now()
-			log.Trace("requestConsensusData packet", "hash", hash)
+			log.Debug("requestConsensusData packet", "hash", hash)
 		} else {
-			log.Trace("Skipping requestConsensusData packet", "hash", hash)
+			log.Debug("Skipping requestConsensusData packet", "hash", hash)
 			return nil
 		}
 	}
@@ -2874,7 +2879,7 @@ func (cph *ConsensusHandler) requestConsensusData(blockStateDetails *BlockStateD
 	}
 	cph.lastRequestConsensusDataTime = time.Now()
 
-	log.Trace("requestConsensusData 1")
+	log.Debug("requestConsensusData 1")
 	requestPacketDetails, err := cph.getRequestConsensusDataPacket(blockStateDetails)
 	if err != nil {
 		return err
@@ -2928,7 +2933,7 @@ func (cph *ConsensusHandler) HandleRequestConsensusDataPacket(packet *eth.Reques
 
 	err := rlp.DecodeBytes(packet.RequestData, &requestDetails)
 	if err != nil {
-		log.Trace("handleProposeTransactionsPacket8", "err", err)
+		log.Debug("handleProposeTransactionsPacket8", "err", err)
 		return nil, err
 	}
 
@@ -2975,7 +2980,7 @@ func (cph *ConsensusHandler) HandleRequestConsensusDataPacket(packet *eth.Reques
 		}
 	}
 
-	log.Trace("HandleRequestConsensusDataPacket", "ParentHash", packet.ParentHash, "count", len(packets), "proposalCount", proposalCount, "ackCount", ackCount, "precommitCount", precommitCount, "commitCount", commitCount)
+	log.Debug("HandleRequestConsensusDataPacket", "ParentHash", packet.ParentHash, "count", len(packets), "proposalCount", proposalCount, "ackCount", ackCount, "precommitCount", precommitCount, "commitCount", commitCount)
 
 	return packets, nil
 }
@@ -2998,7 +3003,7 @@ func getNilVotePreCommitHash(parentHash common.Hash, round byte) common.Hash {
 
 func (cph *ConsensusHandler) LogIncomingPacketStats() {
 	cph.packetStats.TotalIncomingPacketCount = cph.packetStats.TotalIncomingPacketCount + 1
-	log.Trace("LogIncomingPacketStats", "TotalIncomingPacketCount", cph.packetStats.TotalIncomingPacketCount)
+	log.Debug("LogIncomingPacketStats", "TotalIncomingPacketCount", cph.packetStats.TotalIncomingPacketCount)
 }
 
 func (cph *ConsensusHandler) SetLatestBlockNumber(number uint64) {
