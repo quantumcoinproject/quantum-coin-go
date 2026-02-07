@@ -779,6 +779,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	}
 	ancestor, err := d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
 	if err == nil {
+		log.Debug("findAncestor findAncestorSpanSearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
 		return ancestor, nil
 	}
 	// The returned error was not nil.
@@ -793,6 +794,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	if err != nil {
 		return 0, err
 	}
+	log.Debug("findAncestor findAncestorBinarySearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
 	return ancestor, nil
 }
 
