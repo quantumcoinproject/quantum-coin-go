@@ -735,7 +735,7 @@ func (cph *ConsensusHandler) isBlockProposer(parentHash common.Hash, filteredVal
 }
 
 func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, fromPeerId string) error {
-	log.Debug("HandleConsensusPacket", "ParentHash", packet.ParentHash, "fromPeerId", fromPeerId)
+	log.Trace("HandleConsensusPacket", "ParentHash", packet.ParentHash, "fromPeerId", fromPeerId)
 	cph.outerPacketLock.Lock()
 	defer cph.outerPacketLock.Unlock()
 
