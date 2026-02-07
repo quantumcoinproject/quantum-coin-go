@@ -539,26 +539,13 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 		}
 	}
 
-	blockBytes := common.Uint64ToBytes(blockNumber)
-
 	validators := make([]common.Address, len(selectedValMap))
-	k := 0
-	valStr := ""
-	valHashMap := make(map[common.Hash]common.Address)
+	j := 0
 	for valAddr, _ := range selectedValMap {
-		validators[k] = valAddr
-		log.Debug("getBlockProposerV2 before sort", "validator", valAddr)
-		valStr = valStr + "," + valAddr.Hex()
-		valHash := crypto.Keccak256Hash(contextHash.Bytes(), valAddr.Bytes(), []byte{round}, common.Uint64ToBytes(blockNumber))
-		_, ok := valHashMap[valHash]
-		if ok {
-			log.Debug("getBlockProposerV2 hash check", "valAddr", valAddr, "other valAddr", valHashMap[valHash])
-			panic("hash collision check failed")
-		}
-		valHashMap[valHash] = valAddr
-		k = k + 1
+		validators[j] = valAddr
+		j = j + 1
 	}
-	log.Debug("getBlockProposerV2", "contextHash", contextHash, "round", round, "blockBytes", blockBytes, "valStr", valStr)
+	blockBytes := common.Uint64ToBytes(blockNumber)
 
 	sort.Slice(validators, func(i, j int) bool {
 		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
@@ -568,28 +555,14 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 		} else {
 			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}, blockBytes).Bytes()
 			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}, blockBytes).Bytes()
-			val := bytes.Compare(vi, vj)
-			if val == 0 {
-				log.Debug("getBlockProposerV2 before sort", "vi", vi, "vj", vj, "contextHash.Bytes()", contextHash.Bytes(), "validators[i].Bytes()", validators[i].Bytes(),
-					"[]byte{round}", []byte{round}, "blockBytes", blockBytes)
-				panic("hash collision")
-			}
 			return bytes.Compare(vi, vj) == -1
 		}
 	})
 
 	proposer = validators[0]
 
-	valArrAfter := make([]byte, 0)
-	for i, valAddr := range validators {
-		valArrAfter = append(valArrAfter, valAddr.Bytes()...)
-		log.Debug("getBlockProposerV2 after sort", "validator", valAddr, "i", i)
-	}
-
 	log.Debug("getBlockProposerV2 final", "proposer", proposer, "round", round, "contextHash", contextHash, "valCount selected", len(validators), "valcount before", len(*validatorMap),
-		"OfflineValidatorV4StartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, "blockBytes", blockBytes, "valArr hash after sort", common.BytesToHash(valArrAfter).Hex())
-	
-	panic("exit")
+		"OfflineValidatorV4StartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, "blockBytes", blockBytes)
 
 	return proposer, nil
 }
@@ -632,8 +605,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 			return err
 		}
 		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
-		log.Debug("initializeBlockStateIfRequired", "blockContext", blockContext, "post consensusContext", blockStateDetails.consensusContext, "blockContext", blockContext[:],
-			"preFilterValidatorCount", preFilterValidatorCount, "blockNumber", blockNumber)
+		log.Debug("initializeBlockStateIfRequired", "blockContext", blockContext, "post consensusContext", blockStateDetails.consensusContext, "blockContext", blockContext[:], "blockNumber", blockNumber)
 	} else {
 		blockStateDetails.consensusContext = parentHash
 	}

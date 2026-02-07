@@ -518,10 +518,12 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	}
 
 	nilVotedProposers := make(map[common.Address]bool)
+	var slashedBlockProposer common.Address
 	if blockConsensusData.SlashedBlockProposers != nil {
 		for _, proposer := range blockConsensusData.SlashedBlockProposers {
 			nilVotedProposers[proposer] = true
-			log.Debug("proposer slashed", "proposer", proposer)
+			slashedBlockProposer.CopyFrom(proposer)
+			log.Debug("ValidateBlockConsensusDataInner proposer slashed", "proposer", proposer)
 		}
 	}
 
@@ -610,7 +612,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 			if r < MAX_ROUND {
 				_, ok := nilVotedProposers[roundBlockValidators[r]]
 				if ok == false {
-					log.Info("NilVotesProposer doesn't match expected", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash)
+					log.Warn("NilVotesProposer doesn't match expected", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash, "expected proposer", slashedBlockProposer)
 					return errors.New("nilVotedProposers 1")
 				}
 			}
