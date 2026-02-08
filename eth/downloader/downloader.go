@@ -686,6 +686,10 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 		case <-timeout:
 			p.log.Debug("Waiting for head header timed out", "elapsed", ttl)
 			return nil, nil, errTimeout
+
+		case <-d.bodyCh:
+		case <-d.receiptCh:
+			// Out of bounds delivery, ignore
 		}
 	}
 }
@@ -876,6 +880,10 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 		case <-timeout:
 			p.log.Debug("Waiting for head header timed out", "elapsed", ttl)
 			return 0, errTimeout
+
+		case <-d.bodyCh:
+		case <-d.receiptCh:
+			// Out of bounds delivery, ignore
 		}
 	}
 	// If the head fetch already found an ancestor, return
@@ -966,6 +974,10 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 			case <-timeout:
 				p.log.Debug("Waiting for search header timed out", "elapsed", ttl, "peer", p.id)
 				return 0, errTimeout
+
+			case <-d.bodyCh:
+			case <-d.receiptCh:
+				// Out of bounds delivery, ignore
 			}
 		}
 	}
