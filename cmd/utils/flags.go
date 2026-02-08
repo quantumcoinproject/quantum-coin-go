@@ -292,9 +292,9 @@ var (
 		Name:  "light.nopruning",
 		Usage: "Disable ancient light chain data pruning",
 	}
-	HttpSyncListenFlag = cli.BoolFlag{
-		Name:  "httpsync.listen",
-		Usage: "Enable HTTP sync server (block/header download over HTTP on port 30304)",
+	RestSyncListenFlag = cli.BoolFlag{
+		Name:  "restsync.listen",
+		Usage: "Enable REST sync server (block/header download over HTTP on port 30304)",
 	}
 	LightNoSyncServeFlag = cli.BoolFlag{
 		Name:  "light.nosyncserve",
@@ -1507,8 +1507,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
 	setLes(ctx, cfg)
-	if ctx.GlobalIsSet(HttpSyncListenFlag.Name) {
-		cfg.HttpSyncListen = ctx.GlobalBool(HttpSyncListenFlag.Name)
+	if ctx.GlobalIsSet(RestSyncListenFlag.Name) {
+		cfg.RestSyncListen = ctx.GlobalBool(RestSyncListenFlag.Name)
 	}
 	// Cap the cache allowance and tune the garbage collector
 	mem, err := gopsutil.VirtualMemory()

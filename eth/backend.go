@@ -45,7 +45,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/eth/filters"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/gasprice"
 	ethprotocol "github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
-	"github.com/quantumcoinproject/quantum-coin-go/eth/httpsync"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/restsync"
 	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 	"github.com/quantumcoinproject/quantum-coin-go/event"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
@@ -97,10 +97,10 @@ type Ethereum struct {
 
 	p2pServer *p2p.Server
 
-	// HTTP sync (optional)
+	// REST sync (optional)
 	dataDir         string // instance data dir for TLS cert
-	httpSyncServer  *httpsync.Server
-	httpSyncClient  *httpsync.Client
+	restSyncServer  *restsync.Server
+	restSyncClient  *restsync.Client
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
@@ -263,11 +263,11 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.p2pServer.SetRequestPeersFn(eth.handler.RequestPeerList)
 	eth.handler.SetPeerHandler(eth.p2pServer.HandlePeerList, eth.p2pServer.GetLocalPeerId())
 
-	// HTTP sync client: use connected P2P peers (assume each has HTTP sync on port 30304)
-	eth.httpSyncClient = httpsync.NewClientFromProvider(eth.httpSyncPeerURLs, eth.handler.Downloader)
-	if err := eth.handler.Downloader.RegisterPeer(httpsync.HttpSyncPeerID, ethprotocol.ETH66, eth.httpSyncClient); err != nil {
-		log.Warn("Failed to register HTTP sync peer", "err", err)
-		eth.httpSyncClient = nil
+	// REST sync client: use connected P2P peers (assume each has REST on port 30304)
+	eth.restSyncClient = restsync.NewClientFromProvider(eth.restSyncPeerURLs, eth.handler.Downloader)
+	if err := eth.handler.Downloader.RegisterPeer(restsync.RestSyncPeerID, ethprotocol.ETH66, eth.restSyncClient); err != nil {
+		log.Warn("Failed to register REST sync peer", "err", err)
+		eth.restSyncClient = nil
 	}
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
@@ -563,9 +563,9 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 	return protos
 }
 
-// httpSyncPeerURLs returns HTTP sync base URLs for connected P2P peers (host:30304).
-// Peers connected on 30303 are assumed to also expose HTTP sync on 30304.
-func (s *Ethereum) httpSyncPeerURLs() []string {
+// restSyncPeerURLs returns REST sync base URLs for connected P2P peers (host:30304).
+// Peers connected on 30303 are assumed to also expose REST on 30304.
+func (s *Ethereum) restSyncPeerURLs() []string {
 	peers := s.p2pServer.Peers()
 	if len(peers) == 0 {
 		return nil
@@ -593,12 +593,12 @@ func (s *Ethereum) Start() error {
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
 
-	// Start HTTP sync server if enabled (HTTPS, TLS 1.3, port 30304)
-	if s.config.HttpSyncListen {
-		s.httpSyncServer = httpsync.NewServer(s.blockchain, ":30304", s.dataDir)
+	// Start REST sync server if enabled (HTTPS, TLS 1.3, port 30304)
+	if s.config.RestSyncListen {
+		s.restSyncServer = restsync.NewServer(s.blockchain, ":30304", s.dataDir)
 		go func() {
-			if err := s.httpSyncServer.Start(); err != nil && err != http.ErrServerClosed {
-				log.Warn("HTTP sync server failed", "err", err)
+			if err := s.restSyncServer.Start(); err != nil && err != http.ErrServerClosed {
+				log.Warn("REST sync server failed", "err", err)
 			}
 		}()
 	}
@@ -619,14 +619,14 @@ func (s *Ethereum) Start() error {
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	// Stop HTTP sync server and unregister HTTP sync peer first.
-	if s.httpSyncServer != nil {
-		_ = s.httpSyncServer.Shutdown()
-		s.httpSyncServer = nil
+	// Stop REST sync server and unregister REST peer first.
+	if s.restSyncServer != nil {
+		_ = s.restSyncServer.Shutdown()
+		s.restSyncServer = nil
 	}
-	if s.httpSyncClient != nil {
-		s.handler.Downloader.UnregisterPeer(httpsync.HttpSyncPeerID)
-		s.httpSyncClient = nil
+	if s.restSyncClient != nil {
+		s.handler.Downloader.UnregisterPeer(restsync.RestSyncPeerID)
+		s.restSyncClient = nil
 	}
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()

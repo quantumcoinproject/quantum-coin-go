@@ -1,9 +1,9 @@
 // Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
-// Package httpsync implements TLS certificate handling for the HTTP sync server.
+// Package restsync implements TLS certificate handling for the REST sync server.
 // It uses hybrid PQC (Ed25519 + ML-DSA + SLH-DSA) certificates from crypto/tls.
-package httpsync
+package restsync
 
 import (
 	"fmt"
@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	certFilename = "httpsync-tls.crt"
-	keyFilename  = "httpsync-tls.key"
+	certFilename = "restsync-tls.crt"
+	keyFilename  = "restsync-tls.key"
 	certValidity = 365 * 24 * time.Hour
 )
 
@@ -49,7 +49,7 @@ func ensureCertKey(dataDir string) (certFile, keyFile string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("cert template: %w", err)
 	}
-	template.CommonName = "httpsync"
+	template.CommonName = "restsync"
 	template.Organization = "quantum-coin"
 	certDER, err := pqctls.CreateCertificate(template, signer)
 	if err != nil {
@@ -77,7 +77,7 @@ func ensureCertKey(dataDir string) (certFile, keyFile string, err error) {
 		return "", "", err
 	}
 	keyOut.Close()
-	log.Info("HTTP sync: created self-signed PQC TLS certificate", "dir", dataDir)
+	log.Info("REST sync: created self-signed PQC TLS certificate", "dir", dataDir)
 	return certFile, keyFile, nil
 }
 
