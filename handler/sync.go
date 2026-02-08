@@ -165,11 +165,10 @@ type chainSyncer struct {
 
 // chainSyncOp is a scheduled sync operation.
 type chainSyncOp struct {
-	mode   downloader.SyncMode
-	peer   *eth.Peer
-	peerID string // peer id for downloader
-	td     *big.Int
-	head   common.Hash
+	mode downloader.SyncMode
+	peer *eth.Peer
+	td   *big.Int
+	head common.Hash
 }
 
 // newChainSyncer creates a chainSyncer.
@@ -240,7 +239,6 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
 		return nil // Sync already running.
 	}
-	mode, ourTD := cs.modeAndLocalHead()
 
 	// Ensure we're at minimum peer count.
 	minPeers := defaultMinSyncPeers
@@ -258,6 +256,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if peer == nil {
 		return nil
 	}
+	mode, ourTD := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
 	if op.td.Cmp(ourTD) <= 0 {
 		return nil // We're in sync.
@@ -267,7 +266,7 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 
 func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
 	peerHead, peerTD := p.Head()
-	return &chainSyncOp{mode: mode, peer: p, peerID: p.ID(), td: peerTD, head: peerHead}
+	return &chainSyncOp{mode: mode, peer: p, td: peerTD, head: peerHead}
 }
 
 func (cs *chainSyncer) modeAndLocalHead() (downloader.SyncMode, *big.Int) {
@@ -319,7 +318,7 @@ func (h *P2PHandler) doSync(op *chainSyncOp) error {
 		}
 	}
 	// Run the sync cycle, and disable fast sync if we're past the pivot block
-	err := h.Downloader.Synchronise(op.peerID, op.head, op.td, op.mode)
+	err := h.Downloader.Synchronise(op.peer.ID(), op.head, op.td, op.mode)
 	if err != nil {
 		return err
 	}

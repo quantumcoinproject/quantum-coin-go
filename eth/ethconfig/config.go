@@ -191,9 +191,6 @@ type Config struct {
 
 	// Berlin block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
-
-	// HTTP sync: optional HTTP server for block/header download. Clients use P2P peers (30303) and assume HTTP sync on 30304.
-	HttpSyncListen bool `toml:",omitempty"` // Enable HTTP sync server (listen on port 30304)
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

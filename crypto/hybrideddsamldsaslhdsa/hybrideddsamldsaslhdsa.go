@@ -313,11 +313,6 @@ func (s HybridEddsaMldsaSlhdsaSig) Verify(pubKey []byte, digestHash []byte, sign
 	if !bytes.Equal(pubKey, pubKeyBytes) {
 		return false
 	}
-	// Allow optional leading algorithm ID when length is algId+raw (e.g. from TLS cert verification via DynamicVerifier).
-	if len(sigBytes) == pqchelpereddsamldsaslhdsa.CRYPTO_COMPACT_SIGNATURE_BYTES+1 &&
-		crypto.SignatureAlgorithmType(sigBytes[0]) == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
-		sigBytes = sigBytes[1:]
-	}
 	return pqchelpereddsamldsaslhdsa.VerifyCompact(pubKey, digestHash, sigBytes)
 }
 
@@ -326,10 +321,7 @@ func (s HybridEddsaMldsaSlhdsaSig) PublicKeyAndSignatureFromCombinedSignature(di
 	if err != nil {
 		return nil, nil, err
 	}
-	if len(signature) == pqchelpereddsamldsaslhdsa.CRYPTO_COMPACT_SIGNATURE_BYTES+1 &&
-		crypto.SignatureAlgorithmType(signature[0]) == crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
-		signature = signature[1:]
-	}
+
 	ok := pqchelpereddsamldsaslhdsa.VerifyCompact(pubKey, digestHash, signature)
 
 	if ok == false {

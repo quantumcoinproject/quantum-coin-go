@@ -87,8 +87,8 @@ type HandlerConfig struct {
 	Checkpoint             *params.TrustedCheckpoint // Hard coded checkpoint for sync challenges
 	Whitelist              map[uint64]common.Hash    // Hard coded whitelist for sync challenged
 	ConsensusPacketHandler *ConsensusPacketHandler
-	RebroadcastCount int
-	StaticNodes      []*enode.Node
+	RebroadcastCount       int
+	StaticNodes            []*enode.Node
 }
 
 type ConsensusHandler interface {
@@ -369,7 +369,7 @@ func (h *P2PHandler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	if p == nil {
 		return errors.New("peer dropped during handling")
 	}
-	// Register the peer in the Downloader.
+	// Register the peer in the Downloader. If the Downloader considers it banned, we disconnect
 	if err := h.Downloader.RegisterPeer(peer.ID(), peer.Version(), peer); err != nil {
 		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
 		return err
@@ -435,6 +435,7 @@ func (h *P2PHandler) unregisterPeer(id string) {
 	}
 	// Remove the `eth` peer if it exists
 	logger.Debug("Removing Ethereum peer")
+
 	h.Downloader.UnregisterPeer(id)
 	h.txFetcher.Drop(id)
 
@@ -519,7 +520,6 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
 		var td *big.Int
 		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
