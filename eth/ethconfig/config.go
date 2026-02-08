@@ -191,9 +191,6 @@ type Config struct {
 
 	// Berlin block override (TODO: remove after the fork)
 	OverrideLondon *big.Int `toml:",omitempty"`
-
-	// REST sync: optional HTTP server for block/header download. Clients use P2P peers (30303) and assume REST on 30304.
-	RestSyncListen bool `toml:",omitempty"` // Enable REST sync server (listen on port 30304)
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.

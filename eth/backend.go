@@ -20,8 +20,6 @@ package eth
 import (
 	"fmt"
 	"math/big"
-	"net"
-	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,8 +41,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/eth/ethconfig"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/filters"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/gasprice"
-	ethprotocol "github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
-	"github.com/quantumcoinproject/quantum-coin-go/eth/restsync"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 	"github.com/quantumcoinproject/quantum-coin-go/event"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
@@ -95,10 +92,6 @@ type Ethereum struct {
 	netRPCService *ethapi.PublicNetAPI
 
 	p2pServer *p2p.Server
-
-	// REST sync (optional)
-	restSyncServer *restsync.Server
-	restSyncClient *restsync.Client
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
@@ -259,13 +252,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 
 	eth.p2pServer.SetRequestPeersFn(eth.handler.RequestPeerList)
 	eth.handler.SetPeerHandler(eth.p2pServer.HandlePeerList, eth.p2pServer.GetLocalPeerId())
-
-	// REST sync client: use connected P2P peers (assume each has REST on port 30304)
-	eth.restSyncClient = restsync.NewClientFromProvider(eth.restSyncPeerURLs, eth.handler.Downloader)
-	if err := eth.handler.Downloader.RegisterPeer(restsync.RestSyncPeerID, ethprotocol.ETH66, eth.restSyncClient); err != nil {
-		log.Warn("Failed to register REST sync peer", "err", err)
-		eth.restSyncClient = nil
-	}
 
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
@@ -557,45 +543,17 @@ func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 // Protocols returns all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	protos := ethprotocol.MakeProtocols((*handler.EthHandler)(s.handler), s.networkID, s.ethDialCandidates)
+	protos := eth.MakeProtocols((*handler.EthHandler)(s.handler), s.networkID, s.ethDialCandidates)
 	return protos
-}
-
-// restSyncPeerURLs returns REST sync base URLs for connected P2P peers (host:30304).
-// Peers connected on 30303 are assumed to also expose REST on 30304.
-func (s *Ethereum) restSyncPeerURLs() []string {
-	peers := s.p2pServer.Peers()
-	if len(peers) == 0 {
-		return nil
-	}
-	urls := make([]string, 0, len(peers))
-	for _, p := range peers {
-		host, _, err := net.SplitHostPort(p.RemoteAddr().String())
-		if err != nil {
-			continue
-		}
-		urls = append(urls, "http://"+host+":30304")
-	}
-	return urls
 }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	ethprotocol.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
-
-	// Start REST sync server if enabled (hardcoded port 30304)
-	if s.config.RestSyncListen {
-		s.restSyncServer = restsync.NewServer(s.blockchain, ":30304")
-		go func() {
-			if err := s.restSyncServer.Start(); err != nil && err != http.ErrServerClosed {
-				log.Warn("REST sync server failed", "err", err)
-			}
-		}()
-	}
 
 	// Figure out a max peers count based on the server limits
 	maxPeers := s.p2pServer.MaxPeers
@@ -613,15 +571,6 @@ func (s *Ethereum) Start() error {
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
-	// Stop REST sync server and unregister REST peer first.
-	if s.restSyncServer != nil {
-		_ = s.restSyncServer.Shutdown()
-		s.restSyncServer = nil
-	}
-	if s.restSyncClient != nil {
-		s.handler.Downloader.UnregisterPeer(restsync.RestSyncPeerID)
-		s.restSyncClient = nil
-	}
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
 	s.snapDialCandidates.Close()
