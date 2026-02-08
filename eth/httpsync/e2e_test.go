@@ -1,8 +1,8 @@
 // Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
-// Package restsync e2e tests: PQC cert creation/load, server TLS config, and HTTP handlers.
-package restsync
+// Package httpsync e2e tests: PQC cert creation/load, server TLS config, and HTTP handlers.
+package httpsync
 
 import (
 	"compress/gzip"
@@ -94,13 +94,13 @@ func newTestChain(t *testing.T) *core.BlockChain {
 	return chain
 }
 
-// TestE2E_HandlersViaHTTP runs the restsync handlers over plain HTTP (httptest)
+// TestE2E_HandlersViaHTTP runs the httpsync handlers over plain HTTP (httptest)
 // with a minimal chain and checks /status and /headers responses.
 func TestE2E_HandlersViaHTTP(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
 	s := NewServer(chain, "", "") // no TLS
-	ts := httptest.NewServer(s.srv.Handler)
+	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 	client := ts.Client()
 
@@ -162,7 +162,7 @@ func TestE2E_HandlersGzip(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
 	s := NewServer(chain, "", "")
-	ts := httptest.NewServer(s.srv.Handler)
+	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/status", nil)
 	req.Header.Set("Accept-Encoding", "gzip")

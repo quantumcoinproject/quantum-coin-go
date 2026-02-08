@@ -1,8 +1,8 @@
 // Copyright 2020 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
-// Package restsync implements the REST sync client (round-robin over peer URLs).
-package restsync
+// Package httpsync implements the HTTP streaming sync client (round-robin over peer URLs; reads chunked responses).
+package httpsync
 
 import (
 	"compress/gzip"
@@ -25,9 +25,9 @@ import (
 )
 
 const (
-	// RestSyncPeerID is the logical peer id used when registering the REST sync peer.
-	RestSyncPeerID = "restsync"
-	// Default HTTP timeout for REST requests.
+	// HttpSyncPeerID is the logical peer id used when registering the HTTP sync peer.
+	HttpSyncPeerID = "httpsync"
+	// Default HTTP timeout for HTTP sync requests.
 	defaultHTTPTimeout = 30 * time.Second
 )
 
@@ -37,7 +37,7 @@ type Deliverer interface {
 	DeliverBodies(id string, transactions [][]*types.Transaction) error
 }
 
-// Client implements downloader.Peer by round-robin HTTP GETs to REST peer URLs.
+// Client implements downloader.Peer by round-robin HTTP GETs to HTTP sync peer URLs.
 // Peer URLs are obtained from the provider (e.g. derived from P2P peers at 30304).
 type Client struct {
 	urlsFn  func() []string
@@ -48,8 +48,8 @@ type Client struct {
 	log     log.Logger
 }
 
-// NewClientFromProvider creates a REST sync client that round-robins over base URLs
-// returned by the provider (e.g. from connected P2P peers, assuming each has REST on 30304).
+// NewClientFromProvider creates an HTTP sync client that round-robins over base URLs
+// returned by the provider (e.g. from connected P2P peers, assuming each has HTTP sync on 30304).
 // Uses HTTPS with TLS 1.3 and accepts self-signed certs; requests gzip when supported.
 func NewClientFromProvider(peerURLsFn func() []string, dl Deliverer) *Client {
 	tr := &http.Transport{
@@ -58,9 +58,9 @@ func NewClientFromProvider(peerURLsFn func() []string, dl Deliverer) *Client {
 	return &Client{
 		urlsFn: peerURLsFn,
 		dl:     dl,
-		peerID: RestSyncPeerID,
+		peerID: HttpSyncPeerID,
 		client: &http.Client{Timeout: defaultHTTPTimeout, Transport: tr},
-		log:    log.New("restsync", "client"),
+		log:    log.New("httpsync", "client"),
 	}
 }
 
@@ -117,10 +117,10 @@ func (c *Client) doGet(url string) (body []byte, statusCode int, err error) {
 func (c *Client) tryAllURLs(fn func(baseURL string) error) error {
 	urls := c.urls()
 	if len(urls) == 0 {
-		c.log.Info("REST sync no peer URLs available", "reason", "no P2P peers with REST on 30304")
-		return fmt.Errorf("restsync: no peer URLs (no P2P peers with REST on 30304)")
+		c.log.Info("HTTP sync no peer URLs available", "reason", "no P2P peers with HTTP sync on 30304")
+		return fmt.Errorf("httpsync: no peer URLs (no P2P peers with HTTP sync on 30304)")
 	}
-	c.log.Info("REST sync trying peers", "count", len(urls))
+	c.log.Info("HTTP sync trying peers", "count", len(urls))
 	for i := 0; i < len(urls); i++ {
 		baseURL := c.nextURL()
 		if baseURL == "" {
@@ -130,10 +130,10 @@ func (c *Client) tryAllURLs(fn func(baseURL string) error) error {
 		if err == nil {
 			return nil
 		}
-		c.log.Info("REST sync request failed, trying next peer", "remotepeer", baseURL, "attempt", i+1, "total", len(urls), "err", err)
+		c.log.Info("HTTP sync request failed, trying next peer", "remotepeer", baseURL, "attempt", i+1, "total", len(urls), "err", err)
 	}
-	c.log.Info("REST sync all peers failed", "count", len(urls))
-	return fmt.Errorf("restsync: all %d peers failed", len(urls))
+	c.log.Info("HTTP sync all peers failed", "count", len(urls))
+	return fmt.Errorf("httpsync: all %d peers failed", len(urls))
 }
 
 // Head returns the chain head hash and total difficulty from the next peer.
@@ -157,11 +157,11 @@ func (c *Client) Head() (common.Hash, *big.Int) {
 		if _, ok := td.SetString(s.TD, 0); !ok {
 			td = common.Big0
 		}
-		c.log.Info("REST sync Head ok", "hash", hash, "td", td, "remotepeer", baseURL)
+		c.log.Info("HTTP sync Head ok", "hash", hash, "td", td, "remotepeer", baseURL)
 		return nil
 	})
 	if err != nil {
-		c.log.Info("REST sync Head failed", "err", err)
+		c.log.Info("HTTP sync Head failed", "err", err)
 		return common.Hash{}, common.Big0
 	}
 	return hash, td
@@ -169,7 +169,7 @@ func (c *Client) Head() (common.Hash, *big.Int) {
 
 // RequestHeadersByNumber fetches headers by block number (ignore skip/reverse) and delivers them.
 func (c *Client) RequestHeadersByNumber(from uint64, amount int, skip int, reverse bool) error {
-	c.log.Info("REST sync RequestHeadersByNumber", "from", from, "amount", amount)
+	c.log.Info("HTTP sync RequestHeadersByNumber", "from", from, "amount", amount)
 	go func() {
 		_ = c.tryAllURLs(func(baseURL string) error {
 			u := baseURL + "/headers?from=" + strconv.FormatUint(from, 10) + "&count=" + strconv.Itoa(amount)
@@ -187,16 +187,16 @@ func (c *Client) RequestHeadersByNumber(from uint64, amount int, skip int, rever
 			if err := rlp.DecodeBytes(data, &headers); err != nil {
 				return err
 			}
-			c.log.Info("REST sync delivered headers by number", "from", from, "count", len(headers), "remotepeer", baseURL)
+			c.log.Info("HTTP sync delivered headers by number", "from", from, "count", len(headers), "remotepeer", baseURL)
 			return c.dl.DeliverHeaders(c.peerID, headers)
 		})
 	}()
 	return nil
 }
 
-// RequestHeadersByHash fetches a single header by hash (amount must be 1 for REST) and delivers it.
+// RequestHeadersByHash fetches a single header by hash (amount must be 1 for HTTP sync) and delivers it.
 func (c *Client) RequestHeadersByHash(origin common.Hash, amount int, skip int, reverse bool) error {
-	c.log.Info("REST sync RequestHeadersByHash", "hash", origin)
+	c.log.Info("HTTP sync RequestHeadersByHash", "hash", origin)
 	go func() {
 		_ = c.tryAllURLs(func(baseURL string) error {
 			u := baseURL + "/headers?hash=" + origin.Hex()
@@ -214,7 +214,7 @@ func (c *Client) RequestHeadersByHash(origin common.Hash, amount int, skip int, 
 			if err := rlp.DecodeBytes(data, &headers); err != nil {
 				return err
 			}
-			c.log.Info("REST sync delivered header by hash", "hash", origin, "count", len(headers), "remotepeer", baseURL)
+			c.log.Info("HTTP sync delivered header by hash", "hash", origin, "count", len(headers), "remotepeer", baseURL)
 			return c.dl.DeliverHeaders(c.peerID, headers)
 		})
 	}()
@@ -223,7 +223,7 @@ func (c *Client) RequestHeadersByHash(origin common.Hash, amount int, skip int, 
 
 // RequestBodies fetches block bodies by hash (round-robin, optionally batched) and delivers them.
 func (c *Client) RequestBodies(hashes []common.Hash) error {
-	c.log.Info("REST sync RequestBodies", "count", len(hashes))
+	c.log.Info("HTTP sync RequestBodies", "count", len(hashes))
 	go func() {
 		_ = c.tryAllURLs(func(baseURL string) error {
 			if len(hashes) == 0 {
@@ -253,7 +253,7 @@ func (c *Client) RequestBodies(hashes []common.Hash) error {
 						}
 						txs[i] = body.Transactions
 					}
-					c.log.Info("REST sync delivered bodies (batch)", "count", len(txs), "remotepeer", baseURL)
+					c.log.Info("HTTP sync delivered bodies (batch)", "count", len(txs), "remotepeer", baseURL)
 					return c.dl.DeliverBodies(c.peerID, txs)
 				}
 			}
@@ -274,19 +274,19 @@ func (c *Client) RequestBodies(hashes []common.Hash) error {
 				}
 				txs = append(txs, body.Transactions)
 			}
-			c.log.Info("REST sync delivered bodies (single)", "count", len(txs), "remotepeer", baseURL)
+			c.log.Info("HTTP sync delivered bodies (single)", "count", len(txs), "remotepeer", baseURL)
 			return c.dl.DeliverBodies(c.peerID, txs)
 		})
 	}()
 	return nil
 }
 
-// RequestReceipts is not supported by REST sync (returns nil without error).
+// RequestReceipts is not supported by HTTP sync (returns nil without error).
 func (c *Client) RequestReceipts(hashes []common.Hash) error {
 	return nil
 }
 
-// RequestNodeData is not supported by REST sync (returns nil without error).
+// RequestNodeData is not supported by HTTP sync (returns nil without error).
 func (c *Client) RequestNodeData(hashes []common.Hash) error {
 	return nil
 }

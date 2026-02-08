@@ -103,7 +103,7 @@ var (
 		utils.UltraLightFractionFlag,
 		utils.UltraLightOnlyAnnounceFlag,
 		utils.LightNoSyncServeFlag,
-		utils.RestSyncListenFlag,
+		utils.HttpSyncListenFlag,
 		utils.WhitelistFlag,
 		utils.BloomFilterSizeFlag,
 		utils.CacheFlag,
