@@ -8,10 +8,6 @@ import (
 	"errors"
 	"math/big"
 	"time"
-
-	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 )
 
 // OID for hybrid PQC (Ed25519 + ML-DSA + SLH-DSA). Private/experimental.
@@ -346,33 +342,15 @@ func ParseCertificatePQC(certDER []byte) (tbsDER []byte, signature []byte, publi
 	return tbsDER, signature, publicKey, nil
 }
 
-// VerifyCertificatePQC verifies the signature on a PQC certificate using cryptobase.DynamicVerifier.Verify.
-// The cert stores the raw compact signature; we build the combined format (algId + sig, pubKey) expected by DynamicVerifier.
+// VerifyCertificatePQC verifies the signature on a PQC certificate using the hybrid Verify.
 func VerifyCertificatePQC(certDER []byte) (pub *PublicKey, err error) {
 	tbsDER, signature, publicKeyBytes, err := ParseCertificatePQC(certDER)
 	if err != nil {
 		return nil, err
 	}
 	hash := sha256.Sum256(tbsDER)
-	// DynamicVerifier routes on part1[0]; compact.Verify strips a leading alg ID so we prepend it here.
-	part1 := append([]byte{byte(crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID)}, signature...)
-	combinedSig := common.CombineTwoParts(part1, publicKeyBytes)
-	if !cryptobase.DynamicSigVerifier.Verify(publicKeyBytes, hash[:], combinedSig) {
+	if !Verify(&PublicKey{Bytes: publicKeyBytes}, hash[:], signature) {
 		return nil, errors.New("certificate signature verification failed")
 	}
 	return &PublicKey{Bytes: publicKeyBytes}, nil
-}
-
-// VerifyPeerCertificatesPQC verifies each certificate in rawCerts as a PQC cert (e.g. for use in tls.Config.VerifyPeerCertificate).
-// Returns an error if rawCerts is empty or any cert fails verification.
-func VerifyPeerCertificatesPQC(rawCerts [][]byte) error {
-	if len(rawCerts) == 0 {
-		return errors.New("no peer certificates")
-	}
-	for _, der := range rawCerts {
-		if _, err := VerifyCertificatePQC(der); err != nil {
-			return errors.New("peer certificate PQC verification failed: " + err.Error())
-		}
-	}
-	return nil
 }

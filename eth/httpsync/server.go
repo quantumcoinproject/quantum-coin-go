@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -219,15 +218,11 @@ func (s *Server) tlsConfig() (*tls.Config, error) {
 	s.currentCert = cert
 	s.certMu.Unlock()
 	return &tls.Config{
-		MinVersion:   tls.VersionTLS13,
-		ClientAuth:   tls.RequireAnyClientCert, // require client cert; we verify it in VerifyPeerCertificate
+		MinVersion: tls.VersionTLS13,
 		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 			s.certMu.RLock()
 			defer s.certMu.RUnlock()
 			return s.currentCert, nil
-		},
-		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
-			return pqctls.VerifyPeerCertificatesPQC(rawCerts)
 		},
 	}, nil
 }
