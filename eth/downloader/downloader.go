@@ -356,7 +356,7 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 		}
 		return err
 	}
-	log.Warn("Synchronisation failed, retrying", "err", err, "peer", id, "err")
+	log.Warn("Synchronisation failed, retrying", "err", err, "peer", id, "err", err)
 	return err
 }
 
@@ -718,7 +718,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		localHeight = d.lightchain.CurrentHeader().Number.Uint64()
 	}
 	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
-	
+
 	// Recap floor value for binary search
 	maxForkAncestry := localHeight - uint64(maxReorgDepth) + 2
 	if localHeight >= maxForkAncestry {
@@ -729,7 +729,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	// Try reorg-limited first: last (maxReorgDepth+1) headers. Finds ancestor in 1 RTT when synced.
 	ancestor, err := d.findAncestorReorgLimited(p, mode, remoteHeight, floor, localHeight)
 	if err == nil {
-		log.Debug("findAncestor findAncestorReorgLimited", "ancestor", ancestor, "peer", p.id, "localHeight", localHeight, "remoteHeight", remoteHeight)
+		p.log.Debug("findAncestor findAncestorReorgLimited", "ancestor", ancestor, "peer", p.id, "localHeight", localHeight, "remoteHeight", remoteHeight)
 		return ancestor, nil
 	}
 	return 0, err
@@ -738,15 +738,18 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 // findAncestorReorgLimited tries to find the common ancestor by fetching the last
 // (maxReorgDepth+1) headers from the peer. With a max reorg of maxReorgDepth blocks, the ancestor
 // is always in that window when we're synced, so this is one round-trip instead of
-// O(log height) for binary search. Returns errNoAncestorFound if not found (caller
-// should fall back to findAncestorBinarySearch).
+// O(log height) for binary search. Returns errNoAncestorFound if not found
 func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64, localHeight uint64) (commonAncestor uint64, err error) {
 	from := uint64(0)
-	count := int(localHeight) + 1
 	if localHeight >= uint64(maxReorgDepth) {
 		from = localHeight - uint64(maxReorgDepth)
 	}
-	p.log.Debug("Reorg-limited ancestor search", "from", from, "count", count, "remoteHeight", remoteHeight, "localHeight", localHeight, "floor", floor, "peer", p.id)
+	count := 10
+	if (uint64(count) + from) > localHeight {
+		count = int(localHeight - from)
+	}
+
+	p.log.Debug("findAncestorReorgLimited Reorg-limited ancestor search", "from", from, "count", count, "remoteHeight", remoteHeight, "localHeight", localHeight, "floor", floor, "peer", p.id)
 	go p.peer.RequestHeadersByNumber(from, count, 0, false)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -759,39 +762,36 @@ func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, 
 			return 0, errCanceled
 		case packet := <-d.headerCh:
 			if packet.PeerId() != p.id {
-				log.Debug("Received headers from incorrect peer", "peer", packet.PeerId())
+				p.log.Debug("findAncestorReorgLimited Received headers from incorrect peer", "peer", packet.PeerId())
 				break
 			}
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 {
-				log.Debug("Received 0 headers", "peer", packet.PeerId())
+				p.log.Debug("findAncestorReorgLimited Received 0 headers", "peer", packet.PeerId())
 				return 0, errNoAncestorFound
 			}
-			log.Debug("findAncestorReorgLimited", "peer", packet.PeerId(), "header count", len(headers))
+			p.log.Debug("findAncestorReorgLimited got headers", "header count", len(headers), "from", headers[0].Number.Uint64(), "to", headers[len(headers)].Number.Uint64())
 
 			// Walk from highest block down; first one we have is the common ancestor
 			for i := len(headers) - 1; i >= 0; i-- {
 				h := headers[i].Hash()
 				n := headers[i].Number.Uint64()
 				var known bool
-				switch mode {
-				case FullSync:
-					known = d.blockchain.HasBlock(h, n)
-				case FastSync:
-					known = d.blockchain.HasFastBlock(h, n)
-				default:
-					known = d.lightchain.HasHeader(h, n)
-				}
+				known = d.blockchain.HasBlock(h, n)
 				if known {
 					if int64(n) <= floor {
-						p.log.Debug("Ancestor below allowance", "number", n, "hash", h, "allowance", floor)
+						p.log.Debug("findAncestorReorgLimited Ancestor below allowance", "number", n, "hash", h, "allowance", floor)
 						return 0, errInvalidAncestor
 					}
-					p.log.Debug("Found common ancestor (reorg-limited)", "number", n, "hash", h)
+					p.log.Debug("findAncestorReorgLimited Found common ancestor (reorg-limited)", "number", n, "hash", h)
 					return n, nil
 				}
+				if n == localHeight {
+					p.log.Warn("findAncestorReorgLimited localHeight exceeds, unexpected", "number", n, "localHeight", floor)
+					break
+				}
 			}
-			log.Debug("findAncestorReorgLimited errNoAncestorFound", "peer", p.id)
+			p.log.Debug("findAncestorReorgLimited errNoAncestorFound", "peer", p.id)
 			return 0, errNoAncestorFound
 		case <-timeout:
 			p.log.Debug("Reorg-limited ancestor search timed out", "elapsed", ttl, "peer", p.id)
