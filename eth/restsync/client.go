@@ -5,6 +5,8 @@
 package restsync
 
 import (
+	"compress/gzip"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -48,12 +50,16 @@ type Client struct {
 
 // NewClientFromProvider creates a REST sync client that round-robins over base URLs
 // returned by the provider (e.g. from connected P2P peers, assuming each has REST on 30304).
+// Uses HTTPS with TLS 1.3 and accepts self-signed certs; requests gzip when supported.
 func NewClientFromProvider(peerURLsFn func() []string, dl Deliverer) *Client {
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, InsecureSkipVerify: true},
+	}
 	return &Client{
 		urlsFn: peerURLsFn,
 		dl:     dl,
 		peerID: RestSyncPeerID,
-		client: &http.Client{Timeout: defaultHTTPTimeout},
+		client: &http.Client{Timeout: defaultHTTPTimeout, Transport: tr},
 		log:    log.New("restsync", "client"),
 	}
 }
@@ -74,6 +80,37 @@ func (c *Client) nextURL() string {
 	}
 	i := atomic.AddUint32(&c.index, 1) - 1
 	return urls[i%uint32(len(urls))]
+}
+
+// readBody reads the response body and decompresses it if Content-Encoding is gzip.
+func readBody(resp *http.Response) ([]byte, error) {
+	var r io.Reader = resp.Body
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		gz, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			resp.Body.Close()
+			return nil, err
+		}
+		defer gz.Close()
+		r = gz
+	}
+	return io.ReadAll(r)
+}
+
+// doGet performs a GET request with Accept-Encoding: gzip and returns the decompressed body and status code.
+func (c *Client) doGet(url string) (body []byte, statusCode int, err error) {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Accept-Encoding", "gzip")
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	body, err = readBody(resp)
+	return body, resp.StatusCode, err
 }
 
 // tryAllURLs runs fn for each URL in round-robin order until one succeeds.
@@ -104,16 +141,15 @@ func (c *Client) Head() (common.Hash, *big.Int) {
 	var hash common.Hash
 	var td *big.Int
 	err := c.tryAllURLs(func(baseURL string) error {
-		resp, err := c.client.Get(baseURL + "/status")
+		body, statusCode, err := c.doGet(baseURL + "/status")
 		if err != nil {
 			return err
 		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("status %d", resp.StatusCode)
+		if statusCode != http.StatusOK {
+			return fmt.Errorf("status %d", statusCode)
 		}
 		var s StatusResponse
-		if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
+		if err := json.Unmarshal(body, &s); err != nil {
 			return err
 		}
 		hash = s.Hash
@@ -137,20 +173,15 @@ func (c *Client) RequestHeadersByNumber(from uint64, amount int, skip int, rever
 	go func() {
 		_ = c.tryAllURLs(func(baseURL string) error {
 			u := baseURL + "/headers?from=" + strconv.FormatUint(from, 10) + "&count=" + strconv.Itoa(amount)
-			resp, err := c.client.Get(u)
+			data, statusCode, err := c.doGet(u)
 			if err != nil {
 				return err
 			}
-			defer resp.Body.Close()
-			if resp.StatusCode == http.StatusNotFound {
+			if statusCode == http.StatusNotFound {
 				return c.dl.DeliverHeaders(c.peerID, nil)
 			}
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("status %d", resp.StatusCode)
-			}
-			data, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return err
+			if statusCode != http.StatusOK {
+				return fmt.Errorf("status %d", statusCode)
 			}
 			var headers []*types.Header
 			if err := rlp.DecodeBytes(data, &headers); err != nil {
@@ -169,20 +200,15 @@ func (c *Client) RequestHeadersByHash(origin common.Hash, amount int, skip int, 
 	go func() {
 		_ = c.tryAllURLs(func(baseURL string) error {
 			u := baseURL + "/headers?hash=" + origin.Hex()
-			resp, err := c.client.Get(u)
+			data, statusCode, err := c.doGet(u)
 			if err != nil {
 				return err
 			}
-			defer resp.Body.Close()
-			if resp.StatusCode == http.StatusNotFound {
+			if statusCode == http.StatusNotFound {
 				return c.dl.DeliverHeaders(c.peerID, nil)
 			}
-			if resp.StatusCode != http.StatusOK {
-				return fmt.Errorf("status %d", resp.StatusCode)
-			}
-			data, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return err
+			if statusCode != http.StatusOK {
+				return fmt.Errorf("status %d", statusCode)
 			}
 			var headers []*types.Header
 			if err := rlp.DecodeBytes(data, &headers); err != nil {
@@ -210,16 +236,11 @@ func (c *Client) RequestBodies(hashes []common.Hash) error {
 					parts[i] = h.Hex()
 				}
 				u := baseURL + "/blocks?hash=" + strings.Join(parts, ",")
-				resp, err := c.client.Get(u)
+				data, statusCode, err := c.doGet(u)
 				if err != nil {
 					return err
 				}
-				defer resp.Body.Close()
-				if resp.StatusCode == http.StatusOK {
-					data, err := io.ReadAll(resp.Body)
-					if err != nil {
-						return err
-					}
+				if statusCode == http.StatusOK {
 					var bodies []rlp.RawValue
 					if err := rlp.DecodeBytes(data, &bodies); err != nil {
 						return err
@@ -240,18 +261,12 @@ func (c *Client) RequestBodies(hashes []common.Hash) error {
 			txs := make([][]*types.Transaction, 0, len(hashes))
 			for _, hash := range hashes {
 				u := baseURL + "/block?hash=" + hash.Hex()
-				resp, err := c.client.Get(u)
+				data, statusCode, err := c.doGet(u)
 				if err != nil {
 					return err
 				}
-				if resp.StatusCode != http.StatusOK {
-					resp.Body.Close()
-					return fmt.Errorf("status %d for %s", resp.StatusCode, hash.Hex())
-				}
-				data, err := io.ReadAll(resp.Body)
-				resp.Body.Close()
-				if err != nil {
-					return err
+				if statusCode != http.StatusOK {
+					return fmt.Errorf("status %d for %s", statusCode, hash.Hex())
 				}
 				var body types.Body
 				if err := rlp.DecodeBytes(data, &body); err != nil {

@@ -98,8 +98,9 @@ type Ethereum struct {
 	p2pServer *p2p.Server
 
 	// REST sync (optional)
-	restSyncServer *restsync.Server
-	restSyncClient *restsync.Client
+	dataDir         string // instance data dir for TLS cert
+	restSyncServer  *restsync.Server
+	restSyncClient  *restsync.Client
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
@@ -163,6 +164,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
+		dataDir:           stack.ResolvePath(""),
 	}
 	log.Debug("New after RecoverPruning")
 
@@ -578,7 +580,7 @@ func (s *Ethereum) restSyncPeerURLs() []string {
 		if i := strings.Index(host, "%"); i >= 0 {
 			host = host[:i]
 		}
-		urls = append(urls, "http://"+host+":30304")
+		urls = append(urls, "https://"+host+":30304")
 	}
 	return urls
 }
@@ -591,9 +593,9 @@ func (s *Ethereum) Start() error {
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
 
-	// Start REST sync server if enabled (hardcoded port 30304)
+	// Start REST sync server if enabled (HTTPS, TLS 1.3, port 30304)
 	if s.config.RestSyncListen {
-		s.restSyncServer = restsync.NewServer(s.blockchain, ":30304")
+		s.restSyncServer = restsync.NewServer(s.blockchain, ":30304", s.dataDir)
 		go func() {
 			if err := s.restSyncServer.Start(); err != nil && err != http.ErrServerClosed {
 				log.Warn("REST sync server failed", "err", err)
