@@ -89,7 +89,6 @@ type HandlerConfig struct {
 	ConsensusPacketHandler *ConsensusPacketHandler
 	RebroadcastCount       int
 	StaticNodes            []*enode.Node
-	ClassicalBlockService bool // If true, serve block headers/bodies over P2P (30303); default true
 }
 
 type ConsensusHandler interface {
@@ -157,9 +156,6 @@ type P2PHandler struct {
 	consensusPacketHelper      *ConsensusPacketHelper
 	StaticNodes                []*enode.Node
 	StaticNodeMap              map[string]bool
-	classicalBlockService      bool
-	restSyncHeadFn             func() (common.Hash, *big.Int) // when set and !classicalBlockService, sync uses REST
-	restSyncPeerID             string
 }
 
 var lock = &sync.Mutex{}
@@ -185,15 +181,6 @@ func (h *P2PHandler) SetPeerHandler(handleFn HandlePeerList, localPeerId string)
 	defer lock.Unlock()
 	h.handlePeerListFn = handleFn
 	h.localPeerId = localPeerId
-}
-
-// SetRestSyncHeadFn sets the function and peer ID used for REST-based sync when ClassicalBlockService is false.
-// Call with fn != nil and peerID (e.g. "restsync") after the REST client is registered with the downloader.
-func (h *P2PHandler) SetRestSyncHeadFn(fn func() (common.Hash, *big.Int), peerID string) {
-	lock.Lock()
-	defer lock.Unlock()
-	h.restSyncHeadFn = fn
-	h.restSyncPeerID = peerID
 }
 
 // NewHandler returns a P2PHandler for all Ethereum chain management protocol.
@@ -224,7 +211,6 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		rebroadcastLastCleanupTime: time.Now(),
 		consensusPacketHelper:      NewConsensusPacketHelper(config.Chain),
 		StaticNodes:                config.StaticNodes,
-		classicalBlockService:      config.ClassicalBlockService,
 	}
 	h.StaticNodeMap = make(map[string]bool)
 	if h.StaticNodes != nil {
@@ -383,12 +369,10 @@ func (h *P2PHandler) runEthPeer(peer *eth.Peer, handler eth.Handler) error {
 	if p == nil {
 		return errors.New("peer dropped during handling")
 	}
-	// Register the peer in the Downloader (unless we use REST-only block sync).
-	if h.classicalBlockService {
-		if err := h.Downloader.RegisterPeer(peer.ID(), peer.Version(), peer); err != nil {
-			peer.Log().Error("Failed to register peer in eth syncer", "err", err)
-			return err
-		}
+	// Register the peer in the Downloader. If the Downloader considers it banned, we disconnect
+	if err := h.Downloader.RegisterPeer(peer.ID(), peer.Version(), peer); err != nil {
+		peer.Log().Error("Failed to register peer in eth syncer", "err", err)
+		return err
 	}
 	h.chainSync.handlePeerEvent(peer)
 
@@ -449,11 +433,10 @@ func (h *P2PHandler) unregisterPeer(id string) {
 		logger.Error("Ethereum peer removal failed", "err", errPeerNotRegistered)
 		return
 	}
-	// Remove the `eth` peer if it exists (only if it was registered for block sync).
+	// Remove the `eth` peer if it exists
 	logger.Debug("Removing Ethereum peer")
-	if h.classicalBlockService {
-		h.Downloader.UnregisterPeer(id)
-	}
+
+	h.Downloader.UnregisterPeer(id)
 	h.txFetcher.Drop(id)
 
 	if err := h.peers.unregisterPeer(id); err != nil {

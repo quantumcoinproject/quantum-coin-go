@@ -22,7 +22,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -236,18 +235,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	if eth.handler, err = handler.NewHandler(&handler.HandlerConfig{
-		Database:            chainDb,
-		Chain:               eth.blockchain,
-		TxPool:              eth.txPool,
-		Network:             config.NetworkId,
-		Sync:                config.SyncMode,
-		BloomCache:          uint64(cacheLimit),
-		EventMux:            eth.eventMux,
-		Checkpoint:          checkpoint,
-		Whitelist:           config.Whitelist,
-		RebroadcastCount:    stack.Config().RebroadcastCount,
-		StaticNodes:         eth.p2pServer.StaticNodes,
-		ClassicalBlockService:     config.ClassicalBlockService,
+		Database:         chainDb,
+		Chain:            eth.blockchain,
+		TxPool:           eth.txPool,
+		Network:          config.NetworkId,
+		Sync:             config.SyncMode,
+		BloomCache:       uint64(cacheLimit),
+		EventMux:         eth.eventMux,
+		Checkpoint:       checkpoint,
+		Whitelist:        config.Whitelist,
+		RebroadcastCount: stack.Config().RebroadcastCount,
+		StaticNodes:      eth.p2pServer.StaticNodes,
 	}); err != nil {
 		return nil, err
 	}
@@ -267,9 +265,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	if err := eth.handler.Downloader.RegisterPeer(restsync.RestSyncPeerID, ethprotocol.ETH66, eth.restSyncClient); err != nil {
 		log.Warn("Failed to register REST sync peer", "err", err)
 		eth.restSyncClient = nil
-	}
-	if !config.ClassicalBlockService && eth.restSyncClient != nil {
-		eth.handler.SetRestSyncHeadFn(eth.restSyncClient.Head, restsync.RestSyncPeerID)
 	}
 
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
@@ -578,10 +573,6 @@ func (s *Ethereum) restSyncPeerURLs() []string {
 		host, _, err := net.SplitHostPort(p.RemoteAddr().String())
 		if err != nil {
 			continue
-		}
-		// Use only the IP/host; strip zone identifier (e.g. 169.254.183.41%Ethernet0 -> 169.254.183.41).
-		if i := strings.Index(host, "%"); i >= 0 {
-			host = host[:i]
 		}
 		urls = append(urls, "http://"+host+":30304")
 	}

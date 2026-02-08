@@ -168,7 +168,7 @@ func (c *Client) RequestHeadersByHash(origin common.Hash, amount int, skip int, 
 	c.log.Info("REST sync RequestHeadersByHash", "hash", origin)
 	go func() {
 		_ = c.tryAllURLs(func(baseURL string) error {
-			u := baseURL + "/headers?hash=" + origin.Hex()
+			u := baseURL + "/headers?hash=0x" + origin.Hex()
 			resp, err := c.client.Get(u)
 			if err != nil {
 				return err
@@ -207,7 +207,7 @@ func (c *Client) RequestBodies(hashes []common.Hash) error {
 			if len(hashes) > 1 {
 				parts := make([]string, len(hashes))
 				for i, h := range hashes {
-					parts[i] = h.Hex()
+					parts[i] = "0x" + h.Hex()
 				}
 				u := baseURL + "/blocks?hash=" + strings.Join(parts, ",")
 				resp, err := c.client.Get(u)
@@ -239,7 +239,7 @@ func (c *Client) RequestBodies(hashes []common.Hash) error {
 			// Single or fallback: request one by one
 			txs := make([][]*types.Transaction, 0, len(hashes))
 			for _, hash := range hashes {
-				u := baseURL + "/block?hash=" + hash.Hex()
+				u := baseURL + "/block?hash=0x" + hash.Hex()
 				resp, err := c.client.Get(u)
 				if err != nil {
 					return err

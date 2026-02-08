@@ -296,10 +296,6 @@ var (
 		Name:  "restsync.listen",
 		Usage: "Enable REST sync server (block/header download over HTTP on port 30304)",
 	}
-	ClassicalBlockServiceFlag = cli.BoolFlag{
-		Name:  "p2p.classicalblocks",
-		Usage: "Enable serving block headers and bodies over P2P (port 30303) (default: true)",
-	}
 	LightNoSyncServeFlag = cli.BoolFlag{
 		Name:  "light.nosyncserve",
 		Usage: "Enables serving light clients before syncing",
@@ -1513,11 +1509,6 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *ethconfig.Config) {
 	setLes(ctx, cfg)
 	if ctx.GlobalIsSet(RestSyncListenFlag.Name) {
 		cfg.RestSyncListen = ctx.GlobalBool(RestSyncListenFlag.Name)
-	}
-	if ctx.GlobalIsSet(ClassicalBlockServiceFlag.Name) {
-		cfg.ClassicalBlockService = ctx.GlobalBool(ClassicalBlockServiceFlag.Name)
-	} else {
-		cfg.ClassicalBlockService = true // default: classical P2P block service on
 	}
 
 	// Cap the cache allowance and tune the garbage collector

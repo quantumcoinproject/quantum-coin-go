@@ -60,11 +60,6 @@ func (h *EthHandler) AcceptTxs() bool {
 	return atomic.LoadUint32(&h.AcceptTxns) == 1
 }
 
-// ClassicalBlockService returns true if block headers/bodies should be served over P2P (30303).
-func (h *EthHandler) ClassicalBlockService() bool {
-	return (*P2PHandler)(h).classicalBlockService
-}
-
 // Handle is invoked from a peer's message P2PHandler when it receives a new remote
 // message that the P2PHandler couldn't consume and serve itself.
 func (h *EthHandler) Handle(peer *eth.Peer, pkt eth.Packet) error {
