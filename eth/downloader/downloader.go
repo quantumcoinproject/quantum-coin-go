@@ -727,7 +727,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	}
 
 	// Try reorg-limited first: last (maxReorgDepth+1) headers. Finds ancestor in 1 RTT when synced.
-	ancestor, err := d.findAncestorReorgLimited(p, remoteHeight, floor, localHeight)
+	ancestor, err := d.findAncestorReorgLimited(p, mode, remoteHeight, floor, localHeight)
 	if err == nil {
 		p.log.Debug("findAncestor findAncestorReorgLimited", "ancestor", ancestor, "peer", p.id, "localHeight", localHeight, "remoteHeight", remoteHeight)
 		return ancestor, nil
@@ -739,7 +739,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 // (maxReorgDepth+1) headers from the peer. With a max reorg of maxReorgDepth blocks, the ancestor
 // is always in that window when we're synced, so this is one round-trip instead of
 // O(log height) for binary search. Returns errNoAncestorFound if not found
-func (d *Downloader) findAncestorReorgLimited(p *peerConnection, remoteHeight uint64, floor int64, localHeight uint64) (commonAncestor uint64, err error) {
+func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64, localHeight uint64) (commonAncestor uint64, err error) {
 	from := uint64(0)
 	if localHeight >= uint64(maxReorgDepth) {
 		from = localHeight - uint64(maxReorgDepth)
