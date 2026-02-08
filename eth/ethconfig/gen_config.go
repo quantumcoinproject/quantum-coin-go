@@ -58,7 +58,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideLondon          *big.Int                       `toml:",omitempty"`
 		RestSyncListen          bool                           `toml:",omitempty"`
-		ClassicalBlockService       bool                           `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -102,7 +101,6 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.CheckpointOracle = c.CheckpointOracle
 	enc.OverrideLondon = c.OverrideLondon
 	enc.RestSyncListen = c.RestSyncListen
-	enc.ClassicalBlockService = c.ClassicalBlockService
 	return &enc, nil
 }
 
@@ -150,7 +148,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideLondon          *big.Int                       `toml:",omitempty"`
 		RestSyncListen          *bool                          `toml:",omitempty"`
-		ClassicalBlockService       *bool                          `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -278,11 +275,6 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.RestSyncListen != nil {
 		c.RestSyncListen = *dec.RestSyncListen
-	}
-	if dec.ClassicalBlockService != nil {
-		c.ClassicalBlockService = *dec.ClassicalBlockService
-	} else {
-		c.ClassicalBlockService = true // default: classical P2P block service on
 	}
 	return nil
 }

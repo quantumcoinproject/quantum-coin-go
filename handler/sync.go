@@ -166,8 +166,8 @@ type chainSyncer struct {
 // chainSyncOp is a scheduled sync operation.
 type chainSyncOp struct {
 	mode   downloader.SyncMode
-	peer   *eth.Peer  // nil when syncing via REST
-	peerID string     // peer id for downloader (peer.ID() or restSyncPeerID)
+	peer   *eth.Peer
+	peerID string // peer id for downloader
 	td     *big.Int
 	head   common.Hash
 }
@@ -241,15 +241,6 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil // Sync already running.
 	}
 	mode, ourTD := cs.modeAndLocalHead()
-
-	// When using REST-only block sync, use REST peer head instead of P2P peers.
-	if !cs.handler.classicalBlockService && cs.handler.restSyncHeadFn != nil && cs.handler.restSyncPeerID != "" {
-		head, td := cs.handler.restSyncHeadFn()
-		if head == (common.Hash{}) || td == nil || td.Cmp(ourTD) <= 0 {
-			return nil
-		}
-		return &chainSyncOp{mode: mode, peer: nil, peerID: cs.handler.restSyncPeerID, head: head, td: td}
-	}
 
 	// Ensure we're at minimum peer count.
 	minPeers := defaultMinSyncPeers

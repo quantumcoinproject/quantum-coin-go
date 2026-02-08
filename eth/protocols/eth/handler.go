@@ -92,9 +92,6 @@ type Backend interface {
 	// the remote peer. Only packets not consumed by the protocol handler will
 	// be forwarded to the backend.
 	Handle(peer *Peer, packet Packet) error
-
-	// ClassicalBlockService returns true if the node should serve block headers and bodies over P2P (30303).
-	ClassicalBlockService() bool
 }
 
 // TxPool defines the methods needed by the protocol handler to serve transactions.

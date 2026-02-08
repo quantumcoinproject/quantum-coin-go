@@ -194,8 +194,6 @@ type Config struct {
 
 	// REST sync: optional HTTP server for block/header download. Clients use P2P peers (30303) and assume REST on 30304.
 	RestSyncListen bool `toml:",omitempty"` // Enable REST sync server (listen on port 30304)
-	// ClassicalBlockService enables serving block headers and bodies over the eth protocol (port 30303). Default true.
-	ClassicalBlockService bool `toml:",omitempty"`
 }
 
 // CreateConsensusEngine creates a consensus engine for the given chain configuration.
