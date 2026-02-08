@@ -732,20 +732,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		log.Debug("findAncestor findAncestorReorgLimited", "ancestor", ancestor, "peer", p.id, "localHeight", localHeight, "remoteHeight", remoteHeight)
 		return ancestor, nil
 	}
-	if !errors.Is(err, errNoAncestorFound) {
-		return 0, err
-	}
-
-	return 0, errNoAncestorFound
-	/*
-		// Far behind or divergent chain: binary search over [floor, remoteHeight].
-		ancestor, err = d.findAncestorBinarySearch(p, mode, remoteHeight, floor)
-		if err != nil {
-			log.Debug("findAncestor findAncestorBinarySearch error", "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor, "err", err)
-			return 0, err
-		}
-		log.Debug("findAncestor findAncestorBinarySearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
-		return ancestor, nil*/
+	return 0, err
 }
 
 // findAncestorReorgLimited tries to find the common ancestor by fetching the last
@@ -760,7 +747,7 @@ func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, 
 		from = remoteHeight - uint64(maxReorgDepth)
 		count = maxReorgDepth + 1
 	}
-	p.log.Trace("Reorg-limited ancestor search", "from", from, "count", count)
+	p.log.Debug("Reorg-limited ancestor search", "from", from, "count", count, "remoteHeight", remoteHeight, "floor", floor, "peer", p.id)
 	go p.peer.RequestHeadersByNumber(from, count, 0, false)
 
 	ttl := d.peers.rates.TargetTimeout()
@@ -769,6 +756,7 @@ func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, 
 	for {
 		select {
 		case <-d.cancelCh:
+			p.log.Debug("findAncestorReorgLimited cancelled", "peer", p.id)
 			return 0, errCanceled
 		case packet := <-d.headerCh:
 			if packet.PeerId() != p.id {
@@ -777,8 +765,11 @@ func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, 
 			}
 			headers := packet.(*headerPack).headers
 			if len(headers) == 0 {
+				log.Debug("Received 0 headers", "peer", packet.PeerId())
 				return 0, errNoAncestorFound
 			}
+			log.Debug("findAncestorReorgLimited", "peer", packet.PeerId(), "header count", len(headers))
+
 			// Walk from highest block down; first one we have is the common ancestor
 			for i := len(headers) - 1; i >= 0; i-- {
 				h := headers[i].Hash()
@@ -794,114 +785,25 @@ func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, 
 				}
 				if known {
 					if int64(n) <= floor {
-						p.log.Warn("Ancestor below allowance", "number", n, "hash", h, "allowance", floor)
+						p.log.Debug("Ancestor below allowance", "number", n, "hash", h, "allowance", floor)
 						return 0, errInvalidAncestor
 					}
 					p.log.Debug("Found common ancestor (reorg-limited)", "number", n, "hash", h)
 					return n, nil
 				}
 			}
+			log.Debug("findAncestorReorgLimited errNoAncestorFound", "peer", p.id)
 			return 0, errNoAncestorFound
 		case <-timeout:
-			p.log.Debug("Reorg-limited ancestor search timed out", "elapsed", ttl)
+			p.log.Debug("Reorg-limited ancestor search timed out", "elapsed", ttl, "peer", p.id)
 			return 0, errNoAncestorFound
 		case <-d.bodyCh:
+			p.log.Debug("findAncestorReorgLimited got out of band block bodies", "peer", p.id)
 		case <-d.receiptCh:
+			p.log.Debug("findAncestorReorgLimited got out of band receipts", "peer", p.id)
 			// Out of bounds delivery, ignore
 		}
 	}
-}
-
-func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (commonAncestor uint64, err error) {
-	hash := common.Hash{}
-
-	// Ancestor not found, we need to binary search over our chain
-	start, end := uint64(0), remoteHeight
-	if floor > 0 {
-		start = uint64(floor)
-	}
-	p.log.Trace("Binary searching for common ancestor", "start", start, "end", end)
-
-	for start+1 < end {
-		// Split our chain interval in two, and request the hash to cross check
-		check := (start + end) / 2
-
-		ttl := d.peers.rates.TargetTimeout()
-		timeout := time.After(ttl)
-		log.Debug("ttl timeout", "ttl", ttl)
-
-		go p.peer.RequestHeadersByNumber(check, 1, 0, false)
-
-		// Wait until a reply arrives to this request
-		for arrived := false; !arrived; {
-			select {
-			case <-d.cancelCh:
-				return 0, errCanceled
-
-			case packet := <-d.headerCh:
-				// Discard anything not from the origin peer
-				if packet.PeerId() != p.id {
-					log.Debug("Received headers from incorrect peer", "peer", packet.PeerId())
-					break
-				}
-				// Make sure the peer actually gave something valid
-				headers := packet.(*headerPack).headers
-				if len(headers) != 1 {
-					if len(headers) == 0 {
-						p.log.Warn("Zero headers arrived", "PeerId", packet.PeerId())
-					} else {
-						p.log.Warn("Multiple headers for single request", "headers", len(headers), "PeerId", packet.PeerId())
-					}
-					return 0, fmt.Errorf("%w: multiple headers (%d) for single request", errBadPeer, len(headers))
-				}
-				arrived = true
-
-				// Modify the search interval based on the response
-				h := headers[0].Hash()
-				n := headers[0].Number.Uint64()
-
-				var known bool
-				switch mode {
-				case FullSync:
-					known = d.blockchain.HasBlock(h, n)
-				case FastSync:
-					known = d.blockchain.HasFastBlock(h, n)
-				default:
-					known = d.lightchain.HasHeader(h, n)
-				}
-				if !known {
-					end = check
-					break
-				}
-				exists := d.lightchain.HasHeader(h, n) // Independent of sync mode, header surely exists
-				if exists == false {
-					p.log.Warn("Header or number is nil", "hash", h, "number", n)
-					return 0, errBadPeer
-				}
-				if n != check {
-					p.log.Warn("Received non requested header", "number", n, "hash", h, "request", check)
-					return 0, fmt.Errorf("%w: non-requested header (%d)", errBadPeer, n)
-				}
-				start = check
-				hash = h
-
-			case <-timeout:
-				p.log.Debug("Waiting for search header timed out", "elapsed", ttl, "peer", p.id)
-				return 0, errTimeout
-
-			case <-d.bodyCh:
-			case <-d.receiptCh:
-				// Out of bounds delivery, ignore
-			}
-		}
-	}
-	// Ensure valid ancestry and return
-	if int64(start) <= floor {
-		p.log.Warn("Ancestor below allowance", "number", start, "hash", hash, "allowance", floor)
-		return 0, errInvalidAncestor
-	}
-	p.log.Debug("Found common ancestor", "number", start, "hash", hash)
-	return start, nil
 }
 
 // fetchHeaders keeps retrieving headers concurrently from the number
