@@ -104,6 +104,7 @@ var (
 		utils.UltraLightOnlyAnnounceFlag,
 		utils.LightNoSyncServeFlag,
 		utils.RestSyncListenFlag,
+		utils.ClassicalBlockServiceFlag,
 		utils.WhitelistFlag,
 		utils.BloomFilterSizeFlag,
 		utils.CacheFlag,

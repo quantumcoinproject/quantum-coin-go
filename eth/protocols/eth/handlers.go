@@ -45,7 +45,10 @@ func handleGetBlockHeaders66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	response := answerGetBlockHeadersQuery(backend, query.GetBlockHeadersPacket, peer)
+	var response []*types.Header
+	if backend.ClassicalBlockService() {
+		response = answerGetBlockHeadersQuery(backend, query.GetBlockHeadersPacket, peer)
+	}
 	return peer.ReplyBlockHeaders(query.RequestId, response)
 }
 
@@ -151,7 +154,10 @@ func handleGetBlockBodies66(backend Backend, msg Decoder, peer *Peer) error {
 	if err := msg.Decode(&query); err != nil {
 		return fmt.Errorf("%w: message %v: %v", errDecode, msg, err)
 	}
-	response := answerGetBlockBodiesQuery(backend, query.GetBlockBodiesPacket, peer)
+	var response []rlp.RawValue
+	if backend.ClassicalBlockService() {
+		response = answerGetBlockBodiesQuery(backend, query.GetBlockBodiesPacket, peer)
+	}
 	return peer.ReplyBlockBodiesRLP(query.RequestId, response)
 }
 
