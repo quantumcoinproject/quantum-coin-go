@@ -718,7 +718,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 		localHeight = d.lightchain.CurrentHeader().Number.Uint64()
 	}
 	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
-
+	
 	// Recap floor value for binary search
 	maxForkAncestry := localHeight - uint64(maxReorgDepth) + 2
 	if localHeight >= maxForkAncestry {
@@ -727,7 +727,7 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	}
 
 	// Try reorg-limited first: last (maxReorgDepth+1) headers. Finds ancestor in 1 RTT when synced.
-	ancestor, err := d.findAncestorReorgLimited(p, mode, remoteHeight, floor)
+	ancestor, err := d.findAncestorReorgLimited(p, mode, remoteHeight, floor, localHeight)
 	if err == nil {
 		log.Debug("findAncestor findAncestorReorgLimited", "ancestor", ancestor, "peer", p.id, "localHeight", localHeight, "remoteHeight", remoteHeight)
 		return ancestor, nil
@@ -740,14 +740,13 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 // is always in that window when we're synced, so this is one round-trip instead of
 // O(log height) for binary search. Returns errNoAncestorFound if not found (caller
 // should fall back to findAncestorBinarySearch).
-func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (commonAncestor uint64, err error) {
+func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64, localHeight uint64) (commonAncestor uint64, err error) {
 	from := uint64(0)
-	count := int(remoteHeight) + 1
-	if remoteHeight >= uint64(maxReorgDepth) {
-		from = remoteHeight - uint64(maxReorgDepth)
-		count = maxReorgDepth + 1
+	count := int(localHeight) + 1
+	if localHeight >= uint64(maxReorgDepth) {
+		from = localHeight - uint64(maxReorgDepth)
 	}
-	p.log.Debug("Reorg-limited ancestor search", "from", from, "count", count, "remoteHeight", remoteHeight, "floor", floor, "peer", p.id)
+	p.log.Debug("Reorg-limited ancestor search", "from", from, "count", count, "remoteHeight", remoteHeight, "localHeight", localHeight, "floor", floor, "peer", p.id)
 	go p.peer.RequestHeadersByNumber(from, count, 0, false)
 
 	ttl := d.peers.rates.TargetTimeout()
