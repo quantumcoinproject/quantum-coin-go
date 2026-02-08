@@ -57,6 +57,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideLondon          *big.Int                       `toml:",omitempty"`
+		HttpSyncListen          bool                           `toml:",omitempty"`
 	}
 	var enc Config
 	enc.Genesis = c.Genesis
@@ -99,6 +100,7 @@ func (c Config) MarshalTOML() (interface{}, error) {
 	enc.Checkpoint = c.Checkpoint
 	enc.CheckpointOracle = c.CheckpointOracle
 	enc.OverrideLondon = c.OverrideLondon
+	enc.HttpSyncListen = c.HttpSyncListen
 	return &enc, nil
 }
 
@@ -145,6 +147,7 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 		Checkpoint              *params.TrustedCheckpoint      `toml:",omitempty"`
 		CheckpointOracle        *params.CheckpointOracleConfig `toml:",omitempty"`
 		OverrideLondon          *big.Int                       `toml:",omitempty"`
+		HttpSyncListen          *bool                          `toml:",omitempty"`
 	}
 	var dec Config
 	if err := unmarshal(&dec); err != nil {
@@ -269,6 +272,9 @@ func (c *Config) UnmarshalTOML(unmarshal func(interface{}) error) error {
 	}
 	if dec.OverrideLondon != nil {
 		c.OverrideLondon = dec.OverrideLondon
+	}
+	if dec.HttpSyncListen != nil {
+		c.HttpSyncListen = *dec.HttpSyncListen
 	}
 	return nil
 }

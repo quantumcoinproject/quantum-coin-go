@@ -143,6 +143,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.JSpathFlag,
 			utils.ExecFlag,
 			utils.PreloadJSFlag,
+			utils.HttpSyncListenFlag,
 		},
 	},
 	{

@@ -20,6 +20,9 @@ package eth
 import (
 	"fmt"
 	"math/big"
+	"net"
+	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,7 +44,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/eth/ethconfig"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/filters"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/gasprice"
-	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
+	ethprotocol "github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/httpsync"
 	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 	"github.com/quantumcoinproject/quantum-coin-go/event"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
@@ -92,6 +96,11 @@ type Ethereum struct {
 	netRPCService *ethapi.PublicNetAPI
 
 	p2pServer *p2p.Server
+
+	// HTTP sync (optional)
+	dataDir         string // instance data dir for TLS cert
+	httpSyncServer  *httpsync.Server
+	httpSyncClient  *httpsync.Client
 
 	lock sync.RWMutex // Protects the variadic fields (e.g. gas price and etherbase)
 }
@@ -155,6 +164,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		bloomRequests:     make(chan chan *bloombits.Retrieval),
 		bloomIndexer:      core.NewBloomIndexer(chainDb, params.BloomBitsBlocks, params.BloomConfirms),
 		p2pServer:         stack.Server(),
+		dataDir:           stack.ResolvePath(""),
 	}
 	log.Debug("New after RecoverPruning")
 
@@ -228,17 +238,17 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	}
 
 	if eth.handler, err = handler.NewHandler(&handler.HandlerConfig{
-		Database:         chainDb,
-		Chain:            eth.blockchain,
-		TxPool:           eth.txPool,
-		Network:          config.NetworkId,
-		Sync:             config.SyncMode,
-		BloomCache:       uint64(cacheLimit),
-		EventMux:         eth.eventMux,
-		Checkpoint:       checkpoint,
-		Whitelist:        config.Whitelist,
-		RebroadcastCount: stack.Config().RebroadcastCount,
-		StaticNodes:      eth.p2pServer.StaticNodes,
+		Database:            chainDb,
+		Chain:               eth.blockchain,
+		TxPool:              eth.txPool,
+		Network:             config.NetworkId,
+		Sync:                config.SyncMode,
+		BloomCache:          uint64(cacheLimit),
+		EventMux:            eth.eventMux,
+		Checkpoint:          checkpoint,
+		Whitelist:           config.Whitelist,
+		RebroadcastCount:    stack.Config().RebroadcastCount,
+		StaticNodes:         eth.p2pServer.StaticNodes,
 	}); err != nil {
 		return nil, err
 	}
@@ -253,6 +263,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.p2pServer.SetRequestPeersFn(eth.handler.RequestPeerList)
 	eth.handler.SetPeerHandler(eth.p2pServer.HandlePeerList, eth.p2pServer.GetLocalPeerId())
 
+	// HTTP sync client is created in Start() after the server (so mTLS cert exists).
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
@@ -543,17 +554,66 @@ func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 // Protocols returns all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	protos := eth.MakeProtocols((*handler.EthHandler)(s.handler), s.networkID, s.ethDialCandidates)
+	protos := ethprotocol.MakeProtocols((*handler.EthHandler)(s.handler), s.networkID, s.ethDialCandidates)
 	return protos
+}
+
+// httpSyncPeerURLs returns HTTP sync base URLs for connected P2P peers (host:30304).
+// Peers connected on 30303 are assumed to also expose HTTP sync on 30304.
+func (s *Ethereum) httpSyncPeerURLs() []string {
+	peers := s.p2pServer.Peers()
+	if len(peers) == 0 {
+		return nil
+	}
+	urls := make([]string, 0, len(peers))
+	for _, p := range peers {
+		host, _, err := net.SplitHostPort(p.RemoteAddr().String())
+		if err != nil {
+			continue
+		}
+		// Use only the IP/host; strip zone identifier (e.g. 169.254.183.41%Ethernet0 -> 169.254.183.41).
+		if i := strings.Index(host, "%"); i >= 0 {
+			host = host[:i]
+		}
+		urls = append(urls, "https://"+host+":30304")
+	}
+	return urls
 }
 
 // Start implements node.Lifecycle, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
 func (s *Ethereum) Start() error {
-	eth.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
+	ethprotocol.StartENRUpdater(s.blockchain, s.p2pServer.LocalNode())
 
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
+
+	// Start HTTP sync server if enabled (HTTPS, TLS 1.3, port 30304, mTLS). Uses node key for TLS cert when it is the compact PQC type.
+	if s.config.HttpSyncListen {
+		nodeKey := s.p2pServer.Config.PrivateKey
+		peerID := ""
+		if ln := s.p2pServer.LocalNode(); ln != nil {
+			if n := ln.Node(); n != nil {
+				peerID = n.ID().String()
+			}
+		}
+		s.httpSyncServer = httpsync.NewServer(s.blockchain, ":30304", s.dataDir, nodeKey, peerID)
+		go func() {
+			if err := s.httpSyncServer.Start(); err != nil && err != http.ErrServerClosed {
+				log.Warn("HTTP sync server failed", "err", err)
+			}
+		}()
+		// HTTP sync client (mTLS): use same cert as server to connect to peers.
+		if clientTLS, err := httpsync.ClientTLSConfig(s.dataDir, nodeKey); err == nil {
+			s.httpSyncClient = httpsync.NewClientFromProvider(s.httpSyncPeerURLs, s.handler.Downloader, clientTLS)
+			if err := s.handler.Downloader.RegisterPeer(httpsync.HttpSyncPeerID, ethprotocol.ETH66, s.httpSyncClient); err != nil {
+				log.Warn("Failed to register HTTP sync peer", "err", err)
+				s.httpSyncClient = nil
+			}
+		} else {
+			log.Warn("HTTP sync client TLS config failed (no client cert?)", "err", err)
+		}
+	}
 
 	// Figure out a max peers count based on the server limits
 	maxPeers := s.p2pServer.MaxPeers
@@ -571,6 +631,15 @@ func (s *Ethereum) Start() error {
 // Stop implements node.Lifecycle, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
+	// Stop HTTP sync server and unregister HTTP sync peer first.
+	if s.httpSyncServer != nil {
+		_ = s.httpSyncServer.Shutdown()
+		s.httpSyncServer = nil
+	}
+	if s.httpSyncClient != nil {
+		s.handler.Downloader.UnregisterPeer(httpsync.HttpSyncPeerID)
+		s.httpSyncClient = nil
+	}
 	// Stop all the peer-related stuff first.
 	s.ethDialCandidates.Close()
 	s.snapDialCandidates.Close()
