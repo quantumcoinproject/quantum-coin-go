@@ -28,6 +28,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/forkid"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/downloader"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/fetcher"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
@@ -510,6 +511,11 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		logLevel = log.LvlInfo
 	} else {
 		logLevel = log.LvlDebug
+	}
+
+	if defaults.SkipPropagateBlock() {
+		log.Write(logLevel, "Skipping propagate, announce block", "number", block.NumberU64())
+		return
 	}
 
 	// If propagation is requested, send to a subset of the peer

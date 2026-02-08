@@ -46,20 +46,21 @@ type OutOfOrderPacket struct {
 }
 
 type ConsensusHandler struct {
-	account                         accounts.Account
-	signFn                          SignerFn
-	signFnWithContext               SignerFnWithContext
-	p2pHandler                      P2PHandler
-	blockStateDetailsMap            map[common.Hash]*BlockStateDetails
-	outOfOrderPacketsMap            map[common.Hash]map[common.Hash]*OutOfOrderPacket
-	outerPacketLock                 sync.Mutex
-	innerPacketLock                 sync.Mutex
-	p2pLock                         sync.Mutex
-	getValidatorsFn                 GetValidatorsFn
-	listValidatorsFn                ListValidatorsAsMapFn
-	getBlockConsensusContext        GetBlockConsensusContextFn
-	doesFinalizedTransactionExistFn DoesFinalizedTransactionExistFn
-	currentParentHash               common.Hash
+	account                            accounts.Account
+	signFn                             SignerFn
+	signFnWithContext                  SignerFnWithContext
+	p2pHandler                         P2PHandler
+	blockStateDetailsMap               map[common.Hash]*BlockStateDetails
+	outOfOrderPacketsMap               map[common.Hash]map[common.Hash]*OutOfOrderPacket
+	outOfOrderPacketMapLastCleanupTime time.Time
+	outerPacketLock                    sync.Mutex
+	innerPacketLock                    sync.Mutex
+	p2pLock                            sync.Mutex
+	getValidatorsFn                    GetValidatorsFn
+	listValidatorsFn                   ListValidatorsAsMapFn
+	getBlockConsensusContext           GetBlockConsensusContextFn
+	doesFinalizedTransactionExistFn    DoesFinalizedTransactionExistFn
+	currentParentHash                  common.Hash
 
 	timeStatMap map[string]int
 
@@ -110,6 +111,8 @@ var BLOCK_TIMEOUT_MS = int64(60000)
 var FULL_BLOCK_TIMEOUT_MS = int64(90000)
 var ACK_BLOCK_TIMEOUT_MS = 300000 //relative to start of block locally
 var BLOCK_CLEANUP_TIME_MS = int64(900000)
+var OOP_CLEANUP_TIME_MS = int64(60000)
+var OOP_PKT_CLEANUP_TIME_MS = int64(300000)
 var MAX_ROUND = byte(2)
 var BROADCAST_RESEND_DELAY = int64(10000)
 var BROADCAST_CLEANUP_DELAY = int64(1800000)
@@ -376,9 +379,10 @@ func NewConsensusPacketHandler() *ConsensusHandler {
 	}
 
 	cph := &ConsensusHandler{
-		blockStateDetailsMap: make(map[common.Hash]*BlockStateDetails),
-		outOfOrderPacketsMap: make(map[common.Hash]map[common.Hash]*OutOfOrderPacket),
-		timeStatMap:          timeStatMap,
+		blockStateDetailsMap:               make(map[common.Hash]*BlockStateDetails),
+		outOfOrderPacketsMap:               make(map[common.Hash]map[common.Hash]*OutOfOrderPacket),
+		outOfOrderPacketMapLastCleanupTime: time.Now(),
+		timeStatMap:                        timeStatMap,
 	}
 
 	cph.peerHandler = NewPeerHandler(isConsensusRelay, cph.GetLatestBlockNumber)
@@ -731,7 +735,7 @@ func (cph *ConsensusHandler) isBlockProposer(parentHash common.Hash, filteredVal
 }
 
 func (cph *ConsensusHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, fromPeerId string) error {
-	log.Debug("HandleConsensusPacket", "ParentHash", packet.ParentHash, "fromPeerId", fromPeerId)
+	log.Trace("HandleConsensusPacket", "ParentHash", packet.ParentHash, "fromPeerId", fromPeerId)
 	cph.outerPacketLock.Lock()
 	defer cph.outerPacketLock.Unlock()
 
@@ -881,38 +885,49 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 }
 
 func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash, blockNumber uint64) error {
-	unprocessedPackets := make([]*OutOfOrderPacket, 0)
+	packetMap, ok := cph.outOfOrderPacketsMap[parentHash]
+	if !ok {
+		return nil
+	}
 
-	for key, pktList := range cph.outOfOrderPacketsMap {
-		for _, pkt := range pktList {
-			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
-				err := cph.processPacket(pkt.Packet, blockNumber)
-				if err != nil {
-					unprocessedPackets = append(unprocessedPackets, &OutOfOrderPacket{
-						Packet:       pkt.Packet,
-						ReceivedTime: pkt.ReceivedTime,
-					})
-				} else {
-					log.Debug("processOutOfOrderPackets A", "err", err)
-				}
-			} else {
-				log.Debug("processOutOfOrderPackets mismatch", "packet parentHash", pkt.Packet.ParentHash, "current parentHash", parentHash)
+	for pktHash, pkt := range packetMap {
+		if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
+			err := cph.processPacket(pkt.Packet, blockNumber)
+			if err != nil {
+				log.Debug("processOutOfOrderPackets A", "err", err)
+				continue
 			}
-		}
-
-		if len(unprocessedPackets) == 0 {
-			log.Debug("processOutOfOrderPackets none")
-			delete(cph.outOfOrderPacketsMap, key)
+			delete(packetMap, pktHash)
 		} else {
-			log.Debug("processOutOfOrderPackets", "count", len(unprocessedPackets))
-			packetMap := cph.outOfOrderPacketsMap[parentHash]
-			for i := 0; i < len(unprocessedPackets); i++ {
-				pkt := unprocessedPackets[i]
-				packetMap[pkt.Packet.Hash()] = pkt
-			}
-			cph.outOfOrderPacketsMap[parentHash] = packetMap
+			log.Debug("processOutOfOrderPackets mismatch", "packet parentHash", pkt.Packet.ParentHash, "current parentHash", parentHash)
 		}
 	}
+	if len(packetMap) == 0 {
+		delete(cph.outOfOrderPacketsMap, parentHash)
+	} else {
+		cph.outOfOrderPacketsMap[parentHash] = packetMap
+	}
+
+	if Elapsed(cph.outOfOrderPacketMapLastCleanupTime) < OOP_CLEANUP_TIME_MS {
+		return nil
+	}
+
+	log.Debug("Cleaning up out of order packets")
+	for prHash, pktMap := range cph.outOfOrderPacketsMap {
+		if prHash.IsEqualTo(parentHash) {
+			continue
+		}
+		for k, v := range pktMap {
+			if Elapsed(v.ReceivedTime) < OOP_PKT_CLEANUP_TIME_MS {
+				continue
+			}
+			delete(pktMap, k)
+		}
+		if len(pktMap) == 0 {
+			delete(cph.outOfOrderPacketsMap, prHash)
+		}
+	}
+	cph.outOfOrderPacketMapLastCleanupTime = time.Now()
 
 	return nil
 }
@@ -1474,8 +1489,9 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 
 	//Find validators in greater rounds
 	valMap := make(map[common.Address]bool)
-	for _, pktList := range cph.outOfOrderPacketsMap {
-		for _, pkt := range pktList {
+	pktMap, ok := cph.outOfOrderPacketsMap[parentHash]
+	if ok {
+		for _, pkt := range pktMap {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
 				round, validator, err := parsePacket(pkt.Packet, blockNumber)
 				if err != nil {
@@ -1556,8 +1572,9 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 	//Find validators in greater rounds
 	valMap := make(map[common.Address]bool)
 	valCommitMap := make(map[common.Address]bool)
-	for _, pktList := range cph.outOfOrderPacketsMap {
-		for _, pkt := range pktList {
+	pktMap, ok := cph.outOfOrderPacketsMap[parentHash]
+	if ok {
+		for _, pkt := range pktMap {
 			if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
 				round, validator, err := parsePacket(pkt.Packet, blockNumber)
 				if err != nil {

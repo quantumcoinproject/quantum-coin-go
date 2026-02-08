@@ -22,14 +22,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
-	util "github.com/quantumcoinproject/quantum-coin-go/tools"
 	"net"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	util "github.com/quantumcoinproject/quantum-coin-go/tools"
+
+	"math/rand"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/mclock"
@@ -40,7 +43,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/enr"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/nat"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p/netutil"
-	"math/rand"
 )
 
 const (
@@ -60,10 +62,10 @@ const (
 
 	// Maximum time allowed for reading a complete message.
 	// This is effectively the amount of time a connection can be idle.
-	frameReadTimeout = 60 * time.Second
+	frameReadTimeout = 120 * time.Second
 
 	// Maximum amount of time allowed for writing a complete message.
-	frameWriteTimeout        = 60 * time.Second
+	frameWriteTimeout        = 120 * time.Second
 	startPeerLookupLoopCount = 30
 	startPeerLookupInterval  = 10 * time.Second
 	peerLookupInterval       = 300 * time.Second
