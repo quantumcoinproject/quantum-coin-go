@@ -3,6 +3,7 @@
 //
 // Package httpsync implements TLS certificate handling for the HTTP sync server.
 // It uses hybrid PQC (Ed25519 + ML-DSA + SLH-DSA) certificates from crypto/tls.
+// When the node key is the compact PQC type (same as TLS), the cert is created from it and no separate key file is written.
 package httpsync
 
 import (
@@ -11,24 +12,66 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	pqctls "github.com/quantumcoinproject/quantum-coin-go/crypto/tls"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereddsamldsaslhdsa"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 const (
-	certFilename = "httpsync-tls.crt"
-	keyFilename  = "httpsync-tls.key"
-	certValidity = 365 * 24 * time.Hour
+	certFilename       = "httpsync-tls.crt"
+	keyFilename       = "httpsync-tls.key"
+	certValidity      = 365 * 24 * time.Hour
+	certRenewBefore   = 30 * 24 * time.Hour // regenerate cert if expiry is within 30 days
+	certCheckInterval = 24 * time.Hour      // how often to check cert expiry (renewal goroutine)
 )
 
-// ensureCertKey creates a self-signed PQC certificate and key in dataDir if they do not exist.
-// Returns certFile, keyFile paths and any error.
-// Cert is PEM-encoded; key file is raw secret key bytes (binary).
-func ensureCertKey(dataDir string) (certFile, keyFile string, err error) {
+// compactPrivateKeyLength is the length of the raw private key for the hybrid compact scheme (same as TLS).
+func compactPrivateKeyLength() int {
+	return cryptobase.SigAlgHybridMlDsaEddsaSlhDsaCompact.PrivateKeyLength()
+}
+
+// nodeKeyUsableForTLS returns true if the node key is the compact PQC type (same raw key format as TLS).
+func nodeKeyUsableForTLS(nodeKey *signaturealgorithm.PrivateKey) bool {
+	return nodeKey != nil && len(nodeKey.PriData) == compactPrivateKeyLength()
+}
+
+// certExpiresSoon returns true if the certificate at certFile exists and expires within certRenewBefore.
+func certExpiresSoon(certFile string) bool {
+	pemBytes, err := os.ReadFile(certFile)
+	if err != nil {
+		return true // treat missing/unreadable as "expires soon" so we regenerate
+	}
+	certDER, err := pqctls.PEMToCertDER(pemBytes)
+	if err != nil {
+		return true
+	}
+	notAfter, err := pqctls.CertNotAfter(certDER)
+	if err != nil {
+		return true
+	}
+	return time.Until(notAfter) < certRenewBefore
+}
+
+// defaultCertCommonName is used when peerID (ENR node ID) is not available.
+const defaultCertCommonName = "httpsync"
+
+// ensureCertKey creates a self-signed PQC certificate in dataDir if it does not exist or expires within 30 days.
+// commonName is the cert Subject CN (e.g. node peer ID from ENR); if empty, defaultCertCommonName is used.
+// If nodeKey is the compact PQC type (same as TLS), the cert is signed with it and no key file is written (keyFile returned as "").
+// Otherwise a new PQC key is generated and both cert and key files are written.
+// Returns certFile, keyFile paths (keyFile may be "" when using nodeKey) and any error.
+func ensureCertKey(dataDir string, nodeKey *signaturealgorithm.PrivateKey, commonName string) (certFile, keyFile string, err error) {
+	if commonName == "" {
+		commonName = defaultCertCommonName
+	}
 	certFile = filepath.Join(dataDir, certFilename)
 	keyFile = filepath.Join(dataDir, keyFilename)
-	if _, errCert := os.Stat(certFile); errCert == nil {
+	if _, errCert := os.Stat(certFile); errCert == nil && !certExpiresSoon(certFile) {
+		if nodeKeyUsableForTLS(nodeKey) {
+			return certFile, "", nil
+		}
 		if _, errKey := os.Stat(keyFile); errKey == nil {
 			return certFile, keyFile, nil
 		}
@@ -36,11 +79,19 @@ func ensureCertKey(dataDir string) (certFile, keyFile string, err error) {
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return "", "", fmt.Errorf("create data dir: %w", err)
 	}
-	publicKey, secretKey, err := pqchelpereddsamldsaslhdsa.GenerateKey()
-	if err != nil {
-		return "", "", fmt.Errorf("generate PQC key: %w", err)
+	var secretKey []byte
+	useNodeKey := nodeKeyUsableForTLS(nodeKey)
+	if useNodeKey {
+		secretKey = make([]byte, len(nodeKey.PriData))
+		copy(secretKey, nodeKey.PriData)
+	} else {
+		publicKey, sk, err := pqchelpereddsamldsaslhdsa.GenerateKey()
+		if err != nil {
+			return "", "", fmt.Errorf("generate PQC key: %w", err)
+		}
+		_ = publicKey
+		secretKey = sk
 	}
-	_ = publicKey
 	signer, err := pqctls.NewHybridSigner(secretKey)
 	if err != nil {
 		return "", "", fmt.Errorf("create signer: %w", err)
@@ -49,7 +100,7 @@ func ensureCertKey(dataDir string) (certFile, keyFile string, err error) {
 	if err != nil {
 		return "", "", fmt.Errorf("cert template: %w", err)
 	}
-	template.CommonName = "httpsync"
+	template.CommonName = commonName
 	template.Organization = "quantum-coin"
 	certDER, err := pqctls.CreateCertificate(template, signer)
 	if err != nil {
@@ -65,6 +116,10 @@ func ensureCertKey(dataDir string) (certFile, keyFile string, err error) {
 		return "", "", err
 	}
 	certOut.Close()
+	if useNodeKey {
+		log.Info("HTTP sync: created self-signed PQC TLS certificate from node key", "dir", dataDir)
+		return certFile, "", nil
+	}
 	keyOut, err := os.OpenFile(keyFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		os.Remove(certFile)
@@ -81,9 +136,9 @@ func ensureCertKey(dataDir string) (certFile, keyFile string, err error) {
 	return certFile, keyFile, nil
 }
 
-// loadCertKey loads the PQC certificate (PEM) and secret key (raw bytes) from files
-// and returns the cert DER and a HybridSigner for use with TLS.
-func loadCertKey(certFile, keyFile string) (certDER []byte, signer *pqctls.HybridSigner, err error) {
+// loadCertKey loads the PQC certificate (PEM) and builds a signer from keyFile or from nodeKey when keyFile is "".
+// When keyFile is "" and nodeKey is the compact PQC type, the signer is created from nodeKey.PriData.
+func loadCertKey(certFile, keyFile string, nodeKey *signaturealgorithm.PrivateKey) (certDER []byte, signer *pqctls.HybridSigner, err error) {
 	pemBytes, err := os.ReadFile(certFile)
 	if err != nil {
 		return nil, nil, fmt.Errorf("read cert: %w", err)
@@ -92,9 +147,15 @@ func loadCertKey(certFile, keyFile string) (certDER []byte, signer *pqctls.Hybri
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse cert PEM: %w", err)
 	}
-	secretKey, err := os.ReadFile(keyFile)
-	if err != nil {
-		return nil, nil, fmt.Errorf("read key: %w", err)
+	var secretKey []byte
+	if keyFile == "" && nodeKeyUsableForTLS(nodeKey) {
+		secretKey = make([]byte, len(nodeKey.PriData))
+		copy(secretKey, nodeKey.PriData)
+	} else {
+		secretKey, err = os.ReadFile(keyFile)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read key: %w", err)
+		}
 	}
 	signer, err = pqctls.NewHybridSigner(secretKey)
 	if err != nil {

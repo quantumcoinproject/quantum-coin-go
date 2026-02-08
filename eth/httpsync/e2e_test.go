@@ -27,14 +27,14 @@ import (
 // and loadCertKey loads them; cert verifies with VerifyCertificatePQC.
 func TestE2E_PQCCertCreateAndLoad(t *testing.T) {
 	dataDir := t.TempDir()
-	certFile, keyFile, err := ensureCertKey(dataDir)
+	certFile, keyFile, err := ensureCertKey(dataDir, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if certFile == "" || keyFile == "" {
-		t.Fatal("ensureCertKey returned empty paths")
+		t.Fatal("ensureCertKey returned empty paths (nodeKey is nil so both cert and key file expected)")
 	}
-	certDER, signer, err := loadCertKey(certFile, keyFile)
+	certDER, signer, err := loadCertKey(certFile, keyFile, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestE2E_PQCCertCreateAndLoad(t *testing.T) {
 // tlsConfig() succeeds, and the server can Start (listen) and Shutdown.
 func TestE2E_ServerTLSConfigAndListen(t *testing.T) {
 	dataDir := t.TempDir()
-	s := NewServer(nil, "127.0.0.1:0", dataDir)
+	s := NewServer(nil, "127.0.0.1:0", dataDir, nil, "")
 	if s.certFile == "" || s.keyFile == "" {
 		t.Fatal("NewServer did not set cert/key paths")
 	}
@@ -62,8 +62,12 @@ func TestE2E_ServerTLSConfigAndListen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if config == nil || len(config.Certificates) != 1 {
-		t.Fatal("tlsConfig should return one PQC certificate")
+	if config == nil || config.GetCertificate == nil {
+		t.Fatal("tlsConfig should return config with GetCertificate")
+	}
+	cert, err := config.GetCertificate(nil)
+	if err != nil || cert == nil || len(cert.Certificate) != 1 {
+		t.Fatal("GetCertificate should return one PQC certificate")
 	}
 	done := make(chan error, 1)
 	go func() { done <- s.Start() }()
@@ -99,7 +103,7 @@ func newTestChain(t *testing.T) *core.BlockChain {
 func TestE2E_HandlersViaHTTP(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
-	s := NewServer(chain, "", "") // no TLS
+	s := NewServer(chain, "", "", nil, "") // no TLS
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 	client := ts.Client()
@@ -161,7 +165,7 @@ func TestE2E_HandlersViaHTTP(t *testing.T) {
 func TestE2E_HandlersGzip(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
-	s := NewServer(chain, "", "")
+	s := NewServer(chain, "", "", nil, "")
 	ts := httptest.NewServer(s.Handler())
 	defer ts.Close()
 	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/status", nil)

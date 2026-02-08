@@ -34,7 +34,7 @@ func newTestChain(t *testing.T) *core.BlockChain {
 func TestRun_Status(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
-	srv := httpsync.NewServer(chain, "", "")
+	srv := httpsync.NewServer(chain, "", "", nil, "")
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -59,7 +59,7 @@ func TestRun_Status(t *testing.T) {
 func TestRun_HeadersFromCount(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
-	srv := httpsync.NewServer(chain, "", "")
+	srv := httpsync.NewServer(chain, "", "", nil, "")
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -86,7 +86,7 @@ func TestRun_HeadersFromCount(t *testing.T) {
 func TestRun_HeadersNumber(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
-	srv := httpsync.NewServer(chain, "", "")
+	srv := httpsync.NewServer(chain, "", "", nil, "")
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -109,7 +109,7 @@ func TestRun_HeadersNumber(t *testing.T) {
 func TestRun_BlockNumber(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
-	srv := httpsync.NewServer(chain, "", "")
+	srv := httpsync.NewServer(chain, "", "", nil, "")
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
@@ -130,7 +130,7 @@ func TestRun_BlockNumber(t *testing.T) {
 func TestRun_BlocksNumber(t *testing.T) {
 	chain := newTestChain(t)
 	defer chain.Stop()
-	srv := httpsync.NewServer(chain, "", "")
+	srv := httpsync.NewServer(chain, "", "", nil, "")
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 

@@ -59,8 +59,17 @@ type rdnAttribute struct {
 // name is a simplified X.501 Name: SEQUENCE of SET of SEQUENCE { type, value }.
 // We use one RDN with CN and O for simplicity.
 var (
-	oidCommonName     = asn1.ObjectIdentifier{2, 5, 4, 3}
-	oidOrganization   = asn1.ObjectIdentifier{2, 5, 4, 10}
+	oidCommonName   = asn1.ObjectIdentifier{2, 5, 4, 3}
+	oidOrganization = asn1.ObjectIdentifier{2, 5, 4, 10}
+)
+
+// X.509 v3 extension OIDs (RFC 5280).
+var (
+	oidExtensionBasicConstraints = asn1.ObjectIdentifier{2, 5, 29, 19}
+	oidExtensionKeyUsage         = asn1.ObjectIdentifier{2, 5, 29, 15}
+	oidExtensionExtKeyUsage      = asn1.ObjectIdentifier{2, 5, 29, 37}
+	oidKPServerAuth              = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 1}
+	oidKPClientAuth              = asn1.ObjectIdentifier{1, 3, 6, 1, 5, 5, 7, 3, 2}
 )
 
 // validity is NotBefore and NotAfter (UTCTime).
@@ -69,7 +78,14 @@ type validity struct {
 	NotAfter  time.Time
 }
 
-// tbsCertificate is the TBSCertificate structure (minimal set of fields).
+// extension is Extension ::= SEQUENCE { extnID OID, critical BOOLEAN DEFAULT FALSE, extnValue OCTET STRING } (RFC 5280).
+type extension struct {
+	ExtnID    asn1.ObjectIdentifier
+	Critical  bool `asn1:"optional"`
+	ExtnValue []byte `asn1:"tag:4"` // OCTET STRING, holds DER-encoded value
+}
+
+// tbsCertificate is the TBSCertificate structure (X.509 v3 with extensions).
 type tbsCertificate struct {
 	Version            int `asn1:"optional,explicit,tag:0,default:0"`
 	SerialNumber       *big.Int
@@ -78,6 +94,7 @@ type tbsCertificate struct {
 	Validity           validity
 	Subject            asn1.RawValue
 	SubjectPublicKeyInfo subjectPublicKeyInfo
+	Extensions         []extension `asn1:"optional,explicit,tag:3"`
 }
 
 // certificate is Certificate ::= SEQUENCE { tbsCertificate, signatureAlgorithm, signature }
@@ -108,6 +125,36 @@ func buildName(commonName, organization string) (asn1.RawValue, error) {
 	return asn1.RawValue{Class: 0, Tag: 16, IsCompound: true, Bytes: nameBytes}, nil
 }
 
+// basicConstraintsValue is SEQUENCE { cA BOOLEAN DEFAULT FALSE, pathLenConstraint INTEGER OPTIONAL } (RFC 5280).
+type basicConstraintsValue struct {
+	CA bool `asn1:"optional"`
+}
+
+// buildExtensions returns X.509 v3 extensions: BasicConstraints (CA:FALSE), KeyUsage (digitalSignature, keyEncipherment), ExtKeyUsage (serverAuth, clientAuth).
+func buildExtensions() ([]extension, error) {
+	// BasicConstraints: cA = FALSE (end-entity cert)
+	bcVal := basicConstraintsValue{CA: false}
+	bcDER, err := asn1.Marshal(bcVal)
+	if err != nil {
+		return nil, err
+	}
+	// KeyUsage: digitalSignature (bit 0) + keyEncipherment (bit 2) per RFC 5280
+	keyUsageDER, err := asn1.Marshal(asn1.BitString{Bytes: []byte{0x80 | 0x20}, BitLength: 8}) // one byte, bits 0 and 2 set
+	if err != nil {
+		return nil, err
+	}
+	// ExtKeyUsage: SEQUENCE OF OID { id-kp-serverAuth, id-kp-clientAuth }
+	extKeyUsageDER, err := asn1.Marshal([]asn1.ObjectIdentifier{oidKPServerAuth, oidKPClientAuth})
+	if err != nil {
+		return nil, err
+	}
+	return []extension{
+		{ExtnID: oidExtensionBasicConstraints, Critical: true, ExtnValue: bcDER},
+		{ExtnID: oidExtensionKeyUsage, Critical: true, ExtnValue: keyUsageDER},
+		{ExtnID: oidExtensionExtKeyUsage, ExtnValue: extKeyUsageDER},
+	}, nil
+}
+
 // CreateCertificate builds a self-signed X.509 certificate (DER) for the hybrid public key,
 // signed by signer. Template defines serial, validity, and subject/issuer name.
 func CreateCertificate(template *CertTemplate, signer *HybridSigner) (certDER []byte, err error) {
@@ -128,9 +175,13 @@ func CreateCertificate(template *CertTemplate, signer *HybridSigner) (certDER []
 		return nil, err
 	}
 
+	exts, err := buildExtensions()
+	if err != nil {
+		return nil, err
+	}
 	algo := algorithmIdentifier{Algorithm: oidHybridPQC}
 	tbs := tbsCertificate{
-		Version:            0, // v1
+		Version:            2, // v3 (required when extensions present)
 		SerialNumber:       template.SerialNumber,
 		Signature:          algo,
 		Issuer:             issuer,
@@ -140,6 +191,7 @@ func CreateCertificate(template *CertTemplate, signer *HybridSigner) (certDER []
 			Algorithm: algo,
 			PublicKey: asn1.BitString{Bytes: pub.Bytes, BitLength: len(pub.Bytes) * 8},
 		},
+		Extensions: exts,
 	}
 
 	tbsDER, err := asn1.Marshal(tbs)
@@ -173,6 +225,92 @@ func PEMToCertDER(pemBytes []byte) ([]byte, error) {
 		return nil, errors.New("no CERTIFICATE block in PEM")
 	}
 	return block.Bytes, nil
+}
+
+// CertNotAfter returns the NotAfter (expiry) time of a PQC certificate (DER).
+// Returns zero time and an error if the certificate cannot be parsed.
+func CertNotAfter(certDER []byte) (time.Time, error) {
+	var cert certificate
+	rest, err := asn1.Unmarshal(certDER, &cert)
+	if err != nil || len(rest) != 0 {
+		return time.Time{}, errors.New("invalid certificate DER")
+	}
+	return cert.TBSCertificate.Validity.NotAfter, nil
+}
+
+// CertNotBefore returns the NotBefore time of a PQC certificate (DER).
+func CertNotBefore(certDER []byte) (time.Time, error) {
+	var cert certificate
+	rest, err := asn1.Unmarshal(certDER, &cert)
+	if err != nil || len(rest) != 0 {
+		return time.Time{}, errors.New("invalid certificate DER")
+	}
+	return cert.TBSCertificate.Validity.NotBefore, nil
+}
+
+// CertSubjectNames parses the Subject of a PQC certificate and returns the CommonName and Organization.
+func CertSubjectNames(certDER []byte) (commonName, organization string, err error) {
+	var cert certificate
+	rest, err := asn1.Unmarshal(certDER, &cert)
+	if err != nil || len(rest) != 0 {
+		return "", "", errors.New("invalid certificate DER")
+	}
+	var rdns []relativeDistinguishedNameSET
+	_, err = asn1.Unmarshal(cert.TBSCertificate.Subject.Bytes, &rdns)
+	if err != nil {
+		return "", "", err
+	}
+	for _, set := range rdns {
+		for _, attr := range set.Attributes {
+			if len(attr.Type) == len(oidCommonName) {
+				match := true
+				for i := range oidCommonName {
+					if attr.Type[i] != oidCommonName[i] {
+						match = false
+						break
+					}
+				}
+				if match {
+					commonName = attr.Value
+				}
+			}
+			if len(attr.Type) == len(oidOrganization) {
+				match := true
+				for i := range oidOrganization {
+					if attr.Type[i] != oidOrganization[i] {
+						match = false
+						break
+					}
+				}
+				if match {
+					organization = attr.Value
+				}
+			}
+		}
+	}
+	return commonName, organization, nil
+}
+
+// CertInfo holds display metadata from a PQC certificate.
+type CertInfo struct {
+	CommonName   string
+	Organization string
+	NotBefore    time.Time
+	NotAfter     time.Time
+}
+
+// CertMetadata returns the CN, O, NotBefore, and NotAfter of a PQC certificate (DER).
+func CertMetadata(certDER []byte) (m CertInfo, err error) {
+	m.NotBefore, err = CertNotBefore(certDER)
+	if err != nil {
+		return m, err
+	}
+	m.NotAfter, err = CertNotAfter(certDER)
+	if err != nil {
+		return m, err
+	}
+	m.CommonName, m.Organization, err = CertSubjectNames(certDER)
+	return m, err
 }
 
 // ParseCertificatePQC parses a PQC X.509 certificate (DER) and returns the raw TBSCertificate

@@ -11,13 +11,19 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	pqctls "github.com/quantumcoinproject/quantum-coin-go/crypto/tls"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -36,18 +42,30 @@ type StatusResponse struct {
 }
 
 // Server serves block headers and bodies over HTTPS (RLP-encoded) with HTTP streaming (chunked transfer, flush per chunk).
+// The TLS certificate can be renewed at runtime (when expiry is within 30 days) by a background goroutine without restart.
 type Server struct {
 	chain   *core.BlockChain
 	srv     *http.Server
 	log     log.Logger
 	certFile string
 	keyFile  string
+	nodeKey  *signaturealgorithm.PrivateKey // optional; when set and compact PQC type, TLS cert uses it (no key file)
+
+	// certCommonName is the Subject CN for the TLS cert (e.g. node peer ID from ENR); used when creating/renewing the cert.
+	certCommonName string
+
+	// certMu protects currentCert; GetCertificate returns it and the renewal goroutine updates it.
+	certMu      sync.RWMutex
+	currentCert *tls.Certificate
+	stopRenew   chan struct{} // closed when server is shutting down to stop the renewal goroutine
 }
 
 // NewServer creates a new HTTP sync HTTPS server. Call Start to listen.
-// dataDir is used to load or create a self-signed TLS cert (httpsync-tls.crt/key).
-func NewServer(chain *core.BlockChain, listenAddr, dataDir string) *Server {
-	s := &Server{chain: chain, log: log.New("httpsync", "server")}
+// dataDir is used to load or create a self-signed TLS cert (httpsync-tls.crt, and httpsync-tls.key only if not using nodeKey).
+// nodeKey may be nil; when non-nil and the key is the compact PQC type (same as TLS), the cert is created from it and no key file is written.
+// peerID is the node's peer ID (from ENR); used as the cert Subject CN when creating/renewing the cert. If empty, a default CN is used.
+func NewServer(chain *core.BlockChain, listenAddr, dataDir string, nodeKey *signaturealgorithm.PrivateKey, peerID string) *Server {
+	s := &Server{chain: chain, log: log.New("httpsync", "server"), nodeKey: nodeKey, certCommonName: peerID}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/headers", s.serveHeaders)
 	mux.HandleFunc("/block", s.serveBlock)
@@ -57,7 +75,7 @@ func NewServer(chain *core.BlockChain, listenAddr, dataDir string) *Server {
 	handler := gzipHandler(mux)
 	s.srv = &http.Server{Addr: listenAddr, Handler: handler}
 	if dataDir != "" {
-		s.certFile, s.keyFile, _ = ensureCertKey(dataDir)
+		s.certFile, s.keyFile, _ = ensureCertKey(dataDir, nodeKey, s.certCommonName)
 	}
 	return s
 }
@@ -126,22 +144,98 @@ func writeStreamChunked(w http.ResponseWriter, data []byte) {
 	}
 }
 
-// tlsConfig loads the PQC cert and key and returns a TLS config with TLS 1.3 and Certificates set.
-func (s *Server) tlsConfig() (*tls.Config, error) {
-	certDER, signer, err := loadCertKey(s.certFile, s.keyFile)
+// loadCurrentCert loads cert and key from disk (or nodeKey) and returns a tls.Certificate. Caller must not hold certMu.
+func (s *Server) loadCurrentCert() (*tls.Certificate, error) {
+	certDER, signer, err := loadCertKey(s.certFile, s.keyFile, s.nodeKey)
 	if err != nil {
 		return nil, err
 	}
+	return &tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  signer,
+	}, nil
+}
+
+// logCertMetadata reads the current cert file and logs CN, organization, NotBefore, and NotAfter.
+func (s *Server) logCertMetadata() {
+	if s.certFile == "" {
+		return
+	}
+	pemBytes, err := os.ReadFile(s.certFile)
+	if err != nil {
+		s.log.Warn("HTTP sync: could not read cert for metadata", "err", err)
+		return
+	}
+	certDER, err := pqctls.PEMToCertDER(pemBytes)
+	if err != nil {
+		s.log.Warn("HTTP sync: could not parse cert for metadata", "err", err)
+		return
+	}
+	meta, err := pqctls.CertMetadata(certDER)
+	if err != nil {
+		s.log.Warn("HTTP sync: could not get cert metadata", "err", err)
+		return
+	}
+	s.log.Info("HTTP sync TLS cert",
+		"CN", meta.CommonName,
+		"organization", meta.Organization,
+		"notBefore", meta.NotBefore,
+		"notAfter", meta.NotAfter)
+}
+
+// reloadCertIfExpiringSoon checks if the cert expires within 30 days; if so, regenerates it and updates currentCert.
+// Must be called without holding certMu (it takes the write lock internally).
+func (s *Server) reloadCertIfExpiringSoon() {
+	if s.certFile == "" {
+		return
+	}
+	if !certExpiresSoon(s.certFile) {
+		return
+	}
+	dataDir := filepath.Dir(s.certFile)
+	if _, _, err := ensureCertKey(dataDir, s.nodeKey, s.certCommonName); err != nil {
+		s.log.Warn("HTTP sync: cert renewal (ensure) failed", "err", err)
+		return
+	}
+	cert, err := s.loadCurrentCert()
+	if err != nil {
+		s.log.Warn("HTTP sync: cert renewal (load) failed", "err", err)
+		return
+	}
+	s.certMu.Lock()
+	s.currentCert = cert
+	s.certMu.Unlock()
+	s.log.Info("HTTP sync: TLS certificate renewed (expiry was within 30 days)")
+}
+
+// tlsConfig returns a TLS config that uses GetCertificate so the cert can be hot-reloaded by the renewal goroutine.
+func (s *Server) tlsConfig() (*tls.Config, error) {
+	cert, err := s.loadCurrentCert()
+	if err != nil {
+		return nil, err
+	}
+	s.certMu.Lock()
+	s.currentCert = cert
+	s.certMu.Unlock()
 	return &tls.Config{
-		MinVersion:   tls.VersionTLS13,
-		Certificates: []tls.Certificate{{Certificate: [][]byte{certDER}, PrivateKey: signer}},
+		MinVersion: tls.VersionTLS13,
+		GetCertificate: func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			s.certMu.RLock()
+			defer s.certMu.RUnlock()
+			return s.currentCert, nil
+		},
 	}, nil
 }
 
 // Start starts the HTTPS server (TLS 1.3). It blocks until the server is stopped.
+// A background goroutine checks cert expiry once per day and renews the cert if within 30 days of expiry (no restart needed).
 func (s *Server) Start() error {
-	if s.certFile == "" || s.keyFile == "" {
+	if s.certFile == "" {
 		s.log.Info("HTTP sync: no TLS cert (missing dataDir?), skipping server")
+		return nil
+	}
+	if s.keyFile == "" && s.nodeKey == nil {
+		s.log.Info("HTTP sync: no TLS key and no node key, skipping server")
 		return nil
 	}
 	config, err := s.tlsConfig()
@@ -150,12 +244,33 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.srv.TLSConfig = config
+	s.stopRenew = make(chan struct{})
+	go s.certRenewalLoop()
+	s.logCertMetadata()
 	log.Info("HTTP sync server listening (HTTPS, TLS 1.3, PQC cert)", "addr", s.srv.Addr)
 	return s.srv.ListenAndServeTLS("", "")
 }
 
-// Shutdown gracefully shuts down the server.
+// certRenewalLoop runs until stopRenew is closed; checks cert expiry every certCheckInterval and renews if needed.
+func (s *Server) certRenewalLoop() {
+	ticker := time.NewTicker(certCheckInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-s.stopRenew:
+			return
+		case <-ticker.C:
+			s.reloadCertIfExpiringSoon()
+		}
+	}
+}
+
+// Shutdown gracefully shuts down the server and stops the cert renewal goroutine.
 func (s *Server) Shutdown() error {
+	if s.stopRenew != nil {
+		close(s.stopRenew)
+		s.stopRenew = nil
+	}
 	if s.srv != nil {
 		return s.srv.Close()
 	}
