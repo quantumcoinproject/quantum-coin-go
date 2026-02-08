@@ -33,7 +33,7 @@ func main() {
 	}
 }
 
-// Run runs the CLI with the given args and writes output to w. Args are flag-style (e.g. -server URL -cmd status).
+// Run runs the CLI with the given args and writes output to w. For HTTPS, a new in-memory client cert is generated for mTLS.
 func Run(args []string, w io.Writer) error {
 	fs := flag.NewFlagSet("httpsync-cli", flag.ContinueOnError)
 	server := fs.String("server", "", "Base URL of HTTP sync server")
@@ -50,7 +50,16 @@ func Run(args []string, w io.Writer) error {
 		return fmt.Errorf("missing -server or -cmd")
 	}
 	baseURL := strings.TrimSuffix(*server, "/")
-	client := newClient()
+	var client *http.Client
+	if strings.HasPrefix(baseURL, "https://") {
+		var err error
+		client, err = newClientMTLS()
+		if err != nil {
+			return err
+		}
+	} else {
+		client = newClientInsecure()
+	}
 	switch *cmd {
 	case "status":
 		return runStatusTo(client, baseURL, w)
@@ -68,6 +77,8 @@ func Run(args []string, w io.Writer) error {
 
 func printUsageTo(out io.Writer) {
 	fmt.Fprintf(out, `Usage: httpsync-cli -server <base_url> -cmd <command> [options]
+
+For HTTPS, a new in-memory client certificate is generated automatically for mTLS.
 
 Commands and options:
   -cmd status
@@ -92,11 +103,21 @@ Commands and options:
 Example:
   httpsync-cli -server https://127.0.0.1:30304 -cmd status
   httpsync-cli -server https://127.0.0.1:30304 -cmd headers -from 0 -count 5
-  httpsync-cli -server https://127.0.0.1:30304 -cmd block -number 0
 `)
 }
 
-func newClient() *http.Client {
+// newClientMTLS returns a client with a newly generated in-memory PQC client cert and server cert verification.
+func newClientMTLS() (*http.Client, error) {
+	tlsConfig, err := httpsync.ClientTLSConfigInMemory()
+	if err != nil {
+		return nil, fmt.Errorf("client TLS: %w", err)
+	}
+	tr := &http.Transport{TLSClientConfig: tlsConfig}
+	return &http.Client{Timeout: defaultTimeout, Transport: tr}, nil
+}
+
+// newClientInsecure returns a client with no client cert and InsecureSkipVerify (for http:// or tests).
+func newClientInsecure() *http.Client {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, InsecureSkipVerify: true},
 	}

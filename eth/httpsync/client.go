@@ -50,11 +50,10 @@ type Client struct {
 
 // NewClientFromProvider creates an HTTP sync client that round-robins over base URLs
 // returned by the provider (e.g. from connected P2P peers, assuming each has HTTP sync on 30304).
-// Uses HTTPS with TLS 1.3 and accepts self-signed certs; requests gzip when supported.
-func NewClientFromProvider(peerURLsFn func() []string, dl Deliverer) *Client {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS13, InsecureSkipVerify: true},
-	}
+// Uses HTTPS with TLS 1.3 and mTLS: tlsConfig must supply the client cert and VerifyPeerCertificate
+// to verify the server's PQC cert (e.g. from httpsync.ClientTLSConfig). Requests gzip when supported.
+func NewClientFromProvider(peerURLsFn func() []string, dl Deliverer, tlsConfig *tls.Config) *Client {
+	tr := &http.Transport{TLSClientConfig: tlsConfig}
 	return &Client{
 		urlsFn: peerURLsFn,
 		dl:     dl,

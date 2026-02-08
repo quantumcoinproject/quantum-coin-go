@@ -263,12 +263,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 	eth.p2pServer.SetRequestPeersFn(eth.handler.RequestPeerList)
 	eth.handler.SetPeerHandler(eth.p2pServer.HandlePeerList, eth.p2pServer.GetLocalPeerId())
 
-	// HTTP sync client: use connected P2P peers (assume each has HTTP sync on port 30304)
-	eth.httpSyncClient = httpsync.NewClientFromProvider(eth.httpSyncPeerURLs, eth.handler.Downloader)
-	if err := eth.handler.Downloader.RegisterPeer(httpsync.HttpSyncPeerID, ethprotocol.ETH66, eth.httpSyncClient); err != nil {
-		log.Warn("Failed to register HTTP sync peer", "err", err)
-		eth.httpSyncClient = nil
-	}
+	// HTTP sync client is created in Start() after the server (so mTLS cert exists).
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
@@ -593,7 +588,7 @@ func (s *Ethereum) Start() error {
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
 
-	// Start HTTP sync server if enabled (HTTPS, TLS 1.3, port 30304). Uses node key for TLS cert when it is the compact PQC type.
+	// Start HTTP sync server if enabled (HTTPS, TLS 1.3, port 30304, mTLS). Uses node key for TLS cert when it is the compact PQC type.
 	if s.config.HttpSyncListen {
 		nodeKey := s.p2pServer.Config.PrivateKey
 		peerID := ""
@@ -608,6 +603,16 @@ func (s *Ethereum) Start() error {
 				log.Warn("HTTP sync server failed", "err", err)
 			}
 		}()
+		// HTTP sync client (mTLS): use same cert as server to connect to peers.
+		if clientTLS, err := httpsync.ClientTLSConfig(s.dataDir, nodeKey); err == nil {
+			s.httpSyncClient = httpsync.NewClientFromProvider(s.httpSyncPeerURLs, s.handler.Downloader, clientTLS)
+			if err := s.handler.Downloader.RegisterPeer(httpsync.HttpSyncPeerID, ethprotocol.ETH66, s.httpSyncClient); err != nil {
+				log.Warn("Failed to register HTTP sync peer", "err", err)
+				s.httpSyncClient = nil
+			}
+		} else {
+			log.Warn("HTTP sync client TLS config failed (no client cert?)", "err", err)
+		}
 	}
 
 	// Figure out a max peers count based on the server limits

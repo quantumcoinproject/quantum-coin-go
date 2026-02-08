@@ -7,6 +7,8 @@
 package httpsync
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,6 +58,11 @@ func certExpiresSoon(certFile string) bool {
 
 // defaultCertCommonName is used when peerID (ENR node ID) is not available.
 const defaultCertCommonName = "httpsync"
+
+// EnsureCertKeyForTest creates a PQC cert in dataDir (for tests). Returns cert and key file paths.
+func EnsureCertKeyForTest(dataDir string) (certFile, keyFile string, err error) {
+	return ensureCertKey(dataDir, nil, "")
+}
 
 // ensureCertKey creates a self-signed PQC certificate in dataDir if it does not exist or expires within 30 days.
 // commonName is the cert Subject CN (e.g. node peer ID from ENR); if empty, defaultCertCommonName is used.
@@ -162,4 +169,94 @@ func loadCertKey(certFile, keyFile string, nodeKey *signaturealgorithm.PrivateKe
 		return nil, nil, fmt.Errorf("create signer from key: %w", err)
 	}
 	return certDER, signer, nil
+}
+
+// ClientTLSConfig builds a TLS config for the HTTP sync client: client cert (from dataDir, same as server)
+// and server cert verification via cryptobase.DynamicVerifier (VerifyPeerCertificatesPQC).
+// Ensures the cert exists (ensureCertKey with default CN) when used without a server.
+func ClientTLSConfig(dataDir string, nodeKey *signaturealgorithm.PrivateKey) (*tls.Config, error) {
+	if dataDir == "" {
+		return nil, fmt.Errorf("dataDir required for client cert")
+	}
+	if _, _, err := ensureCertKey(dataDir, nodeKey, ""); err != nil {
+		return nil, err
+	}
+	certFile := filepath.Join(dataDir, certFilename)
+	keyFile := filepath.Join(dataDir, keyFilename)
+	certDER, signer, err := loadCertKey(certFile, keyFile, nodeKey)
+	if err != nil {
+		return nil, err
+	}
+	tlsCert := tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  signer,
+	}
+	return &tls.Config{
+		MinVersion:         tls.VersionTLS13,
+		Certificates:       []tls.Certificate{tlsCert},
+		InsecureSkipVerify: true, // we verify server cert in VerifyPeerCertificate with PQC
+		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			return pqctls.VerifyPeerCertificatesPQC(rawCerts)
+		},
+	}, nil
+}
+
+// ClientTLSConfigFromFiles builds a client TLS config from cert and key PEM files.
+// Verifies server cert with VerifyPeerCertificatesPQC.
+func ClientTLSConfigFromFiles(certFile, keyFile string) (*tls.Config, error) {
+	certDER, signer, err := loadCertKey(certFile, keyFile, nil)
+	if err != nil {
+		return nil, err
+	}
+	tlsCert := tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  signer,
+	}
+	return &tls.Config{
+		MinVersion:         tls.VersionTLS13,
+		Certificates:       []tls.Certificate{tlsCert},
+		InsecureSkipVerify: true,
+		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			return pqctls.VerifyPeerCertificatesPQC(rawCerts)
+		},
+	}, nil
+}
+
+// clientCertCommonName is the CN used for ephemeral in-memory client certs.
+const clientCertCommonName = "httpsync-cli"
+
+// ClientTLSConfigInMemory generates a new PQC keypair and self-signed cert in memory and returns a client TLS config.
+// Use for one-off clients (e.g. CLI) that do not need to persist a cert. Verifies server cert with VerifyPeerCertificatesPQC.
+func ClientTLSConfigInMemory() (*tls.Config, error) {
+	publicKey, secretKey, err := pqchelpereddsamldsaslhdsa.GenerateKey()
+	if err != nil {
+		return nil, fmt.Errorf("generate PQC key: %w", err)
+	}
+	_ = publicKey
+	signer, err := pqctls.NewHybridSigner(secretKey)
+	if err != nil {
+		return nil, fmt.Errorf("create signer: %w", err)
+	}
+	template, err := pqctls.DefaultCertTemplate(certValidity)
+	if err != nil {
+		return nil, fmt.Errorf("cert template: %w", err)
+	}
+	template.CommonName = clientCertCommonName
+	template.Organization = "quantum-coin"
+	certDER, err := pqctls.CreateCertificate(template, signer)
+	if err != nil {
+		return nil, fmt.Errorf("create certificate: %w", err)
+	}
+	tlsCert := tls.Certificate{
+		Certificate: [][]byte{certDER},
+		PrivateKey:  signer,
+	}
+	return &tls.Config{
+		MinVersion:         tls.VersionTLS13,
+		Certificates:       []tls.Certificate{tlsCert},
+		InsecureSkipVerify: true,
+		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+			return pqctls.VerifyPeerCertificatesPQC(rawCerts)
+		},
+	}, nil
 }

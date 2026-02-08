@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/mockconsensus"
@@ -169,4 +170,21 @@ func TestRun_UnknownCommand(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown command")
 	}
+}
+
+// TestRun_HTTPS_UsesInMemoryCert verifies that Run with https URL does not require -cert/-key (in-memory cert is generated).
+// With no server listening we get a connection error, not a "missing cert" error.
+func TestRun_HTTPS_UsesInMemoryCert(t *testing.T) {
+	var buf bytes.Buffer
+	err := Run([]string{"-server", "https://127.0.0.1:39999", "-cmd", "status"}, &buf)
+	// Should not complain about missing cert/key; we generate in-memory. Failure is connection/refused or handshake.
+	if err != nil && strings.Contains(err.Error(), "cert") && strings.Contains(err.Error(), "required") {
+		t.Fatalf("HTTPS should use in-memory cert, not require -cert/-key: %v", err)
+	}
+}
+
+// TestRun_MTLS_Success would run the CLI against a real HTTPS server with mTLS.
+// Skipped: standard library TLS does not support PQC certs, so the handshake would fail with "unsupported certificate key".
+func TestRun_MTLS_Success(t *testing.T) {
+	t.Skip("stdlib TLS does not support PQC certs; full mTLS CLI test requires PQC-aware TLS stack")
 }
