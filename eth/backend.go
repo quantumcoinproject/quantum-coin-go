@@ -593,16 +593,9 @@ func (s *Ethereum) Start() error {
 	// Start the bloom bits servicing goroutines
 	s.startBloomHandlers(params.BloomBitsBlocks)
 
-	// Start HTTP sync server if enabled (HTTPS, TLS 1.3, port 30304). Uses node key for TLS cert when it is the compact PQC type.
+	// Start HTTP sync server if enabled (HTTPS, TLS 1.3, port 30304)
 	if s.config.HttpSyncListen {
-		nodeKey := s.p2pServer.Config.PrivateKey
-		peerID := ""
-		if ln := s.p2pServer.LocalNode(); ln != nil {
-			if n := ln.Node(); n != nil {
-				peerID = n.ID().String()
-			}
-		}
-		s.httpSyncServer = httpsync.NewServer(s.blockchain, ":30304", s.dataDir, nodeKey, peerID)
+		s.httpSyncServer = httpsync.NewServer(s.blockchain, ":30304", s.dataDir)
 		go func() {
 			if err := s.httpSyncServer.Start(); err != nil && err != http.ErrServerClosed {
 				log.Warn("HTTP sync server failed", "err", err)

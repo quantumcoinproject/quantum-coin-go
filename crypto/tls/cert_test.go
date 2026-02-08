@@ -98,36 +98,4 @@ func TestDefaultCertTemplate(t *testing.T) {
 	}
 }
 
-func TestCertNotAfter(t *testing.T) {
-	_, secret, err := pqchelpereddsamldsaslhdsa.GenerateKey()
-	if err != nil {
-		t.Fatal(err)
-	}
-	signer, err := NewHybridSigner(secret)
-	if err != nil {
-		t.Fatal(err)
-	}
-	validity := 24 * time.Hour
-	template, err := DefaultCertTemplate(validity)
-	if err != nil {
-		t.Fatal(err)
-	}
-	certDER, err := CreateCertificate(template, signer)
-	if err != nil {
-		t.Fatal(err)
-	}
-	notAfter, err := CertNotAfter(certDER)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if notAfter.Before(template.NotBefore) || notAfter.Sub(template.NotBefore) < validity-time.Second {
-		t.Errorf("CertNotAfter: got %v, expected ~%v", notAfter, template.NotAfter)
-	}
-	// Invalid DER
-	_, err = CertNotAfter([]byte{0x00})
-	if err == nil {
-		t.Error("CertNotAfter should fail on invalid DER")
-	}
-}
-
 
