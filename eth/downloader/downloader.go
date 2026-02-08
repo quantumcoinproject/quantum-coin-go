@@ -786,6 +786,10 @@ func (d *Downloader) findAncestorReorgLimited(p *peerConnection, mode SyncMode, 
 					p.log.Debug("findAncestorReorgLimited Found common ancestor (reorg-limited)", "number", n, "hash", h)
 					return n, nil
 				}
+				if n == localHeight {
+					p.log.Warn("findAncestorReorgLimited localHeight exceeds, unexpected", "number", n, "localHeight", floor)
+					break
+				}
 			}
 			p.log.Debug("findAncestorReorgLimited errNoAncestorFound", "peer", p.id)
 			return 0, errNoAncestorFound
