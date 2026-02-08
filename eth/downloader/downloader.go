@@ -770,7 +770,7 @@ func (d *Downloader) findAncestorReorgLimited(p *peerConnection, remoteHeight ui
 				p.log.Debug("findAncestorReorgLimited Received 0 headers", "peer", packet.PeerId())
 				return 0, errNoAncestorFound
 			}
-			p.log.Debug("findAncestorReorgLimited got headers", "header count", len(headers), "from", headers[0].Number.Uint64(), "to", headers[len(headers)-1].Number.Uint64())
+			p.log.Debug("findAncestorReorgLimited got headers", "header count", len(headers), "from", headers[0].Number.Uint64(), "to", headers[len(headers)].Number.Uint64())
 
 			// Walk from highest block down; first one we have is the common ancestor
 			for i := len(headers) - 1; i >= 0; i-- {
