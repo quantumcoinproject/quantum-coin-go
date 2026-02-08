@@ -688,7 +688,9 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 			return nil, nil, errTimeout
 
 		case <-d.bodyCh:
+			log.Warn("fetchhead bodyCh")
 		case <-d.receiptCh:
+			log.Warn("receiptCh bodyCh")
 			// Out of bounds delivery, ignore
 		}
 	}
@@ -882,7 +884,9 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			return 0, errTimeout
 
 		case <-d.bodyCh:
+			log.Warn("findAncestorSpanSearch bodyCh")
 		case <-d.receiptCh:
+			log.Warn("receiptCh receiptCh")
 			// Out of bounds delivery, ignore
 		}
 	}
@@ -976,7 +980,9 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 				return 0, errTimeout
 
 			case <-d.bodyCh:
+				log.Warn("findAncestorBinarySearch bodyCh")
 			case <-d.receiptCh:
+				log.Warn("findAncestorBinarySearch receiptCh")
 				// Out of bounds delivery, ignore
 			}
 		}
