@@ -5,10 +5,7 @@
 package restsync
 
 import (
-	"compress/gzip"
-	"crypto/tls"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,89 +30,29 @@ type StatusResponse struct {
 	TD     string      `json:"td"` // hex-encoded total difficulty
 }
 
-// Server serves block headers and bodies over HTTPS (RLP-encoded) for REST sync.
+// Server serves block headers and bodies over HTTP (RLP-encoded) for REST sync.
 type Server struct {
-	chain   *core.BlockChain
-	srv     *http.Server
-	log     log.Logger
-	certFile string
-	keyFile  string
+	chain *core.BlockChain
+	srv   *http.Server
+	log   log.Logger
 }
 
-// NewServer creates a new REST sync HTTPS server. Call Start to listen.
-// dataDir is used to load or create a self-signed TLS cert (restsync-tls.crt/key).
-func NewServer(chain *core.BlockChain, listenAddr, dataDir string) *Server {
+// NewServer creates a new REST sync HTTP server. Call Start to listen.
+func NewServer(chain *core.BlockChain, listenAddr string) *Server {
 	s := &Server{chain: chain, log: log.New("restsync", "server")}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/headers", s.serveHeaders)
 	mux.HandleFunc("/block", s.serveBlock)
 	mux.HandleFunc("/blocks", s.serveBlocks)
 	mux.HandleFunc("/status", s.serveStatus)
-	// Gzip compression for all responses
-	handler := gzipHandler(mux)
-	s.srv = &http.Server{Addr: listenAddr, Handler: handler}
-	if dataDir != "" {
-		s.certFile, s.keyFile, _ = ensureCertKey(dataDir)
-	}
+	s.srv = &http.Server{Addr: listenAddr, Handler: mux}
 	return s
 }
 
-// gzipHandler wraps an http.Handler and compresses responses with gzip when the client accepts it.
-func gzipHandler(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !contains(r.Header.Values("Accept-Encoding"), "gzip") {
-			h.ServeHTTP(w, r)
-			return
-		}
-		w.Header().Set("Content-Encoding", "gzip")
-		gz := gzip.NewWriter(w)
-		defer gz.Close()
-		h.ServeHTTP(&gzipResponseWriter{Writer: gz, ResponseWriter: w}, r)
-	})
-}
-
-func contains(vals []string, s string) bool {
-	for _, v := range vals {
-		if strings.Contains(strings.ToLower(v), s) {
-			return true
-		}
-	}
-	return false
-}
-
-type gzipResponseWriter struct {
-	io.Writer
-	http.ResponseWriter
-}
-
-func (w *gzipResponseWriter) Write(b []byte) (int, error) { return w.Writer.Write(b) }
-
-// tlsConfig loads the PQC cert and key and returns a TLS config with TLS 1.3 and Certificates set.
-func (s *Server) tlsConfig() (*tls.Config, error) {
-	certDER, signer, err := loadCertKey(s.certFile, s.keyFile)
-	if err != nil {
-		return nil, err
-	}
-	return &tls.Config{
-		MinVersion:   tls.VersionTLS13,
-		Certificates: []tls.Certificate{{Certificate: [][]byte{certDER}, PrivateKey: signer}},
-	}, nil
-}
-
-// Start starts the HTTPS server (TLS 1.3). It blocks until the server is stopped.
+// Start starts the HTTP server. It blocks until the server is stopped.
 func (s *Server) Start() error {
-	if s.certFile == "" || s.keyFile == "" {
-		s.log.Info("REST sync: no TLS cert (missing dataDir?), skipping server")
-		return nil
-	}
-	config, err := s.tlsConfig()
-	if err != nil {
-		s.log.Error("REST sync: failed to load TLS cert", "err", err)
-		return err
-	}
-	s.srv.TLSConfig = config
-	log.Info("REST sync server listening (HTTPS, TLS 1.3, PQC cert)", "addr", s.srv.Addr)
-	return s.srv.ListenAndServeTLS("", "")
+	log.Info("REST sync server listening", "addr", s.srv.Addr)
+	return s.srv.ListenAndServe()
 }
 
 // Shutdown gracefully shuts down the server.
