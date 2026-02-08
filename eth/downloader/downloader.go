@@ -27,6 +27,7 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 	"github.com/quantumcoinproject/quantum-coin-go/core/state/snapshot"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
@@ -51,6 +52,10 @@ var (
 	maxResultsProcess           = 2048                              // Number of content download results to import at once into the chain
 	fullMaxForkAncestry  uint64 = params.FullImmutabilityThreshold  // Maximum chain reorganisation (locally redeclared so tests can reduce it)
 	lightMaxForkAncestry uint64 = params.LightImmutabilityThreshold // Maximum chain reorganisation (locally redeclared so tests can reduce it)
+
+	// maxReorgDepth is the maximum reorg depth (blocks) the chain allows. When span search
+	// fails, we try the last maxReorgDepth+1 headers first (1 round-trip) before binary search. Add 2 for sanity padding
+	maxReorgDepth = core.ReorgThresold + 2
 
 	reorgProtThreshold   = 48 // Threshold number of recent blocks to disable mini reorg protection
 	reorgProtHeaderDelay = 2  // Number of headers to delay delivering to cover mini reorgs
@@ -773,17 +778,32 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 	p.log.Debug("Looking for common ancestor", "local", localHeight, "remote", remoteHeight)
 
 	// Recap floor value for binary search
-	maxForkAncestry := localHeight - MaxAncestor
+	maxForkAncestry := fullMaxForkAncestry
 	if localHeight >= maxForkAncestry {
 		// We're above the max reorg threshold, find the earliest fork point
 		floor = int64(localHeight - maxForkAncestry)
 	}
-	ancestor, err := d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
+
+	// Try reorg-limited first: last (maxReorgDepth+1) headers. Finds ancestor in 1 RTT when synced.
+	ancestor, err := d.findAncestorReorgLimited(p, remoteHeight, floor, localHeight)
 	if err == nil {
-		log.Debug("findAncestor findAncestorSpanSearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
+		p.log.Debug("findAncestor findAncestorReorgLimited", "ancestor", ancestor, "peer", p.id, "localHeight", localHeight, "remoteHeight", remoteHeight)
 		return ancestor, nil
 	}
-	log.Debug("findAncestor findAncestorSpanSearch error", "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor, "err", err)
+	// The returned error was not nil.
+	// If the error returned does not reflect that a common ancestor was not found, return it.
+	// If the error reflects that a common ancestor was not found, continue to binary search,
+	// where the error value will be reassigned.
+	if !errors.Is(err, errNoAncestorFound) {
+		return 0, err
+	}
+
+	ancestor, err = d.findAncestorSpanSearch(p, mode, remoteHeight, localHeight, floor)
+	if err == nil {
+		p.log.Debug("findAncestor findAncestorSpanSearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
+		return ancestor, nil
+	}
+	p.log.Debug("findAncestor findAncestorSpanSearch error", "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor, "err", err)
 
 	// The returned error was not nil.
 	// If the error returned does not reflect that a common ancestor was not found, return it.
@@ -795,23 +815,91 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 
 	ancestor, err = d.findAncestorBinarySearch(p, mode, remoteHeight, floor)
 	if err != nil {
-		log.Debug("findAncestor findAncestorBinarySearch error", "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor, "err", err)
+		p.log.Debug("findAncestor findAncestorBinarySearch error", "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor, "err", err)
 		return 0, err
 	}
-	log.Debug("findAncestor findAncestorBinarySearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
+	p.log.Debug("findAncestor findAncestorBinarySearch", "ancestor", ancestor, "peer", p.id, "maxForkAncestry", maxForkAncestry, "localHeight", localHeight, "remoteHeight", remoteHeight, "floor", floor)
 	return ancestor, nil
 }
 
-func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (commonAncestor uint64, err error) {
-	var from int64
-	if localHeight > MaxAncestor {
-		from = int64(localHeight - MaxAncestor)
-	}
-	count := 2
-	skip := 0
-	maxVal := localHeight + 16
+// findAncestorReorgLimited tries to find the common ancestor by fetching the last
+// (maxReorgDepth+1) headers from the peer. With a max reorg of maxReorgDepth blocks, the ancestor
+// is always in that window when we're synced, so this is one round-trip instead of
+// O(log height) for binary search. Returns errNoAncestorFound if not found
+func (d *Downloader) findAncestorReorgLimited(p *peerConnection, remoteHeight uint64, floor int64, localHeight uint64) (commonAncestor uint64, err error) {
+	from := uint64(0)
+	count := 10
 
-	p.log.Trace("Span searching for common ancestor (new)", "count", count, "from", from, "skip", skip)
+	if localHeight < remoteHeight {
+		if localHeight >= uint64(maxReorgDepth) {
+			from = localHeight - uint64(maxReorgDepth)
+		}
+	} else {
+		if remoteHeight >= uint64(maxReorgDepth) {
+			from = remoteHeight - uint64(maxReorgDepth)
+		}
+	}
+
+	if (uint64(count) + from) > localHeight {
+		count = int(localHeight - from)
+	}
+
+	p.log.Debug("findAncestorReorgLimited Reorg-limited ancestor search", "from", from, "count", count, "remoteHeight", remoteHeight, "localHeight", localHeight, "floor", floor, "peer", p.id)
+	go p.peer.RequestHeadersByNumber(from, count, 0, false)
+
+	ttl := d.peers.rates.TargetTimeout()
+	timeout := time.After(ttl)
+
+	for {
+		select {
+		case <-d.cancelCh:
+			p.log.Debug("findAncestorReorgLimited cancelled", "peer", p.id)
+			return 0, errCanceled
+		case packet := <-d.headerCh:
+			if packet.PeerId() != p.id {
+				p.log.Debug("findAncestorReorgLimited Received headers from incorrect peer", "peer", packet.PeerId())
+				break
+			}
+			headers := packet.(*headerPack).headers
+			if len(headers) == 0 {
+				p.log.Debug("findAncestorReorgLimited Received 0 headers", "peer", packet.PeerId())
+				return 0, errNoAncestorFound
+			}
+			p.log.Debug("findAncestorReorgLimited got headers", "header count", len(headers), "from", headers[0].Number.Uint64(), "to", headers[len(headers)].Number.Uint64())
+
+			// Walk from highest block down; first one we have is the common ancestor
+			for i := len(headers) - 1; i >= 0; i-- {
+				h := headers[i].Hash()
+				n := headers[i].Number.Uint64()
+				var known bool
+				known = d.blockchain.HasBlock(h, n)
+				if known {
+					if int64(n) <= floor {
+						p.log.Debug("findAncestorReorgLimited Ancestor below allowance", "number", n, "hash", h, "allowance", floor)
+						return 0, errInvalidAncestor
+					}
+					p.log.Debug("findAncestorReorgLimited Found common ancestor (reorg-limited)", "number", n, "hash", h)
+					return n, nil
+				}
+			}
+			p.log.Debug("findAncestorReorgLimited errNoAncestorFound", "peer", p.id)
+			return 0, errNoAncestorFound
+		case <-timeout:
+			p.log.Debug("Reorg-limited ancestor search timed out", "elapsed", ttl, "peer", p.id)
+			return 0, errTimeout
+		case <-d.bodyCh:
+			p.log.Debug("findAncestorReorgLimited got out of band block bodies", "peer", p.id)
+		case <-d.receiptCh:
+			p.log.Debug("findAncestorReorgLimited got out of band receipts", "peer", p.id)
+			// Out of bounds delivery, ignore
+		}
+	}
+}
+
+func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (commonAncestor uint64, err error) {
+	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
+
+	p.log.Trace("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
 	go p.peer.RequestHeadersByNumber(uint64(from), count, skip, false)
 
 	// Wait for the remote response to the head fetch
@@ -837,11 +925,9 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 				p.log.Warn("Empty head header set")
 				return 0, errEmptyHeaderSet
 			}
-			log.Debug("findAncestorSpanSearch headers", "count", len(headers), "from", from, "skip", skip)
 			// Make sure the peer's reply conforms to the request
 			for i, header := range headers {
 				expectNumber := from + int64(i)*int64(skip+1)
-				log.Debug("findAncestorSpanSearch", "header received", headers[i].Number.Uint64(), "expectNumber", expectNumber, "hash", headers[i].Hash())
 				if number := header.Number.Int64(); number != expectNumber {
 					p.log.Warn("Head headers broke chain ordering", "index", i, "requested", expectNumber, "received", number)
 					return 0, fmt.Errorf("%w: %v", errInvalidChain, errors.New("head headers broke chain ordering"))
@@ -851,10 +937,8 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 			// Check if a common ancestor was found
 			finished = true
 			for i := len(headers) - 1; i >= 0; i-- {
-				log.Debug("findAncestorSpanSearch", "header received", headers[i].Number.Uint64(), "i", i, "from", from, "maxVal", maxVal, "hash", headers[i].Hash())
 				// Skip any headers that underflow/overflow our requested set
-				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > maxVal {
-					log.Debug("findAncestorSpanSearch not in range", "header", headers[i].Number.Uint64(), "i", i, "from", from, "maxVal", maxVal)
+				if headers[i].Number.Int64() < from || headers[i].Number.Uint64() > max {
 					continue
 				}
 				// Otherwise check if we already know the header or not
@@ -874,7 +958,6 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 					number, hash = n, h
 					break
 				}
-				log.Debug("findAncestorSpanSearch header not known", "header", headers[i].Number.Uint64(), "i", i, "from", from, "maxVal", maxVal)
 			}
 
 		case <-timeout:
