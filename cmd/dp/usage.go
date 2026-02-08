@@ -144,6 +144,7 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 			utils.ExecFlag,
 			utils.PreloadJSFlag,
 			utils.RestSyncListenFlag,
+			utils.ClassicalBlockServiceFlag,
 		},
 	},
 	{

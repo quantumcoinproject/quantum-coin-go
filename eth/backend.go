@@ -247,6 +247,7 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		Whitelist:           config.Whitelist,
 		RebroadcastCount:    stack.Config().RebroadcastCount,
 		StaticNodes:         eth.p2pServer.StaticNodes,
+		ClassicalBlockService:     config.ClassicalBlockService,
 	}); err != nil {
 		return nil, err
 	}
@@ -267,6 +268,10 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		log.Warn("Failed to register REST sync peer", "err", err)
 		eth.restSyncClient = nil
 	}
+	if !config.ClassicalBlockService && eth.restSyncClient != nil {
+		eth.handler.SetRestSyncHeadFn(eth.restSyncClient.Head, restsync.RestSyncPeerID)
+	}
+
 	eth.miner = miner.New(eth, &config.Miner, chainConfig, eth.EventMux(), eth.engine, eth.isLocalBlock)
 	eth.miner.SetExtra(makeExtraData(config.Miner.ExtraData))
 
