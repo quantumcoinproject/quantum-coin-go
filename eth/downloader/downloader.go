@@ -65,7 +65,7 @@ var (
 	PeerErrorMap  = make(map[string]uint)
 	PeerMaxErrors = uint(16)
 
-	MaxAncestor = uint64(5)
+	MaxAncestor = MaxHeaderFetch
 )
 
 var (
