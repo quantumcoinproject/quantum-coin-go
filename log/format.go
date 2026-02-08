@@ -28,7 +28,8 @@ var locationTrims = []string{
 }
 
 // PrintOrigins sets or unsets log location (file:line) printing for terminal
-// format output.
+// and logfmt format output. When disabled (default), no caller formatting is
+// done, avoiding extra allocations and CPU in hot paths.
 func PrintOrigins(print bool) {
 	if print {
 		atomic.StoreUint32(&locationEnabled, 1)
@@ -151,6 +152,9 @@ func TerminalFormat(usecolor bool) Format {
 func LogfmtFormat() Format {
 	return FormatFunc(func(r *Record) []byte {
 		common := []interface{}{r.KeyNames.Time, r.Time, r.KeyNames.Lvl, r.Lvl, r.KeyNames.Msg, r.Msg}
+		if atomic.LoadUint32(&locationEnabled) != 0 {
+			common = append(common, "caller", fmt.Sprint(r.Call))
+		}
 		buf := &bytes.Buffer{}
 		logfmt(buf, append(common, r.Ctx...), 0, false)
 		return buf.Bytes()
