@@ -735,7 +735,7 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	}
 	// If the batch of headers wasn't accepted, mark as unavailable
 	if !accepted {
-		logger.Trace("Skeleton filling not accepted", "from", request.From)
+		logger.Trace("Skeleton filling not accepted", "from", request.From, "len(headers)", len(headers), "MaxHeaderFetch", MaxHeaderFetch)
 
 		miss := q.headerPeerMiss[id]
 		if miss == nil {
