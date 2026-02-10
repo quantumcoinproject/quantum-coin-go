@@ -717,17 +717,20 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 		f.forgetHash(hash)
 		return
 	}
+
 	// Ensure the peer isn't DOSing us
 	count := f.queues[peer] + 1
 	if count > blockLimit {
-		limit := blockLimit
-		if dist := int64(number) - int64(f.chainHeight()); dist <= MinQueueDistThreshold { //higher threshold if block is lower enough to current block
-			limit = blockLimitLower
+		if _, ok := f.queued[hash]; ok {
+			limit := blockLimit
+			if dist := int64(number) - int64(f.chainHeight()); dist <= MinQueueDistThreshold { //higher threshold if block is lower enough to current block
+				limit = blockLimitLower
+			}
+			log.Debug("Discarded delivered header or block, exceeded allowance", "peer", peer, "number", number, "hash", hash, "limit", limit)
+			blockBroadcastDOSMeter.Mark(1)
+			f.forgetHash(hash)
+			return
 		}
-		log.Debug("Discarded delivered header or block, exceeded allowance", "peer", peer, "number", number, "hash", hash, "limit", limit)
-		blockBroadcastDOSMeter.Mark(1)
-		f.forgetHash(hash)
-		return
 	}
 	// Schedule the block for future importing
 	if _, ok := f.queued[hash]; !ok {
