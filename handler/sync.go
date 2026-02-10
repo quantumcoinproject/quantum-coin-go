@@ -226,7 +226,7 @@ func (cs *chainSyncer) loop() {
 			cs.forced = false
 		case <-cs.force.C:
 			cs.forced = true
-			if defaults.DisableForceSync() {
+			if !defaults.EnableForceSync() {
 				log.Debug("handlePeerEvent force sync disabled")
 				return
 			}
