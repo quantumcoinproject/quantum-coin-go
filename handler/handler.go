@@ -538,9 +538,15 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 
 		// Send the block to a subset of our peers
 		transfer := peers[:h.getSendCount(len(peers))]
+		localHead := h.chain.CurrentBlock().Number().Uint64()
 		for _, peer := range transfer {
 			if h.StaticNodeMap[peer.ID()] == true {
 				continue //we already send to static nodes above
+			}
+			peerBlock := td.Uint64()
+			if localHead > peerBlock && ((localHead - peerBlock) > fetcher.MaxQueueDist) {
+				peer.Log().Debug("Skipping propagating block due to distance", "localHead", localHead, "peerBlock", peerBlock, "MaxQueueDist", fetcher.MaxQueueDist)
+				continue
 			}
 			peer.AsyncSendNewBlock(block, td)
 		}
