@@ -263,6 +263,24 @@ func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 	return bestPeer
 }
 
+func (ps *peerSet) getRandomPeer() *eth.Peer {
+	ps.lock.RLock()
+	defer ps.lock.RUnlock()
+
+	if ps.peers == nil || len(ps.peers) == 0 {
+		return nil
+	}
+	n := rand.Intn(len(ps.peers))
+	i := 0
+	for _, p := range ps.peers {
+		if i == n {
+			return p.Peer
+		}
+		i++
+	}
+	return nil
+}
+
 // close disconnects all peers.
 func (ps *peerSet) close() {
 	ps.lock.Lock()
