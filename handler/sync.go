@@ -25,7 +25,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/downloader"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -208,34 +207,20 @@ func (cs *chainSyncer) loop() {
 	defer cs.force.Stop()
 
 	for {
-		log.Debug("handlePeerEvent loop start")
 		if op := cs.nextSyncOp(); op != nil {
-			log.Debug("handlePeerEvent startSync")
 			cs.startSync(op)
-		} else {
-			log.Debug("handlePeerEvent not startSync")
 		}
 		select {
 		case <-cs.peerEventCh:
-			log.Debug("handlePeerEvent peerEventCh")
 			// Peer information changed, recheck.
 		case <-cs.doneCh:
-			log.Debug("handlePeerEvent doneCh")
 			cs.doneCh = nil
 			cs.force.Reset(forceSyncCycle)
 			cs.forced = false
 		case <-cs.force.C:
 			cs.forced = true
-			if !defaults.EnableForceSync() {
-				log.Debug("handlePeerEvent force sync disabled")
-				return
-			}
-			forceInterval := forceSyncCycle*2 + time.Duration(rand.Int63n(int64(forceSyncCycle*3)))
-			cs.force.Reset(forceInterval)
-			log.Debug("handlePeerEvent force sync request", "forceInterval", forceInterval)
-		case <-cs.handler.quitSync:
-			log.Debug("handlePeerEvent quitSync")
 
+		case <-cs.handler.quitSync:
 			// Disable all insertion on the blockchain. This needs to happen before
 			// terminating the Downloader because the Downloader waits for blockchain
 			// inserts, and these can take a long time to finish.
@@ -244,7 +229,6 @@ func (cs *chainSyncer) loop() {
 			if cs.doneCh != nil {
 				<-cs.doneCh
 			}
-			log.Debug("handlePeerEvent loop end")
 			return
 		}
 	}
@@ -256,42 +240,28 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		return nil // Sync already running.
 	}
 
-	// We have enough peers, check TD
-	var peer *eth.Peer
-
-	if cs.forced == false {
-		// Ensure we're at minimum peer count.
-		minPeers := defaultMinSyncPeers
-		if minPeers > cs.handler.maxPeers {
-			minPeers = cs.handler.maxPeers
-		}
-		if cs.handler.peers.len() < minPeers {
-			log.Debug("nextSyncOp less than minPeers connected", "minPeers", minPeers, "cs.handler.peers.len()", cs.handler.peers.len())
-			return nil
-		}
-
-		peer = cs.handler.peers.peerWithHighestTD()
-		if peer == nil {
-			log.Debug("peerWithHighestTD none")
-			return nil
-		}
-
-		mode, ourTD := cs.modeAndLocalHead()
-		op := peerToSyncOp(mode, peer)
-		if op.td.Cmp(ourTD) <= 0 {
-			log.Debug("peerWithHighestTD already in sync")
-			return nil // We're in sync.
-		}
-		return peerToSyncOp(mode, peer)
-	} else {
-		peer = cs.handler.peers.getRandomPeer()
-		if peer == nil {
-			log.Debug("peerWithHighestTD none")
-			return nil
-		}
-		mode, _ := cs.modeAndLocalHead()
-		return peerToSyncOp(mode, peer)
+	// Ensure we're at minimum peer count.
+	minPeers := defaultMinSyncPeers
+	if cs.forced {
+		minPeers = 1
+	} else if minPeers > cs.handler.maxPeers {
+		minPeers = cs.handler.maxPeers
 	}
+	if cs.handler.peers.len() < minPeers {
+		log.Debug("nextSyncOp less than minPeers connected", "minPeers", minPeers, "cs.handler.peers.len()", cs.handler.peers.len())
+		return nil
+	}
+	// We have enough peers, check TD
+	peer := cs.handler.peers.peerWithHighestTD()
+	if peer == nil {
+		return nil
+	}
+	mode, ourTD := cs.modeAndLocalHead()
+	op := peerToSyncOp(mode, peer)
+	if op.td.Cmp(ourTD) <= 0 {
+		return nil // We're in sync.
+	}
+	return op
 }
 
 func peerToSyncOp(mode downloader.SyncMode, p *eth.Peer) *chainSyncOp {
