@@ -515,11 +515,6 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
-		if defaults.SkipPropagateBlock() {
-			log.Write(logLevel, "Skipping propagate, announce block", "number", block.NumberU64())
-			return
-		}
-
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
 		var td *big.Int
 		if parent := h.chain.GetBlock(block.ParentHash(), block.NumberU64()-1); parent != nil {
@@ -529,14 +524,20 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 			return
 		}
 		//Send to all static nodes first
+		log.Write(logLevel, "Propagating block to static nodes", "number", block.NumberU64())
 		for _, peer := range peers {
 			if h.StaticNodeMap[peer.ID()] == true {
 				peer.AsyncSendNewBlock(block, td)
 			}
 		}
 
+		if defaults.SkipPropagateBlock() {
+			log.Write(logLevel, "Skipping propagate block", "number", block.NumberU64())
+			return
+		}
+
 		// Send the block to a subset of our peers
-		transfer := peers[:h.getSendCount(len(peers))]
+		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
 		for _, peer := range transfer {
 			if h.StaticNodeMap[peer.ID()] == true {
 				continue //we already send to static nodes above
