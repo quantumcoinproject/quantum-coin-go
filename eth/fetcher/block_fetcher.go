@@ -39,9 +39,9 @@ const (
 )
 
 const (
-	maxQueueDist = 32000 // Maximum allowed distance from the chain head to queue
-	hashLimit    = 256   // Maximum number of unique blocks or headers a peer may have announced
-	blockLimit   = 64    // Maximum number of unique blocks a peer may have delivered
+	maxQueueDist = 256 // Maximum allowed distance from the chain head to queue
+	hashLimit    = 256 // Maximum number of unique blocks or headers a peer may have announced
+	blockLimit   = 256 // Maximum number of unique blocks a peer may have delivered
 )
 
 var (
@@ -708,18 +708,18 @@ func (f *BlockFetcher) enqueue(peer string, header *types.Header, block *types.B
 		hash, number = block.Hash(), block.NumberU64()
 		log.Trace("BlockFetcher enqueue block", "hash", hash, "number", number)
 	}
+	// Discard any past or too distant blocks
+	if dist := int64(number) - int64(f.chainHeight()); dist > maxQueueDist {
+		log.Debug("Discarded delivered header or block, too far away", "peer", peer, "number", number, "hash", hash, "distance", dist, "maxQueueDist", maxQueueDist)
+		blockBroadcastDropMeter.Mark(1)
+		f.forgetHash(hash)
+		return
+	}
 	// Ensure the peer isn't DOSing us
 	count := f.queues[peer] + 1
 	if count > blockLimit {
 		log.Debug("Discarded delivered header or block, exceeded allowance", "peer", peer, "number", number, "hash", hash, "limit", blockLimit)
 		blockBroadcastDOSMeter.Mark(1)
-		f.forgetHash(hash)
-		return
-	}
-	// Discard any past or too distant blocks
-	if dist := int64(number) - int64(f.chainHeight()); dist > maxQueueDist {
-		log.Debug("Discarded delivered header or block, too far away", "peer", peer, "number", number, "hash", hash, "distance", dist)
-		blockBroadcastDropMeter.Mark(1)
 		f.forgetHash(hash)
 		return
 	}
