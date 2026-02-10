@@ -25,6 +25,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/downloader"
 	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -225,6 +226,10 @@ func (cs *chainSyncer) loop() {
 			cs.forced = false
 		case <-cs.force.C:
 			cs.forced = true
+			if defaults.DisableForceSync() {
+				log.Debug("handlePeerEvent force sync disabled")
+				return
+			}
 			forceInterval := forceSyncCycle*2 + time.Duration(rand.Int63n(int64(forceSyncCycle*3)))
 			cs.force.Reset(forceInterval)
 			log.Debug("handlePeerEvent force sync request", "forceInterval", forceInterval)
