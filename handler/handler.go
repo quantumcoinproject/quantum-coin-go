@@ -513,13 +513,12 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		logLevel = log.LvlDebug
 	}
 
-	if defaults.SkipPropagateBlock() {
-		log.Write(logLevel, "Skipping propagate, announce block", "number", block.NumberU64())
-		return
-	}
-
 	// If propagation is requested, send to a subset of the peer
 	if propagate {
+		if defaults.SkipPropagateBlock() {
+			log.Write(logLevel, "Skipping propagate, announce block", "number", block.NumberU64())
+			return
+		}
 
 		// Calculate the TD of the block (it's not imported yet, so block.Td is not valid)
 		var td *big.Int
