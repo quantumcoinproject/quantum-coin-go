@@ -39,11 +39,12 @@ const (
 )
 
 const (
-	MinQueueDistThreshold = 16
-	MaxQueueDist          = 256 // Maximum allowed distance from the chain head to queue
-	hashLimit             = 256 // Maximum number of unique blocks or headers a peer may have announced
-	blockLimit            = 256 // Maximum number of unique blocks a peer may have delivered
-	blockLimitLower       = 512 // Maximum number of unique blocks a peer may have delivered
+	MinQueueDistThreshold  = 16
+	MaxQueueDist           = 256 // Maximum allowed distance from the chain head to queue
+	hashLimit              = 256 // Maximum number of unique blocks or headers a peer may have announced
+	blockLimit             = 256 // Maximum number of unique blocks a peer may have delivered
+	blockLimitLower        = 512 // Maximum number of unique blocks a peer may have delivered
+	MaxPropagationDistance = 32  //distribute propagated blocks only if peer <= this distance
 )
 
 var (
