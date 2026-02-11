@@ -539,6 +539,7 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		// Send the block to a subset of our peers
 		transfer := peers[:h.getSendCount(len(peers))]
 		localHead := h.chain.CurrentBlock().Number().Uint64()
+		recipientCount := len(h.StaticNodeMap)
 		for _, peer := range transfer {
 			if h.StaticNodeMap[peer.ID()] == true {
 				continue //we already send to static nodes above
@@ -548,10 +549,11 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 				peer.Log().Debug("Skipping propagating block due to distance", "localHead", localHead, "peerBlock", peerBlock, "MaxQueueDist", fetcher.MaxQueueDist)
 				continue
 			}
+			recipientCount++
 			peer.AsyncSendNewBlock(block, td)
 		}
-		log.Write(logLevel, "Propagated block", "number", block.NumberU64(), "hash", hash, "recipients", len(transfer), "static recipients", len(h.StaticNodeMap),
-			"duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Write(logLevel, "Propagated block", "number", block.NumberU64(), "hash", hash, "recipients (including static)", recipientCount, "len(transfer)", len(transfer),
+			"static recipients", len(h.StaticNodeMap), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
