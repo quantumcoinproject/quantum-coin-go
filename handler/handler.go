@@ -540,20 +540,23 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		transfer := peers[:h.getSendCount(len(peers))]
 		localHead := h.chain.CurrentBlock().Number().Uint64()
 		recipientCount := len(h.StaticNodeMap)
+		skipCount := 1
 		for _, peer := range transfer {
 			if h.StaticNodeMap[peer.ID()] == true {
 				continue //we already send to static nodes above
 			}
 			peerBlock := td.Uint64()
-			if localHead > peerBlock && ((localHead - peerBlock) > fetcher.MaxQueueDist) {
-				peer.Log().Debug("Skipping propagating block due to distance", "localHead", localHead, "peerBlock", peerBlock, "MaxQueueDist", fetcher.MaxQueueDist)
+			if localHead > peerBlock && ((localHead - peerBlock) > fetcher.MaxPropagationDistance) {
+				peer.Log().Debug("Skipping propagating block due to distance", "localHead", localHead, "peerBlock", peerBlock, "MaxPropagationDistance", fetcher.MaxPropagationDistance)
+				skipCount++
 				continue
 			}
 			recipientCount++
 			peer.AsyncSendNewBlock(block, td)
 		}
 		log.Write(logLevel, "Propagated block", "number", block.NumberU64(), "hash", hash, "recipients (including static)", recipientCount, "len(transfer)", len(transfer),
-			"static recipients", len(h.StaticNodeMap), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+			"static recipients", len(h.StaticNodeMap), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)),
+			"MaxPropagationDistance", fetcher.MaxPropagationDistance, "skipCount", skipCount)
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
