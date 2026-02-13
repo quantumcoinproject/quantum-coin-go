@@ -556,7 +556,7 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		}
 		log.Write(logLevel, "Propagated block", "number", block.NumberU64(), "hash", hash, "recipients (including static)", recipientCount, "len(transfer)", len(transfer),
 			"static recipients", len(h.StaticNodeMap), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)),
-			"MaxPropagationDistance", fetcher.MaxPropagationDistance, "skipCount", skipCount)
+			"MaxPropagationDistance", fetcher.MaxPropagationDistance, "skipCount", skipCount, "localHead", localHead)
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
