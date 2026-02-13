@@ -598,7 +598,7 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 				skipCount++
 			}
 		}
-		log.Write(logLevel, "Announced block", "number", block.NumberU64(), "hash", hash, "recipients", recipientCount, "skipCount", skipCount, "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Write(log.LvlInfo, "Announced block", "number", block.NumberU64(), "hash", hash, "recipients", recipientCount, "skipCount", skipCount, "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 
