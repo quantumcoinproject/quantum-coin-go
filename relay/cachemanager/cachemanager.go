@@ -1364,8 +1364,8 @@ func (c *CacheManager) getTransactionType(txn *types.Transaction, receipt *types
 			} else if acc.AccType == ethclient.ACCOUNT_TYPE_CONTRACT {
 				return NEW_SMART_CONTRACT, nil
 			} else {
-				log.Warn("getTransactionType account type issue", "ContractAddress", receipt.ContractAddress, "blockNumber", blockNumber, "txHash", txn.Hash(), "type", acc.AccType)
-				return "", errors.New("unexpected account type")
+				log.Debug("getTransactionType account type empty contract", "ContractAddress", receipt.ContractAddress, "blockNumber", blockNumber, "txHash", txn.Hash(), "type", acc.AccType)
+				return NEW_SMART_CONTRACT, nil
 			}
 		} else {
 			return NEW_SMART_CONTRACT, nil
