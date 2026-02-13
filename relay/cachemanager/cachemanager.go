@@ -1698,7 +1698,7 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
 		if err != nil {
 			if err.Error() == LevelDbNoTFoundErrMsg {
-				log.Warn("processAccountTokenTransfers getTokenDetailsInternal not found", "contractAddress", contractAddress)
+				log.Debug("processAccountTokenTransfers getTokenDetailsInternal not found", "contractAddress", contractAddress)
 				return nil
 			} else {
 				log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
