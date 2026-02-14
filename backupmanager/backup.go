@@ -37,10 +37,25 @@ type ValidatorDeposit struct {
 	PostFilterDeposit *big.Int       `json:"postFilterDeposit" gencodec:"required"`
 }
 
+type ValidatorDetailsV2 struct {
+	Depositor          common.Address `json:"depositor"     gencodec:"required"`
+	Validator          common.Address `json:"validator"     gencodec:"required"`
+	Balance            *big.Int       `json:"balance"       gencodec:"required"`
+	NetBalance         *big.Int       `json:"netBalance"    gencodec:"required"`
+	BlockRewards       *big.Int       `json:"blockRewards"  gencodec:"required"`
+	Slashings          *big.Int       `json:"slashings"     gencodec:"required"`
+	IsValidationPaused bool           `json:"isValidationPaused"  gencodec:"required"`
+	WithdrawalBlock    *big.Int       `json:"withdrawalBlock"  gencodec:"required"`
+	WithdrawalAmount   *big.Int       `json:"withdrawalAmount" gencodec:"required"`
+	LastNiLBlock       *big.Int       `json:"lastNiLBlock" gencodec:"required"`
+	NilBlockCount      *big.Int       `json:"nilBlockCount" gencodec:"required"`
+}
+
 type BlockValidatorDetails struct {
-	BlockNumber          *big.Int           `json:"blockNumber" gencodec:"required"`
-	ParentHash           common.Hash        `json:"parentHash" gencodec:"required"`
-	ValidatorDepositList []ValidatorDeposit `json:"validatorDepositList" gencodec:"required"`
+	BlockNumber                  *big.Int             `json:"blockNumber" gencodec:"required"`
+	ParentHash                   common.Hash          `json:"parentHash" gencodec:"required"`
+	FilteredValidatorDepositList []ValidatorDeposit   `json:"filteredValidatorDepositList" gencodec:"required"`
+	ValidatorDetailsList         []ValidatorDetailsV2 `json:"validatorDetailsList" gencodec:"optional"`
 
 	PreFilterValidatorCount *big.Int    `json:"preFilterValidatorCount" gencodec:"required"`
 	ConsensusContext        common.Hash `json:"consensusContext" gencodec:"required"`
@@ -313,7 +328,7 @@ func (b *BackupManager) GetBlockValidatorDetails(blockNumber uint64, context str
 	}
 
 	details := BlockValidatorDetails{}
-	//details.ValidatorDepositList = make([]*ValidatorDeposit, 0)
+	//details.FilteredValidatorDepositList = make([]*ValidatorDeposit, 0)
 
 	err = rlp.DecodeBytes(detailsBytes, &details)
 	if err != nil {

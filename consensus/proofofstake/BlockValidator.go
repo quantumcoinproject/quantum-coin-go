@@ -552,16 +552,16 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	var filteredValidatorDepositMap map[common.Address]*big.Int
 	filteredValidatorDepositMap = make(map[common.Address]*big.Int)
 	blockValidatorDetails := backupmanager.BlockValidatorDetails{
-		BlockNumber:          big.NewInt(int64(blockNumber)),
-		ParentHash:           parentHash,
-		ValidatorDepositList: make([]backupmanager.ValidatorDeposit, len(filteredValidators)),
+		BlockNumber:                  big.NewInt(int64(blockNumber)),
+		ParentHash:                   parentHash,
+		FilteredValidatorDepositList: make([]backupmanager.ValidatorDeposit, len(filteredValidators)),
 	}
 	blockValidatorDetails.ConsensusContext.CopyFrom(consensusContext)
 
 	valIndex := 0
 	for v, _ := range filteredValidators {
 		filteredValidatorDepositMap[v] = valMap[v]
-		blockValidatorDetails.ValidatorDepositList[valIndex] = backupmanager.ValidatorDeposit{
+		blockValidatorDetails.FilteredValidatorDepositList[valIndex] = backupmanager.ValidatorDeposit{
 			ValidatorAddress:  v,
 			PostFilterDeposit: valMap[v],
 		}
@@ -581,6 +581,13 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 				log.Debug("ValidateBlockConsensusDataInner filteredValidatorDepositMap remove", "validator", valAddr, "blockNumber", blockNumber)
 				delete(*valDetailsMap, valAddr)
 			}
+		}
+
+		blockValidatorDetails.ValidatorDetailsList = make([]backupmanager.ValidatorDetailsV2, len(*valDetailsMap))
+		valDetailsIndex := 0
+		for _, valDetails := range *valDetailsMap {
+			blockValidatorDetails.ValidatorDetailsList[valDetailsIndex] = (backupmanager.ValidatorDetailsV2)(*valDetails)
+			valDetailsIndex++
 		}
 
 		log.Debug("ValidateBlockConsensusDataInner before getBlockProposer", "len(filteredValidatorDepositMap)",
