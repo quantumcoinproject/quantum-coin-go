@@ -48,8 +48,14 @@ type BlockValidatorDetails struct {
 
 var singleInstance *BackupManager
 
+var singleConsensusInstance *BackupManager
+
 func GetInstance() *BackupManager {
 	return singleInstance
+}
+
+func GetConsensusInstance() *BackupManager {
+	return singleConsensusInstance
 }
 
 var instanceLock sync.Mutex
@@ -77,8 +83,8 @@ func NewConsensusBackupManager(backupDir string) (*BackupManager, error) {
 	instanceLock.Lock()
 	defer instanceLock.Unlock()
 
-	if singleInstance != nil {
-		return singleInstance, nil
+	if singleConsensusInstance != nil {
+		return singleConsensusInstance, nil
 	}
 
 	bm := &BackupManager{}
@@ -88,7 +94,7 @@ func NewConsensusBackupManager(backupDir string) (*BackupManager, error) {
 		return nil, err
 	}
 
-	singleInstance = bm
+	singleConsensusInstance = bm
 	return bm, nil
 }
 

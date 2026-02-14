@@ -815,9 +815,9 @@ func ValidateBlockConsensusData(block *types.Block, validatorDepositMap *map[com
 	}
 
 	blockValidatorDetails, err := ValidateBlockConsensusDataInner(txnList, header.ParentHash, blockConsensusData, blockAdditionalConsensusData, validatorDepositMap, header.Number.Uint64(), valDetailsMap, consensusContext)
-	if blockValidatorDetails != nil && backupmanager.GetInstance() != nil { //save even if error
+	if blockValidatorDetails != nil && backupmanager.GetConsensusInstance() != nil { //save even if error
 		blockValidatorDetails.PreFilterValidatorCount = big.NewInt(int64(preFilterValidatorCount))
-		errBackup := backupmanager.GetInstance().BackupBlockValidatorDetails(blockValidatorDetails, backupmanager.BlockValidatorContextBlockVerify)
+		errBackup := backupmanager.GetConsensusInstance().BackupBlockValidatorDetails(blockValidatorDetails, backupmanager.BlockValidatorContextBlockVerify)
 		if errBackup != nil {
 			log.Warn("ValidateBlockConsensusDataInner backup consensus", "errBackup", errBackup)
 		}

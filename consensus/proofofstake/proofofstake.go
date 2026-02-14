@@ -951,8 +951,8 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	}
 
 	blockConsensusData, blockAdditionalConsensusData, blockValidatorDetails, err := c.consensusHandler.getBlockConsensusData(header.ParentHash)
-	if blockValidatorDetails != nil && backupmanager.GetInstance() != nil { //save even if error
-		errBackup := backupmanager.GetInstance().BackupBlockValidatorDetails(blockValidatorDetails, backupmanager.BlockValidatorContextValidator)
+	if blockValidatorDetails != nil && backupmanager.GetConsensusInstance() != nil { //save even if error
+		errBackup := backupmanager.GetConsensusInstance().BackupBlockValidatorDetails(blockValidatorDetails, backupmanager.BlockValidatorContextValidator)
 		if errBackup != nil {
 			log.Warn("ValidateBlockConsensusDataInner backup consensus", "errBackup", errBackup)
 		}
