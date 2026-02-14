@@ -197,9 +197,13 @@ func (ec *Client) ListConversionDetails(ctx context.Context) (*proofofstake.Conv
 	return summary, err
 }
 
-func (ec *Client) GetBlockValidatorDetails(ctx context.Context) (*backupmanager.BlockValidatorDetails, error) {
+
+
+// GetBlockValidatorDetailsByBlock returns block validator details for the given block number and context.
+// context must be backupmanager.BlockValidatorContextValidator ("1") or backupmanager.BlockValidatorContextBlockVerify ("2").
+func (ec *Client) GetBlockValidatorDetailsByBlock(ctx context.Context, blockNumber uint64, context string) (*backupmanager.BlockValidatorDetails, error) {
 	var details *backupmanager.BlockValidatorDetails
-	err := ec.c.CallContext(ctx, &details, "proofofstake_getBlockValidatorDetails")
+	err := ec.c.CallContext(ctx, &details, "proofofstake_getBlockValidatorDetails", blockNumber, context)
 	if err == nil && details == nil {
 		err = ethereum.NotFound
 	}
