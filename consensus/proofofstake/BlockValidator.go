@@ -554,14 +554,14 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	blockValidatorDetails := backupmanager.BlockValidatorDetails{
 		BlockNumber:          big.NewInt(int64(blockNumber)),
 		ParentHash:           parentHash,
-		ValidatorDepositList: make([]*backupmanager.ValidatorDeposit, len(filteredValidators)),
+		ValidatorDepositList: make([]backupmanager.ValidatorDeposit, len(filteredValidators)),
 	}
 	blockValidatorDetails.ConsensusContext.CopyFrom(consensusContext)
 
 	valCount := 0
 	for v, _ := range filteredValidators {
 		filteredValidatorDepositMap[v] = valMap[v]
-		blockValidatorDetails.ValidatorDepositList[valCount] = &backupmanager.ValidatorDeposit{
+		blockValidatorDetails.ValidatorDepositList[valCount] = backupmanager.ValidatorDeposit{
 			ValidatorAddress:  v,
 			PostFilterDeposit: valMap[v],
 		}
@@ -719,7 +719,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		return nil, errors.New("ValidateBlockConsensusData unexpected vote type")
 	}
 
-	return nil, nil
+	return &blockValidatorDetails, nil
 }
 
 // In this function, absolute time cannot be validated, since this function can get called at a different time, for example when new node is created and is reading old blocks

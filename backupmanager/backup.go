@@ -38,9 +38,9 @@ type ValidatorDeposit struct {
 }
 
 type BlockValidatorDetails struct {
-	BlockNumber          *big.Int            `json:"blockNumber" gencodec:"required"`
-	ParentHash           common.Hash         `json:"parentHash" gencodec:"required"`
-	ValidatorDepositList []*ValidatorDeposit `json:"validatorDepositList" gencodec:"required"`
+	BlockNumber          *big.Int           `json:"blockNumber" gencodec:"required"`
+	ParentHash           common.Hash        `json:"parentHash" gencodec:"required"`
+	ValidatorDepositList []ValidatorDeposit `json:"validatorDepositList" gencodec:"required"`
 
 	PreFilterValidatorCount *big.Int    `json:"preFilterValidatorCount" gencodec:"required"`
 	ConsensusContext        common.Hash `json:"consensusContext" gencodec:"required"`
@@ -275,8 +275,8 @@ func (b *BackupManager) TrsansactionExists(hash common.Hash) error {
 }
 
 func (b *BackupManager) BackupBlockValidatorDetails(details *BlockValidatorDetails, context string) error {
-	b.txBackupLock.Lock()
-	defer b.txBackupLock.Unlock()
+	b.consensusBackupLock.Lock()
+	defer b.consensusBackupLock.Unlock()
 
 	data, err := rlp.EncodeToBytes(details)
 	if err != nil {
@@ -286,29 +286,34 @@ func (b *BackupManager) BackupBlockValidatorDetails(details *BlockValidatorDetai
 
 	key := []byte(fmt.Sprintf("%d-%s", details.BlockNumber.Uint64(), context))
 
-	db := *b.txndb
+	db := *b.consensusdb
 	err = db.Put(key, data)
 	if err != nil {
 		return err
 	}
 
-	log.Trace("BackupBlockValidatorDetails", "block", details.BlockNumber.Uint64())
+	log.Debug("BackupBlockValidatorDetails", "block", details.BlockNumber.Uint64(), "context", context)
 	return nil
 }
 
 func (b *BackupManager) GetBlockValidatorDetails(blockNumber uint64, context string) (*BlockValidatorDetails, error) {
-	b.blkBackupLock.Lock()
-	defer b.blkBackupLock.Unlock()
+	b.consensusBackupLock.Lock()
+	defer b.consensusBackupLock.Unlock()
+
+	if b.consensusdb == nil {
+		return nil, errors.New("consensusdb is nil")
+	}
 
 	key := []byte(fmt.Sprintf("%d-%s", blockNumber, context))
 
-	db := *b.blockdb
+	db := *b.consensusdb
 	detailsBytes, err := db.Get(key)
 	if err != nil {
 		return nil, err
 	}
 
 	details := BlockValidatorDetails{}
+	//details.ValidatorDepositList = make([]*ValidatorDeposit, 0)
 
 	err = rlp.DecodeBytes(detailsBytes, &details)
 	if err != nil {
