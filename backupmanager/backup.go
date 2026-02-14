@@ -5,22 +5,45 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"math/big"
+	"path/filepath"
+	"sync"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"path/filepath"
-	"sync"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 type BackupManager struct {
-	backupDir     string
-	txBackupLock  sync.Mutex
-	blkBackupLock sync.Mutex
-	blockdb       *ethdb.Database
-	txndb         *ethdb.Database
+	backupDir           string
+	txBackupLock        sync.Mutex
+	blkBackupLock       sync.Mutex
+	consensusBackupLock sync.Mutex
+	blockdb             *ethdb.Database
+	txndb               *ethdb.Database
+	consensusdb         *ethdb.Database
+}
+
+const BlockValidatorContextValidator = "1"
+const BlockValidatorContextBlockVerify = "1"
+
+type ValidatorDeposit struct {
+	ValidatorAddress  common.Address `json:"validatorAddress" gencodec:"required"`
+	PostFilterDeposit *big.Int       `json:"postFilterDeposit" gencodec:"required"`
+}
+
+type BlockValidatorDetails struct {
+	BlockNumber          *big.Int            `json:"blockNumber" gencodec:"required"`
+	ParentHash           common.Hash         `json:"parentHash" gencodec:"required"`
+	ValidatorDepositList []*ValidatorDeposit `json:"validatorDepositList" gencodec:"required"`
+
+	PreFilterValidatorCount *big.Int    `json:"preFilterValidatorCount" gencodec:"required"`
+	ConsensusContext        common.Hash `json:"consensusContext" gencodec:"required"`
 }
 
 var singleInstance *BackupManager
@@ -50,6 +73,41 @@ func NewBackupManager(backupDir string) (*BackupManager, error) {
 	return bm, nil
 }
 
+func NewConsensusBackupManager(backupDir string) (*BackupManager, error) {
+	instanceLock.Lock()
+	defer instanceLock.Unlock()
+
+	if singleInstance != nil {
+		return singleInstance, nil
+	}
+
+	bm := &BackupManager{}
+
+	err := bm.InitializeConsensusBlockManager(backupDir)
+	if err != nil {
+		return nil, err
+	}
+
+	singleInstance = bm
+	return bm, nil
+}
+
+func (b *BackupManager) InitializeConsensusBlockManager(backupDir string) error {
+	log.Debug("Initialize consensus backup", "backupDir", backupDir)
+
+	filePath := filepath.Join(backupDir, "consensus.db")
+	var consensusdb ethdb.Database
+	consensusdb, err := rawdb.NewLevelDBDatabase(filePath, 32, 0, "", false)
+	if err != nil {
+		return err
+	}
+
+	b.backupDir = backupDir
+	b.consensusdb = &consensusdb
+
+	return nil
+}
+
 func (b *BackupManager) Initialize(backupDir string) error {
 	log.Debug("Initialize backup", "backupDir", backupDir)
 
@@ -67,9 +125,17 @@ func (b *BackupManager) Initialize(backupDir string) error {
 		return err
 	}
 
+	consensusFilePath := filepath.Join(backupDir, "consensus.db")
+	var consensusdb ethdb.Database
+	consensusdb, err = rawdb.NewLevelDBDatabase(consensusFilePath, 32, 0, "", false)
+	if err != nil {
+		return err
+	}
+
 	b.backupDir = backupDir
 	b.blockdb = &blkdb
 	b.txndb = &txndb
+	b.consensusdb = &consensusdb
 
 	return nil
 }
@@ -202,25 +268,63 @@ func (b *BackupManager) TrsansactionExists(hash common.Hash) error {
 	return nil
 }
 
+func (b *BackupManager) BackupBlockValidatorDetails(details *BlockValidatorDetails, context string) error {
+	b.txBackupLock.Lock()
+	defer b.txBackupLock.Unlock()
+
+	data, err := rlp.EncodeToBytes(details)
+	if err != nil {
+		log.Trace("EncodeToBytes BlockValidatorDetails", "err", err)
+		return err
+	}
+
+	key := []byte(fmt.Sprintf("%d-%s", details.BlockNumber.Uint64(), context))
+
+	db := *b.txndb
+	err = db.Put(key, data)
+	if err != nil {
+		return err
+	}
+
+	log.Trace("BackupBlockValidatorDetails", "block", details.BlockNumber.Uint64())
+	return nil
+}
+
 func (b *BackupManager) Close() error {
+	b.consensusBackupLock.Lock()
+	defer b.consensusBackupLock.Unlock()
+
 	b.blkBackupLock.Lock()
 	defer b.blkBackupLock.Unlock()
 
 	b.txBackupLock.Lock()
 	defer b.txBackupLock.Unlock()
 
-	blkdb := *b.blockdb
-	err := blkdb.Close()
-	if err != nil {
-		log.Debug("backup manager blockdb close error", "err", err)
-		return err
+	if b.blockdb != nil {
+		blkdb := *b.blockdb
+		err := blkdb.Close()
+		if err != nil {
+			log.Debug("backup manager blockdb close error", "err", err)
+			return err
+		}
 	}
 
-	txndb := *b.txndb
-	err = txndb.Close()
-	log.Debug("backup manager txndb close error", "err", err)
-	if err != nil {
-		return err
+	if b.txndb != nil {
+		txndb := *b.txndb
+		err := txndb.Close()
+		log.Debug("backup manager txndb close error", "err", err)
+		if err != nil {
+			return err
+		}
+	}
+
+	if b.consensusdb != nil {
+		consensusdb := *b.consensusdb
+		err := consensusdb.Close()
+		log.Debug("backup manager consensusdb close error", "err", err)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil

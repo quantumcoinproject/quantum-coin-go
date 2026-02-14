@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/state"
@@ -949,7 +950,14 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 		return nil, errors.New("Block state not yet BLOCK_STATE_WAITING_FOR_COMMITS")
 	}
 
-	blockConsensusData, blockAdditionalConsensusData, err := c.consensusHandler.getBlockConsensusData(header.ParentHash)
+	blockConsensusData, blockAdditionalConsensusData, blockValidatorDetails, err := c.consensusHandler.getBlockConsensusData(header.ParentHash)
+	if blockValidatorDetails != nil && backupmanager.GetInstance() != nil { //save even if error
+		errBackup := backupmanager.GetInstance().BackupBlockValidatorDetails(blockValidatorDetails, backupmanager.BlockValidatorContextValidator)
+		if errBackup != nil {
+			log.Warn("ValidateBlockConsensusDataInner backup consensus", "errBackup", errBackup)
+		}
+	}
+
 	if err != nil {
 		log.Trace("getBlockConsensusData", "err", err)
 		return nil, err

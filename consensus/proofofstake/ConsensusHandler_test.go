@@ -573,7 +573,7 @@ func ValidateBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager,
 			t.Fatalf("failed")
 		}
 
-		blockConsensusData, blockAdditionalConsensusData, err := handler.consensusHandler.getBlockConsensusData(parentHash)
+		blockConsensusData, blockAdditionalConsensusData, _, err := handler.consensusHandler.getBlockConsensusData(parentHash)
 		if err != nil {
 			fmt.Println("ValidateBlockConsensusData getBlockConsensusData", "err", err, "val", handler.validator)
 			t.Fatalf("failed")
@@ -625,7 +625,7 @@ func ValidateBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager,
 		}
 		consensusContext := crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(len(*validatorMap))))
 
-		err = ValidateBlockConsensusDataInner(txns, parentHash, blockConsensusData, blockAdditionalConsensusData, validatorMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, valDetailsMap, consensusContext)
+		_, err = ValidateBlockConsensusDataInner(txns, parentHash, blockConsensusData, blockAdditionalConsensusData, validatorMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, valDetailsMap, consensusContext)
 		if err != nil {
 			t.Fatalf("ValidateBlockConsensusDataInner failed")
 		}
