@@ -27,6 +27,7 @@ import (
 
 	ethereum "github.com/quantumcoinproject/quantum-coin-go"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi/bind"
+	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus/proofofstake"
@@ -194,6 +195,15 @@ func (ec *Client) ListConversionDetails(ctx context.Context) (*proofofstake.Conv
 		err = ethereum.NotFound
 	}
 	return summary, err
+}
+
+func (ec *Client) GetBlockValidatorDetails(ctx context.Context) (*backupmanager.BlockValidatorDetails, error) {
+	var details *backupmanager.BlockValidatorDetails
+	err := ec.c.CallContext(ctx, &details, "proofofstake_getBlockValidatorDetails")
+	if err == nil && details == nil {
+		err = ethereum.NotFound
+	}
+	return details, err
 }
 
 type rpcTransaction struct {

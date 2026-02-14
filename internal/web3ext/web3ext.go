@@ -81,6 +81,11 @@ web3._extend({
 			call: 'proofofstake_listConversionDetails',
 			params: 0
 		}),
+		new web3._extend.Method({
+			name: 'getBlockValidatorDetails',
+			call: 'proofofstake_getBlockValidatorDetails',
+			params: 2
+		}),
 	]
 });
 `

@@ -20,6 +20,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/big"
+
+	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus"
@@ -33,7 +36,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/conversion"
-	"math/big"
 )
 
 // API is a user facing RPC API to allow controlling the signer and voting
@@ -700,6 +702,18 @@ func (api *API) GetBlockConsensusContext(blockNumber uint64) ([32]byte, error) {
 		return context, err
 	}
 	return api.proofofstake.GetConsensusContext(key, currentheader.Hash())
+}
+
+func (api *API) GetBlockValidatorDetails(blockNumber uint64, context string) (*backupmanager.BlockValidatorDetails, error) {
+	if backupmanager.GetConsensusInstance() == nil {
+		return nil, errors.New("GetConsensusInstance is nil")
+	}
+
+	if context != backupmanager.BlockValidatorContextValidator && context != backupmanager.BlockValidatorContextBlockVerify {
+		return nil, errors.New("GetBlockValidatorDetails context needs to be 1 or 2")
+	}
+
+	return backupmanager.GetConsensusInstance().GetBlockValidatorDetails(blockNumber, context)
 }
 
 type ConversionSummary struct {

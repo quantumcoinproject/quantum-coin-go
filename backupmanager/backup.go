@@ -30,7 +30,7 @@ type BackupManager struct {
 }
 
 const BlockValidatorContextValidator = "1"
-const BlockValidatorContextBlockVerify = "1"
+const BlockValidatorContextBlockVerify = "2"
 
 type ValidatorDeposit struct {
 	ValidatorAddress  common.Address `json:"validatorAddress" gencodec:"required"`
@@ -294,6 +294,28 @@ func (b *BackupManager) BackupBlockValidatorDetails(details *BlockValidatorDetai
 
 	log.Trace("BackupBlockValidatorDetails", "block", details.BlockNumber.Uint64())
 	return nil
+}
+
+func (b *BackupManager) GetBlockValidatorDetails(blockNumber uint64, context string) (*BlockValidatorDetails, error) {
+	b.blkBackupLock.Lock()
+	defer b.blkBackupLock.Unlock()
+
+	key := []byte(fmt.Sprintf("%d-%s", blockNumber, context))
+
+	db := *b.blockdb
+	detailsBytes, err := db.Get(key)
+	if err != nil {
+		return nil, err
+	}
+
+	details := BlockValidatorDetails{}
+
+	err = rlp.DecodeBytes(detailsBytes, &details)
+	if err != nil {
+		return nil, err
+	}
+
+	return &details, nil
 }
 
 func (b *BackupManager) Close() error {
