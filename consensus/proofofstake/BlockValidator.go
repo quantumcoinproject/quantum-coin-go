@@ -558,14 +558,15 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	}
 	blockValidatorDetails.ConsensusContext.CopyFrom(consensusContext)
 
-	valCount := 0
+	valIndex := 0
 	for v, _ := range filteredValidators {
 		filteredValidatorDepositMap[v] = valMap[v]
-		blockValidatorDetails.ValidatorDepositList[valCount] = backupmanager.ValidatorDeposit{
+		blockValidatorDetails.ValidatorDepositList[valIndex] = backupmanager.ValidatorDeposit{
 			ValidatorAddress:  v,
 			PostFilterDeposit: valMap[v],
 		}
-		log.Debug("ValidateBlockConsensusDataInner", "validator", v, "deposit value after filtering", valMap[v], "blockNumber", blockNumber)
+		valIndex++
+		log.Debug("ValidateBlockConsensusDataInner", "validator", v, "deposit value after filtering", valMap[v], "blockNumber", blockNumber, "valIndex", valIndex)
 	}
 
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
