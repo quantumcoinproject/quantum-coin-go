@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core"
@@ -74,7 +75,7 @@ func StartNode(ctx *cli.Context, stack *node.Node) {
 		if err != nil {
 			Fatalf("Error starting protocol stack (backup manager initialize failed: %v", err)
 		}
-	} else {
+	} else if defaults.EnableProposerCheck() {
 		_, err := backupmanager.NewConsensusBackupManager(stack.InstanceDir())
 		if err != nil {
 			Fatalf("Error starting protocol stack (consensus backup manager initialize failed: %v", err)
