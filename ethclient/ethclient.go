@@ -197,8 +197,6 @@ func (ec *Client) ListConversionDetails(ctx context.Context) (*proofofstake.Conv
 	return summary, err
 }
 
-
-
 // GetBlockValidatorDetailsByBlock returns block validator details for the given block number and context.
 // context must be backupmanager.BlockValidatorContextValidator ("1") or backupmanager.BlockValidatorContextBlockVerify ("2").
 func (ec *Client) GetBlockValidatorDetailsByBlock(ctx context.Context, blockNumber uint64, context string) (*backupmanager.BlockValidatorDetails, error) {
