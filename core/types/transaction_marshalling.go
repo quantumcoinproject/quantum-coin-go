@@ -199,7 +199,6 @@ func (t *Transaction) UnmarshalJSON(input []byte) error {
 			return errors.New("missing required field 'maxGasTier' in transaction") //todo: fill
 		}
 		maxGasTier := int64(*dec.MaxGasTier)
-		log.Warn("decode", "maxGasTier", maxGasTier)
 		if big.NewInt(maxGasTier).Cmp(GetDefaultGasPrice()) == 0 {
 			itx.MaxGasTier = GAS_TIER_DEFAULT
 		} else if maxGasTier == int64(GAS_TIER_DEFAULT) {

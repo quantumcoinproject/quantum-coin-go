@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
+	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
@@ -266,6 +267,7 @@ type BlockStateDetails struct {
 	parentHash                        common.Hash
 	highestProposalRoundSeen          byte
 	consensusContext                  common.Hash
+	preFilterValidatorCount           int
 	skipValidation                    bool
 	blocksSkippedValidation           uint64
 
@@ -609,6 +611,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 			return err
 		}
 		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
+		blockStateDetails.preFilterValidatorCount = preFilterValidatorCount
 		log.Debug("initializeBlockStateIfRequired", "blockContext", blockContext, "post consensusContext", blockStateDetails.consensusContext, "blockContext", blockContext[:], "blockNumber", blockNumber)
 	} else {
 		blockStateDetails.consensusContext = parentHash
@@ -950,28 +953,29 @@ func (cph *ConsensusHandler) getBlockRoundState(parentHash common.Hash, round by
 	return roundDetails.state, roundDetails.blockVoteType, len(roundDetails.validatorProposalAcks), nil
 }
 
-func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (blockConsensusData *BlockConsensusData, blockAdditionalConsensusData *BlockAdditionalConsensusData, err error) {
+func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (blockConsensusData *BlockConsensusData,
+	blockAdditionalConsensusData *BlockAdditionalConsensusData, bvDetails *backupmanager.BlockValidatorDetails, err error) {
 	cph.outerPacketLock.Lock()
 	defer cph.outerPacketLock.Unlock()
 
 	blockStateDetails, ok := cph.blockStateDetailsMap[parentHash]
 	if ok == false {
-		return nil, nil, errors.New("block doesn't exist")
+		return nil, nil, nil, errors.New("block doesn't exist")
 	}
 
 	if blockStateDetails.currentRound == 0 {
-		return nil, nil, errors.New("invalid block round")
+		return nil, nil, nil, errors.New("invalid block round")
 	}
 
 	blockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
 
 	if blockRoundDetails.state != BLOCK_STATE_RECEIVED_COMMITS {
-		return nil, nil, errors.New("block state not done commit yet")
+		return nil, nil, nil, errors.New("block state not done commit yet")
 	}
 
 	if blockRoundDetails.blockVoteType != VOTE_TYPE_OK && blockRoundDetails.blockVoteType != VOTE_TYPE_NIL {
 		log.Warn("getBlockConsensusData", "voteType", blockRoundDetails.blockVoteType)
-		return nil, nil, errors.New("getBlockConsensusData invalid vote type e")
+		return nil, nil, nil, errors.New("getBlockConsensusData invalid vote type e")
 	}
 
 	blockConsensusData = &BlockConsensusData{
@@ -1027,13 +1031,13 @@ func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (bloc
 		roundProposer, err := getBlockProposer(parentHash, &blockStateDetails.filteredValidatorsDepositMap, r,
 			blockStateDetails.validatorDetailsMap, blockStateDetails.blockNumber, blockStateDetails.consensusContext)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		roundPktCount = roundPktCount + len(blockRoundDetails.proposalAckPackets) + len(blockRoundDetails.precommitPackets) + len(blockRoundDetails.commitPackets)
 		if roundPktCount == 0 {
 			log.Debug("consensusdata", "Address", cph.account.Address, "currentRound", blockStateDetails.currentRound, "r", r)
-			return nil, nil, errors.New("no consensus packets for round")
+			return nil, nil, nil, errors.New("no consensus packets for round")
 		}
 
 		if blockConsensusData.VoteType == VOTE_TYPE_NIL {
@@ -1055,19 +1059,23 @@ func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (bloc
 		blockAdditionalConsensusData.ConsensusPackets[i] = eth.NewConsensusPacket(&packet)
 	}
 
+	var blockValidatorDetails *backupmanager.BlockValidatorDetails
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL {
-		err = ValidateBlockConsensusDataInner(nil, parentHash, blockConsensusData, blockAdditionalConsensusData,
+		blockValidatorDetails, err = ValidateBlockConsensusDataInner(nil, parentHash, blockConsensusData, blockAdditionalConsensusData,
 			&blockStateDetails.filteredValidatorsDepositMap, blockStateDetails.blockNumber, blockStateDetails.validatorDetailsMap, blockStateDetails.consensusContext)
 	} else {
-		err = ValidateBlockConsensusDataInner(blockRoundDetails.proposalTxns, parentHash, blockConsensusData, blockAdditionalConsensusData,
+		blockValidatorDetails, err = ValidateBlockConsensusDataInner(blockRoundDetails.proposalTxns, parentHash, blockConsensusData, blockAdditionalConsensusData,
 			&blockStateDetails.filteredValidatorsDepositMap, blockStateDetails.blockNumber, blockStateDetails.validatorDetailsMap, blockStateDetails.consensusContext)
+	}
+	if blockValidatorDetails != nil {
+		blockValidatorDetails.PreFilterValidatorCount = big.NewInt(int64(blockStateDetails.preFilterValidatorCount))
 	}
 
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, blockValidatorDetails, err
 	}
 
-	return blockConsensusData, blockAdditionalConsensusData, nil
+	return blockConsensusData, blockAdditionalConsensusData, blockValidatorDetails, nil
 }
 
 func (cph *ConsensusHandler) getBlockRound(parentHash common.Hash, round byte) (blockRoundState *BlockRoundDetails, err error) {

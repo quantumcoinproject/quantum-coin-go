@@ -156,6 +156,11 @@ type P2PHandler struct {
 	consensusPacketHelper      *ConsensusPacketHelper
 	StaticNodes                []*enode.Node
 	StaticNodeMap              map[string]bool
+
+	// lastFarBlockHashAnnounce tracks last time we sent a blockhash announcement to peers
+	// that are beyond MaxPropagationDistance; we only re-announce to them every 900s.
+	lastFarBlockHashAnnounce   map[string]time.Time
+	lastFarBlockHashAnnounceMu sync.Mutex
 }
 
 var lock = &sync.Mutex{}
@@ -211,6 +216,7 @@ func NewHandler(config *HandlerConfig) (*P2PHandler, error) {
 		rebroadcastLastCleanupTime: time.Now(),
 		consensusPacketHelper:      NewConsensusPacketHelper(config.Chain),
 		StaticNodes:                config.StaticNodes,
+		lastFarBlockHashAnnounce:   make(map[string]time.Time),
 	}
 	h.StaticNodeMap = make(map[string]bool)
 	if h.StaticNodes != nil {
@@ -556,15 +562,43 @@ func (h *P2PHandler) BroadcastBlock(block *types.Block, propagate bool) {
 		}
 		log.Write(logLevel, "Propagated block", "number", block.NumberU64(), "hash", hash, "recipients (including static)", recipientCount, "len(transfer)", len(transfer),
 			"static recipients", len(h.StaticNodeMap), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)),
-			"MaxPropagationDistance", fetcher.MaxPropagationDistance, "skipCount", skipCount, "localHead", localHead)
+			"MaxPropagationDistance", fetcher.MaxPropagationDistance, "skipCount", skipCount, "skippedCount", skipCount, "localHead", localHead)
 		return
 	}
 	// Otherwise if the block is indeed in out own chain, announce it
 	if h.chain.HasBlock(hash, block.NumberU64()) {
+		localHead := h.chain.CurrentBlock().Number().Uint64()
+		now := time.Now()
+		const farPeerAnnounceInterval = 900 * time.Second
+		recipientCount := 0
+		skipCount := 0
 		for _, peer := range peers {
-			peer.AsyncSendNewBlockHash(block)
+			_, peerTD := peer.Head()
+			peerBlock := peerTD.Uint64()
+			var distance uint64
+			if localHead > peerBlock {
+				distance = localHead - peerBlock
+			}
+			if distance < fetcher.MaxPropagationDistance {
+				peer.AsyncSendNewBlockHash(block)
+				recipientCount++
+				continue
+			}
+			// Far peer: announce first time, then at most every 900 seconds
+			h.lastFarBlockHashAnnounceMu.Lock()
+			last, ok := h.lastFarBlockHashAnnounce[peer.ID()]
+			h.lastFarBlockHashAnnounceMu.Unlock()
+			if !ok || now.Sub(last) >= farPeerAnnounceInterval {
+				peer.AsyncSendNewBlockHash(block)
+				recipientCount++
+				h.lastFarBlockHashAnnounceMu.Lock()
+				h.lastFarBlockHashAnnounce[peer.ID()] = now
+				h.lastFarBlockHashAnnounceMu.Unlock()
+			} else {
+				skipCount++
+			}
 		}
-		log.Write(logLevel, "Announced block", "number", block.NumberU64(), "hash", hash, "recipients", len(peers), "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
+		log.Write(logLevel, "Announced block", "number", block.NumberU64(), "hash", hash, "recipients", recipientCount, "skipCount", skipCount, "duration", common.PrettyDuration(time.Since(block.ReceivedAt)))
 	}
 }
 

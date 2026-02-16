@@ -1364,7 +1364,8 @@ func (c *CacheManager) getTransactionType(txn *types.Transaction, receipt *types
 			} else if acc.AccType == ethclient.ACCOUNT_TYPE_CONTRACT {
 				return NEW_SMART_CONTRACT, nil
 			} else {
-				return "", errors.New("unexpected account type")
+				log.Debug("getTransactionType account type empty contract", "ContractAddress", receipt.ContractAddress, "blockNumber", blockNumber, "txHash", txn.Hash(), "type", acc.AccType)
+				return NEW_SMART_CONTRACT, nil
 			}
 		} else {
 			return NEW_SMART_CONTRACT, nil
@@ -1697,7 +1698,7 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
 		if err != nil {
 			if err.Error() == LevelDbNoTFoundErrMsg {
-				log.Warn("processAccountTokenTransfers getTokenDetailsInternal not found", "contractAddress", contractAddress)
+				log.Debug("processAccountTokenTransfers getTokenDetailsInternal not found", "contractAddress", contractAddress)
 				return nil
 			} else {
 				log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
