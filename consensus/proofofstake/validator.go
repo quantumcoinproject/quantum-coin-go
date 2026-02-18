@@ -3,6 +3,9 @@ package proofofstake
 import (
 	"context"
 	"errors"
+	"math"
+	"math/big"
+
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -13,24 +16,24 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
-	"math"
-	"math/big"
 )
 
 type ValidatorDetails struct {
-	Depositor               common.Address `json:"depositor"     gencodec:"required"`
-	Validator               common.Address `json:"validator"     gencodec:"required"`
-	Balance                 string         `json:"balance"       gencodec:"required"`
-	NetBalance              string         `json:"netBalance"    gencodec:"required"`
-	BlockRewards            string         `json:"blockRewards"  gencodec:"required"`
-	Slashings               string         `json:"slashings"  gencodec:"required"`
-	IsValidationPaused      bool           `json:"isValidationPaused"  gencodec:"required"`
-	WithdrawalBlock         string         `json:"withdrawalBlock"  gencodec:"required"`
-	WithdrawalAmount        string         `json:"withdrawalAmount"  gencodec:"required"`
-	LastNiLBlock            string         `json:"lastNiLBlock" gencodec:"required"`
-	NilBlockCount           string         `json:"nilBlockCount" gencodec:"required"`
-	BlockProposerResetBlock string         `json:"blockProposerResetBlock" gencodec:"required"`
-	ValidatorResetBlock     string         `json:"validatorResetBlock" gencodec:"required"`
+	Depositor                     common.Address `json:"depositor"     gencodec:"required"`
+	Validator                     common.Address `json:"validator"     gencodec:"required"`
+	Balance                       string         `json:"balance"       gencodec:"required"`
+	NetBalance                    string         `json:"netBalance"    gencodec:"required"`
+	BlockRewards                  string         `json:"blockRewards"  gencodec:"required"`
+	Slashings                     string         `json:"slashings"  gencodec:"required"`
+	IsValidationPaused            bool           `json:"isValidationPaused"  gencodec:"required"`
+	WithdrawalBlock               string         `json:"withdrawalBlock"  gencodec:"required"`
+	WithdrawalAmount              string         `json:"withdrawalAmount"  gencodec:"required"`
+	LastNiLBlock                  string         `json:"lastNiLBlock" gencodec:"required"`
+	NilBlockCount                 string         `json:"nilBlockCount" gencodec:"required"`
+	BlockProposerResetBlock       string         `json:"blockProposerResetBlock" gencodec:"required"`
+	ValidatorResetBlock           string         `json:"validatorResetBlock" gencodec:"required"`
+	ValidatorNetBalanceAfterDecay string         `json:"validatorNetBalanceAfterDecay" gencodec:"required"`
+	IsActive                      bool           `json:"isActive" gencodec:"required"`
 }
 
 type ValidatorDetailsV2 struct {
@@ -1070,19 +1073,23 @@ func (p *ProofOfStake) ListValidators(blockHash common.Hash, blockNumber uint64)
 
 			canVal, validatorResetBlock := canValidate(validatorDetailsV2, blockNumber)
 			canProp, blockProposerResetBlock := canPropose(validatorDetailsV2, blockNumber)
+			validatorNetBalanceAfterDecay := getOfflineValidatorDepositAfterPenalty(validatorDetailsV2, blockNumber, validatorDetailsV2.NetBalance)
+			isActive := canVal && validatorNetBalanceAfterDecay.Cmp(MIN_VALIDATOR_DEPOSIT) >= 0 && !validatorDetailsV2.IsValidationPaused
 
 			validatorDetails = &ValidatorDetails{
-				Depositor:          validatorDetailsV2.Depositor,
-				Validator:          validatorDetailsV2.Validator,
-				Balance:            hexutil.EncodeBig(validatorDetailsV2.Balance),
-				NetBalance:         hexutil.EncodeBig(validatorDetailsV2.NetBalance),
-				BlockRewards:       hexutil.EncodeBig(validatorDetailsV2.BlockRewards),
-				Slashings:          hexutil.EncodeBig(validatorDetailsV2.Slashings),
-				IsValidationPaused: validatorDetailsV2.IsValidationPaused,
-				WithdrawalBlock:    hexutil.EncodeBig(validatorDetailsV2.WithdrawalBlock),
-				WithdrawalAmount:   hexutil.EncodeBig(validatorDetailsV2.WithdrawalAmount),
-				LastNiLBlock:       hexutil.EncodeBig(validatorDetailsV2.LastNiLBlock),
-				NilBlockCount:      hexutil.EncodeBig(validatorDetailsV2.NilBlockCount),
+				Depositor:                     validatorDetailsV2.Depositor,
+				Validator:                     validatorDetailsV2.Validator,
+				Balance:                       hexutil.EncodeBig(validatorDetailsV2.Balance),
+				NetBalance:                    hexutil.EncodeBig(validatorDetailsV2.NetBalance),
+				BlockRewards:                  hexutil.EncodeBig(validatorDetailsV2.BlockRewards),
+				Slashings:                     hexutil.EncodeBig(validatorDetailsV2.Slashings),
+				IsValidationPaused:            validatorDetailsV2.IsValidationPaused,
+				WithdrawalBlock:               hexutil.EncodeBig(validatorDetailsV2.WithdrawalBlock),
+				WithdrawalAmount:              hexutil.EncodeBig(validatorDetailsV2.WithdrawalAmount),
+				LastNiLBlock:                  hexutil.EncodeBig(validatorDetailsV2.LastNiLBlock),
+				NilBlockCount:                 hexutil.EncodeBig(validatorDetailsV2.NilBlockCount),
+				ValidatorNetBalanceAfterDecay: hexutil.EncodeBig(validatorNetBalanceAfterDecay),
+				IsActive:                      isActive,
 			}
 			if validatorDetailsV2.NilBlockCount.Uint64() > 0 {
 				if canVal == false {
