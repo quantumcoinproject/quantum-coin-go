@@ -667,7 +667,11 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 				taskQueue.Push(header, -int64(header.Number.Uint64()))
 			}
 			// Add the peer to the expiry report along the number of failed requests
-			expiries[id] = len(request.Headers)
+			if request.From > 0 {
+				expiries[id] = MaxSkeletonSize  // 16
+			} else {
+				expiries[id] = len(request.Headers)
+			}
 
 			// Remove the expired requests from the pending pool directly
 			delete(pendPool, id)
