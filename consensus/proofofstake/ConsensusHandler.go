@@ -5,11 +5,12 @@ package proofofstake
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/binary"
 	"errors"
 	"io/ioutil"
 	"math"
 	"math/big"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -2554,7 +2555,9 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	const MaxRand = 9
 	const minRand = 1
 
-	rndVal := rand.Intn(MaxRand-minRand) + minRand
+	var rndBuf [4]byte
+	rand.Read(rndBuf[:])
+	rndVal := int(binary.LittleEndian.Uint32(rndBuf[:]))%(MaxRand-minRand) + minRand
 	var logLevel log.Lvl
 	if rndVal == 1 {
 		logLevel = log.LvlInfo

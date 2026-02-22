@@ -80,6 +80,9 @@ func (ds DynamicSigner) Sign(digestHash []byte, prv *signaturealgorithm.PrivateK
 }
 
 func (ds DynamicSigner) SignWithContext(digestHash []byte, prv *signaturealgorithm.PrivateKey, context []byte) (sig []byte, err error) {
+	if len(context) < 1 {
+		return nil, errors.New("invalid context")
+	}
 	if context[0] == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
 		return SigAlgHybridEdsFull.SignWithContext(digestHash, prv, context)
 	} else if context[0] == byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID) {
@@ -95,6 +98,9 @@ type DynamicVerifier struct {
 var DynamicSigVerifier DynamicVerifier = DynamicVerifier{}
 
 func (dv DynamicVerifier) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {
+	if len(sigBytes) < 1 {
+		return nil, errors.New("invalid signature")
+	}
 	algType := crypto.SignatureAlgorithmType(sigBytes[0])
 	if algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID {
 		return SigAlgHybridEds.CombinePublicKeySignature(sigBytes, pubKeyBytes)
@@ -117,7 +123,7 @@ func (dv DynamicVerifier) PublicKeyAndSignatureFromCombinedSignature(digestHash 
 		return nil, nil, err
 	}
 	if len(sigBytes) < 1 {
-		return nil, nil, err
+		return nil, nil, errors.New("invalid signature")
 	}
 	algType := crypto.SignatureAlgorithmType(sigBytes[0])
 	if algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID {
@@ -141,7 +147,7 @@ func (dv DynamicVerifier) PublicKeyBytesFromSignature(digestHash []byte, sig []b
 		return nil, err
 	}
 	if len(sigBytes) < 1 {
-		return nil, err
+		return nil, errors.New("invalid signature")
 	}
 	algType := crypto.SignatureAlgorithmType(sigBytes[0])
 	if algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID {
@@ -165,7 +171,7 @@ func (dv DynamicVerifier) GetAddress(digestHash []byte, sig []byte) (common.Addr
 		return common.Address{}, err
 	}
 	if len(sigBytes) < 1 {
-		return common.Address{}, err
+		return common.Address{}, errors.New("invalid signature")
 	}
 	algType := crypto.SignatureAlgorithmType(sigBytes[0])
 	if algType == crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID {
@@ -253,6 +259,9 @@ func (dv DynamicVerifier) ValidateSignatureValues(digestHash []byte, v byte, r, 
 }
 
 func (dv DynamicVerifier) IsSignatureTypeAllowedForTxn(blockNumber uint64, signature []byte) (bool, error) {
+	if len(signature) < 1 {
+		return false, errors.New("invalid signature length")
+	}
 	algType := crypto.SignatureAlgorithmType(signature[0])
 
 	isBreakglassBlock := defaults.IsCryptoBreakglassMode(blockNumber)
@@ -361,7 +370,7 @@ func checkKeyFileEnd(r *bufio.Reader) error {
 		case b != '\n' && b != '\r':
 			return fmt.Errorf("invalid character %q at end of key file", b)
 		case i >= 2:
-			return errors.New("key file too long, want 64 hex characters")
+			return errors.New("key file too long")
 		}
 	}
 }
@@ -403,7 +412,7 @@ func SigAlgFromSignature(digestHash []byte, sig []byte) (algorithm *signaturealg
 		return nil, err
 	}
 	if len(sigBytes) < 1 {
-		return nil, err
+		return nil, errors.New("invalid signature")
 	}
 	algType := crypto.SignatureAlgorithmType(sigBytes[0])
 	var s signaturealgorithm.SignatureAlgorithm

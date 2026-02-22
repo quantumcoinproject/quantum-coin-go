@@ -163,6 +163,8 @@ func (c *Client) PerformHandshake() error {
 
 	//Create the secrets
 	secret, err := NewSessionSecret(transcriptHash, c.kemSharedSecret[:])
+	if err != nil {
+		return err
 	c.secret = *secret
 
 	//Receive the server verify message
@@ -177,6 +179,10 @@ func (c *Client) PerformHandshake() error {
 	serverPubKeyDataLocal, err := cryptobase.SigAlg.SerializePublicKey(c.serverSigningPublicKey)
 	if err != nil {
 		return err
+	}
+
+	if serverVerifyMessage.SignatureLen > uint(len(serverVerifyMessage.Signature)) {
+		return errors.New("invalid signature length")
 	}
 
 	//Recover the public key from the signature
@@ -264,7 +270,7 @@ func (c *Client) makeClientHello() error {
 	}
 	c.ephemeralKemPrivateKey = kemPrivateKey
 	clientHelloMessage.ClientKemPublicKey = make([]byte, k.Details().LengthPublicKey)
-	copy(clientHelloMessage.ClientKemPublicKey[:], c.ephemeralKemPrivateKey.N.Bytes())
+	copy(clientHelloMessage.ClientKemPublicKey[:], c.ephemeralKemPrivateKey.N)
 
 	// Generate ClientRandomData
 	randomData := make([]byte, shaLength)
@@ -317,6 +323,7 @@ func (c *Client) ReadAndDecryptMessage(msg interface{}, packetType PacketType) e
 func (c *Client) WriteEncrypted(data []byte, context uint64, packetType PacketType) error {
 	if packetType == PacketTypeApplicationData {
 		if c.handshakeDone != true {
+			return errors.New("handshake not completed")
 		}
 	}
 
@@ -392,7 +399,9 @@ func (c *Client) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 
 func (c *Client) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	if packetType == PacketTypeApplicationData {
-
+		if c.handshakeDone != true {
+			return nil, errors.New("handshake not completed")
+		}
 	}
 
 	header := new(Header)
@@ -403,20 +412,17 @@ func (c *Client) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 
 	// Read the encrypted data
 	recLen := int(header.RecordLength)
-
-	if packetType == PacketTypeApplicationData {
-
+	if recLen < 0 || recLen > maxRecordLength {
+		return nil, errors.New("record length exceeds maximum allowed size")
 	}
 
-	encryptedData := make([]byte, int(recLen))
-	bytesRead, err := io.ReadAtLeast(c.conn, encryptedData, int(recLen))
+	encryptedData := make([]byte, recLen)
+	bytesRead, err := io.ReadAtLeast(c.conn, encryptedData, recLen)
 	if err != nil {
-
 		return nil, err
 	}
 
-	if bytesRead != int(recLen) {
-
+	if bytesRead != recLen {
 		return nil, errors.New("prefix size less")
 	}
 
@@ -462,4 +468,5 @@ func (c *Client) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 
 func (c *Client) InitWithSecrets(secret SessionSecret) {
 	c.secret = secret
+	c.handshakeDone = true
 }

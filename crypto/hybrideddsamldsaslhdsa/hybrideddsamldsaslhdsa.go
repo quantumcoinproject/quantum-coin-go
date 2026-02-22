@@ -16,13 +16,11 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideddsamldsaslhdsafull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereddsamldsaslhdsa"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"os"
-	"time"
 )
 
 type HybridEddsaMldsaSlhdsaSig struct {
@@ -382,14 +380,10 @@ func (osig HybridEddsaMldsaSlhdsaSig) ValidateSignatureValues(digestHash []byte,
 	pubKey, signature := r.Bytes(), s.Bytes()
 
 	if len(pubKey) != osig.PublicKeyLength() {
-		if time.Now().UTC().Unix() < defaults.DefaultConfig.ValidateSigPubStartTime { //remove check after time has elapsed
-			return false, nil, nil
-		}
 		if len(pubKey) > osig.PublicKeyLength() {
 			return false, nil, nil
 		}
 		//conversion issues since big.Int setBytes stores only positive integers. pad with zero's
-		log.Debug("ValidateSignatureValues padding zero", "pubKey len", len(pubKey), "expected len", osig.PublicKeyLength())
 		zeroBuff := make([]byte, osig.PublicKeyLength()-len(pubKey))
 		pubKey = append(zeroBuff, pubKey...)
 	}

@@ -5,11 +5,12 @@ import (
 	"compress/gzip"
 	"crypto/cipher"
 	"errors"
+	"io"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	"io"
-	"time"
 )
 
 // Constants for the handshake.
@@ -27,6 +28,9 @@ const (
 
 	padLen = 0
 	shaLen = 32
+
+	maxRecordLength     = 96 * 1024 * 1024  // 96 MB
+	maxDecompressedSize = 128 * 1024 * 1024 // 128 MB
 )
 
 type PacketType byte
@@ -63,8 +67,14 @@ type AdditionalData struct {
 	Rest         []rlp.RawValue `rlp:"tail"`
 }
 
-func CalculateNonce(recordCount uint, input []byte) []byte {
+func CalculateNonce(recordCount uint, input []byte) ([]byte, error) {
 	inputLen := len(input)
+	if inputLen < 8 {
+		return nil, errors.New("IV too short for counter")
+	}
+	if recordCount == ^uint(0) {
+		return nil, errors.New("recordCount reached maximum value, nonce reuse imminent")
+	}
 	output := make([]byte, inputLen)
 	copy(output, input)
 
@@ -75,13 +85,16 @@ func CalculateNonce(recordCount uint, input []byte) []byte {
 		rec >>= 8
 	}
 
-	return output
+	return output, nil
 }
 
 func Encrypt(cipher1 cipher.AEAD, fragment []byte, additionalData []byte, packetType PacketType, iv []byte, seqNum uint) (encrypted []byte, err error) {
 	dataLen := len(fragment)
 
-	nonce := CalculateNonce(seqNum, iv)
+	nonce, err := CalculateNonce(seqNum, iv)
+	if err != nil {
+		return nil, err
+	}
 
 	//Calculate packet overhead
 	beforeEncryptLen := dataLen + 1 + padLen
@@ -117,10 +130,13 @@ func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, p
 	}
 
 	//Compute the nonce
-	nonce := CalculateNonce(seqNum, iv)
+	nonce, err := CalculateNonce(seqNum, iv)
+	if err != nil {
+		return nil, err
+	}
 
 	// Decrypt
-	_, err := cipher1.Open(dataPacket.fragment[:0], nonce, encryptedData, additionalData)
+	_, err = cipher1.Open(dataPacket.fragment[:0], nonce, encryptedData, additionalData)
 	if err != nil {
 		return nil, err
 	}
@@ -183,17 +199,19 @@ func compress(data []byte) ([]byte, error) {
 }
 
 func decompress(compressedData []byte) ([]byte, error) {
-	// Create a new gzip reader that reads from the compressed data
 	gzReader, err := gzip.NewReader(bytes.NewReader(compressedData))
 	if err != nil {
 		return nil, err
 	}
-	defer gzReader.Close() // Ensure the reader is closed
+	defer gzReader.Close()
 
-	// Read the decompressed data
-	decompressedData, err := io.ReadAll(gzReader)
+	limitedReader := io.LimitReader(gzReader, maxDecompressedSize+1)
+	decompressedData, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, err
+	}
+	if len(decompressedData) > maxDecompressedSize {
+		return nil, errors.New("decompressed data exceeds maximum allowed size")
 	}
 
 	return decompressedData, nil

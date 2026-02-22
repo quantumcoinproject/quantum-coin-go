@@ -60,18 +60,18 @@ func testKEMCorrectness(threading bool, t *testing.T) {
 		t.Fatalf("failed")
 	}
 
-	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.N.Bytes())
+	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.N)
 	if err != nil {
 		fmt.Println(KemName + ": EncapSecret sharedSecretServer failed")
 	}
 
-	if bytes.Equal(clientKey.N.Bytes(), ciphertext) {
+	if bytes.Equal(clientKey.N, ciphertext) {
 		// t.Errorf is thread-safe
 		fmt.Println(KemName + ": publicKey ciphertext coincides")
 		t.Fatalf("failed")
 	}
 
-	ciphertext1, sharedSecretServer1, err := EncapSecret(clientKey.N.Bytes())
+	ciphertext1, sharedSecretServer1, err := EncapSecret(clientKey.N)
 	if err != nil {
 		fmt.Println(KemName + ": EncapSecret sharedSecretServer1 failed")
 	}
@@ -82,7 +82,7 @@ func testKEMCorrectness(threading bool, t *testing.T) {
 		t.Fatalf("failed")
 	}
 
-	sharedSecretClient, err := DecapSecret(clientKey.D.Bytes(), ciphertext)
+	sharedSecretClient, err := DecapSecret(clientKey.D, ciphertext)
 	if err != nil {
 		fmt.Println(KemName + ": DecapSecret sharedSecretClient failed")
 		t.Fatalf("failed")
@@ -94,7 +94,7 @@ func testKEMCorrectness(threading bool, t *testing.T) {
 		t.Fatalf("failed")
 	}
 
-	sharedSecretClient1, err := DecapSecret(clientKey.D.Bytes(), ciphertext1)
+	sharedSecretClient1, err := DecapSecret(clientKey.D, ciphertext1)
 	if err != nil {
 		fmt.Println(KemName + ": DecapSecret sharedSecretClient1 failed")
 		t.Fatalf("failed")
@@ -122,14 +122,14 @@ func testKEMWrongCiphertext(threading bool, t *testing.T) {
 		t.Fatalf("failed")
 	}
 
-	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.N.Bytes())
+	ciphertext, sharedSecretServer, err := EncapSecret(clientKey.N)
 	if err != nil {
 		fmt.Println(KemName + ": EncapSecret sharedSecretServer failed")
 		t.Fatalf("failed")
 	}
 
 	wrongCiphertext := csprngEntropy(len(ciphertext))
-	sharedSecretClient, err := DecapSecret(clientKey.D.Bytes(), wrongCiphertext)
+	sharedSecretClient, err := DecapSecret(clientKey.D, wrongCiphertext)
 	if err != nil {
 		fmt.Println(KemName + ": DecapSecret sharedSecretClient failed")
 		t.Fatalf("failed")
@@ -182,24 +182,10 @@ func TestKeyEncapsulationCorrectness(t *testing.T) {
 	wgKEMCorrectness.Add(1)
 	testKEMCorrectness(true, t)
 	wgKEMCorrectness.Wait()
-
-	SetSchemeHybrid()
-
-	testKEMCorrectness(false, t)
-	wgKEMCorrectness.Add(1)
-	testKEMCorrectness(true, t)
-	wgKEMCorrectness.Wait()
 }
 
 // TestKeyEncapsulationWrongCiphertext tests the wrong ciphertext regime of all enabled KEMs.
 func TestKeyEncapsulationWrongCiphertext(t *testing.T) {
-	testKEMWrongCiphertext(false, t)
-	wgKEMWrongCiphertext.Add(1)
-	testKEMWrongCiphertext(true, t)
-	wgKEMWrongCiphertext.Wait()
-
-	SetSchemeHybrid()
-
 	testKEMWrongCiphertext(false, t)
 	wgKEMWrongCiphertext.Add(1)
 	testKEMWrongCiphertext(true, t)
