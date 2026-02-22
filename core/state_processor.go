@@ -107,7 +107,7 @@ func (p *StateProcessor) Process(block *types.Block, statedb *state.StateDB, cfg
 		return nil, nil, 0, err
 	}
 	log.Debug("StateProcessor process", "blockNumber", header.Number.Uint64(),
-		"block txn count", len(block.Transactions()), "error txn count", len(errTxns), err)
+		"block txn count", len(block.Transactions()), "error txn count", len(errTxns))
 
 	txnList = append(txnList, errTxns...)
 

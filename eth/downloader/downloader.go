@@ -713,7 +713,7 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 	var (
 		from     int
 		count    int
-		MaxCount = MaxHeaderFetch / 16
+		MaxCount = MaxHeaderFetch
 	)
 
 	// requestHead is the highest block that we will ask for. If requestHead is not offset,
@@ -1136,6 +1136,25 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 			if packet.PeerId() != p.id {
 				log.Debug("Received skeleton from incorrect peer", "peer", packet.PeerId())
 				break
+			}
+			// Discard stale responses from a previous phase. In skeleton
+			// mode we expect the first header at from+MaxHeaderFetch-1; in
+			// full-header mode we expect it at from. A mismatch means this
+			// is a late skeleton response arriving in full-header mode or a
+			// late fill response arriving in skeleton mode -- either would
+			// corrupt downstream processing.
+			if packet.Items() > 0 {
+				first := packet.(*headerPack).headers[0].Number.Uint64()
+				var expected uint64
+				if skeleton {
+					expected = from + uint64(MaxHeaderFetch) - 1
+				} else {
+					expected = from
+				}
+				if first != expected {
+					p.log.Debug("Discarding stale header response", "first", first, "expected", expected, "skeleton", skeleton)
+					break
+				}
 			}
 			headerReqTimer.UpdateSince(request)
 			timeout.Stop()
