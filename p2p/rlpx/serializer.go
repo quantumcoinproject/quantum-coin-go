@@ -2,11 +2,12 @@ package rlpx
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"io"
-	mrand "math/rand"
+	"math/big"
 	"sync"
 )
 
@@ -54,7 +55,11 @@ func (rs *RlpxSerializer) SerializeDeterministic(msg interface{}, padLen int) ([
 }
 
 func (rs *RlpxSerializer) Serialize(msg interface{}) ([]byte, error) {
-	padLen := mrand.Intn(100) + 100
+	padLenRand, err := rand.Int(rand.Reader, big.NewInt(100))
+	if err != nil {
+		return nil, err
+	}
+	padLen := int(padLenRand.Int64()) + 100
 	return rs.SerializeDeterministic(msg, padLen)
 }
 
