@@ -6,13 +6,12 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
+	"errors"
 	"io"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/sha3"
-	"time"
 )
 
 const (
@@ -27,6 +26,11 @@ const (
 )
 
 type SessionSecret struct {
+	// useFixedLabel is set once at session creation to select the HKDF label
+	// encoding for the lifetime of this session. true for V2 (post-KemSwitchTime),
+	// false for legacy. This avoids repeated wall-clock checks (TOCTOU).
+	useFixedLabel bool
+
 	handshakeSecret []byte
 
 	clientHandshakeTrafficSecret []byte
@@ -54,27 +58,32 @@ type SessionSecret struct {
 }
 
 // NewSessionSecret derives handshake keys (legacy path: uses transcriptHash as salt
-// in the initial HKDF-Extract).
+// in the initial HKDF-Extract). Label encoding uses hkdfEncodeLabelLegacy.
 func NewSessionSecret(transcriptHash []byte, sharedSecret []byte) (*SessionSecret, error) {
 	zeroKey := bytes.Repeat([]byte{0}, common.HashLength)
 	earlySecret := hkdf.Extract(sha3.New256, zeroKey, transcriptHash)
-	return newSessionSecretImpl(earlySecret, transcriptHash, sharedSecret)
+	return newSessionSecretImpl(earlySecret, transcriptHash, sharedSecret, false)
 }
 
 // NewSessionSecretV2 derives handshake keys (v2 path: uses nil salt in the
-// initial HKDF-Extract, matching the TLS 1.3 key schedule).
+// initial HKDF-Extract, matching the TLS 1.3 key schedule). Label encoding
+// uses hkdfEncodeLabelFixed.
 func NewSessionSecretV2(transcriptHash []byte, sharedSecret []byte) (*SessionSecret, error) {
 	zeroKey := bytes.Repeat([]byte{0}, common.HashLength)
 	earlySecret := hkdf.Extract(sha3.New256, zeroKey, nil)
-	return newSessionSecretImpl(earlySecret, transcriptHash, sharedSecret)
+	return newSessionSecretImpl(earlySecret, transcriptHash, sharedSecret, true)
 }
 
-func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecret []byte) (*SessionSecret, error) {
+func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecret []byte, useFixed bool) (*SessionSecret, error) {
 	defer zeroBytes(earlySecret)
+
+	expand := func(secret []byte, label string, hashVal []byte, length int) ([]byte, error) {
+		return hkdfExpandLabelDirect(secret, label, hashVal, length, useFixed)
+	}
 
 	emptyHash := crypto2.SHA3_256.New().Sum(nil)
 
-	derivedSecret, err := HkdfExpandLabel(
+	derivedSecret, err := expand(
 		earlySecret,
 		derivedLabelName,
 		emptyHash,
@@ -86,7 +95,7 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 
 	handshakeSecret := hkdf.Extract(sha3.New256, sharedSecret, derivedSecret)
 
-	clientHandshakeTrafficSecret, err := HkdfExpandLabel(
+	clientHandshakeTrafficSecret, err := expand(
 		handshakeSecret,
 		clientHandshakeTrafficLabelName,
 		transcriptHash,
@@ -95,7 +104,7 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 		return nil, err
 	}
 
-	serverHandshakeTrafficSecret, err := HkdfExpandLabel(
+	serverHandshakeTrafficSecret, err := expand(
 		handshakeSecret,
 		serverHandshakeTrafficLabelName,
 		transcriptHash,
@@ -104,7 +113,7 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 		return nil, err
 	}
 
-	clientHandshakeKey, err := HkdfExpandLabel(
+	clientHandshakeKey, err := expand(
 		clientHandshakeTrafficSecret,
 		secretKeyLabelName,
 		nil,
@@ -113,7 +122,7 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 		return nil, err
 	}
 
-	serverHandshakeKey, err := HkdfExpandLabel(
+	serverHandshakeKey, err := expand(
 		serverHandshakeTrafficSecret,
 		secretKeyLabelName,
 		nil,
@@ -122,7 +131,7 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 		return nil, err
 	}
 
-	clientHandshakeIv, err := HkdfExpandLabel(
+	clientHandshakeIv, err := expand(
 		clientHandshakeTrafficSecret,
 		secretIvLabelName,
 		nil,
@@ -131,7 +140,7 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 		return nil, err
 	}
 
-	serverHandshakeIv, err := HkdfExpandLabel(
+	serverHandshakeIv, err := expand(
 		serverHandshakeTrafficSecret,
 		secretIvLabelName,
 		nil,
@@ -141,6 +150,7 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 	}
 
 	secret := &SessionSecret{
+		useFixedLabel:                useFixed,
 		handshakeSecret:              handshakeSecret,
 		clientHandshakeTrafficSecret: clientHandshakeTrafficSecret,
 		serverHandshakeTrafficSecret: serverHandshakeTrafficSecret,
@@ -174,11 +184,15 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 }
 
 func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
+	expand := func(secret []byte, label string, hashVal []byte, length int) ([]byte, error) {
+		return hkdfExpandLabelDirect(secret, label, hashVal, length, ss.useFixedLabel)
+	}
+
 	var hash crypto2.Hash
 	hash = crypto2.SHA3_256
 	emptyHash := hash.New().Sum(nil)
 
-	derivedSecret, err := HkdfExpandLabel(
+	derivedSecret, err := expand(
 		ss.handshakeSecret,
 		derivedLabelName,
 		emptyHash,
@@ -193,7 +207,7 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	ss.masterSecret = masterSecret
 	ss.TranscriptHash = transcriptHash
 
-	clientApplicationTrafficSecret, err := HkdfExpandLabel(
+	clientApplicationTrafficSecret, err := expand(
 		masterSecret,
 		clientApplicationTrafficLabelName,
 		transcriptHash,
@@ -203,7 +217,7 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	}
 	ss.clientApplicationTrafficSecret = clientApplicationTrafficSecret
 
-	serverApplicationTrafficSecret, err := HkdfExpandLabel(
+	serverApplicationTrafficSecret, err := expand(
 		masterSecret,
 		serverApplicationTrafficLabelName,
 		transcriptHash,
@@ -213,7 +227,7 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	}
 	ss.serverApplicationTrafficSecret = serverApplicationTrafficSecret
 
-	clientApplicationKey, err := HkdfExpandLabel(
+	clientApplicationKey, err := expand(
 		clientApplicationTrafficSecret,
 		secretKeyLabelName,
 		nil,
@@ -223,7 +237,7 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	}
 	ss.ClientApplicationKey = clientApplicationKey
 
-	serverApplicationKey, err := HkdfExpandLabel(
+	serverApplicationKey, err := expand(
 		serverApplicationTrafficSecret,
 		secretKeyLabelName,
 		nil,
@@ -233,7 +247,7 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	}
 	ss.ServerApplicationKey = serverApplicationKey
 
-	clientApplicationIv, err := HkdfExpandLabel(
+	clientApplicationIv, err := expand(
 		clientApplicationTrafficSecret,
 		secretIvLabelName,
 		nil,
@@ -243,7 +257,7 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	}
 	ss.ClientApplicationIv = clientApplicationIv
 
-	serverApplicationIv, err := HkdfExpandLabel(
+	serverApplicationIv, err := expand(
 		serverApplicationTrafficSecret,
 		secretIvLabelName,
 		nil,
@@ -253,7 +267,6 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	}
 	ss.ServerApplicationIv = serverApplicationIv
 
-	//Create the Client Application Cipher
 	blockApplicationClient, err := aes.NewCipher(clientApplicationKey)
 	if err != nil {
 		return err
@@ -264,7 +277,6 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 		return err
 	}
 
-	//Create the Server Application Cipher
 	blockApplicationServer, err := aes.NewCipher(serverApplicationKey)
 	if err != nil {
 		return err
@@ -275,11 +287,34 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 		return err
 	}
 
+	// Zero raw key bytes now that the cipher objects hold their own internal
+	// copies. The IVs must remain live for nonce calculation during the data
+	// phase, so only the keys are zeroed here.
+	zeroBytes(ss.ClientApplicationKey)
+	ss.ClientApplicationKey = nil
+	zeroBytes(ss.ServerApplicationKey)
+	ss.ServerApplicationKey = nil
+
 	return nil
 }
 
+// HkdfExpandLabel is the public entry point preserved for callers that don't
+// have a SessionSecret (e.g. tests). It delegates to hkdfExpandLabelDirect
+// using the useFixed flag.
 func HkdfExpandLabel(secret []byte, label string, hashVal []byte, outputLength int) ([]byte, error) {
-	hkdfLabel := hkdfEncodeLabel(label, hashVal, outputLength)
+	return hkdfExpandLabelDirect(secret, label, hashVal, outputLength, true)
+}
+
+// hkdfExpandLabelDirect performs HKDF-Expand-Label with the label encoding
+// selected by useFixed. This is the only function that chooses between fixed
+// and legacy encoding; the choice is made once per session (not per call).
+func hkdfExpandLabelDirect(secret []byte, label string, hashVal []byte, outputLength int, useFixed bool) ([]byte, error) {
+	var hkdfLabel []byte
+	if useFixed {
+		hkdfLabel = hkdfEncodeLabelFixed(label, hashVal, outputLength)
+	} else {
+		hkdfLabel = hkdfEncodeLabelLegacy(label, hashVal, outputLength)
+	}
 
 	reader := hkdf.Expand(sha3.New256, secret, hkdfLabel)
 	output := make([]byte, outputLength)
@@ -290,17 +325,13 @@ func HkdfExpandLabel(secret []byte, label string, hashVal []byte, outputLength i
 	return output, nil
 }
 
-func hkdfEncodeLabel(label string, hashVal []byte, outputLength int) []byte {
-	if time.Now().UTC().Unix() >= defaults.DefaultConfig.KemSwitchTime {
-		return hkdfEncodeLabelFixed(label, hashVal, outputLength)
-	}
-	return hkdfEncodeLabelLegacy(label, hashVal, outputLength)
-}
-
 func hkdfEncodeLabelFixed(label string, hashVal []byte, outputLength int) []byte {
 	fullLabel := "pqkem " + label
 
 	fullLabelLen := len(fullLabel)
+	if fullLabelLen > 255 {
+		panic("HKDF label exceeds 255 bytes")
+	}
 	hashLen := len(hashVal)
 	hkdfLabel := make([]byte, 2+1+fullLabelLen+1+hashLen)
 	hkdfLabel[0] = byte(outputLength >> 8)
@@ -313,7 +344,7 @@ func hkdfEncodeLabelFixed(label string, hashVal []byte, outputLength int) []byte
 	return hkdfLabel
 }
 
-// Function will be in-scope till KemSwitchTime and then be removed.
+// hkdfEncodeLabelLegacy will be removed after KemSwitchTime.
 // NOTE: this function intentionally copies `label` (not `fullLabel`) into the
 // buffer even though the length byte is set to len(fullLabel). This is a
 // historical bug that all existing nodes already use. Changing it would break
@@ -323,6 +354,9 @@ func hkdfEncodeLabelLegacy(label string, hashVal []byte, outputLength int) []byt
 	fullLabel := "pqkem " + label
 
 	fullLabelLen := len(fullLabel)
+	if fullLabelLen > 255 {
+		panic("HKDF label exceeds 255 bytes")
+	}
 	hashLen := len(hashVal)
 	hkdfLabel := make([]byte, 2+1+fullLabelLen+1+hashLen)
 	hkdfLabel[0] = byte(outputLength >> 8)
@@ -337,9 +371,16 @@ func hkdfEncodeLabelLegacy(label string, hashVal []byte, outputLength int) []byt
 
 // ComputeServerFinished computes the server's Finished verify data for explicit
 // key confirmation. The HMAC is keyed with a finished-key derived from the
-// server application traffic secret.
+// server handshake traffic secret, matching TLS 1.3 (RFC 8446 Section 4.4.4).
+//
+// TranscriptHash must cover ClientHello through ClientVerify at the time this
+// is called. The caller extends the transcript with the ServerFinished bytes
+// before computing the client Finished, so the two are cryptographically bound.
 func (ss *SessionSecret) ComputeServerFinished() ([]byte, error) {
-	finishedKey, err := HkdfExpandLabel(ss.serverApplicationTrafficSecret, "s finished", nil, shaLength)
+	if ss.serverHandshakeTrafficSecret == nil || ss.TranscriptHash == nil {
+		return nil, errors.New("required secrets are nil (handshake secrets already zeroed?)")
+	}
+	finishedKey, err := hkdfExpandLabelDirect(ss.serverHandshakeTrafficSecret, "s finished", nil, shaLength, ss.useFixedLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -351,9 +392,15 @@ func (ss *SessionSecret) ComputeServerFinished() ([]byte, error) {
 
 // ComputeClientFinished computes the client's Finished verify data for explicit
 // key confirmation. The HMAC is keyed with a finished-key derived from the
-// client application traffic secret.
+// client handshake traffic secret. TranscriptHash must cover ClientHello
+// through ServerFinished (extended after ServerFinished exchange) at the time
+// this is called, so the client Finished cryptographically binds to the server
+// Finished.
 func (ss *SessionSecret) ComputeClientFinished() ([]byte, error) {
-	finishedKey, err := HkdfExpandLabel(ss.clientApplicationTrafficSecret, "c finished", nil, shaLength)
+	if ss.clientHandshakeTrafficSecret == nil || ss.TranscriptHash == nil {
+		return nil, errors.New("required secrets are nil (handshake secrets already zeroed?)")
+	}
+	finishedKey, err := hkdfExpandLabelDirect(ss.clientHandshakeTrafficSecret, "c finished", nil, shaLength, ss.useFixedLabel)
 	if err != nil {
 		return nil, err
 	}
@@ -363,10 +410,18 @@ func (ss *SessionSecret) ComputeClientFinished() ([]byte, error) {
 	return mac.Sum(nil), nil
 }
 
-// ZeroHandshakeSecrets zeros handshake-phase key material that is no longer
-// needed once the Finished messages have been exchanged. This limits the
-// window during which an attacker with memory access could recover keys.
-func (ss *SessionSecret) ZeroHandshakeSecrets() {
+// ZeroPostHandshakeKeyMaterial zeros all key material that is no longer needed
+// once the Finished messages have been exchanged: handshake keys/IVs/ciphers,
+// traffic secrets, master secret, and the transcript hash. After this call only
+// the application ciphers and IVs remain live for the data phase.
+//
+// Known limitation: Go's crypto/aes stores an expanded key schedule inside the
+// cipher.Block object with no API to zero it. Setting the cipher fields to nil
+// here only drops the reference; the expanded key bytes (176 bytes for AES-256)
+// persist on the heap until GC reclaims the memory. The raw key slices
+// (ClientHandshakeKey etc.) are properly zeroed, but the cipher objects'
+// internal copies are not. There is no pure-Go workaround.
+func (ss *SessionSecret) ZeroPostHandshakeKeyMaterial() {
 	zeroBytes(ss.handshakeSecret)
 	ss.handshakeSecret = nil
 	zeroBytes(ss.clientHandshakeTrafficSecret)

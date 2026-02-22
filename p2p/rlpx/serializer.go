@@ -5,10 +5,12 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"fmt"
 	"io"
 	"math/big"
 	"sync"
+
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 type Serializer interface {
@@ -46,6 +48,10 @@ func (rs *RlpxSerializer) serializeDeterministicLocked(msg interface{}, padLen i
 	// Pad with random amount of data. the amount needs to be at least 100 bytes to make
 	// the message distinguishable from pre-EIP-8 handshakes.
 	rs.wbuf.AppendZero(padLen)
+
+	if len(rs.wbuf.Data) > 65535 {
+		return nil, fmt.Errorf("message too large for 16-bit length prefix: %d bytes", len(rs.wbuf.Data))
+	}
 
 	prefix := make([]byte, 2)
 

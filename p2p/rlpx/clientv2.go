@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
@@ -53,7 +54,7 @@ type ClientV2 struct {
 
 	server *ServerV2
 
-	handshakeDone bool
+	handshakeDone atomic.Bool
 	mutex         sync.Mutex
 	writeMutex    sync.Mutex
 	readMutex     sync.Mutex
@@ -95,101 +96,135 @@ func (c *ClientV2) ServerSigningPublicKey() *signaturealgorithm.PublicKey {
 	return c.serverSigningPublicKey
 }
 
-func (c *ClientV2) PerformHandshake() error {
+func (c *ClientV2) PerformHandshake() (retErr error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if c.handshakeDone {
-		return errors.New("Handshake already done")
+	// #11: zero all secrets on handshake failure
+	defer func() {
+		if retErr != nil {
+			zeroBytes(c.kemSharedSecret)
+			c.kemSharedSecret = nil
+			c.secret.ZeroSecrets()
+			if c.kem != nil {
+				k := *c.kem
+				k.Clean()
+				c.kem = nil
+			}
+			if c.ephemeralKemPrivateKey != nil {
+				zeroBytes(c.ephemeralKemPrivateKey.D)
+				c.ephemeralKemPrivateKey = nil
+			}
+		}
+	}()
+
+	if c.handshakeDone.Load() {
+		retErr = errors.New("Handshake already done")
+		return
 	}
 
-	var err error
-	c.kem, err = NewKem("client")
-	if err != nil {
-		return err
+	c.kem, retErr = NewKem("client")
+	if retErr != nil {
+		return
 	}
 
-	err = c.makeClientHelloV2()
-	if err != nil {
-		return err
+	retErr = c.makeClientHelloV2()
+	if retErr != nil {
+		return
 	}
 
+	// #12: save actual wire bytes for transcript (not re-serialized)
 	clientHelloPacket, err := c.serializer.Serialize(c.cliHelloMessage)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 	if _, err = c.conn.Write(clientHelloPacket); err != nil {
-		return err
+		retErr = err
+		return
 	}
 
 	serverHelloMessage := new(ServerHelloMessage)
-	_, err = c.serializer.Deserialize(serverHelloMessage, c.conn)
+	serverHelloRaw, err := c.serializer.Deserialize(serverHelloMessage, c.conn)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 
 	c.srvHelloMessage = serverHelloMessage
-	err = c.handleServerHelloV2()
-	if err != nil {
-		return err
+	retErr = c.handleServerHelloV2()
+	if retErr != nil {
+		return
 	}
 
-	clientHelloTranscript, err := c.serializer.SerializeDeterministic(c.cliHelloMessage, 0)
-	if err != nil {
-		return err
-	}
-	serverHelloTranscript, err := c.serializer.SerializeDeterministic(c.srvHelloMessage, 0)
-	if err != nil {
-		return err
-	}
-	transcript := append(clientHelloTranscript, serverHelloTranscript...)
+	// #12: use wire bytes for transcript to prevent padding malleability
+	transcript := append(clientHelloPacket[2:], serverHelloRaw...)
 	transcriptHash := sha3Sum256(transcript)
 	c.transcript = transcript
 
 	secret, err := NewSessionSecretV2(transcriptHash, c.kemSharedSecret[:])
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 	c.secret = *secret
 	zeroBytes(c.kemSharedSecret)
+	c.kemSharedSecret = nil
 	if c.kem != nil {
 		k := *c.kem
 		k.Clean()
 		c.kem = nil
 	}
-	c.ephemeralKemPrivateKey = nil
+	// #10: zero KEM private key bytes before dropping reference
+	if c.ephemeralKemPrivateKey != nil {
+		zeroBytes(c.ephemeralKemPrivateKey.D)
+		c.ephemeralKemPrivateKey = nil
+	}
 
 	serverVerifyMessage := new(ServerVerifyMessage)
-	err = c.ReadAndDecryptMessageV2(serverVerifyMessage, PacketTypeHandshake)
-	if err != nil {
-		return err
+	retErr = c.ReadAndDecryptMessageV2(serverVerifyMessage, PacketTypeHandshake)
+	if retErr != nil {
+		return
 	}
 
 	serverPubKeyDataLocal, err := cryptobase.SigAlg.SerializePublicKey(c.serverSigningPublicKey)
 	if err != nil {
-		return err
+		retErr = err
+		return
+	}
+	// #2: reject empty signatures at the protocol level
+	if serverVerifyMessage.SignatureLen == 0 {
+		retErr = errors.New("empty signature")
+		return
 	}
 	if serverVerifyMessage.SignatureLen > uint(len(serverVerifyMessage.Signature)) {
-		return errors.New("invalid signature length")
+		retErr = errors.New("invalid signature length")
+		return
 	}
-	serverPubKeyDataRemote, err := cryptobase.SigAlg.PublicKeyBytesFromSignature(transcriptHash, serverVerifyMessage.Signature[:serverVerifyMessage.SignatureLen])
+	sig := serverVerifyMessage.Signature[:serverVerifyMessage.SignatureLen]
+	serverPubKeyDataRemote, err := cryptobase.SigAlg.PublicKeyBytesFromSignature(transcriptHash, sig)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 	if !bytes.Equal(serverPubKeyDataLocal, serverPubKeyDataRemote) {
 		log.Trace("Public Key mismatch",
 			"serverSigningPublicKey", base64.StdEncoding.EncodeToString(c.serverSigningPublicKey.PubData),
-			"signature", base64.StdEncoding.EncodeToString(serverVerifyMessage.Signature[:serverVerifyMessage.SignatureLen]),
+			"signature", base64.StdEncoding.EncodeToString(sig),
 			"serverPubKeyDataRemote", base64.StdEncoding.EncodeToString(serverPubKeyDataRemote))
-		return errors.New("Public key mismatch")
+		retErr = errors.New("Public key mismatch")
+		return
 	}
-	if !cryptobase.DynamicSigVerifier.Verify(serverPubKeyDataLocal, transcriptHash, serverVerifyMessage.Signature[:serverVerifyMessage.SignatureLen]) {
-		return errors.New("server's signature verification failed")
+	// #13: use SigAlg.Verify (static algorithm) instead of DynamicSigVerifier
+	if !cryptobase.SigAlg.Verify(serverPubKeyDataLocal, transcriptHash, sig) {
+		retErr = errors.New("server's signature verification failed")
+		return
 	}
 
 	serverVerifyTranscript, err := c.serializer.SerializeDeterministic(serverVerifyMessage, 0)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 	transcript = append(transcript, serverVerifyTranscript...)
 	transcriptHash = sha3Sum256(transcript)
@@ -198,7 +233,8 @@ func (c *ClientV2) PerformHandshake() error {
 
 	signature, err := cryptobase.SigAlg.Sign(transcriptHash, c.clientSigningPrivateKey)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 	clientVerifyMessage := new(ClientVerifyMessage)
 	clientVerifyMessage.Signature = make([]byte, cryptobase.SigAlg.SignatureWithPublicKeyLength())
@@ -208,56 +244,77 @@ func (c *ClientV2) PerformHandshake() error {
 
 	clientVerifyPacket, err := c.serializer.Serialize(clientVerifyMessage)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 
-	err = c.WriteEncrypted(clientVerifyPacket, 0, PacketTypeHandshake)
-	if err != nil {
-		return err
+	retErr = c.WriteEncrypted(clientVerifyPacket, 0, PacketTypeHandshake)
+	if retErr != nil {
+		return
 	}
 
 	clientVerifyTranscript, err := c.serializer.SerializeDeterministic(clientVerifyMessage, 0)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 	transcript = append(transcript, clientVerifyTranscript...)
 	c.transcript = transcript
 
 	tHash := sha3Sum256(c.transcript)
-	err = c.secret.CreateApplicationSecrets(tHash)
-	if err != nil {
-		return err
+	retErr = c.secret.CreateApplicationSecrets(tHash)
+	if retErr != nil {
+		return
 	}
 
 	serverFinishedMessage := new(FinishedMessage)
-	err = c.ReadAndDecryptMessageV2(serverFinishedMessage, PacketTypeHandshake)
-	if err != nil {
-		return err
+	retErr = c.ReadAndDecryptMessageV2(serverFinishedMessage, PacketTypeHandshake)
+	if retErr != nil {
+		return
+	}
+	if len(serverFinishedMessage.Rest) > 0 {
+		retErr = errors.New("unexpected data in finished message")
+		return
 	}
 	expectedServerFinished, err := c.secret.ComputeServerFinished()
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 	if subtle.ConstantTimeCompare(serverFinishedMessage.VerifyData, expectedServerFinished) != 1 {
-		return errors.New("server finished verification failed")
+		retErr = errors.New("server finished verification failed")
+		return
 	}
+
+	// Extend transcript with ServerFinished so the ClientFinished HMAC
+	// cryptographically binds to the ServerFinished, matching TLS 1.3.
+	serverFinishedTranscript, err := c.serializer.SerializeDeterministic(serverFinishedMessage, 0)
+	if err != nil {
+		retErr = err
+		return
+	}
+	transcript = append(transcript, serverFinishedTranscript...)
+	c.transcript = transcript
+	c.secret.TranscriptHash = sha3Sum256(c.transcript)
 
 	clientFinishedData, err := c.secret.ComputeClientFinished()
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
 	clientFinishedMessage := &FinishedMessage{VerifyData: clientFinishedData}
 	clientFinishedPacket, err := c.serializer.Serialize(clientFinishedMessage)
 	if err != nil {
-		return err
+		retErr = err
+		return
 	}
-	err = c.WriteEncrypted(clientFinishedPacket, 0, PacketTypeHandshake)
-	if err != nil {
-		return err
+	retErr = c.WriteEncrypted(clientFinishedPacket, 0, PacketTypeHandshake)
+	if retErr != nil {
+		return
 	}
 
-	c.secret.ZeroHandshakeSecrets()
-	c.handshakeDone = true
+	c.secret.ZeroPostHandshakeKeyMaterial()
+	c.handshakeDone.Store(true)
 	return nil
 }
 
@@ -289,9 +346,20 @@ func (c *ClientV2) handleServerHelloV2() error {
 		return errors.New("unsupported handshake version")
 	}
 	k := *c.kem
+	// #5: validate ciphertext length before KEM operation
+	if len(c.srvHelloMessage.CipherText) != k.Details().LengthCiphertext {
+		return errors.New("invalid KEM ciphertext length")
+	}
 	sharedSecret, err := k.DecapsulateSecret(c.srvHelloMessage.CipherText[:])
 	if err != nil {
 		return err
+	}
+	// #6: validate shared secret is non-empty and non-zero
+	if len(sharedSecret) != k.Details().LengthSharedSecret {
+		return errors.New("KEM shared secret has unexpected length")
+	}
+	if isAllZeros(sharedSecret) {
+		return errors.New("KEM shared secret is all zeros")
 	}
 	c.kemSharedSecret = make([]byte, k.Details().LengthSharedSecret)
 	copy(c.kemSharedSecret[:], sharedSecret[:])
@@ -302,6 +370,10 @@ func (c *ClientV2) Cleanup() {
 	if c.kem != nil {
 		k := *c.kem
 		k.Clean()
+	}
+	if c.ephemeralKemPrivateKey != nil {
+		zeroBytes(c.ephemeralKemPrivateKey.D)
+		c.ephemeralKemPrivateKey = nil
 	}
 	zeroBytes(c.kemSharedSecret)
 	c.secret.ZeroSecrets()
@@ -318,13 +390,12 @@ func (c *ClientV2) ReadAndDecryptMessageV2(msg interface{}, packetType PacketTyp
 }
 
 func (c *ClientV2) WriteEncrypted(data []byte, context uint64, packetType PacketType) error {
-	if packetType == PacketTypeApplicationData {
-		if !c.handshakeDone {
-			return errors.New("handshake not completed")
-		}
-		c.writeMutex.Lock()
-		defer c.writeMutex.Unlock()
+	if packetType == PacketTypeApplicationData && !c.handshakeDone.Load() {
+		return errors.New("handshake not completed")
 	}
+	// #3: lock unconditionally to prevent nonce reuse from concurrent calls
+	c.writeMutex.Lock()
+	defer c.writeMutex.Unlock()
 
 	var cipher cipher2.AEAD
 	var seqNum uint64
@@ -382,7 +453,7 @@ func (c *ClientV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 
 func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	if packetType == PacketTypeApplicationData {
-		if !c.handshakeDone {
+		if !c.handshakeDone.Load() {
 			return nil, errors.New("handshake not completed")
 		}
 		c.readMutex.Lock()
@@ -410,9 +481,15 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	if header.MinorVersion != minorVersionV2 {
 		return nil, errors.New("unsupported transport version")
 	}
+	if len(header.Rest) > 0 {
+		return nil, errors.New("unexpected data in header")
+	}
 
-	recLen := int(header.RecordLength)
-	if recLen < 0 || recLen > maxRecordLengthV2 {
+	maxRecLen := uint(maxRecordLengthV2)
+	if packetType == PacketTypeHandshake {
+		maxRecLen = maxHandshakeRecordLengthV2
+	}
+	if header.RecordLength > maxRecLen {
 		return nil, errors.New("record length exceeds maximum allowed size")
 	}
 
@@ -421,6 +498,7 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		return nil, errors.New("header AAD mismatch")
 	}
 
+	recLen := int(header.RecordLength)
 	encryptedData := make([]byte, recLen)
 	bytesRead, err := io.ReadAtLeast(c.conn, encryptedData, recLen)
 	if err != nil {
@@ -443,6 +521,9 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	if err := rlp.DecodeBytes(decryptedPayloadBytes, &encryptedPayload); err != nil {
 		return nil, err
 	}
+	if len(encryptedPayload.Rest) > 0 {
+		return nil, errors.New("unexpected data in encrypted payload")
+	}
 
 	dataPacket := &DataPacket{
 		packetType: PacketType(encryptedPayload.PacketType),
@@ -452,10 +533,6 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	}
 	if dataPacket.packetType != packetType {
 		return nil, errors.New("packetType mismatch")
-	}
-	dataPacket.fragment, err = maybeDecompress(dataPacket.fragment)
-	if err != nil {
-		return nil, err
 	}
 
 	if packetType == PacketTypeHandshake {
@@ -468,5 +545,5 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 
 func (c *ClientV2) InitWithSecrets(secret SessionSecret) {
 	c.secret = secret
-	c.handshakeDone = true
+	c.handshakeDone.Store(true)
 }
