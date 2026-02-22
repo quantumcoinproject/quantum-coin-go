@@ -4,11 +4,11 @@ import (
 	"bytes"
 	cipher2 "crypto/cipher"
 	"crypto/rand"
+	"crypto/subtle"
 	"errors"
 	"io"
 	"sync"
 
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
@@ -134,14 +134,19 @@ func (s *ServerV2) PerformHandshake() error {
 		return err
 	}
 	s.transcript = append(clientHelloTranscript, serverHelloTranscript...)
-	transcriptHash := crypto.Keccak256(s.transcript)
+	transcriptHash := sha3Sum256(s.transcript)
 
-	secret, err := NewSessionSecret(transcriptHash, s.kemSharedSecret[:])
+	secret, err := NewSessionSecretV2(transcriptHash, s.kemSharedSecret[:])
 	if err != nil {
 		return err
 	}
 	s.secret = *secret
 	zeroBytes(s.kemSharedSecret)
+	if s.kem != nil {
+		k := *s.kem
+		k.Clean()
+		s.kem = nil
+	}
 
 	signature, err := cryptobase.SigAlg.Sign(transcriptHash, s.serverSigningPrivateKey)
 	if err != nil {
@@ -175,6 +180,34 @@ func (s *ServerV2) PerformHandshake() error {
 		return err
 	}
 
+	serverFinishedData, err := s.secret.ComputeServerFinished()
+	if err != nil {
+		return err
+	}
+	serverFinishedMessage := &FinishedMessage{VerifyData: serverFinishedData}
+	serverFinishedPacket, err := s.serializer.Serialize(serverFinishedMessage)
+	if err != nil {
+		return err
+	}
+	err = s.WriteEncrypted(serverFinishedPacket, 0, PacketTypeHandshake)
+	if err != nil {
+		return err
+	}
+
+	clientFinishedMessage := new(FinishedMessage)
+	err = s.ReadAndDecryptMessageV2(clientFinishedMessage, PacketTypeHandshake)
+	if err != nil {
+		return err
+	}
+	expectedClientFinished, err := s.secret.ComputeClientFinished()
+	if err != nil {
+		return err
+	}
+	if subtle.ConstantTimeCompare(clientFinishedMessage.VerifyData, expectedClientFinished) != 1 {
+		return errors.New("client finished verification failed")
+	}
+
+	s.secret.ZeroHandshakeSecrets()
 	s.handshakeDone = true
 	return nil
 }
@@ -212,6 +245,43 @@ func (s *ServerV2) handleClientHelloV2() error {
 	return nil
 }
 
+// handleClientVerifyV2 verifies the client's signature over the transcript.
+//
+// Cryptographic verification performed here:
+//   - The client signs the transcript hash (covering ClientHello, ServerHello,
+//     and ServerVerify) with its signing private key.
+//   - This function recovers the client's public key from that signature
+//     (PublicKeyBytesFromSignature) and then explicitly verifies the signature
+//     against the recovered key (DynamicSigVerifier.Verify). This proves the
+//     client possesses the private key corresponding to the recovered public key.
+//   - The recovered key is stored in s.clientSigningPublicKey. It is returned
+//     to the caller via ClientSigningPublicKey().
+//
+// Identity binding (why no expected-key check here):
+//   The server intentionally does NOT check the recovered public key against
+//   any pre-known identity at this layer. Identity verification is performed
+//   by the caller in p2p/server.go setupConn (line ~1044–1075):
+//
+//   Step 1 (line ~1053): For inbound connections, setupConn calls
+//     nodeFromConn(remotePubkey) → enode.NewV4 → V4ID.NodeAddr, which computes
+//     c.node.ID() = Keccak256(SerializePublicKey(remotePubkey))
+//     where remotePubkey is the key authenticated by this function.
+//
+//   Step 2 (line ~1065): setupConn runs a protocol handshake (doProtoHandshake)
+//     over the now-encrypted channel. The client sends phs.ID = its serialized
+//     public key bytes (set in server.go line ~537 the same way for all peers).
+//
+//   Step 3 (line ~1072): setupConn verifies
+//     Keccak256(phs.ID) == c.node.ID()
+//     If this fails, the connection is rejected with DiscUnexpectedIdentity.
+//     This binds the protocol-level identity claim to the RLPx-authenticated
+//     key: an attacker who cannot produce a valid signature in Step 1 cannot
+//     forge a node ID, and an attacker who passes Step 1 but claims a different
+//     key in Step 2 will fail the hash comparison in Step 3.
+//
+//   This two-layer design allows the RLPx layer to remain identity-agnostic
+//   while the p2p layer enforces that only the holder of the corresponding
+//   private key can assume a given node ID.
 func (s *ServerV2) handleClientVerifyV2() error {
 	clientVerifyMessage := new(ClientVerifyMessage)
 	err := s.ReadAndDecryptMessageV2(clientVerifyMessage, PacketTypeHandshake)
@@ -224,7 +294,7 @@ func (s *ServerV2) handleClientVerifyV2() error {
 	if err != nil {
 		return err
 	}
-	transcriptHash := crypto.Keccak256(s.transcript)
+	transcriptHash := sha3Sum256(s.transcript)
 
 	if clientVerifyMessage.SignatureLen > uint(len(clientVerifyMessage.Signature)) {
 		return errors.New("invalid signature length")
@@ -236,13 +306,15 @@ func (s *ServerV2) handleClientVerifyV2() error {
 	if !cryptobase.DynamicSigVerifier.Verify(clientPubKeyDataRemote, transcriptHash, clientVerifyMessage.Signature[:clientVerifyMessage.SignatureLen]) {
 		return errors.New("client's signature verification failed")
 	}
+	// Store the recovered key; the caller (p2p/server.go) reads it via
+	// ClientSigningPublicKey() and performs the identity binding check.
 	s.clientSigningPublicKey, err = cryptobase.SigAlg.DeserializePublicKey(clientPubKeyDataRemote)
 	if err != nil {
 		return err
 	}
 
 	s.transcript = append(s.transcript, clientVerifyTranscript...)
-	transcriptHash = crypto.Keccak256(s.transcript)
+	transcriptHash = sha3Sum256(s.transcript)
 	return s.secret.CreateApplicationSecrets(transcriptHash)
 }
 
@@ -278,10 +350,6 @@ func (s *ServerV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 		serverIv = s.secret.ServerApplicationIv
 	}
 
-	header := new(Header)
-	header.MinorVersion = minorVersionV2
-	header.AdditionalData = BuildAAD(minorVersionV2, packetType)
-
 	payload := &EncryptedPayload{
 		PacketType: uint(packetType),
 		Context:    context,
@@ -292,20 +360,25 @@ func (s *ServerV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 		return err
 	}
 
+	encryptedLen := uint(len(payloadData) + cipher.Overhead())
+	header := new(Header)
+	header.MinorVersion = minorVersionV2
+	header.RecordLength = encryptedLen
+	header.AdditionalData = BuildAADV2(minorVersionV2, encryptedLen)
+
 	encryptedData, err := Encrypt(cipher, payloadData, header.AdditionalData[:], serverIv, seqNum)
 	if err != nil {
 		return err
 	}
-	header.RecordLength = uint(len(encryptedData))
 
 	headerPacket, err := s.serializer.Serialize(header)
 	if err != nil {
 		return err
 	}
-	if _, err = s.conn.Write(headerPacket); err != nil {
-		return err
-	}
-	if _, err = s.conn.Write(encryptedData); err != nil {
+	buf := make([]byte, len(headerPacket)+len(encryptedData))
+	copy(buf, headerPacket)
+	copy(buf[len(headerPacket):], encryptedData)
+	if _, err = s.conn.Write(buf); err != nil {
 		return err
 	}
 
@@ -349,9 +422,15 @@ func (s *ServerV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	}
 
 	recLen := int(header.RecordLength)
-	if recLen < 0 || recLen > maxRecordLength {
+	if recLen < 0 || recLen > maxRecordLengthV2 {
 		return nil, errors.New("record length exceeds maximum allowed size")
 	}
+
+	reconstructedAAD := BuildAADV2(header.MinorVersion, header.RecordLength)
+	if reconstructedAAD != header.AdditionalData {
+		return nil, errors.New("header AAD mismatch")
+	}
+
 	encryptedData := make([]byte, recLen)
 	bytesRead, err := io.ReadAtLeast(s.conn, encryptedData, recLen)
 	if err != nil {
@@ -361,7 +440,7 @@ func (s *ServerV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		return nil, errors.New("prefix size less")
 	}
 
-	decryptedPayloadBytes, err := Decrypt(cipher, encryptedData, header.AdditionalData[:], clientIv, seqNum)
+	decryptedPayloadBytes, err := Decrypt(cipher, encryptedData, reconstructedAAD[:], clientIv, seqNum)
 	if err != nil {
 		return nil, err
 	}

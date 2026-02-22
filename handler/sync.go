@@ -237,6 +237,7 @@ func (cs *chainSyncer) loop() {
 // nextSyncOp determines whether sync is required at this time.
 func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 	if cs.doneCh != nil {
+		log.Debug("nextSyncOp exit: sync already running")
 		return nil // Sync already running.
 	}
 
@@ -248,19 +249,22 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		minPeers = cs.handler.maxPeers
 	}
 	if cs.handler.peers.len() < minPeers {
-		log.Debug("nextSyncOp less than minPeers connected", "minPeers", minPeers, "cs.handler.peers.len()", cs.handler.peers.len())
+		log.Debug("nextSyncOp exit: less than minPeers connected", "minPeers", minPeers, "cs.handler.peers.len()", cs.handler.peers.len())
 		return nil
 	}
 	// We have enough peers, check TD
 	peer := cs.handler.peers.peerWithHighestTD()
 	if peer == nil {
+		log.Debug("nextSyncOp exit: no peer with highest TD")
 		return nil
 	}
 	mode, ourTD := cs.modeAndLocalHead()
 	op := peerToSyncOp(mode, peer)
 	if op.td.Cmp(ourTD) <= 0 {
+		log.Debug("nextSyncOp exit: already in sync", "ourTD", ourTD, "peerTD", op.td)
 		return nil // We're in sync.
 	}
+	log.Debug("nextSyncOp exit: starting sync", "peer", peer.ID(), "ourTD", ourTD, "peerTD", op.td)
 	return op
 }
 

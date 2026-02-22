@@ -35,6 +35,7 @@ type handshakeClient interface {
 	WriteEncrypted([]byte, uint64, PacketType) error
 	InitWithSecrets(SessionSecret)
 	ServerSigningPublicKey() *signaturealgorithm.PublicKey
+	Cleanup()
 }
 
 // handshakeServer is implemented by both Server (old) and ServerV2 (new).
@@ -45,6 +46,7 @@ type handshakeServer interface {
 	WriteEncrypted([]byte, uint64, PacketType) error
 	InitWithSecrets(SessionSecret)
 	ClientSigningPublicKey() *signaturealgorithm.PublicKey
+	Cleanup()
 }
 
 // Conn is an RLPx network connection. It wraps a low-level network connection. The
@@ -188,8 +190,14 @@ func (c *Conn) Handshake(prv *signaturealgorithm.PrivateKey) (*signaturealgorith
 	return c.server.ClientSigningPublicKey(), nil
 }
 
-// Close closes the underlying network connection.
+// Close zeroes session key material and closes the underlying network connection.
 func (c *Conn) Close() error {
+	if c.client != nil {
+		c.client.Cleanup()
+	}
+	if c.server != nil {
+		c.server.Cleanup()
+	}
 	return c.conn.Close()
 }
 

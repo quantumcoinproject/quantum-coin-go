@@ -11,6 +11,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"golang.org/x/crypto/sha3"
 )
 
 // Constants for the handshake.
@@ -29,7 +30,8 @@ const (
 
 	padLen = 0 // legacy format padding length
 
-	maxRecordLength     = 96 * 1024 * 1024  // 96 MB
+	maxRecordLength     = 96 * 1024 * 1024  // 96 MB (legacy)
+	maxRecordLengthV2   = 16 * 1024 * 1024  // 16 MB
 	maxDecompressedSize = 128 * 1024 * 1024 // 128 MB
 )
 
@@ -72,6 +74,11 @@ type EncryptedPayload struct {
 	PacketType uint
 	Context    uint64
 	Fragment   []byte
+	Rest       []rlp.RawValue `rlp:"tail"`
+}
+
+type FinishedMessage struct {
+	VerifyData []byte
 	Rest       []rlp.RawValue `rlp:"tail"`
 }
 
@@ -247,6 +254,29 @@ func BuildAAD(minorVersion uint, packetType PacketType) [common.HashLength]byte 
 	aad[3] = byte(minorVersion)
 	aad[4] = byte(packetType)
 	return aad
+}
+
+// BuildAADV2 constructs AAD for the v2 protocol. It includes the record
+// length so the AEAD authenticates the header field, and uses a fixed content
+// type to prevent leaking whether a record is handshake or application data.
+func BuildAADV2(minorVersion uint, recordLength uint) [common.HashLength]byte {
+	var aad [common.HashLength]byte
+	aad[0] = byte(minorVersion >> 24)
+	aad[1] = byte(minorVersion >> 16)
+	aad[2] = byte(minorVersion >> 8)
+	aad[3] = byte(minorVersion)
+	aad[4] = byte(PacketTypeApplicationData)
+	aad[5] = byte(recordLength >> 24)
+	aad[6] = byte(recordLength >> 16)
+	aad[7] = byte(recordLength >> 8)
+	aad[8] = byte(recordLength)
+	return aad
+}
+
+func sha3Sum256(data []byte) []byte {
+	h := sha3.New256()
+	h.Write(data)
+	return h.Sum(nil)
 }
 
 func zeroBytes(b []byte) {

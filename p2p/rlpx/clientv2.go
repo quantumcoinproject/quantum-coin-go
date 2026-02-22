@@ -4,12 +4,12 @@ import (
 	"bytes"
 	cipher2 "crypto/cipher"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"io"
 	"sync"
 
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
@@ -143,15 +143,21 @@ func (c *ClientV2) PerformHandshake() error {
 		return err
 	}
 	transcript := append(clientHelloTranscript, serverHelloTranscript...)
-	transcriptHash := crypto.Keccak256(transcript)
+	transcriptHash := sha3Sum256(transcript)
 	c.transcript = transcript
 
-	secret, err := NewSessionSecret(transcriptHash, c.kemSharedSecret[:])
+	secret, err := NewSessionSecretV2(transcriptHash, c.kemSharedSecret[:])
 	if err != nil {
 		return err
 	}
 	c.secret = *secret
 	zeroBytes(c.kemSharedSecret)
+	if c.kem != nil {
+		k := *c.kem
+		k.Clean()
+		c.kem = nil
+	}
+	c.ephemeralKemPrivateKey = nil
 
 	serverVerifyMessage := new(ServerVerifyMessage)
 	err = c.ReadAndDecryptMessageV2(serverVerifyMessage, PacketTypeHandshake)
@@ -186,7 +192,7 @@ func (c *ClientV2) PerformHandshake() error {
 		return err
 	}
 	transcript = append(transcript, serverVerifyTranscript...)
-	transcriptHash = crypto.Keccak256(transcript)
+	transcriptHash = sha3Sum256(transcript)
 	c.transcript = transcript
 	c.srvVerifyMessage = serverVerifyMessage
 
@@ -217,12 +223,40 @@ func (c *ClientV2) PerformHandshake() error {
 	transcript = append(transcript, clientVerifyTranscript...)
 	c.transcript = transcript
 
-	tHash := crypto.Keccak256(c.transcript)
+	tHash := sha3Sum256(c.transcript)
 	err = c.secret.CreateApplicationSecrets(tHash)
 	if err != nil {
 		return err
 	}
 
+	serverFinishedMessage := new(FinishedMessage)
+	err = c.ReadAndDecryptMessageV2(serverFinishedMessage, PacketTypeHandshake)
+	if err != nil {
+		return err
+	}
+	expectedServerFinished, err := c.secret.ComputeServerFinished()
+	if err != nil {
+		return err
+	}
+	if subtle.ConstantTimeCompare(serverFinishedMessage.VerifyData, expectedServerFinished) != 1 {
+		return errors.New("server finished verification failed")
+	}
+
+	clientFinishedData, err := c.secret.ComputeClientFinished()
+	if err != nil {
+		return err
+	}
+	clientFinishedMessage := &FinishedMessage{VerifyData: clientFinishedData}
+	clientFinishedPacket, err := c.serializer.Serialize(clientFinishedMessage)
+	if err != nil {
+		return err
+	}
+	err = c.WriteEncrypted(clientFinishedPacket, 0, PacketTypeHandshake)
+	if err != nil {
+		return err
+	}
+
+	c.secret.ZeroHandshakeSecrets()
 	c.handshakeDone = true
 	return nil
 }
@@ -305,10 +339,6 @@ func (c *ClientV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 		clientIv = c.secret.ClientApplicationIv
 	}
 
-	header := new(Header)
-	header.MinorVersion = minorVersionV2
-	header.AdditionalData = BuildAAD(minorVersionV2, packetType)
-
 	payload := &EncryptedPayload{
 		PacketType: uint(packetType),
 		Context:    context,
@@ -319,20 +349,25 @@ func (c *ClientV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 		return err
 	}
 
+	encryptedLen := uint(len(payloadData) + cipher.Overhead())
+	header := new(Header)
+	header.MinorVersion = minorVersionV2
+	header.RecordLength = encryptedLen
+	header.AdditionalData = BuildAADV2(minorVersionV2, encryptedLen)
+
 	encryptedData, err := Encrypt(cipher, payloadData, header.AdditionalData[:], clientIv, seqNum)
 	if err != nil {
 		return err
 	}
-	header.RecordLength = uint(len(encryptedData))
 
 	headerPacket, err := c.serializer.Serialize(header)
 	if err != nil {
 		return err
 	}
-	if _, err = c.conn.Write(headerPacket); err != nil {
-		return err
-	}
-	if _, err = c.conn.Write(encryptedData); err != nil {
+	buf := make([]byte, len(headerPacket)+len(encryptedData))
+	copy(buf, headerPacket)
+	copy(buf[len(headerPacket):], encryptedData)
+	if _, err = c.conn.Write(buf); err != nil {
 		return err
 	}
 
@@ -376,9 +411,15 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	}
 
 	recLen := int(header.RecordLength)
-	if recLen < 0 || recLen > maxRecordLength {
+	if recLen < 0 || recLen > maxRecordLengthV2 {
 		return nil, errors.New("record length exceeds maximum allowed size")
 	}
+
+	reconstructedAAD := BuildAADV2(header.MinorVersion, header.RecordLength)
+	if reconstructedAAD != header.AdditionalData {
+		return nil, errors.New("header AAD mismatch")
+	}
+
 	encryptedData := make([]byte, recLen)
 	bytesRead, err := io.ReadAtLeast(c.conn, encryptedData, recLen)
 	if err != nil {
@@ -388,7 +429,7 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		return nil, errors.New("prefix size less")
 	}
 
-	decryptedPayloadBytes, err := Decrypt(cipher, encryptedData, header.AdditionalData[:], serverIv, seqNum)
+	decryptedPayloadBytes, err := Decrypt(cipher, encryptedData, reconstructedAAD[:], serverIv, seqNum)
 	if err != nil {
 		return nil, err
 	}
