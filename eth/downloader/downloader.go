@@ -1137,6 +1137,25 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				log.Debug("Received skeleton from incorrect peer", "peer", packet.PeerId())
 				break
 			}
+			// Discard stale responses from a previous phase. In skeleton
+			// mode we expect the first header at from+MaxHeaderFetch-1; in
+			// full-header mode we expect it at from. A mismatch means this
+			// is a late skeleton response arriving in full-header mode or a
+			// late fill response arriving in skeleton mode -- either would
+			// corrupt downstream processing.
+			if packet.Items() > 0 {
+				first := packet.(*headerPack).headers[0].Number.Uint64()
+				var expected uint64
+				if skeleton {
+					expected = from + uint64(MaxHeaderFetch) - 1
+				} else {
+					expected = from
+				}
+				if first != expected {
+					p.log.Debug("Discarding stale header response", "first", first, "expected", expected, "skeleton", skeleton)
+					break
+				}
+			}
 			headerReqTimer.UpdateSince(request)
 			timeout.Stop()
 
@@ -1214,18 +1233,6 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				if err != nil {
 					p.log.Debug("Skeleton chain invalid", "err", err)
 					return fmt.Errorf("%w: %v", errInvalidChain, err)
-				}
-				// Drain any stale fill responses that arrived after the fill
-				// phase ended. Without this, a late response from the sync peer
-				// could be consumed as the next skeleton batch, corrupting the
-				// skeleton targets and causing all subsequent fills to fail.
-				for drained := true; drained; {
-					select {
-					case <-d.headerCh:
-						p.log.Debug("Drained stale header fill response after skeleton fill")
-					default:
-						drained = false
-					}
 				}
 				headers = filled[proced:]
 				from += uint64(proced)
