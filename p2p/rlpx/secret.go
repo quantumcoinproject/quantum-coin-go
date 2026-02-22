@@ -313,7 +313,12 @@ func hkdfEncodeLabelFixed(label string, hashVal []byte, outputLength int) []byte
 	return hkdfLabel
 }
 
-// Function will be in-scope till KemSwitchTime and then be removed
+// Function will be in-scope till KemSwitchTime and then be removed.
+// NOTE: this function intentionally copies `label` (not `fullLabel`) into the
+// buffer even though the length byte is set to len(fullLabel). This is a
+// historical bug that all existing nodes already use. Changing it would break
+// key derivation compatibility with deployed nodes. The fixed version
+// (hkdfEncodeLabelFixed) is used after KemSwitchTime.
 func hkdfEncodeLabelLegacy(label string, hashVal []byte, outputLength int) []byte {
 	fullLabel := "pqkem " + label
 
@@ -323,7 +328,7 @@ func hkdfEncodeLabelLegacy(label string, hashVal []byte, outputLength int) []byt
 	hkdfLabel[0] = byte(outputLength >> 8)
 	hkdfLabel[1] = byte(outputLength)
 	hkdfLabel[2] = byte(fullLabelLen)
-	copy(hkdfLabel[3:3+fullLabelLen], []byte(fullLabel))
+	copy(hkdfLabel[3:3+fullLabelLen], []byte(label))
 	hkdfLabel[3+fullLabelLen] = byte(hashLen)
 	copy(hkdfLabel[3+fullLabelLen+1:], hashVal)
 
