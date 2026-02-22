@@ -7,8 +7,10 @@ import (
 	"crypto/cipher"
 	"errors"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/sha3"
+	"time"
 )
 
 const (
@@ -251,12 +253,12 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	//Create the Server Application Cipher
 	blockApplicationServer, err := aes.NewCipher(serverApplicationKey)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	ss.ServerApplicationCipher, err = cipher.NewGCM(blockApplicationServer)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	return nil
@@ -279,6 +281,29 @@ func HkdfExpandLabel(secret []byte, label string, hashVal []byte, outputLength i
 }
 
 func hkdfEncodeLabel(label string, hashVal []byte, outputLength int) []byte {
+	if time.Now().UTC().Unix() >= defaults.DefaultConfig.HkdfLabelFixTime {
+		return hkdfEncodeLabelFixed(label, hashVal, outputLength)
+	}
+	return hkdfEncodeLabelLegacy(label, hashVal, outputLength)
+}
+
+func hkdfEncodeLabelFixed(label string, hashVal []byte, outputLength int) []byte {
+	fullLabel := "pqkem " + label
+
+	fullLabelLen := len(fullLabel)
+	hashLen := len(hashVal)
+	hkdfLabel := make([]byte, 2+1+fullLabelLen+1+hashLen)
+	hkdfLabel[0] = byte(outputLength >> 8)
+	hkdfLabel[1] = byte(outputLength)
+	hkdfLabel[2] = byte(fullLabelLen)
+	copy(hkdfLabel[3:3+fullLabelLen], []byte(fullLabel))
+	hkdfLabel[3+fullLabelLen] = byte(hashLen)
+	copy(hkdfLabel[3+fullLabelLen+1:], hashVal)
+
+	return hkdfLabel
+}
+
+func hkdfEncodeLabelLegacy(label string, hashVal []byte, outputLength int) []byte {
 	fullLabel := "pqkem " + label
 
 	fullLabelLen := len(fullLabel)

@@ -1447,7 +1447,9 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 				// Unless a peer delivered something completely else than requested (usually
 				// caused by a timed out request which came through in the end), set it to
 				// idle. If the delivery's stale, the peer should have already been idled.
-				if !errors.Is(err, errStaleDelivery) {
+				// If no fetches were pending, the peer wasn't actively fetching for us,
+				// so touching its idle state would race with any in-progress request.
+				if !errors.Is(err, errStaleDelivery) && !errors.Is(err, errNoFetchesPending) {
 					setIdle(peer, accepted, deliveryTime)
 				}
 				// Issue a log to the user to see what's going on
@@ -1582,6 +1584,7 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 			// Make sure that we have peers available for fetching. If all peers have been tried
 			// and all failed throw an error
 			if !progressed && !throttled && !running && len(idles) == total && pendCount > 0 {
+				log.Debug("No peers available for fetching", "type", kind, "total", total, "idles", len(idles), "pendCount", pendCount)
 				return errPeersUnavailable
 			}
 		}

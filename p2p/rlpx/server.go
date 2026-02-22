@@ -154,6 +154,9 @@ func (s *Server) PerformHandshake() error {
 
 	//Create the secrets
 	secret, err := NewSessionSecret(transcriptHash, s.kemSharedSecret[:])
+	if err != nil {
+		return err
+	}
 	s.secret = *secret
 
 	//Sign the transcript hash
@@ -265,6 +268,10 @@ func (s *Server) handleClientVerify() error {
 
 	transcriptHash := crypto.Keccak256(s.transcript)
 
+	if clientVerifyMessage.SignatureLen > uint(len(clientVerifyMessage.Signature)) {
+		return errors.New("invalid signature length")
+	}
+
 	//Recover the public key from the signature
 	clientPubKeyDataRemote, err := cryptobase.SigAlg.PublicKeyBytesFromSignature(transcriptHash, clientVerifyMessage.Signature[:clientVerifyMessage.SignatureLen])
 	if err != nil {
@@ -297,6 +304,11 @@ func (s *Server) createApplicationSecrets() error {
 }
 
 func (s *Server) WriteEncrypted(data []byte, context uint64, packetType PacketType) error {
+	if packetType == PacketTypeApplicationData {
+		if s.handshakeDone != true {
+			return errors.New("handshake not completed")
+		}
+	}
 	additionalData := make([]byte, shaLength)
 	_, err := rand.Read(additionalData)
 	if err != nil {
@@ -381,17 +393,17 @@ func (s *Server) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 
 	// Read the encrypted data
 	recLen := int(header.RecordLength)
-
-	if packetType == PacketTypeApplicationData {
+	if recLen < 0 || recLen > maxRecordLength {
+		return nil, errors.New("record length exceeds maximum allowed size")
 	}
 
-	encryptedData := make([]byte, int(recLen))
-	bytesRead, err := io.ReadAtLeast(s.conn, encryptedData, int(recLen))
+	encryptedData := make([]byte, recLen)
+	bytesRead, err := io.ReadAtLeast(s.conn, encryptedData, recLen)
 	if err != nil {
 		return nil, err
 	}
 
-	if bytesRead != int(recLen) {
+	if bytesRead != recLen {
 		return nil, errors.New("prefix size less")
 	}
 
@@ -459,4 +471,5 @@ func (s *Server) Cleanup() {
 
 func (s *Server) InitWithSecrets(secret SessionSecret) {
 	s.secret = secret
+	s.handshakeDone = true
 }

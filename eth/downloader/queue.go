@@ -517,6 +517,7 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 			// the caller to throttle, since we still want some other
 			// peer to fetch those for us
 			throttled = len(skip) == 0
+			log.Debug("Throttling fetch reservation", "number", header.Number.Uint64(), "skip", len(skip))
 			break
 		}
 		if err != nil {
@@ -667,7 +668,11 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 				taskQueue.Push(header, -int64(header.Number.Uint64()))
 			}
 			// Add the peer to the expiry report along the number of failed requests
-			expiries[id] = len(request.Headers)
+			if request.From > 0 {
+				expiries[id] = MaxSkeletonSize  // 16
+			} else {
+				expiries[id] = len(request.Headers)
+			}
 
 			// Remove the expired requests from the pending pool directly
 			delete(pendPool, id)

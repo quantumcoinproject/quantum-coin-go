@@ -3,28 +3,14 @@ package keyestablishmentalgorithm
 import (
 	"github.com/quantumcoinproject/circl/kem"
 	"github.com/quantumcoinproject/circl/kem/hybrid"
-	"github.com/quantumcoinproject/circl/kem/kyber/kyber512"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"math/big"
-	"time"
 )
 
 func GetScheme() kem.Scheme {
-	if time.Now().UTC().Unix() < defaults.DefaultConfig.KemSwitchTime && schemeOverride == false {
-		return kyber512.Scheme()
-	} else {
-		return hybrid.X25519MLKEM768()
-	}
+	return hybrid.X25519MLKEM768()
 }
-
-var schemeOverride = false
 
 type KeyEncap struct {
 	PriKey *PrivateKey
-}
-
-func SetSchemeHybrid() { //test hook
-	schemeOverride = true
 }
 
 func NewKeyEncap() (*KeyEncap, error) {
@@ -33,14 +19,13 @@ func NewKeyEncap() (*KeyEncap, error) {
 
 func (kem *KeyEncap) Init(algName string, secretKey []byte) error {
 	kem.PriKey = &PrivateKey{
-		D: new(big.Int).SetBytes(secretKey),
+		D: append([]byte(nil), secretKey...),
 	}
 
 	return nil
 }
 
 func (kem *KeyEncap) Details() KeyEncapsulationDetails {
-	//todo: race condition during GetScheme switch
 	scheme := GetScheme()
 	return KeyEncapsulationDetails{
 		Name:               scheme.Name(),
@@ -67,8 +52,10 @@ func GenerateKemKeyPair() (*PrivateKey, error) {
 	}
 
 	privy := new(PrivateKey)
-	privy.D = new(big.Int).SetBytes(priBytes)
-	privy.PublicKey.N = new(big.Int).SetBytes(pubBytes)
+	privy.D = make([]byte, len(priBytes))
+	copy(privy.D, priBytes)
+	privy.PublicKey.N = make([]byte, len(pubBytes))
+	copy(privy.PublicKey.N, pubBytes)
 
 	return privy, nil
 }
@@ -93,7 +80,7 @@ func (kem *KeyEncap) EncapsulateSecret(publicKey []byte) (ciphertext, sharedSecr
 
 func (kem *KeyEncap) DecapsulateSecret(ciphertext []byte) ([]byte, error) {
 	scheme := GetScheme()
-	pri, err := scheme.UnmarshalBinaryPrivateKey(kem.PriKey.D.Bytes())
+	pri, err := scheme.UnmarshalBinaryPrivateKey(kem.PriKey.D)
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +88,10 @@ func (kem *KeyEncap) DecapsulateSecret(ciphertext []byte) ([]byte, error) {
 }
 
 func (kem *KeyEncap) Clean() {
-	kem.PriKey = nil
-	//no op
+	if kem.PriKey != nil {
+		for i := range kem.PriKey.D {
+			kem.PriKey.D[i] = 0
+		}
+		kem.PriKey = nil
+	}
 }

@@ -20,6 +20,10 @@ import (
 	"github.com/status-im/keycard-go/hexutils"
 )
 
+/*
+	CrossSign involves signing a message with both hybrid post quantum algorithms andd classical Ethereum's algorithm. Verify needs to succeed on both.
+*/
+
 const (
 	ERC20AddressLength             = 20
 	GenesisMessageTemplate         = "I AGREE TO BECOME A GENESIS VALIDATOR FOR MAINNET. MY ETH ADDRESS IS [ETH_ADDRESS]. MY CORRESPONDING DEPOSITOR QUANTUM ADDRESS IS [DEPOSITOR_ADDRESS] AND VALIDATOR QUANTUM ADDRESS IS [VALIDATOR_ADDRESS]. VALIDATOR AMOUNT IS [AMOUNT] DOGEP."
@@ -337,6 +341,9 @@ func sigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	}
 
 	x, y := elliptic.Unmarshal(ecc.P256k1(), s)
+	if x == nil || y == nil {
+		return nil, errors.New("error 1-1 : invalid signature")
+	}
 	return &ecdsa.PublicKey{Curve: ecc.P256k1(), X: x, Y: y}, nil
 }
 

@@ -1606,6 +1606,7 @@ func getAccountTokenCountKey(address string) (key string, blob []byte) {
 }
 
 func (c *CacheManager) getAccountTokenCount(address string) (uint64, error) {
+	address = strings.ToLower(address)
 	accountTokenCountKey, keyBlob := getAccountTokenCountKey(address)
 	accountTokenCountBlob, err := c.cacheDb.Get(keyBlob)
 	if err != nil {

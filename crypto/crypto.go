@@ -45,14 +45,6 @@ const SigningContextDefault SigningContext = 0 //DILITHIUM_ED25519_SPHINCS_COMPA
 const SigningContextLevel1 SigningContext = 1  //MLDSA_ED25519_SLHDSA_FULL_ID
 const SigningContextLevel2 SigningContext = 2  //MLDSA_ED25519_SLHDSA_FULL_ID
 
-func Sha256(data ...[]byte) []byte {
-	h1 := sha3.NewLegacyKeccak256()
-	for _, b := range data {
-		h1.Write(b)
-	}
-	return h1.Sum(nil)
-}
-
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
 	//Round 1
@@ -69,15 +61,6 @@ func Keccak256(data ...[]byte) []byte {
 func Keccak256Hash(data ...[]byte) (h common.Hash) {
 	h.SetBytes(Keccak256(data...))
 	return h
-}
-
-// Keccak512 calculates and returns the Keccak512 hash of the input data.
-func Keccak512(data ...[]byte) []byte {
-	d := sha3.NewLegacyKeccak512()
-	for _, b := range data {
-		d.Write(b)
-	}
-	return d.Sum(nil)
 }
 
 // CreateAddress creates an ethereum address given the bytes and the nonce

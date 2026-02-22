@@ -1,9 +1,5 @@
 package keyestablishmentalgorithm
 
-import (
-	"math/big"
-)
-
 type KeyEncapsulationDetails struct {
 	Name               string
 	LengthCiphertext   int
@@ -13,12 +9,12 @@ type KeyEncapsulationDetails struct {
 }
 
 type PublicKey struct {
-	N *big.Int // public key bytes
+	N []byte // public key bytes
 }
 
 type PrivateKey struct {
-	PublicKey          // public part.
-	D         *big.Int // private key bytes
+	PublicKey        // public part.
+	D        []byte // private key bytes
 }
 
 type KeyEncapsulation interface {

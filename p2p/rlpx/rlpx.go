@@ -18,9 +18,10 @@
 package rlpx
 
 import (
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"net"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 )
 
 // Conn is an RLPx network connection. It wraps a low-level network connection. The
