@@ -22,7 +22,30 @@ import (
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 )
+
+// handshakeClient is implemented by both Client (old) and ClientV2 (new).
+// Conn uses this so it can work with either based on KemSwitchTime.
+type handshakeClient interface {
+	SetClientSigningPrivateKey(*signaturealgorithm.PrivateKey)
+	SetServerSigningPublicKey(*signaturealgorithm.PublicKey)
+	PerformHandshake() error
+	ReadAndDecrypt(PacketType) (*DataPacket, error)
+	WriteEncrypted([]byte, uint64, PacketType) error
+	InitWithSecrets(SessionSecret)
+	ServerSigningPublicKey() *signaturealgorithm.PublicKey
+}
+
+// handshakeServer is implemented by both Server (old) and ServerV2 (new).
+type handshakeServer interface {
+	SetServerSigningPrivateKey(*signaturealgorithm.PrivateKey)
+	PerformHandshake() error
+	ReadAndDecrypt(PacketType) (*DataPacket, error)
+	WriteEncrypted([]byte, uint64, PacketType) error
+	InitWithSecrets(SessionSecret)
+	ClientSigningPublicKey() *signaturealgorithm.PublicKey
+}
 
 // Conn is an RLPx network connection. It wraps a low-level network connection. The
 // underlying connection should not be used for other activity when it is wrapped by Conn.
@@ -30,24 +53,25 @@ import (
 // Before sending messages, a handshake must be performed by calling the Handshake method.
 // This type is not generally safe for concurrent use, but reading and writing of messages
 // may happen concurrently after the handshake.
+//
+// Before KemSwitchTime the connection uses Client/Server (legacy protocol). After
+// KemSwitchTime it uses ClientV2/ServerV2 (v2 protocol).
 type Conn struct {
 	dialDest *signaturealgorithm.PublicKey
 	conn     net.Conn
 
-	// These are the buffers for snappy compression.
-	// Compression is enabled if they are non-nil.
 	snappyReadBuffer  []byte
 	snappyWriteBuffer []byte
 
-	client *Client
-
-	server *Server
+	client handshakeClient
+	server handshakeServer
 
 	context string
 }
 
 // NewConn wraps the given network connection. If dialDest is non-nil, the connection
-// behaves as the initiator during the handshake.
+// behaves as the initiator during the handshake. The implementation (old vs v2) is
+// chosen based on defaults.DefaultConfig.KemSwitchTime.
 func NewConn(conn net.Conn, dialDest *signaturealgorithm.PublicKey, context string) *Conn {
 	connection := &Conn{
 		dialDest: dialDest,
@@ -55,10 +79,20 @@ func NewConn(conn net.Conn, dialDest *signaturealgorithm.PublicKey, context stri
 		context:  context,
 	}
 
+	useV2 := time.Now().UTC().Unix() >= defaults.DefaultConfig.KemSwitchTime
+
 	if dialDest == nil {
-		connection.server = NewServer(conn, nil, context)
+		if useV2 {
+			connection.server = NewServerV2(conn, nil, context)
+		} else {
+			connection.server = NewServer(conn, nil, context)
+		}
 	} else {
-		connection.client = NewClient(conn, nil, dialDest, context)
+		if useV2 {
+			connection.client = NewClientV2(conn, nil, dialDest, context)
+		} else {
+			connection.client = NewClient(conn, nil, dialDest, context)
+		}
 	}
 
 	return connection
@@ -107,15 +141,12 @@ func (c *Conn) Read() (code uint64, data []byte, wireSize int, err error) {
 		}
 
 		return dataPacket.context, dataPacket.fragment, len(dataPacket.fragment), nil
-	} else {
-		dataPacket, err := c.server.ReadAndDecrypt(PacketTypeApplicationData)
-		if err != nil {
-
-			return 0, nil, 0, err
-		}
-
-		return dataPacket.context, dataPacket.fragment, len(dataPacket.fragment), nil
 	}
+	dataPacket, err := c.server.ReadAndDecrypt(PacketTypeApplicationData)
+	if err != nil {
+		return 0, nil, 0, err
+	}
+	return dataPacket.context, dataPacket.fragment, len(dataPacket.fragment), nil
 }
 
 // Write writes a message to the connection.
@@ -129,17 +160,14 @@ func (c *Conn) Write(code uint64, data []byte) (uint32, error) {
 	if c.client != nil {
 		err := c.client.WriteEncrypted(data, code, PacketTypeApplicationData)
 		if err != nil {
-
 			return size, err
 		}
-	} else {
-		err := c.server.WriteEncrypted(data, code, PacketTypeApplicationData)
-		if err != nil {
-
-			return size, err
-		}
+		return size, nil
 	}
-
+	err := c.server.WriteEncrypted(data, code, PacketTypeApplicationData)
+	if err != nil {
+		return size, err
+	}
 	return size, nil
 }
 
@@ -148,23 +176,16 @@ func (c *Conn) Write(code uint64, data []byte) (uint32, error) {
 func (c *Conn) Handshake(prv *signaturealgorithm.PrivateKey) (*signaturealgorithm.PublicKey, error) {
 	if c.client != nil {
 		c.client.SetClientSigningPrivateKey(prv)
-		err := c.client.PerformHandshake()
-		if err != nil {
-
+		if err := c.client.PerformHandshake(); err != nil {
 			return nil, err
 		}
-		return c.client.serverSigningPublicKey, nil
-	} else {
-		c.server.SetServerSigningPrivateKey(prv)
-		err := c.server.PerformHandshake()
-		if err != nil {
-
-			return nil, err
-		}
-
-		return c.server.clientSigningPublicKey, nil
+		return c.client.ServerSigningPublicKey(), nil
 	}
-	return nil, nil
+	c.server.SetServerSigningPrivateKey(prv)
+	if err := c.server.PerformHandshake(); err != nil {
+		return nil, err
+	}
+	return c.server.ClientSigningPublicKey(), nil
 }
 
 // Close closes the underlying network connection.
@@ -175,7 +196,7 @@ func (c *Conn) Close() error {
 func (c *Conn) InitWithSecrets(secret SessionSecret) {
 	if c.client != nil {
 		c.client.InitWithSecrets(secret)
-	} else {
-		c.server.InitWithSecrets(secret)
+		return
 	}
+	c.server.InitWithSecrets(secret)
 }

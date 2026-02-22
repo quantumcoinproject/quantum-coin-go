@@ -35,7 +35,7 @@ func (rs *RlpxSerializer) SetContext(context string) {
 	rs.context = context
 }
 
-func (rs *RlpxSerializer) SerializeDeterministic(msg interface{}, padLen int) ([]byte, error) {
+func (rs *RlpxSerializer) serializeDeterministicLocked(msg interface{}, padLen int) ([]byte, error) {
 	rs.wbuf.Reset()
 
 	// Write the message plaintext.
@@ -54,13 +54,21 @@ func (rs *RlpxSerializer) SerializeDeterministic(msg interface{}, padLen int) ([
 	return append(prefix, rs.wbuf.Data...), nil
 }
 
+func (rs *RlpxSerializer) SerializeDeterministic(msg interface{}, padLen int) ([]byte, error) {
+	rs.mutex.Lock()
+	defer rs.mutex.Unlock()
+	return rs.serializeDeterministicLocked(msg, padLen)
+}
+
 func (rs *RlpxSerializer) Serialize(msg interface{}) ([]byte, error) {
+	rs.mutex.Lock()
+	defer rs.mutex.Unlock()
 	padLenRand, err := rand.Int(rand.Reader, big.NewInt(100))
 	if err != nil {
 		return nil, err
 	}
 	padLen := int(padLenRand.Int64()) + 100
-	return rs.SerializeDeterministic(msg, padLen)
+	return rs.serializeDeterministicLocked(msg, padLen)
 }
 
 func (rs *RlpxSerializer) Deserialize(msg interface{}, reader io.Reader) ([]byte, error) {

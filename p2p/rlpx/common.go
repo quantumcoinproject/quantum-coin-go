@@ -21,13 +21,13 @@ const (
 	symmetricKeySize = 32
 	ivSize           = 12
 
-	majorVersion = 1
-	minorVersion = 1
+	majorVersion     = 1
+	minorVersion     = 1
+	minorVersionV2   = 2
+	shaLen           = 32
+	handshakeVersion = 1
 
-	minorVersionV2 = 2
-
-	padLen = 0
-	shaLen = 32
+	padLen = 0 // legacy format padding length
 
 	maxRecordLength     = 96 * 1024 * 1024  // 96 MB
 	maxDecompressedSize = 128 * 1024 * 1024 // 128 MB
@@ -44,12 +44,21 @@ const (
 
 type DataPacket struct {
 	packetType PacketType
-	seqNum     uint
+	seqNum     uint64
 	fragment   []byte
 	context    uint64
 }
 
 type Header struct {
+	MinorVersion   uint
+	RecordLength   uint
+	AdditionalData [common.HashLength]byte
+	Rest           []rlp.RawValue `rlp:"tail"`
+}
+
+// LegacyHeader is the pre-KemSwitchTime frame format for backward compatibility.
+// Used when useEncryptedHeader is false so old and new nodes can interoperate.
+type LegacyHeader struct {
 	PacketType     uint
 	MinorVersion   uint
 	MajorVersion   uint
@@ -59,20 +68,19 @@ type Header struct {
 	Rest           []rlp.RawValue `rlp:"tail"`
 }
 
-type AdditionalData struct {
-	PacketType   uint
-	MinorVersion uint
-	MajorVersion uint
-	DataLength   uint
-	Rest         []rlp.RawValue `rlp:"tail"`
+type EncryptedPayload struct {
+	PacketType uint
+	Context    uint64
+	Fragment   []byte
+	Rest       []rlp.RawValue `rlp:"tail"`
 }
 
-func CalculateNonce(recordCount uint, input []byte) ([]byte, error) {
+func CalculateNonce(recordCount uint64, input []byte) ([]byte, error) {
 	inputLen := len(input)
 	if inputLen < 8 {
 		return nil, errors.New("IV too short for counter")
 	}
-	if recordCount == ^uint(0) {
+	if recordCount == ^uint64(0) {
 		return nil, errors.New("recordCount reached maximum value, nonce reuse imminent")
 	}
 	output := make([]byte, inputLen)
@@ -88,45 +96,20 @@ func CalculateNonce(recordCount uint, input []byte) ([]byte, error) {
 	return output, nil
 }
 
-func Encrypt(cipher1 cipher.AEAD, fragment []byte, additionalData []byte, packetType PacketType, iv []byte, seqNum uint) (encrypted []byte, err error) {
-	dataLen := len(fragment)
-
+func Encrypt(cipher1 cipher.AEAD, fragment []byte, additionalData []byte, iv []byte, seqNum uint64) (encrypted []byte, err error) {
 	nonce, err := CalculateNonce(seqNum, iv)
 	if err != nil {
 		return nil, err
 	}
 
-	//Calculate packet overhead
-	beforeEncryptLen := dataLen + 1 + padLen
-	encryptedLen := beforeEncryptLen + cipher1.Overhead()
-
-	//Create array to store encrypted data with overhead
-	buffer := make([]byte, encryptedLen)
-	copy(buffer, fragment)
-	buffer[dataLen] = byte(packetType)
-	for i := 1; i <= padLen; i++ {
-		buffer[dataLen+i] = 0
-	}
-
-	//Encrypt the data
-	if len(buffer) < beforeEncryptLen {
-		return nil, errors.New("buffer too short")
-	}
-	payload := buffer[:beforeEncryptLen]
-	encryptedData := cipher1.Seal(payload[:0], nonce, payload, additionalData)
+	encryptedData := cipher1.Seal(nil, nonce, fragment, additionalData)
 
 	return encryptedData, nil
 }
 
-func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, packetType PacketType, iv []byte, seqNum uint) (*DataPacket, error) {
+func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, iv []byte, seqNum uint64) ([]byte, error) {
 	if len(encryptedData) < cipher1.Overhead() {
-		return nil, errors.New("invalid data")
-	}
-
-	dataLen := len(encryptedData) - cipher1.Overhead()
-	dataPacket := &DataPacket{
-		packetType: packetType,
-		fragment:   make([]byte, dataLen),
+		return nil, errors.New("invalid encrypted data")
 	}
 
 	//Compute the nonce
@@ -136,32 +119,64 @@ func Decrypt(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, p
 	}
 
 	// Decrypt
-	_, err = cipher1.Open(dataPacket.fragment[:0], nonce, encryptedData, additionalData)
+	fragment, err := cipher1.Open(nil, nonce, encryptedData, additionalData)
 	if err != nil {
 		return nil, err
 	}
 
-	// Find the padding boundary
-	padLen1 := padLen
+	return fragment, nil
+}
 
+// EncryptLegacy is the old (pre-v2) encrypt: plaintext = fragment || packetType || zeros(padLen).
+// Used by Client and Server (old implementation only).
+func EncryptLegacy(cipher1 cipher.AEAD, fragment []byte, additionalData []byte, packetType PacketType, iv []byte, seqNum uint) (encrypted []byte, err error) {
+	dataLen := len(fragment)
+	beforeEncryptLen := dataLen + 1 + padLen
+	encryptedLen := beforeEncryptLen + cipher1.Overhead()
+	buffer := make([]byte, encryptedLen)
+	copy(buffer, fragment)
+	buffer[dataLen] = byte(packetType)
+	for i := 1; i <= padLen; i++ {
+		buffer[dataLen+i] = 0
+	}
+	nonce, err := CalculateNonce(uint64(seqNum), iv)
+	if err != nil {
+		return nil, err
+	}
+	return cipher1.Seal(buffer[:0], nonce, buffer[:beforeEncryptLen], additionalData), nil
+}
+
+// DecryptLegacy is the old (pre-v2) decrypt: plaintext = fragment || packetType || zeros(padLen).
+// Used by Client and Server (old implementation only).
+func DecryptLegacy(cipher1 cipher.AEAD, encryptedData []byte, additionalData []byte, iv []byte, seqNum uint) (*DataPacket, error) {
+	if len(encryptedData) < cipher1.Overhead() {
+		return nil, errors.New("invalid encrypted data")
+	}
+	dataLen := len(encryptedData) - cipher1.Overhead()
+	dataPacket := &DataPacket{
+		fragment: make([]byte, dataLen),
+	}
+	nonce, err := CalculateNonce(uint64(seqNum), iv)
+	if err != nil {
+		return nil, err
+	}
+	_, err = cipher1.Open(dataPacket.fragment[:0], nonce, encryptedData, additionalData)
+	if err != nil {
+		return nil, err
+	}
+	padLen1 := padLen
 	if len(dataPacket.fragment) < dataLen-padLen1-1 {
 		return nil, errors.New("data length malformed (a)")
 	}
-
 	for ; padLen1 < dataLen+1 && dataPacket.fragment[dataLen-padLen1-1] == 0; padLen1++ {
-
 	}
-
-	// Transfer the content type
 	newLen := dataLen - padLen1 - 1
 	if newLen > len(dataPacket.fragment) {
 		return nil, errors.New("data length malformed (c)")
 	}
 	dataPacket.packetType = PacketType(dataPacket.fragment[newLen])
-
 	dataPacket.fragment = dataPacket.fragment[:newLen]
-	dataPacket.seqNum = seqNum
-
+	dataPacket.seqNum = uint64(seqNum)
 	return dataPacket, nil
 }
 
@@ -215,4 +230,27 @@ func decompress(compressedData []byte) ([]byte, error) {
 	}
 
 	return decompressedData, nil
+}
+
+func maybeDecompress(data []byte) ([]byte, error) {
+	if len(data) >= 3 && data[0] == 0x1f && data[1] == 0x8b && data[2] == 0x08 {
+		return decompress(data)
+	}
+	return data, nil
+}
+
+func BuildAAD(minorVersion uint, packetType PacketType) [common.HashLength]byte {
+	var aad [common.HashLength]byte
+	aad[0] = byte(minorVersion >> 24)
+	aad[1] = byte(minorVersion >> 16)
+	aad[2] = byte(minorVersion >> 8)
+	aad[3] = byte(minorVersion)
+	aad[4] = byte(packetType)
+	return aad
+}
+
+func zeroBytes(b []byte) {
+	for i := range b {
+		b[i] = 0
+	}
 }

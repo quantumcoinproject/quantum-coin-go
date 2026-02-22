@@ -55,6 +55,7 @@ func NewSessionSecret(transcriptHash []byte, sharedSecret []byte) (*SessionSecre
 	//Create early secrets
 	zeroKey := bytes.Repeat([]byte{0}, common.HashLength)
 	earlySecret := hkdf.Extract(sha3.New256, zeroKey, transcriptHash)
+	defer zeroBytes(earlySecret)
 
 	var hash crypto2.Hash
 	hash = crypto2.SHA3_256
@@ -68,6 +69,7 @@ func NewSessionSecret(transcriptHash []byte, sharedSecret []byte) (*SessionSecre
 	if err != nil {
 		return nil, err
 	}
+	defer zeroBytes(derivedSecret)
 
 	handshakeSecret := hkdf.Extract(sha3.New256, sharedSecret, derivedSecret)
 
@@ -173,6 +175,7 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	if err != nil {
 		return err
 	}
+	defer zeroBytes(derivedSecret)
 
 	zeroKey := bytes.Repeat([]byte{0}, common.HashLength)
 	masterSecret := hkdf.Extract(sha3.New256, zeroKey, derivedSecret)
@@ -303,6 +306,7 @@ func hkdfEncodeLabelFixed(label string, hashVal []byte, outputLength int) []byte
 	return hkdfLabel
 }
 
+// Function will be in-scope till KemSwitchTime and then be removed
 func hkdfEncodeLabelLegacy(label string, hashVal []byte, outputLength int) []byte {
 	fullLabel := "pqkem " + label
 
@@ -317,4 +321,22 @@ func hkdfEncodeLabelLegacy(label string, hashVal []byte, outputLength int) []byt
 	copy(hkdfLabel[3+fullLabelLen+1:], hashVal)
 
 	return hkdfLabel
+}
+
+func (ss *SessionSecret) ZeroSecrets() {
+	zeroBytes(ss.handshakeSecret)
+	zeroBytes(ss.clientHandshakeTrafficSecret)
+	zeroBytes(ss.serverHandshakeTrafficSecret)
+	zeroBytes(ss.ClientHandshakeKey)
+	zeroBytes(ss.ServerHandshakeKey)
+	zeroBytes(ss.ClientHandshakeIv)
+	zeroBytes(ss.ServerHandshakeIv)
+	zeroBytes(ss.clientApplicationTrafficSecret)
+	zeroBytes(ss.serverApplicationTrafficSecret)
+	zeroBytes(ss.ClientApplicationKey)
+	zeroBytes(ss.ServerApplicationKey)
+	zeroBytes(ss.ClientApplicationIv)
+	zeroBytes(ss.ServerApplicationIv)
+	zeroBytes(ss.masterSecret)
+	zeroBytes(ss.TranscriptHash)
 }

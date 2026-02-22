@@ -8,7 +8,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
@@ -16,20 +15,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
-type ServerHelloMessage struct {
-	CipherText            []byte //kemCipherTextLength
-	ServerHelloRandomData [shaLen]byte
-	Version               uint
-	Rest                  []rlp.RawValue `rlp:"tail"`
-}
-
-type ServerVerifyMessage struct {
-	Signature    []byte //SignPublicKeyLen
-	SignatureLen uint
-	Rest         []rlp.RawValue `rlp:"tail"`
-}
-
-type Server struct {
+// ServerV2 implements the v2 RLPx transport (after KemSwitchTime).
+type ServerV2 struct {
 	ephemeralKemPrivateKey  *keyestablishmentalgorithm.PrivateKey
 	kem                     *keyestablishmentalgorithm.KeyEncapsulation
 	serverSigningPrivateKey *signaturealgorithm.PrivateKey
@@ -43,14 +30,14 @@ type Server struct {
 	srvVerifyMessage *ServerVerifyMessage
 	cliVerifyMessage *ClientVerifyMessage
 
-	kemCipherText   []byte //kemCipherTextLength
-	kemSharedSecret []byte //kemSecretLength
+	kemCipherText   []byte
+	kemSharedSecret []byte
 
-	serverSeqNumHandshake uint
-	clientSeqNumHandshake uint
+	serverSeqNumHandshake uint64
+	clientSeqNumHandshake uint64
 
-	serverSeqNumApplication uint
-	clientSeqNumApplication uint
+	serverSeqNumApplication uint64
+	clientSeqNumApplication uint64
 
 	secret SessionSecret
 
@@ -60,16 +47,22 @@ type Server struct {
 
 	transcript []byte
 
-	client *Client
+	client *ClientV2
 
 	handshakeDone bool
 	mutex         sync.Mutex
+	writeMutex    sync.Mutex
+	readMutex     sync.Mutex
 
 	context string
 }
 
-func NewServer(conn io.ReadWriter, serverSigningPrivateKey *signaturealgorithm.PrivateKey, context string) *Server {
-	server := Server{
+func (s *ServerV2) SetClient(client *ClientV2) {
+	s.client = client
+}
+
+func NewServerV2(conn io.ReadWriter, serverSigningPrivateKey *signaturealgorithm.PrivateKey, context string) *ServerV2 {
+	server := ServerV2{
 		conn:                    conn,
 		serverSigningPrivateKey: serverSigningPrivateKey,
 		context:                 context,
@@ -77,33 +70,27 @@ func NewServer(conn io.ReadWriter, serverSigningPrivateKey *signaturealgorithm.P
 
 	server.serializer = NewRlpxSerializer()
 	server.serializer.SetContext("server " + context)
-	server.serverSeqNumHandshake = 1
-	server.clientSeqNumHandshake = 1
-	server.serverSeqNumApplication = 1
-	server.clientSeqNumApplication = 1
+	server.serverSeqNumHandshake = 0
+	server.clientSeqNumHandshake = 0
+	server.serverSeqNumApplication = 0
+	server.clientSeqNumApplication = 0
 
 	return &server
 }
 
-// ClientSigningPublicKey returns the client's signing public key (after handshake). Used by Conn.Handshake.
-func (s *Server) ClientSigningPublicKey() *signaturealgorithm.PublicKey {
+func (s *ServerV2) SetServerSigningPrivateKey(prv *signaturealgorithm.PrivateKey) {
+	s.serverSigningPrivateKey = prv
+}
+
+func (s *ServerV2) ClientSigningPublicKey() *signaturealgorithm.PublicKey {
 	return s.clientSigningPublicKey
 }
 
-func (s *Server) SetClient(client *Client) {
-	s.client = client
-}
-
-func (s *Server) SetServerSigningPrivateKey(serverSigningPrivateKey *signaturealgorithm.PrivateKey) {
-	s.serverSigningPrivateKey = serverSigningPrivateKey
-}
-
-func (s *Server) PerformHandshake() error {
-
+func (s *ServerV2) PerformHandshake() error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if s.handshakeDone == true {
+	if s.handshakeDone {
 		return errors.New("Handshake already done")
 	}
 
@@ -113,22 +100,19 @@ func (s *Server) PerformHandshake() error {
 		return err
 	}
 
-	//Receive client hello message
 	clientHelloMessage := new(ClientHelloMessage)
 	_, err = s.serializer.Deserialize(clientHelloMessage, s.conn)
 	if err != nil {
 		return err
 	}
 
-	//Handle client hello message
 	s.cliHelloMessage = clientHelloMessage
-	err = s.handleClientHello()
+	err = s.handleClientHelloV2()
 	if err != nil {
 		return err
 	}
 
-	//Make server hello message
-	err = s.makeServerHello()
+	err = s.makeServerHelloV2()
 	if err != nil {
 		return err
 	}
@@ -137,18 +121,14 @@ func (s *Server) PerformHandshake() error {
 	if err != nil {
 		return err
 	}
-
-	//Write server hello message
 	if _, err = s.conn.Write(serverHelloPacket); err != nil {
 		return err
 	}
 
-	//Find the transcript of the session
 	clientHelloTranscript, err := s.serializer.SerializeDeterministic(s.cliHelloMessage, 0)
 	if err != nil {
 		return err
 	}
-
 	serverHelloTranscript, err := s.serializer.SerializeDeterministic(s.srvHelloMessage, 0)
 	if err != nil {
 		return err
@@ -156,20 +136,18 @@ func (s *Server) PerformHandshake() error {
 	s.transcript = append(clientHelloTranscript, serverHelloTranscript...)
 	transcriptHash := crypto.Keccak256(s.transcript)
 
-	//Create the secrets
 	secret, err := NewSessionSecret(transcriptHash, s.kemSharedSecret[:])
 	if err != nil {
 		return err
 	}
 	s.secret = *secret
+	zeroBytes(s.kemSharedSecret)
 
-	//Sign the transcript hash
 	signature, err := cryptobase.SigAlg.Sign(transcriptHash, s.serverSigningPrivateKey)
 	if err != nil {
 		return err
 	}
 
-	//Serialize the server verify message
 	serverVerifyMessage := new(ServerVerifyMessage)
 	serverVerifyMessage.Signature = make([]byte, cryptobase.SigAlg.SignatureWithPublicKeyLength())
 	copy(serverVerifyMessage.Signature[:], signature)
@@ -186,42 +164,27 @@ func (s *Server) PerformHandshake() error {
 		return err
 	}
 
-	//Create the transcript
 	serverVerifyTranscript, err := s.serializer.SerializeDeterministic(s.srvVerifyMessage, 0)
 	if err != nil {
 		return err
 	}
-
 	s.transcript = append(s.transcript, serverVerifyTranscript...)
 
-	err = s.handleClientVerify()
+	err = s.handleClientVerifyV2()
 	if err != nil {
 		return err
 	}
 
 	s.handshakeDone = true
-
 	return nil
 }
 
-func (s *Server) Read() error {
-	//Receive the server verify message header (legacy format)
-	header := new(LegacyHeader)
-	_, err := s.serializer.Deserialize(header, s.conn)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (s *Server) makeServerHello() error {
+func (s *ServerV2) makeServerHelloV2() error {
 	serverHelloMessage := new(ServerHelloMessage)
-	serverHelloMessage.Version = 1
+	serverHelloMessage.Version = handshakeVersion
 
-	// Generate ServerRandomData
 	randomData := make([]byte, shaLength)
-	_, err := rand.Read(randomData)
-	if err != nil {
+	if _, err := rand.Read(randomData); err != nil {
 		return err
 	}
 	copy(serverHelloMessage.ServerHelloRandomData[:], randomData)
@@ -230,62 +193,49 @@ func (s *Server) makeServerHello() error {
 	serverHelloMessage.CipherText = make([]byte, k.Details().LengthCiphertext)
 	copy(serverHelloMessage.CipherText[:], s.kemCipherText[:])
 	s.srvHelloMessage = serverHelloMessage
-
 	return nil
 }
 
-func (s *Server) handleClientHello() error {
+func (s *ServerV2) handleClientHelloV2() error {
+	if s.cliHelloMessage.Version != handshakeVersion {
+		return errors.New("unsupported handshake version")
+	}
 	k := *s.kem
 	ciphertext, sharedSecret, err := k.EncapsulateSecret(s.cliHelloMessage.ClientKemPublicKey[:])
 	if err != nil {
 		return err
 	}
-
 	s.kemCipherText = make([]byte, k.Details().LengthCiphertext)
 	copy(s.kemCipherText[:], ciphertext[:])
-
 	s.kemSharedSecret = make([]byte, k.Details().LengthSharedSecret)
 	copy(s.kemSharedSecret[:], sharedSecret[:])
-
 	return nil
 }
 
-// handleClientVerify verifies the client's signature over the transcript.
-// Client identity is checked at the application layer after the initial connection is established.
-func (s *Server) handleClientVerify() error {
-
-	//Receive the client verify message
+func (s *ServerV2) handleClientVerifyV2() error {
 	clientVerifyMessage := new(ClientVerifyMessage)
-	err := s.ReadAndDecryptMessage(clientVerifyMessage, PacketTypeHandshake)
+	err := s.ReadAndDecryptMessageV2(clientVerifyMessage, PacketTypeHandshake)
 	if err != nil {
 		return err
 	}
-
 	s.cliVerifyMessage = clientVerifyMessage
 
-	//Find the transcript of the session
 	clientVerifyTranscript, err := s.serializer.SerializeDeterministic(s.cliVerifyMessage, 0)
 	if err != nil {
 		return err
 	}
-
 	transcriptHash := crypto.Keccak256(s.transcript)
 
 	if clientVerifyMessage.SignatureLen > uint(len(clientVerifyMessage.Signature)) {
 		return errors.New("invalid signature length")
 	}
-
-	//Recover the public key from the signature
 	clientPubKeyDataRemote, err := cryptobase.SigAlg.PublicKeyBytesFromSignature(transcriptHash, clientVerifyMessage.Signature[:clientVerifyMessage.SignatureLen])
 	if err != nil {
-
 		return err
 	}
-
 	if !cryptobase.DynamicSigVerifier.Verify(clientPubKeyDataRemote, transcriptHash, clientVerifyMessage.Signature[:clientVerifyMessage.SignatureLen]) {
 		return errors.New("client's signature verification failed")
 	}
-
 	s.clientSigningPublicKey, err = cryptobase.SigAlg.DeserializePublicKey(clientPubKeyDataRemote)
 	if err != nil {
 		return err
@@ -293,33 +243,30 @@ func (s *Server) handleClientVerify() error {
 
 	s.transcript = append(s.transcript, clientVerifyTranscript...)
 	transcriptHash = crypto.Keccak256(s.transcript)
+	return s.secret.CreateApplicationSecrets(transcriptHash)
+}
 
-	err = s.secret.CreateApplicationSecrets(transcriptHash)
+func (s *ServerV2) ReadAndDecryptMessageV2(msg interface{}, packetType PacketType) error {
+	dataPacket, err := s.ReadAndDecrypt(packetType)
 	if err != nil {
 		return err
 	}
-
-	return nil
+	reader := bytes.NewReader(dataPacket.fragment)
+	_, err = s.serializer.Deserialize(msg, reader)
+	return err
 }
 
-func (s *Server) createApplicationSecrets() error {
-	return nil
-}
-
-func (s *Server) WriteEncrypted(data []byte, context uint64, packetType PacketType) error {
+func (s *ServerV2) WriteEncrypted(data []byte, context uint64, packetType PacketType) error {
 	if packetType == PacketTypeApplicationData {
-		if s.handshakeDone != true {
+		if !s.handshakeDone {
 			return errors.New("handshake not completed")
 		}
-	}
-
-	additionalData := make([]byte, shaLength)
-	if _, err := rand.Read(additionalData); err != nil {
-		return err
+		s.writeMutex.Lock()
+		defer s.writeMutex.Unlock()
 	}
 
 	var cipher cipher2.AEAD
-	var seqNum uint
+	var seqNum uint64
 	var serverIv []byte
 	if packetType == PacketTypeHandshake {
 		cipher = s.secret.ServerHandshakeCipher
@@ -331,22 +278,27 @@ func (s *Server) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 		serverIv = s.secret.ServerApplicationIv
 	}
 
-	legacyHeader := &LegacyHeader{
-		PacketType:     uint(packetType),
-		MinorVersion:   minorVersion,
-		MajorVersion:   majorVersion,
-		Context:        context,
-		AdditionalData: [common.HashLength]byte{},
-	}
-	copy(legacyHeader.AdditionalData[:], additionalData)
+	header := new(Header)
+	header.MinorVersion = minorVersionV2
+	header.AdditionalData = BuildAAD(minorVersionV2, packetType)
 
-	encryptedData, err := EncryptLegacy(cipher, data, legacyHeader.AdditionalData[:], packetType, serverIv, seqNum)
+	payload := &EncryptedPayload{
+		PacketType: uint(packetType),
+		Context:    context,
+		Fragment:   data,
+	}
+	payloadData, err := rlp.EncodeToBytes(payload)
 	if err != nil {
 		return err
 	}
-	legacyHeader.RecordLength = uint(len(encryptedData))
 
-	headerPacket, err := s.serializer.Serialize(legacyHeader)
+	encryptedData, err := Encrypt(cipher, payloadData, header.AdditionalData[:], serverIv, seqNum)
+	if err != nil {
+		return err
+	}
+	header.RecordLength = uint(len(encryptedData))
+
+	headerPacket, err := s.serializer.Serialize(header)
 	if err != nil {
 		return err
 	}
@@ -358,22 +310,24 @@ func (s *Server) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 	}
 
 	if packetType == PacketTypeHandshake {
-		s.serverSeqNumHandshake = s.serverSeqNumHandshake + 1
+		s.serverSeqNumHandshake++
 	} else {
-		s.serverSeqNumApplication = s.serverSeqNumApplication + 1
+		s.serverSeqNumApplication++
 	}
 	return nil
 }
 
-func (s *Server) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
+func (s *ServerV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	if packetType == PacketTypeApplicationData {
-		if s.handshakeDone != true {
+		if !s.handshakeDone {
 			return nil, errors.New("handshake not completed")
 		}
+		s.readMutex.Lock()
+		defer s.readMutex.Unlock()
 	}
 
 	var cipher cipher2.AEAD
-	var seqNum uint
+	var seqNum uint64
 	var clientIv []byte
 	if packetType == PacketTypeHandshake {
 		cipher = s.secret.ClientHandshakeCipher
@@ -385,13 +339,16 @@ func (s *Server) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		clientIv = s.secret.ClientApplicationIv
 	}
 
-	legacyHeader := new(LegacyHeader)
-	_, err := s.serializer.Deserialize(legacyHeader, s.conn)
+	header := new(Header)
+	_, err := s.serializer.Deserialize(header, s.conn)
 	if err != nil {
 		return nil, err
 	}
+	if header.MinorVersion != minorVersionV2 {
+		return nil, errors.New("unsupported transport version")
+	}
 
-	recLen := int(legacyHeader.RecordLength)
+	recLen := int(header.RecordLength)
 	if recLen < 0 || recLen > maxRecordLength {
 		return nil, errors.New("record length exceeds maximum allowed size")
 	}
@@ -404,53 +361,48 @@ func (s *Server) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		return nil, errors.New("prefix size less")
 	}
 
-	dataPacket, err := DecryptLegacy(cipher, encryptedData, legacyHeader.AdditionalData[:], clientIv, seqNum)
+	decryptedPayloadBytes, err := Decrypt(cipher, encryptedData, header.AdditionalData[:], clientIv, seqNum)
 	if err != nil {
 		return nil, err
+	}
+
+	var encryptedPayload EncryptedPayload
+	if err := rlp.DecodeBytes(decryptedPayloadBytes, &encryptedPayload); err != nil {
+		return nil, err
+	}
+
+	dataPacket := &DataPacket{
+		packetType: PacketType(encryptedPayload.PacketType),
+		seqNum:     seqNum,
+		fragment:   encryptedPayload.Fragment,
+		context:    encryptedPayload.Context,
 	}
 	if dataPacket.packetType != packetType {
 		return nil, errors.New("packetType mismatch")
 	}
-	dataPacket.context = legacyHeader.Context
-
-	if legacyHeader.MinorVersion >= minorVersionV2 {
-		dataPacket.fragment, err = decompress(dataPacket.fragment)
-		if err != nil {
-			return nil, err
-		}
+	dataPacket.fragment, err = maybeDecompress(dataPacket.fragment)
+	if err != nil {
+		return nil, err
 	}
 
 	if packetType == PacketTypeHandshake {
-		s.clientSeqNumHandshake = s.clientSeqNumHandshake + 1
+		s.clientSeqNumHandshake++
 	} else {
-		s.clientSeqNumApplication = s.clientSeqNumApplication + 1
+		s.clientSeqNumApplication++
 	}
 	return dataPacket, nil
 }
 
-func (s *Server) ReadAndDecryptMessage(msg interface{}, packetType PacketType) error {
-	dataPacket, err := s.ReadAndDecrypt(packetType)
-	if err != nil {
-		return err
-	}
-
-	reader := bytes.NewReader(dataPacket.fragment)
-	_, err = s.serializer.Deserialize(msg, reader)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Server) Cleanup() {
+func (s *ServerV2) Cleanup() {
 	if s.kem != nil {
 		k := *s.kem
 		k.Clean()
 	}
+	zeroBytes(s.kemSharedSecret)
+	s.secret.ZeroSecrets()
 }
 
-func (s *Server) InitWithSecrets(secret SessionSecret) {
+func (s *ServerV2) InitWithSecrets(secret SessionSecret) {
 	s.secret = secret
 	s.handshakeDone = true
 }

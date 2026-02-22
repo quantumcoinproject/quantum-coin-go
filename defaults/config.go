@@ -214,6 +214,7 @@ var MainnetConfig = &Config{
 	ValidateSigPubStartTime: int64(1769904000), //Feb 1, 2026 12:00:00 AM
 	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
 	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:           int64(1787270400), //Aug 21, 2026 12:00:00 AM UTC
 	HkdfLabelFixTime:        int64(1787270400), //Aug 21, 2026 12:00:00 AM UTC
 }
 
@@ -225,6 +226,7 @@ var DevnetConfig = &Config{
 	ValidateSigPubStartTime: int64(1769904000), //Feb 1, 2026 12:00:00 AM
 	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
 	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:           int64(1787270400), //Aug 21, 2026 12:00:00 AM UTC
 	HkdfLabelFixTime:        int64(1787270400), //Aug 21, 2026 12:00:00 AM UTC
 }
 
