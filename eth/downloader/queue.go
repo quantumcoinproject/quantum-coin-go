@@ -70,6 +70,8 @@ type fetchResult struct {
 }
 
 func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
+	log.Debug("Entering newFetchResult")
+	defer log.Debug("Exiting newFetchResult")
 	item := &fetchResult{
 		Header: header,
 	}
@@ -84,6 +86,8 @@ func newFetchResult(header *types.Header, fastSync bool) *fetchResult {
 
 // SetBodyDone flags the body as finished.
 func (f *fetchResult) SetBodyDone() {
+	log.Debug("Entering SetBodyDone")
+	defer log.Debug("Exiting SetBodyDone")
 	if v := atomic.LoadInt32(&f.pending); (v & (1 << bodyType)) != 0 {
 		atomic.AddInt32(&f.pending, -1)
 	}
@@ -91,11 +95,15 @@ func (f *fetchResult) SetBodyDone() {
 
 // AllDone checks if item is done.
 func (f *fetchResult) AllDone() bool {
+	log.Debug("Entering AllDone")
+	defer log.Debug("Exiting AllDone")
 	return atomic.LoadInt32(&f.pending) == 0
 }
 
 // SetReceiptsDone flags the receipts as finished.
 func (f *fetchResult) SetReceiptsDone() {
+	log.Debug("Entering SetReceiptsDone")
+	defer log.Debug("Exiting SetReceiptsDone")
 	if v := atomic.LoadInt32(&f.pending); (v & (1 << receiptType)) != 0 {
 		atomic.AddInt32(&f.pending, -2)
 	}
@@ -103,6 +111,8 @@ func (f *fetchResult) SetReceiptsDone() {
 
 // Done checks if the given type is done already
 func (f *fetchResult) Done(kind uint) bool {
+	log.Debug("Entering Done")
+	defer log.Debug("Exiting Done")
 	v := atomic.LoadInt32(&f.pending)
 	return v&(1<<kind) == 0
 }
@@ -143,6 +153,8 @@ type queue struct {
 
 // newQueue creates a new download queue for scheduling block retrieval.
 func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
+	log.Debug("Entering newQueue")
+	defer log.Debug("Exiting newQueue")
 	lock := new(sync.RWMutex)
 	q := &queue{
 		headerContCh:     make(chan bool),
@@ -157,6 +169,8 @@ func newQueue(blockCacheLimit int, thresholdInitialSize int) *queue {
 
 // Reset clears out the queue contents.
 func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
+	log.Debug("Entering Reset")
+	defer log.Debug("Exiting Reset")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -181,6 +195,8 @@ func (q *queue) Reset(blockCacheLimit int, thresholdInitialSize int) {
 // Close marks the end of the sync, unblocking Results.
 // It may be called even if the queue is already closed.
 func (q *queue) Close() {
+	log.Debug("Entering Close")
+	defer log.Debug("Exiting Close")
 	q.lock.Lock()
 	q.closed = true
 	q.active.Signal()
@@ -189,6 +205,8 @@ func (q *queue) Close() {
 
 // PendingHeaders retrieves the number of header requests pending for retrieval.
 func (q *queue) PendingHeaders() int {
+	log.Debug("Entering PendingHeaders")
+	defer log.Debug("Exiting PendingHeaders")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -197,6 +215,8 @@ func (q *queue) PendingHeaders() int {
 
 // PendingBlocks retrieves the number of block (body) requests pending for retrieval.
 func (q *queue) PendingBlocks() int {
+	log.Debug("Entering PendingBlocks")
+	defer log.Debug("Exiting PendingBlocks")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -205,6 +225,8 @@ func (q *queue) PendingBlocks() int {
 
 // PendingReceipts retrieves the number of block receipts pending for retrieval.
 func (q *queue) PendingReceipts() int {
+	log.Debug("Entering PendingReceipts")
+	defer log.Debug("Exiting PendingReceipts")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -214,6 +236,8 @@ func (q *queue) PendingReceipts() int {
 // InFlightHeaders retrieves whether there are header fetch requests currently
 // in flight.
 func (q *queue) InFlightHeaders() bool {
+	log.Debug("Entering InFlightHeaders")
+	defer log.Debug("Exiting InFlightHeaders")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -223,6 +247,8 @@ func (q *queue) InFlightHeaders() bool {
 // InFlightBlocks retrieves whether there are block fetch requests currently in
 // flight.
 func (q *queue) InFlightBlocks() bool {
+	log.Debug("Entering InFlightBlocks")
+	defer log.Debug("Exiting InFlightBlocks")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -232,6 +258,8 @@ func (q *queue) InFlightBlocks() bool {
 // InFlightReceipts retrieves whether there are receipt fetch requests currently
 // in flight.
 func (q *queue) InFlightReceipts() bool {
+	log.Debug("Entering InFlightReceipts")
+	defer log.Debug("Exiting InFlightReceipts")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -240,6 +268,8 @@ func (q *queue) InFlightReceipts() bool {
 
 // Idle returns if the queue is fully idle or has some data still inside.
 func (q *queue) Idle() bool {
+	log.Debug("Entering Idle")
+	defer log.Debug("Exiting Idle")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -252,6 +282,8 @@ func (q *queue) Idle() bool {
 // ScheduleSkeleton adds a batch of header retrieval tasks to the queue to fill
 // up an already retrieved header skeleton.
 func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
+	log.Debug("Entering ScheduleSkeleton")
+	defer log.Debug("Exiting ScheduleSkeleton")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -279,6 +311,8 @@ func (q *queue) ScheduleSkeleton(from uint64, skeleton []*types.Header) {
 // RetrieveHeaders retrieves the header chain assemble based on the scheduled
 // skeleton.
 func (q *queue) RetrieveHeaders() ([]*types.Header, int) {
+	log.Debug("Entering RetrieveHeaders")
+	defer log.Debug("Exiting RetrieveHeaders")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -291,6 +325,8 @@ func (q *queue) RetrieveHeaders() ([]*types.Header, int) {
 // Schedule adds a set of headers for the download queue for scheduling, returning
 // the new headers encountered.
 func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
+	log.Debug("Entering Schedule")
+	defer log.Debug("Exiting Schedule")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -337,6 +373,8 @@ func (q *queue) Schedule(headers []*types.Header, from uint64) []*types.Header {
 // Results can be called concurrently with Deliver and Schedule,
 // but assumes that there are not two simultaneous callers to Results
 func (q *queue) Results(block bool) []*fetchResult {
+	log.Debug("Entering Results")
+	defer log.Debug("Exiting Results")
 	// Abort early if there are no items and non-blocking requested
 	if !block && !q.resultCache.HasCompletedItems() {
 		return nil
@@ -390,6 +428,8 @@ func (q *queue) Results(block bool) []*fetchResult {
 }
 
 func (q *queue) Stats() []interface{} {
+	log.Debug("Entering Stats")
+	defer log.Debug("Exiting Stats")
 	q.lock.RLock()
 	defer q.lock.RUnlock()
 
@@ -397,6 +437,8 @@ func (q *queue) Stats() []interface{} {
 }
 
 func (q *queue) stats() []interface{} {
+	log.Debug("Entering stats")
+	defer log.Debug("Exiting stats")
 	return []interface{}{
 		"receiptTasks", q.receiptTaskQueue.Size(),
 		"blockTasks", q.blockTaskQueue.Size(),
@@ -407,6 +449,8 @@ func (q *queue) stats() []interface{} {
 // ReserveHeaders reserves a set of headers for the given peer, skipping any
 // previously failed batches.
 func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
+	log.Debug("Entering ReserveHeaders")
+	defer log.Debug("Exiting ReserveHeaders")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -448,6 +492,8 @@ func (q *queue) ReserveHeaders(p *peerConnection, count int) *fetchRequest {
 // previously failed downloads. Beside the next batch of needed fetches, it also
 // returns a flag whether empty blocks were queued requiring processing.
 func (q *queue) ReserveBodies(p *peerConnection, count int) (*fetchRequest, bool, bool) {
+	log.Debug("Entering ReserveBodies")
+	defer log.Debug("Exiting ReserveBodies")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -458,6 +504,8 @@ func (q *queue) ReserveBodies(p *peerConnection, count int) (*fetchRequest, bool
 // any previously failed downloads. Beside the next batch of needed fetches, it
 // also returns a flag whether empty receipts were queued requiring importing.
 func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bool, bool) {
+	log.Debug("Entering ReserveReceipts")
+	defer log.Debug("Exiting ReserveReceipts")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -479,6 +527,8 @@ func (q *queue) ReserveReceipts(p *peerConnection, count int) (*fetchRequest, bo
 //	throttle - if the caller should throttle for a while
 func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common.Hash]*types.Header, taskQueue *prque.Prque,
 	pendPool map[string]*fetchRequest, kind uint) (*fetchRequest, bool, bool) {
+	log.Debug("Entering reserveHeaders")
+	defer log.Debug("Exiting reserveHeaders")
 	// Short circuit if the pool has been depleted, or if the peer's already
 	// downloading something (sanity check not to corrupt state)
 	if taskQueue.Empty() {
@@ -566,6 +616,8 @@ func (q *queue) reserveHeaders(p *peerConnection, count int, taskPool map[common
 
 // CancelHeaders aborts a fetch request, returning all pending skeleton indexes to the queue.
 func (q *queue) CancelHeaders(request *fetchRequest) {
+	log.Debug("Entering CancelHeaders")
+	defer log.Debug("Exiting CancelHeaders")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	q.cancel(request, q.headerTaskQueue, q.headerPendPool)
@@ -574,6 +626,8 @@ func (q *queue) CancelHeaders(request *fetchRequest) {
 // CancelBodies aborts a body fetch request, returning all pending headers to the
 // task queue.
 func (q *queue) CancelBodies(request *fetchRequest) {
+	log.Debug("Entering CancelBodies")
+	defer log.Debug("Exiting CancelBodies")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	q.cancel(request, q.blockTaskQueue, q.blockPendPool)
@@ -582,6 +636,8 @@ func (q *queue) CancelBodies(request *fetchRequest) {
 // CancelReceipts aborts a body fetch request, returning all pending headers to
 // the task queue.
 func (q *queue) CancelReceipts(request *fetchRequest) {
+	log.Debug("Entering CancelReceipts")
+	defer log.Debug("Exiting CancelReceipts")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	q.cancel(request, q.receiptTaskQueue, q.receiptPendPool)
@@ -589,6 +645,8 @@ func (q *queue) CancelReceipts(request *fetchRequest) {
 
 // Cancel aborts a fetch request, returning all pending hashes to the task queue.
 func (q *queue) cancel(request *fetchRequest, taskQueue *prque.Prque, pendPool map[string]*fetchRequest) {
+	log.Debug("Entering cancel")
+	defer log.Debug("Exiting cancel")
 	if request.From > 0 {
 		taskQueue.Push(request.From, -int64(request.From))
 	}
@@ -602,6 +660,8 @@ func (q *queue) cancel(request *fetchRequest, taskQueue *prque.Prque, pendPool m
 // meant to be called during a peer drop to quickly reassign owned data fetches
 // to remaining nodes.
 func (q *queue) Revoke(peerID string) {
+	log.Debug("Entering Revoke")
+	defer log.Debug("Exiting Revoke")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -622,6 +682,8 @@ func (q *queue) Revoke(peerID string) {
 // ExpireHeaders checks for in flight requests that exceeded a timeout allowance,
 // canceling them and returning the responsible peers for penalisation.
 func (q *queue) ExpireHeaders(timeout time.Duration) map[string]int {
+	log.Debug("Entering ExpireHeaders")
+	defer log.Debug("Exiting ExpireHeaders")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -631,6 +693,8 @@ func (q *queue) ExpireHeaders(timeout time.Duration) map[string]int {
 // ExpireBodies checks for in flight block body requests that exceeded a timeout
 // allowance, canceling them and returning the responsible peers for penalisation.
 func (q *queue) ExpireBodies(timeout time.Duration) map[string]int {
+	log.Debug("Entering ExpireBodies")
+	defer log.Debug("Exiting ExpireBodies")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -640,6 +704,8 @@ func (q *queue) ExpireBodies(timeout time.Duration) map[string]int {
 // ExpireReceipts checks for in flight receipt requests that exceeded a timeout
 // allowance, canceling them and returning the responsible peers for penalisation.
 func (q *queue) ExpireReceipts(timeout time.Duration) map[string]int {
+	log.Debug("Entering ExpireReceipts")
+	defer log.Debug("Exiting ExpireReceipts")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -653,6 +719,8 @@ func (q *queue) ExpireReceipts(timeout time.Duration) map[string]int {
 // reason the lock is not obtained in here is because the parameters already need
 // to access the queue, so they already need a lock anyway.
 func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest, taskQueue *prque.Prque, timeoutMeter metrics.Meter) map[string]int {
+	log.Debug("Entering expire")
+	defer log.Debug("Exiting expire")
 	// Iterate over the expired requests and return each to the queue
 	expiries := make(map[string]int)
 	for id, request := range pendPool {
@@ -689,6 +757,8 @@ func (q *queue) expire(timeout time.Duration, pendPool map[string]*fetchRequest,
 // of ready headers to the processor to keep the pipeline full. However it will
 // not block to prevent stalling other pending deliveries.
 func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh chan []*types.Header) (int, error) {
+	log.Debug("Entering DeliverHeaders")
+	defer log.Debug("Exiting DeliverHeaders")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 
@@ -786,6 +856,8 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 // The method returns the number of blocks bodies accepted from the delivery and
 // also wakes any threads waiting for data delivery.
 func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction) (int, error) {
+	log.Debug("Entering DeliverBodies")
+	defer log.Debug("Exiting DeliverBodies")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	trieHasher := trie.NewStackTrie(nil)
@@ -808,6 +880,8 @@ func (q *queue) DeliverBodies(id string, txLists [][]*types.Transaction) (int, e
 // The method returns the number of transaction receipts accepted from the delivery
 // and also wakes any threads waiting for data delivery.
 func (q *queue) DeliverReceipts(id string, receiptList [][]*types.Receipt) (int, error) {
+	log.Debug("Entering DeliverReceipts")
+	defer log.Debug("Exiting DeliverReceipts")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 	trieHasher := trie.NewStackTrie(nil)
@@ -834,6 +908,8 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	taskQueue *prque.Prque, pendPool map[string]*fetchRequest, reqTimer metrics.Timer,
 	results int, validate func(index int, header *types.Header) error,
 	reconstruct func(index int, result *fetchResult)) (int, error) {
+	log.Debug("Entering deliver")
+	defer log.Debug("Exiting deliver")
 
 	// Short circuit if the data was never requested
 	request := pendPool[id]
@@ -905,6 +981,8 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 // Prepare configures the result cache to allow accepting and caching inbound
 // fetch results.
 func (q *queue) Prepare(offset uint64, mode SyncMode) {
+	log.Debug("Entering Prepare")
+	defer log.Debug("Exiting Prepare")
 	q.lock.Lock()
 	defer q.lock.Unlock()
 

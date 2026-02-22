@@ -216,6 +216,8 @@ type BlockChain interface {
 
 // New creates a new downloader to fetch hashes and blocks from remote peers.
 func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, mux *event.TypeMux, chain BlockChain, lightchain LightChain, dropPeer peerDropFn) *Downloader {
+	log.Debug("Entering New")
+	defer log.Debug("Exiting New")
 	if lightchain == nil {
 		lightchain = chain
 	}
@@ -255,6 +257,8 @@ func New(checkpoint uint64, stateDb ethdb.Database, stateBloom *trie.SyncBloom, 
 // of processed and the total number of known states are also returned. Otherwise
 // these are zero.
 func (d *Downloader) Progress() dp.SyncProgress {
+	log.Debug("Entering Progress")
+	defer log.Debug("Exiting Progress")
 	// Lock the current stats and return the progress
 	d.syncStatsLock.RLock()
 	defer d.syncStatsLock.RUnlock()
@@ -282,12 +286,16 @@ func (d *Downloader) Progress() dp.SyncProgress {
 
 // Synchronising returns whether the downloader is currently retrieving blocks.
 func (d *Downloader) Synchronising() bool {
+	log.Debug("Entering Synchronising")
+	defer log.Debug("Exiting Synchronising")
 	return atomic.LoadInt32(&d.synchronising) > 0
 }
 
 // RegisterPeer injects a new download peer into the set of block source to be
 // used for fetching hashes and blocks from.
 func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
+	log.Debug("Entering RegisterPeer")
+	defer log.Debug("Exiting RegisterPeer")
 	var logger log.Logger
 	if len(id) < 16 {
 		// Tests use short IDs, don't choke on them
@@ -304,11 +312,15 @@ func (d *Downloader) RegisterPeer(id string, version uint, peer Peer) error {
 }
 
 func (d *Downloader) SetChainHeighter(fn chainHeightFn) {
+	log.Debug("Entering SetChainHeighter")
+	defer log.Debug("Exiting SetChainHeighter")
 	d.chainHeightFunc = fn
 }
 
 // RegisterLightPeer injects a light client peer, wrapping it so it appears as a regular peer.
 func (d *Downloader) RegisterLightPeer(id string, version uint, peer LightPeer) error {
+	log.Debug("Entering RegisterLightPeer")
+	defer log.Debug("Exiting RegisterLightPeer")
 	return d.RegisterPeer(id, version, &lightPeerWrapper{peer})
 }
 
@@ -316,6 +328,8 @@ func (d *Downloader) RegisterLightPeer(id string, version uint, peer LightPeer) 
 // the specified peer. An effort is also made to return any pending fetches into
 // the queue.
 func (d *Downloader) UnregisterPeer(id string) error {
+	log.Debug("Entering UnregisterPeer")
+	defer log.Debug("Exiting UnregisterPeer")
 	// Unregister the peer from the active peer set and revoke any fetch tasks
 	var logger log.Logger
 	if len(id) < 16 {
@@ -337,6 +351,8 @@ func (d *Downloader) UnregisterPeer(id string) error {
 // Synchronise tries to sync up our local block chain with a remote peer, both
 // adding various sanity checks as well as wrapping it with various log entries.
 func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode SyncMode) error {
+	log.Debug("Entering Synchronise")
+	defer log.Debug("Exiting Synchronise")
 	err := d.synchronise(id, head, td, mode)
 
 	switch err {
@@ -366,6 +382,8 @@ func (d *Downloader) Synchronise(id string, head common.Hash, td *big.Int, mode 
 // it will use the best peer possible and synchronize if its TD is higher than our own. If any of the
 // checks fail an error will be returned. This method is synchronous
 func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode SyncMode) error {
+	log.Debug("Entering synchronise")
+	defer log.Debug("Exiting synchronise")
 	// Mock out the synchronisation if testing
 	if d.synchroniseMock != nil {
 		return d.synchroniseMock(id, hash)
@@ -432,12 +450,16 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 }
 
 func (d *Downloader) getMode() SyncMode {
+	log.Debug("Entering getMode")
+	defer log.Debug("Exiting getMode")
 	return SyncMode(atomic.LoadUint32(&d.mode))
 }
 
 // syncWithPeer starts a block synchronization based on the hash chain from the
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
+	log.Debug("Entering syncWithPeer")
+	defer log.Debug("Exiting syncWithPeer")
 	d.mux.Post(StartEvent{})
 	defer func() {
 		// reset on error
@@ -566,6 +588,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 // spawnSync runs d.process and all given fetcher functions to completion in
 // separate goroutines, returning the first error that appears.
 func (d *Downloader) spawnSync(fetchers []func() error) error {
+	log.Debug("Entering spawnSync")
+	defer log.Debug("Exiting spawnSync")
 	errc := make(chan error, len(fetchers))
 	d.cancelWg.Add(len(fetchers))
 	for _, fn := range fetchers {
@@ -594,6 +618,8 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 // not wait for the running download goroutines to finish. This method should be
 // used when cancelling the downloads from inside the downloader.
 func (d *Downloader) cancel() {
+	log.Debug("Entering cancel")
+	defer log.Debug("Exiting cancel")
 	// Close the current cancel channel
 	d.cancelLock.Lock()
 	defer d.cancelLock.Unlock()
@@ -611,6 +637,8 @@ func (d *Downloader) cancel() {
 // Cancel aborts all of the operations and waits for all download goroutines to
 // finish before returning.
 func (d *Downloader) Cancel() {
+	log.Debug("Entering Cancel")
+	defer log.Debug("Exiting Cancel")
 	d.cancel()
 	d.cancelWg.Wait()
 }
@@ -618,6 +646,8 @@ func (d *Downloader) Cancel() {
 // Terminate interrupts the downloader, canceling all pending operations.
 // The downloader cannot be reused after calling Terminate.
 func (d *Downloader) Terminate() {
+	log.Debug("Entering Terminate")
+	defer log.Debug("Exiting Terminate")
 	// Close the termination channel (make sure double close is allowed)
 	d.quitLock.Lock()
 	select {
@@ -637,6 +667,8 @@ func (d *Downloader) Terminate() {
 // fetchHead retrieves the head header and prior pivot block (if available) from
 // a remote peer.
 func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *types.Header, err error) {
+	log.Debug("Entering fetchHead")
+	defer log.Debug("Exiting fetchHead")
 	p.log.Debug("Retrieving remote chain head")
 	mode := d.getMode()
 
@@ -710,6 +742,8 @@ func (d *Downloader) fetchHead(p *peerConnection) (head *types.Header, pivot *ty
 // and also returns 'max', the last block which is expected to be returned by the remote peers,
 // given the (from,count,skip)
 func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, uint64) {
+	log.Debug("Entering calculateRequestSpan")
+	defer log.Debug("Exiting calculateRequestSpan")
 	var (
 		from     int
 		count    int
@@ -760,6 +794,8 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 // In the rare scenario when we ended up on a long reorganisation (i.e. none of
 // the head links match), we do a binary search to find the common ancestor.
 func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header) (uint64, error) {
+	log.Debug("Entering findAncestor")
+	defer log.Debug("Exiting findAncestor")
 	// Figure out the valid ancestor range to prevent rewrite attacks
 	var (
 		floor        = int64(-1)
@@ -827,6 +863,8 @@ func (d *Downloader) findAncestor(p *peerConnection, remoteHeader *types.Header)
 // is always in that window when we're synced, so this is one round-trip instead of
 // O(log height) for binary search. Returns errNoAncestorFound if not found
 func (d *Downloader) findAncestorReorgLimited(p *peerConnection, remoteHeight uint64, floor int64, localHeight uint64) (commonAncestor uint64, err error) {
+	log.Debug("Entering findAncestorReorgLimited")
+	defer log.Debug("Exiting findAncestorReorgLimited")
 	from := uint64(0)
 	count := 10
 
@@ -897,6 +935,8 @@ func (d *Downloader) findAncestorReorgLimited(p *peerConnection, remoteHeight ui
 }
 
 func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, remoteHeight, localHeight uint64, floor int64) (commonAncestor uint64, err error) {
+	log.Debug("Entering findAncestorSpanSearch")
+	defer log.Debug("Exiting findAncestorSpanSearch")
 	from, count, skip, max := calculateRequestSpan(remoteHeight, localHeight)
 
 	p.log.Trace("Span searching for common ancestor", "count", count, "from", from, "skip", skip)
@@ -982,6 +1022,8 @@ func (d *Downloader) findAncestorSpanSearch(p *peerConnection, mode SyncMode, re
 }
 
 func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, remoteHeight uint64, floor int64) (commonAncestor uint64, err error) {
+	log.Debug("Entering findAncestorBinarySearch")
+	defer log.Debug("Exiting findAncestorBinarySearch")
 	hash := common.Hash{}
 
 	// Ancestor not found, we need to binary search over our chain
@@ -1082,6 +1124,8 @@ func (d *Downloader) findAncestorBinarySearch(p *peerConnection, mode SyncMode, 
 // can fill in the skeleton - not even the origin peer - it's assumed invalid and
 // the origin is dropped.
 func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
+	log.Debug("Entering fetchHeaders")
+	defer log.Debug("Exiting fetchHeaders")
 	p.log.Debug("Directing header downloads", "origin", from)
 	defer p.log.Debug("Header download terminated")
 
@@ -1332,6 +1376,8 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 // The method returns the entire filled skeleton and also the number of headers
 // already forwarded for processing.
 func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) ([]*types.Header, int, error) {
+	log.Debug("Entering fillHeaderSkeleton")
+	defer log.Debug("Exiting fillHeaderSkeleton")
 	log.Debug("Filling up skeleton", "from", from)
 	d.queue.ScheduleSkeleton(from, skeleton)
 
@@ -1364,6 +1410,8 @@ func (d *Downloader) fillHeaderSkeleton(from uint64, skeleton []*types.Header) (
 // available peers, reserving a chunk of blocks for each, waiting for delivery
 // and also periodically checking for timeouts.
 func (d *Downloader) fetchBodies(from uint64) error {
+	log.Debug("Entering fetchBodies")
+	defer log.Debug("Exiting fetchBodies")
 	log.Debug("Downloading block bodies", "origin", from)
 
 	var (
@@ -1388,6 +1436,8 @@ func (d *Downloader) fetchBodies(from uint64) error {
 // available peers, reserving a chunk of receipts for each, waiting for delivery
 // and also periodically checking for timeouts.
 func (d *Downloader) fetchReceipts(from uint64) error {
+	log.Debug("Entering fetchReceipts")
+	defer log.Debug("Exiting fetchReceipts")
 	log.Debug("Downloading transaction receipts", "origin", from)
 
 	var (
@@ -1439,6 +1489,8 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 	expire func() map[string]int, pending func() int, inFlight func() bool, reserve func(*peerConnection, int) (*fetchRequest, bool, bool),
 	fetchHook func([]*types.Header), fetch func(*peerConnection, *fetchRequest) error, cancel func(*fetchRequest), capacity func(*peerConnection) int,
 	idle func() ([]*peerConnection, int), setIdle func(*peerConnection, int, time.Time), kind string) error {
+	log.Debug("Entering fetchParts")
+	defer log.Debug("Exiting fetchParts")
 
 	// Create a ticker to detect expired retrieval tasks
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -1614,6 +1666,8 @@ func (d *Downloader) fetchParts(deliveryCh chan dataPack, deliver func(dataPack)
 // keeps processing and scheduling them into the header chain and downloader's
 // queue until the stream ends or a failure occurs.
 func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
+	log.Debug("Entering processHeaders")
+	defer log.Debug("Exiting processHeaders")
 	// Keep a count of uncertain headers to roll back
 	var (
 		rollback    uint64 // Zero means no rollback (fine as you can't unroll the genesis)
@@ -1783,6 +1837,8 @@ func (d *Downloader) processHeaders(origin uint64, td *big.Int) error {
 
 // processFullSyncContent takes fetch results from the queue and imports them into the chain.
 func (d *Downloader) processFullSyncContent() error {
+	log.Debug("Entering processFullSyncContent")
+	defer log.Debug("Exiting processFullSyncContent")
 	for {
 		results := d.queue.Results(true)
 		if len(results) == 0 {
@@ -1798,6 +1854,8 @@ func (d *Downloader) processFullSyncContent() error {
 }
 
 func (d *Downloader) importBlockResults(results []*fetchResult) error {
+	log.Debug("Entering importBlockResults")
+	defer log.Debug("Exiting importBlockResults")
 	// Check for any early termination requests
 	if len(results) == 0 {
 		return nil
@@ -1835,6 +1893,8 @@ func (d *Downloader) importBlockResults(results []*fetchResult) error {
 // processFastSyncContent takes fetch results from the queue and writes them to the
 // database. It also controls the synchronisation of state nodes of the pivot block.
 func (d *Downloader) processFastSyncContent() error {
+	log.Debug("Entering processFastSyncContent")
+	defer log.Debug("Exiting processFastSyncContent")
 	// Start syncing state of the reported head block. This should get us most of
 	// the state of the pivot block.
 	d.pivotLock.RLock()
@@ -1957,6 +2017,8 @@ func (d *Downloader) processFastSyncContent() error {
 }
 
 func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, before, after []*fetchResult) {
+	log.Debug("Entering splitAroundPivot")
+	defer log.Debug("Exiting splitAroundPivot")
 	if len(results) == 0 {
 		return nil, nil, nil
 	}
@@ -1980,6 +2042,8 @@ func splitAroundPivot(pivot uint64, results []*fetchResult) (p *fetchResult, bef
 }
 
 func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *stateSync) error {
+	log.Debug("Entering commitFastSyncData")
+	defer log.Debug("Exiting commitFastSyncData")
 	// Check for any early termination requests
 	if len(results) == 0 {
 		return nil
@@ -2013,6 +2077,8 @@ func (d *Downloader) commitFastSyncData(results []*fetchResult, stateSync *state
 }
 
 func (d *Downloader) commitPivotBlock(result *fetchResult) error {
+	log.Debug("Entering commitPivotBlock")
+	defer log.Debug("Exiting commitPivotBlock")
 	block := types.NewBlockWithHeader(result.Header).WithBody(result.Transactions)
 	log.Debug("Committing fast sync pivot as new head", "number", block.Number(), "hash", block.Hash())
 
@@ -2039,26 +2105,36 @@ func (d *Downloader) commitPivotBlock(result *fetchResult) error {
 // DeliverHeaders injects a new batch of block headers received from a remote
 // node into the download schedule.
 func (d *Downloader) DeliverHeaders(id string, headers []*types.Header) error {
+	log.Debug("Entering DeliverHeaders")
+	defer log.Debug("Exiting DeliverHeaders")
 	return d.deliver(d.headerCh, &headerPack{id, headers}, headerInMeter, headerDropMeter)
 }
 
 // DeliverBodies injects a new batch of block bodies received from a remote node.
 func (d *Downloader) DeliverBodies(id string, transactions [][]*types.Transaction) error {
+	log.Debug("Entering DeliverBodies")
+	defer log.Debug("Exiting DeliverBodies")
 	return d.deliver(d.bodyCh, &bodyPack{id, transactions}, bodyInMeter, bodyDropMeter)
 }
 
 // DeliverReceipts injects a new batch of receipts received from a remote node.
 func (d *Downloader) DeliverReceipts(id string, receipts [][]*types.Receipt) error {
+	log.Debug("Entering DeliverReceipts")
+	defer log.Debug("Exiting DeliverReceipts")
 	return d.deliver(d.receiptCh, &receiptPack{id, receipts}, receiptInMeter, receiptDropMeter)
 }
 
 // DeliverNodeData injects a new batch of node state data received from a remote node.
 func (d *Downloader) DeliverNodeData(id string, data [][]byte) error {
+	log.Debug("Entering DeliverNodeData")
+	defer log.Debug("Exiting DeliverNodeData")
 	return d.deliver(d.stateCh, &statePack{id, data}, stateInMeter, stateDropMeter)
 }
 
 // deliver injects a new batch of data received from a remote node.
 func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dropMeter metrics.Meter) (err error) {
+	log.Debug("Entering deliver")
+	defer log.Debug("Exiting deliver")
 	// Update the delivery metrics for both good and failed deliveries
 	inMeter.Mark(int64(packet.Items()))
 	defer func() {
@@ -2082,6 +2158,8 @@ func (d *Downloader) deliver(destCh chan dataPack, packet dataPack, inMeter, dro
 }
 
 func shouldDisconnectPeer(peerId string) bool {
+	log.Debug("Entering shouldDisconnectPeer")
+	defer log.Debug("Exiting shouldDisconnectPeer")
 	PeerErrorLock.Lock()
 	defer PeerErrorLock.Unlock()
 

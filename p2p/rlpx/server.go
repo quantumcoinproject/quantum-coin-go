@@ -1,3 +1,7 @@
+// LEGACY (pre-KemSwitchTime): This file implements the v1 RLPx server handshake
+// and record layer. It is only used when time.Now() < defaults.KemSwitchTime.
+// After KemSwitchTime all new connections use ServerV2 (serverv2.go) instead.
+// This file will be removed once all nodes have passed KemSwitchTime.
 package rlpx
 
 import (
@@ -5,15 +9,15 @@ import (
 	cipher2 "crypto/cipher"
 	"crypto/rand"
 	"errors"
+	"io"
+	"sync"
+
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	"io"
-	"sync"
-	"time"
 )
 
 type ServerHelloMessage struct {
@@ -29,6 +33,8 @@ type ServerVerifyMessage struct {
 	Rest         []rlp.RawValue `rlp:"tail"`
 }
 
+// Server is the legacy (v1) RLPx server, used only before KemSwitchTime.
+// After KemSwitchTime, ServerV2 replaces this entirely. See serverv2.go.
 type Server struct {
 	ephemeralKemPrivateKey  *keyestablishmentalgorithm.PrivateKey
 	kem                     *keyestablishmentalgorithm.KeyEncapsulation
@@ -76,14 +82,18 @@ func NewServer(conn io.ReadWriter, serverSigningPrivateKey *signaturealgorithm.P
 	}
 
 	server.serializer = NewRlpxSerializer()
+	server.serializer.SetContext("server " + context)
 	server.serverSeqNumHandshake = 1
 	server.clientSeqNumHandshake = 1
-
 	server.serverSeqNumApplication = 1
 	server.clientSeqNumApplication = 1
-	server.serializer.SetContext("server " + context)
 
 	return &server
+}
+
+// ClientSigningPublicKey returns the client's signing public key (after handshake). Used by Conn.Handshake.
+func (s *Server) ClientSigningPublicKey() *signaturealgorithm.PublicKey {
+	return s.clientSigningPublicKey
 }
 
 func (s *Server) SetClient(client *Client) {
@@ -201,13 +211,12 @@ func (s *Server) PerformHandshake() error {
 }
 
 func (s *Server) Read() error {
-	//Receive the server verify message header
-	additionalData := new(AdditionalData)
-	_, err := s.serializer.Deserialize(additionalData, s.conn)
+	//Receive the server verify message header (legacy format)
+	header := new(LegacyHeader)
+	_, err := s.serializer.Deserialize(header, s.conn)
 	if err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -232,7 +241,6 @@ func (s *Server) makeServerHello() error {
 }
 
 func (s *Server) handleClientHello() error {
-
 	k := *s.kem
 	ciphertext, sharedSecret, err := k.EncapsulateSecret(s.cliHelloMessage.ClientKemPublicKey[:])
 	if err != nil {
@@ -248,12 +256,13 @@ func (s *Server) handleClientHello() error {
 	return nil
 }
 
+// handleClientVerify verifies the client's signature over the transcript.
+// Client identity is checked at the application layer after the initial connection is established.
 func (s *Server) handleClientVerify() error {
 
 	//Receive the client verify message
 	clientVerifyMessage := new(ClientVerifyMessage)
 	err := s.ReadAndDecryptMessage(clientVerifyMessage, PacketTypeHandshake)
-
 	if err != nil {
 		return err
 	}
@@ -309,9 +318,9 @@ func (s *Server) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 			return errors.New("handshake not completed")
 		}
 	}
+
 	additionalData := make([]byte, shaLength)
-	_, err := rand.Read(additionalData)
-	if err != nil {
+	if _, err := rand.Read(additionalData); err != nil {
 		return err
 	}
 
@@ -328,46 +337,29 @@ func (s *Server) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 		serverIv = s.secret.ServerApplicationIv
 	}
 
-	header := new(Header)
-	header.PacketType = uint(packetType)
-	header.MajorVersion = majorVersion
-	if time.Now().UTC().Unix() < defaults.DefaultConfig.KemSwitchTime {
-		header.MinorVersion = minorVersion
-	} else {
-		header.MinorVersion = minorVersionV2
+	legacyHeader := &LegacyHeader{
+		PacketType:     uint(packetType),
+		MinorVersion:   minorVersion,
+		MajorVersion:   majorVersion,
+		Context:        context,
+		AdditionalData: [common.HashLength]byte{},
 	}
+	copy(legacyHeader.AdditionalData[:], additionalData)
 
-	if header.MinorVersion >= minorVersionV2 {
-		compressedData, err := compress(data)
-		if err != nil {
-			return err
-		}
-		data = compressedData
-	}
-
-	encryptedData, err := Encrypt(cipher, data, additionalData, packetType, serverIv, seqNum)
+	encryptedData, err := EncryptLegacy(cipher, data, legacyHeader.AdditionalData[:], packetType, serverIv, seqNum)
 	if err != nil {
 		return err
 	}
+	legacyHeader.RecordLength = uint(len(encryptedData))
 
-	header.RecordLength = uint(len(encryptedData))
-	header.Context = context
-	copy(header.AdditionalData[:], additionalData)
-
-	headerPacket, err := s.serializer.Serialize(header)
+	headerPacket, err := s.serializer.Serialize(legacyHeader)
 	if err != nil {
 		return err
 	}
-
-	_, err = s.conn.Write(headerPacket)
-
-	if err != nil {
+	if _, err = s.conn.Write(headerPacket); err != nil {
 		return err
 	}
-
-	_, err = s.conn.Write(encryptedData)
-
-	if err != nil {
+	if _, err = s.conn.Write(encryptedData); err != nil {
 		return err
 	}
 
@@ -376,35 +368,14 @@ func (s *Server) WriteEncrypted(data []byte, context uint64, packetType PacketTy
 	} else {
 		s.serverSeqNumApplication = s.serverSeqNumApplication + 1
 	}
-
 	return nil
 }
 
 func (s *Server) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
-
 	if packetType == PacketTypeApplicationData {
-	}
-
-	header := new(Header)
-	_, err := s.serializer.Deserialize(header, s.conn)
-	if err != nil {
-		return nil, err
-	}
-
-	// Read the encrypted data
-	recLen := int(header.RecordLength)
-	if recLen < 0 || recLen > maxRecordLength {
-		return nil, errors.New("record length exceeds maximum allowed size")
-	}
-
-	encryptedData := make([]byte, recLen)
-	bytesRead, err := io.ReadAtLeast(s.conn, encryptedData, recLen)
-	if err != nil {
-		return nil, err
-	}
-
-	if bytesRead != recLen {
-		return nil, errors.New("prefix size less")
+		if s.handshakeDone != true {
+			return nil, errors.New("handshake not completed")
+		}
 	}
 
 	var cipher cipher2.AEAD
@@ -420,30 +391,46 @@ func (s *Server) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		clientIv = s.secret.ClientApplicationIv
 	}
 
-	dataPacket, err := Decrypt(cipher, encryptedData, header.AdditionalData[:], packetType, clientIv, seqNum)
+	legacyHeader := new(LegacyHeader)
+	_, err := s.serializer.Deserialize(legacyHeader, s.conn)
 	if err != nil {
 		return nil, err
 	}
 
+	recLen := int(legacyHeader.RecordLength)
+	if recLen < 0 || recLen > maxRecordLength {
+		return nil, errors.New("record length exceeds maximum allowed size")
+	}
+	encryptedData := make([]byte, recLen)
+	bytesRead, err := io.ReadAtLeast(s.conn, encryptedData, recLen)
+	if err != nil {
+		return nil, err
+	}
+	if bytesRead != recLen {
+		return nil, errors.New("prefix size less")
+	}
+
+	dataPacket, err := DecryptLegacy(cipher, encryptedData, legacyHeader.AdditionalData[:], clientIv, seqNum)
+	if err != nil {
+		return nil, err
+	}
 	if dataPacket.packetType != packetType {
 		return nil, errors.New("packetType mismatch")
 	}
-	dataPacket.context = header.Context
+	dataPacket.context = legacyHeader.Context
+
+	if legacyHeader.MinorVersion >= minorVersionV2 {
+		dataPacket.fragment, err = decompress(dataPacket.fragment)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	if packetType == PacketTypeHandshake {
 		s.clientSeqNumHandshake = s.clientSeqNumHandshake + 1
 	} else {
 		s.clientSeqNumApplication = s.clientSeqNumApplication + 1
 	}
-
-	if header.MinorVersion >= minorVersionV2 {
-		uncompressedData, err := decompress(dataPacket.fragment)
-		if err != nil {
-			return nil, err
-		}
-		dataPacket.fragment = uncompressedData
-	}
-
 	return dataPacket, nil
 }
 
