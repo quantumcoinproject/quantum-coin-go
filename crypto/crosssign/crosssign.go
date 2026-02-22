@@ -20,6 +20,10 @@ import (
 	"github.com/status-im/keycard-go/hexutils"
 )
 
+/*
+	CrossSign involves signing a message with both hybrid post quantum algorithms andd classical Ethereum's algorithm. Verify needs to succeed on both.
+*/
+
 const (
 	ERC20AddressLength             = 20
 	GenesisMessageTemplate         = "I AGREE TO BECOME A GENESIS VALIDATOR FOR MAINNET. MY ETH ADDRESS IS [ETH_ADDRESS]. MY CORRESPONDING DEPOSITOR QUANTUM ADDRESS IS [DEPOSITOR_ADDRESS] AND VALIDATOR QUANTUM ADDRESS IS [VALIDATOR_ADDRESS]. VALIDATOR AMOUNT IS [AMOUNT] DOGEP."
