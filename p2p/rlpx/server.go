@@ -1,3 +1,7 @@
+// LEGACY (pre-KemSwitchTime): This file implements the v1 RLPx server handshake
+// and record layer. It is only used when time.Now() < defaults.KemSwitchTime.
+// After KemSwitchTime all new connections use ServerV2 (serverv2.go) instead.
+// This file will be removed once all nodes have passed KemSwitchTime.
 package rlpx
 
 import (
@@ -29,6 +33,8 @@ type ServerVerifyMessage struct {
 	Rest         []rlp.RawValue `rlp:"tail"`
 }
 
+// Server is the legacy (v1) RLPx server, used only before KemSwitchTime.
+// After KemSwitchTime, ServerV2 replaces this entirely. See serverv2.go.
 type Server struct {
 	ephemeralKemPrivateKey  *keyestablishmentalgorithm.PrivateKey
 	kem                     *keyestablishmentalgorithm.KeyEncapsulation

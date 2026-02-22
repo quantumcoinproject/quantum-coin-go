@@ -1,3 +1,7 @@
+// LEGACY (pre-KemSwitchTime): This file implements the v1 RLPx client handshake
+// and record layer. It is only used when time.Now() < defaults.KemSwitchTime.
+// After KemSwitchTime all new connections use ClientV2 (clientv2.go) instead.
+// This file will be removed once all nodes have passed KemSwitchTime.
 package rlpx
 
 import (
@@ -31,6 +35,8 @@ type ClientVerifyMessage struct {
 	Rest         []rlp.RawValue `rlp:"tail"`
 }
 
+// Client is the legacy (v1) RLPx client, used only before KemSwitchTime.
+// After KemSwitchTime, ClientV2 replaces this entirely. See clientv2.go.
 type Client struct {
 	ephemeralKemPrivateKey  *keyestablishmentalgorithm.PrivateKey
 	kem                     *keyestablishmentalgorithm.KeyEncapsulation
