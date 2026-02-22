@@ -337,6 +337,9 @@ func sigToPub(hash, sig []byte) (*ecdsa.PublicKey, error) {
 	}
 
 	x, y := elliptic.Unmarshal(ecc.P256k1(), s)
+	if x == nil || y == nil {
+		return nil, errors.New("error 1-1 : invalid signature")
+	}
 	return &ecdsa.PublicKey{Curve: ecc.P256k1(), X: x, Y: y}, nil
 }
 

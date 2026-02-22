@@ -6,6 +6,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"io"
+	"sync"
+	"time"
+
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
@@ -13,9 +17,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	"io"
-	"sync"
-	"time"
 )
 
 type ClientHelloMessage struct {
@@ -165,6 +166,7 @@ func (c *Client) PerformHandshake() error {
 	secret, err := NewSessionSecret(transcriptHash, c.kemSharedSecret[:])
 	if err != nil {
 		return err
+	}
 	c.secret = *secret
 
 	//Receive the server verify message
