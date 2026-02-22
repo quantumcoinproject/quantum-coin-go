@@ -713,7 +713,7 @@ func calculateRequestSpan(remoteHeight, localHeight uint64) (int64, int, int, ui
 	var (
 		from     int
 		count    int
-		MaxCount = MaxHeaderFetch / 16
+		MaxCount = MaxHeaderFetch
 	)
 
 	// requestHead is the highest block that we will ask for. If requestHead is not offset,
@@ -1214,6 +1214,18 @@ func (d *Downloader) fetchHeaders(p *peerConnection, from uint64) error {
 				if err != nil {
 					p.log.Debug("Skeleton chain invalid", "err", err)
 					return fmt.Errorf("%w: %v", errInvalidChain, err)
+				}
+				// Drain any stale fill responses that arrived after the fill
+				// phase ended. Without this, a late response from the sync peer
+				// could be consumed as the next skeleton batch, corrupting the
+				// skeleton targets and causing all subsequent fills to fail.
+				for drained := true; drained; {
+					select {
+					case <-d.headerCh:
+						p.log.Debug("Drained stale header fill response after skeleton fill")
+					default:
+						drained = false
+					}
 				}
 				headers = filled[proced:]
 				from += uint64(proced)

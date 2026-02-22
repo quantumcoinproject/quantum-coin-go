@@ -711,12 +711,15 @@ func (q *queue) DeliverHeaders(id string, headers []*types.Header, headerProcCh 
 	target := q.headerTaskPool[request.From].Hash()
 
 	accepted := len(headers) == MaxHeaderFetch
+	if !accepted {
+		logger.Debug("Header count mismatch", "have", len(headers), "want", MaxHeaderFetch, "from", request.From)
+	}
 	if accepted {
 		if headers[0].Number.Uint64() != request.From {
-			logger.Trace("First header broke chain ordering", "number", headers[0].Number, "hash", headers[0].Hash(), "expected", request.From)
+			logger.Debug("First header broke chain ordering", "number", headers[0].Number, "hash", headers[0].Hash(), "expected", request.From)
 			accepted = false
 		} else if headers[len(headers)-1].Hash() != target {
-			logger.Trace("Last header broke skeleton structure ", "number", headers[len(headers)-1].Number, "hash", headers[len(headers)-1].Hash(), "expected", target)
+			logger.Debug("Last header broke skeleton structure", "number", headers[len(headers)-1].Number, "hash", headers[len(headers)-1].Hash(), "expected", target)
 			accepted = false
 		}
 	}
