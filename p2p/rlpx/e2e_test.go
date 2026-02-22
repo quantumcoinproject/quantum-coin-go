@@ -19,23 +19,17 @@ func useV2() bool {
 func runWithKemSwitchTimeMatrix(t *testing.T, testFn func(t *testing.T)) {
 	t.Run("V2_KemSwitchTimeInPast", func(t *testing.T) {
 		orig := defaults.DefaultConfig.KemSwitchTime
-		origHkdf := defaults.DefaultConfig.HkdfLabelFixTime
 		defaults.DefaultConfig.KemSwitchTime = 0
-		defaults.DefaultConfig.HkdfLabelFixTime = 0
 		defer func() {
 			defaults.DefaultConfig.KemSwitchTime = orig
-			defaults.DefaultConfig.HkdfLabelFixTime = origHkdf
 		}()
 		testFn(t)
 	})
 	t.Run("V1_KemSwitchTimeInFuture", func(t *testing.T) {
 		orig := defaults.DefaultConfig.KemSwitchTime
-		origHkdf := defaults.DefaultConfig.HkdfLabelFixTime
 		defaults.DefaultConfig.KemSwitchTime = time.Now().UTC().Unix() + 86400*365*10
-		defaults.DefaultConfig.HkdfLabelFixTime = time.Now().UTC().Unix() + 86400*365*10
 		defer func() {
 			defaults.DefaultConfig.KemSwitchTime = orig
-			defaults.DefaultConfig.HkdfLabelFixTime = origHkdf
 		}()
 		testFn(t)
 	})

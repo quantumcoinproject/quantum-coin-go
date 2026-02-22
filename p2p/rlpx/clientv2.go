@@ -355,10 +355,11 @@ func (c *ClientV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 	header.RecordLength = encryptedLen
 	header.AdditionalData = BuildAADV2(minorVersionV2, encryptedLen)
 
-	encryptedData, err := Encrypt(cipher, payloadData, header.AdditionalData[:], clientIv, seqNum)
+	nonce, err := CalculateNonceV2(seqNum, clientIv)
 	if err != nil {
 		return err
 	}
+	encryptedData := cipher.Seal(nil, nonce, payloadData, header.AdditionalData[:])
 
 	headerPacket, err := c.serializer.Serialize(header)
 	if err != nil {
@@ -429,7 +430,11 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		return nil, errors.New("prefix size less")
 	}
 
-	decryptedPayloadBytes, err := Decrypt(cipher, encryptedData, reconstructedAAD[:], serverIv, seqNum)
+	nonce, err := CalculateNonceV2(seqNum, serverIv)
+	if err != nil {
+		return nil, err
+	}
+	decryptedPayloadBytes, err := cipher.Open(nil, nonce, encryptedData, reconstructedAAD[:])
 	if err != nil {
 		return nil, err
 	}

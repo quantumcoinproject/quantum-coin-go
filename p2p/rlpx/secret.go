@@ -291,7 +291,7 @@ func HkdfExpandLabel(secret []byte, label string, hashVal []byte, outputLength i
 }
 
 func hkdfEncodeLabel(label string, hashVal []byte, outputLength int) []byte {
-	if time.Now().UTC().Unix() >= defaults.DefaultConfig.HkdfLabelFixTime {
+	if time.Now().UTC().Unix() >= defaults.DefaultConfig.KemSwitchTime {
 		return hkdfEncodeLabelFixed(label, hashVal, outputLength)
 	}
 	return hkdfEncodeLabelLegacy(label, hashVal, outputLength)
@@ -323,7 +323,7 @@ func hkdfEncodeLabelLegacy(label string, hashVal []byte, outputLength int) []byt
 	hkdfLabel[0] = byte(outputLength >> 8)
 	hkdfLabel[1] = byte(outputLength)
 	hkdfLabel[2] = byte(fullLabelLen)
-	copy(hkdfLabel[3:3+fullLabelLen], []byte(label))
+	copy(hkdfLabel[3:3+fullLabelLen], []byte(fullLabel))
 	hkdfLabel[3+fullLabelLen] = byte(hashLen)
 	copy(hkdfLabel[3+fullLabelLen+1:], hashVal)
 

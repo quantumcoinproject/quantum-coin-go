@@ -103,6 +103,26 @@ func CalculateNonce(recordCount uint64, input []byte) ([]byte, error) {
 	return output, nil
 }
 
+// CalculateNonceV2 implements the V2-specific nonce calculation (XORing 64-bit counter).
+// It ensures the IV is exactly 12 bytes and handles the XOR operation explicitly.
+func CalculateNonceV2(recordCount uint64, iv []byte) ([]byte, error) {
+	if len(iv) != ivSize {
+		return nil, errors.New("invalid IV length for V2 nonce")
+	}
+	if recordCount == ^uint64(0) {
+		return nil, errors.New("recordCount reached maximum value, nonce reuse imminent")
+	}
+	nonce := make([]byte, ivSize)
+	copy(nonce, iv)
+
+	// XOR the 8-byte recordCount into the last 8 bytes of the 12-byte IV.
+	// This follows the TLS 1.3 nonce construction (RFC 8446 Section 5.3).
+	for i := 0; i < 8; i++ {
+		nonce[ivSize-1-i] ^= byte(recordCount >> (i * 8))
+	}
+	return nonce, nil
+}
+
 func Encrypt(cipher1 cipher.AEAD, fragment []byte, additionalData []byte, iv []byte, seqNum uint64) (encrypted []byte, err error) {
 	nonce, err := CalculateNonce(seqNum, iv)
 	if err != nil {

@@ -113,7 +113,6 @@ type Config struct {
 	TxnStartAllowedTime     int64
 	ConversionTxnLastTime   int64
 	KemSwitchTime           int64
-	HkdfLabelFixTime        int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -215,7 +214,6 @@ var MainnetConfig = &Config{
 	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
 	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
 	KemSwitchTime:           int64(1787270400), //Aug 21, 2026 12:00:00 AM UTC
-	HkdfLabelFixTime:        int64(1787270400), //Aug 21, 2026 12:00:00 AM UTC
 }
 
 var DevnetConfig = &Config{
@@ -227,7 +225,6 @@ var DevnetConfig = &Config{
 	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
 	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
 	KemSwitchTime:           int64(1787270400), //Aug 21, 2026 12:00:00 AM UTC
-	HkdfLabelFixTime:        int64(1787270400), //Aug 21, 2026 12:00:00 AM UTC
 }
 
 var DefaultConfig = MainnetConfig
