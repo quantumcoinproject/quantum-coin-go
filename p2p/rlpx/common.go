@@ -30,9 +30,16 @@ const (
 
 	padLen = 0 // legacy format padding length
 
-	maxRecordLength     = 96 * 1024 * 1024  // 96 MB (legacy)
-	maxRecordLengthV2   = 16 * 1024 * 1024  // 16 MB
-	maxDecompressedSize = 128 * 1024 * 1024 // 128 MB
+	maxRecordLength       = 96 * 1024 * 1024  // 96 MB (legacy)
+	maxRecordLengthV2     = 64 * 1024 * 1024  // 64 MB (max application record on wire)
+	maxDecompressedSize   = 128 * 1024 * 1024 // 128 MB (legacy decompression limit)
+	maxDecompressedSizeV2 = 96 * 1024 * 1024  // 96 MB (v2 decompression limit, same as legacy record max)
+
+	// maxHandshakeRecordLengthV2 caps the record size for V2 handshake messages.
+	// The largest handshake record is a Verify message (~4.2 KB with current PQC
+	// signature sizes). 16 KB provides ~4x safety margin while preventing a
+	// remote peer from forcing large allocations before AEAD authentication.
+	maxHandshakeRecordLengthV2 = 16 * 1024 // 16 KB
 )
 
 type PacketType byte
@@ -240,28 +247,36 @@ func compress(data []byte) ([]byte, error) {
 	return buff.Bytes(), nil
 }
 
-func decompress(compressedData []byte) ([]byte, error) {
+func decompressWithLimit(compressedData []byte, maxSize int) ([]byte, error) {
 	gzReader, err := gzip.NewReader(bytes.NewReader(compressedData))
 	if err != nil {
 		return nil, err
 	}
 	defer gzReader.Close()
 
-	limitedReader := io.LimitReader(gzReader, maxDecompressedSize+1)
+	limitedReader := io.LimitReader(gzReader, int64(maxSize)+1)
 	decompressedData, err := io.ReadAll(limitedReader)
 	if err != nil {
 		return nil, err
 	}
-	if len(decompressedData) > maxDecompressedSize {
+	if len(decompressedData) > maxSize {
 		return nil, errors.New("decompressed data exceeds maximum allowed size")
 	}
 
 	return decompressedData, nil
 }
 
+// decompress is used by legacy (V1) read paths only.
+func decompress(compressedData []byte) ([]byte, error) {
+	return decompressWithLimit(compressedData, maxDecompressedSize)
+}
+
+// maybeDecompress is used by V2 read paths. It detects gzip-compressed
+// fragments (written by the V2 write path) via the gzip magic bytes and
+// decompresses them up to maxDecompressedSizeV2.
 func maybeDecompress(data []byte) ([]byte, error) {
 	if len(data) >= 3 && data[0] == 0x1f && data[1] == 0x8b && data[2] == 0x08 {
-		return decompress(data)
+		return decompressWithLimit(data, maxDecompressedSizeV2)
 	}
 	return data, nil
 }
@@ -303,4 +318,12 @@ func zeroBytes(b []byte) {
 	for i := range b {
 		b[i] = 0
 	}
+}
+
+func isAllZeros(b []byte) bool {
+	var acc byte
+	for _, v := range b {
+		acc |= v
+	}
+	return acc == 0
 }
