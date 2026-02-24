@@ -247,53 +247,6 @@ func GetConnectionContext(from string) (*ConnectionContext, error) {
 	}, nil
 }
 
-func sendVia(connectionContext *ConnectionContext, to string, quantity string, nonce uint64) (string, uint64, error) {
-	if connectionContext == nil {
-		return "", 0, errors.New("nil")
-	}
-	fromAddress := common.HexToAddress(connectionContext.From)
-	toAddress := common.HexToAddress(to)
-
-	if nonce == 0 {
-		nonceTmp, err := connectionContext.Client.PendingNonceAt(context.Background(), fromAddress)
-		if err != nil {
-			return "", 0, err
-		}
-		nonce = nonceTmp
-	}
-
-	chainID, err := connectionContext.Client.NetworkID(context.Background())
-	if err != nil {
-		return "", 0, err
-	}
-	gasLimit := uint64(21000)
-	gasPrice, err := connectionContext.Client.SuggestGasPrice(context.Background())
-	if err != nil {
-		return "", 0, err
-	}
-
-	v, err := ParseBigFloat(quantity)
-	if err != nil {
-		return "", 0, err
-	}
-
-	value := etherToWeiFloat(v)
-
-	var data []byte
-	tx := types.NewTransaction(nonce, toAddress, value, gasLimit, gasPrice, data)
-	signedTx, err := types.SignTx(tx, types.NewLondonSigner(chainID), connectionContext.Key.PrivateKey)
-	if err != nil {
-		return "", 0, err
-	}
-	err = connectionContext.Client.SendTransaction(context.Background(), signedTx)
-	if err != nil {
-		return "", 0, err
-	}
-
-	fmt.Println("Sent Transaction", "from", fromAddress, "to", toAddress, "quantity", quantity, "Transaction", signedTx.Hash().Hex())
-	return signedTx.Hash().Hex(), nonce, nil
-}
-
 func send(from string, to string, quantity string, remarks string) (string, error) {
 	keyFile, err := findKeyFile(from)
 	if err != nil {
@@ -380,7 +333,6 @@ func send(from string, to string, quantity string, remarks string) (string, erro
 
 	var data []byte
 
-	txType := os.Getenv("TX_TYPE")
 	var tx *types.Transaction
 	var remarkBytes []byte
 	if len(remarks) > 0 {
@@ -538,6 +490,7 @@ func convertCoins(ethAddress string, ethSignature string, key *signaturealgorith
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = DEFAULT_GAS_LIMIT
+
 
 	contract, err := conversion.NewConversion(contractAddress, client)
 	if err != nil {
