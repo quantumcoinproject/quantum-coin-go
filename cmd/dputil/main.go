@@ -44,10 +44,10 @@ func printHelp() {
 	fmt.Println("      You can also set TX_TYPE environment variable (values 0 or 1) to control the transaction type.")
 	fmt.Println("")
 	fmt.Println("      SIGN_MODE selects the hybrid post-quantum signature algorithm (Ed25519 + NIST PQC):")
-	fmt.Println("           1 = Dilithium + SPHINCS+ (compact)")
-	fmt.Println("           3 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) compact")
-	fmt.Println("           4 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) full, higher gas fee")
-	fmt.Println("           5 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) level 5 (maximum security), higher gas fee")
+	fmt.Println("           1 = Dilithium + SPHINCS+  + ed25519(compact)")
+	fmt.Println("           3 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) + ed25519 compact")
+	fmt.Println("           4 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) + ed25519 full, higher gas fee")
+	fmt.Println("           5 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) + ed25519 level 5 (maximum security), higher gas fee")
 	fmt.Println("           For SIGN_MODE 5, create keys of type SigAlgHybridMlDsaEddsaSlhDsa5 (keytype 5), e.g.:")
 	fmt.Println("             dp account new --keytype 5")
 	fmt.Println("")
@@ -201,23 +201,31 @@ func main() {
 	signMode := os.Getenv("SIGN_MODE")
 	if signMode == "5" {
 		defaults.SetCryptoSigningMode(5)
+		fmt.Println("Signing Mode 5")
 	} else if signMode == "4" {
 		defaults.SetCryptoSigningMode(4)
+		fmt.Println("Signing Mode 4")
 	} else if signMode == "3" {
 		defaults.SetCryptoSigningMode(3)
+		fmt.Println("Signing Mode 3")
 	} else if signMode == "2" {
 		defaults.SetCryptoSigningMode(2)
+		fmt.Println("Signing Mode 2")
 	} else if signMode == "1" {
 		defaults.SetCryptoSigningMode(1)
+		fmt.Println("Signing Mode 1")
 	} else if len(signMode) > 0 {
 		fmt.Println("Unknown value for environment variable SIGN_MODE")
 		return
+	} else {
+		defaults.SetCryptoSigningMode(3)
+		fmt.Println("Signing Mode 3")
 	}
 
 	if txType == "" || txType == "0" {
-
+		fmt.Println("Tx Type: DefaultFee")
 	} else if txType == "1" {
-
+		fmt.Println("Tx Type: DynamicFee")
 	} else {
 		fmt.Println("Unknown txType", txType)
 		return

@@ -29,6 +29,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/event"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
@@ -55,7 +56,16 @@ type TransactOpts struct {
 	Value          *big.Int // Funds to transfer along the transaction (nil = 0 = no funds)
 	GasPrice       *big.Int // Gas price to use for the transaction execution (nil = gas price oracle)
 	GasLimit       uint64   // Gas limit to set for the transaction execution (0 = estimate)
-	SigningContext byte     //crypto.SigningContext
+	SigningContext byte     // crypto.SigningContext for dynamic-fee transactions
+
+	// ChainID is the chain identifier used when constructing dynamic-fee transactions.
+	// It is optional for default-fee transactions, but required when TxType == 1.
+	ChainID *big.Int
+
+	// TxType selects the transaction type:
+	//   0 = default-fee transaction (legacy style)
+	//   1 = dynamic-fee transaction (uses SigningContext and ChainID)
+	TxType byte
 
 	Context context.Context // Network context to support cancellation and timeouts (nil = no timeout)
 
@@ -287,9 +297,26 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		toAddress = &c.address
 	}
 
-	baseTx := types.NewDefaultFeeTransactionSimple(nonce, toAddress, value, gasLimit, input)
-
-	rawTx = types.NewTx(baseTx)
+	// Select transaction type based on opts.TxType.
+	if opts.TxType == types.DynamicFeeTxType {
+		// Dynamic-fee transaction requires a valid ChainID.
+		if opts.ChainID == nil {
+			return nil, errors.New("TxType 1 (dynamic-fee) requires ChainID")
+		}
+		rawTx = types.NewDynamicFeeTransaction(
+			opts.ChainID,
+			nonce,
+			toAddress,
+			value,
+			gasLimit,
+			cryptobase.GetSigningContext(),
+			input,
+			nil,
+		)
+	} else {
+		baseTx := types.NewDefaultFeeTransactionSimple(nonce, toAddress, value, gasLimit, input)
+		rawTx = types.NewTx(baseTx)
+	}
 	if opts.Signer == nil {
 		return nil, errors.New("no signer to authorize the transaction with")
 	}
