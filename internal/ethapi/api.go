@@ -18,12 +18,14 @@ package ethapi
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"strings"
 	"time"
 
+	"github.com/quantumcoinproject/circl/sign/hybridparser"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
 	"github.com/davecgh/go-spew/spew"
@@ -1503,6 +1505,51 @@ func (s *PublicTransactionPoolAPI) GetRawTransactionByHash(ctx context.Context, 
 	return tx.MarshalBinary()
 }
 
+// GetTransactionSignature returns the transaction hash, public key hex, signature hex, and parsed hybrid
+// signature for the given transaction hash. The message used for parsing is the signing hash of the transaction.
+func (s *PublicTransactionPoolAPI) GetTransactionSignature(ctx context.Context, hash common.Hash) (*TransactionSignatureResult, error) {
+	tx, _, _, _, err := s.b.GetTransaction(ctx, hash)
+	if err != nil {
+		return nil, err
+	}
+	if tx == nil {
+		if tx = s.b.GetPoolTransaction(hash); tx == nil {
+			return nil, nil
+		}
+	}
+
+	signingHash, err := s.signer.Hash(tx)
+	if err != nil {
+		return nil, err
+	}
+	message := signingHash[:]
+
+	_, r, sig := tx.RawSignatureValues()
+	if r == nil || sig == nil {
+		return nil, errors.New("transaction has no signature")
+	}
+	signature := sig.Bytes()
+	publicKey := r.Bytes()
+
+	parsed, err := hybridparser.ParseHybrid(signature, publicKey, message)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TransactionSignatureResult{
+		TxHash:          hash,
+		PublicKeyHex:    hex.EncodeToString(publicKey),
+		SignatureHex:    hex.EncodeToString(signature),
+		HybridSignature: &HybridSignatureRPC{
+			SchemeID:   parsed.SchemeID,
+			Message:    hex.EncodeToString(message),
+			PublicKeys: parsed.PublicKeys,
+			Signatures: parsed.Signatures,
+			Nonce:      parsed.Nonce,
+		},
+	}, nil
+}
+
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (map[string]interface{}, error) {
 	tx, blockHash, blockNumber, index, err := s.b.GetTransaction(ctx, hash)
@@ -1691,6 +1738,23 @@ func (s *PublicTransactionPoolAPI) Sign(addr common.Address, data hexutil.Bytes)
 type SignTransactionResult struct {
 	Raw hexutil.Bytes      `json:"raw"`
 	Tx  *types.Transaction `json:"tx"`
+}
+
+// TransactionSignatureResult is the result of eth_getTransactionSignature.
+type TransactionSignatureResult struct {
+	TxHash           common.Hash         `json:"transactionHash"`
+	PublicKeyHex     string              `json:"publicKeyHex"`
+	SignatureHex     string              `json:"signatureHex"`
+	HybridSignature  *HybridSignatureRPC  `json:"hybridSignature"`
+}
+
+// HybridSignatureRPC mirrors hybridparser.HybridSignature for JSON-RPC.
+type HybridSignatureRPC struct {
+	SchemeID   byte              `json:"schemeId"`
+	Message    string            `json:"message"`
+	PublicKeys map[string]string `json:"publicKeys"`
+	Signatures map[string]string `json:"signatures"`
+	Nonce      string            `json:"nonce,omitempty"`
 }
 
 // SignTransaction will sign the given transaction with the from account.
