@@ -26,6 +26,7 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
@@ -147,7 +148,8 @@ func NewKeyStoreTransactorWithChainID(keystore *keystore.KeyStore, account accou
 	}
 	signer := types.LatestSignerForChainID(chainID)
 	return &TransactOpts{
-		From: account.Address,
+		From:    account.Address,
+		ChainID: chainID,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != account.Address {
 				return nil, ErrNotAuthorized
@@ -184,7 +186,8 @@ func NewKeyedTransactorWithChainID(key *signaturealgorithm.PrivateKey, chainID *
 	}
 	signer := types.LatestSignerForChainID(chainID)
 	return &TransactOpts{
-		From: keyAddr,
+		From:    keyAddr,
+		ChainID: chainID,
 		Signer: func(address common.Address, tx *types.Transaction) (*types.Transaction, error) {
 			if address != keyAddr {
 				return nil, ErrNotAuthorized
@@ -201,6 +204,6 @@ func NewKeyedTransactorWithChainID(key *signaturealgorithm.PrivateKey, chainID *
 			return tx.WithSignature(signer, signature)
 		},
 		Context:  context.Background(),
-		GasPrice: big.NewInt(100000),
+		GasPrice: big.NewInt(defaults.DEFAULT_PRICE),
 	}, nil
 }

@@ -40,6 +40,25 @@ func printHelp() {
 	fmt.Println(" dputil ")
 	fmt.Println("      Set a default environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("      You can also set SIGN_MODE environment variable (values 1 to 5) to control the signing mode.")
+	fmt.Println("      You can also set TX_TYPE environment variable (values 0 or 1) to control the transaction type.")
+	fmt.Println("")
+	fmt.Println("      SIGN_MODE selects the hybrid post-quantum signature algorithm (Ed25519 + NIST PQC):")
+	fmt.Println("           1 = Dilithium + SPHINCS+  + ed25519(compact)")
+	fmt.Println("           3 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) + ed25519 compact")
+	fmt.Println("           4 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) + ed25519 full, higher gas fee")
+	fmt.Println("           5 = ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) + ed25519 level 5 (maximum security), higher gas fee")
+	fmt.Println("           For SIGN_MODE 5, create keys of type SigAlgHybridMlDsaEddsaSlhDsa5 (keytype 5), e.g.:")
+	fmt.Println("             dp account new --keytype 5")
+	fmt.Println("")
+	fmt.Println("      TX_TYPE selects the transaction encoding and fee model:")
+	fmt.Println("           0 or unset = Default-fee transaction (fixed gas tier, GAS_TIER_DEFAULT)")
+	fmt.Println("           1 = Dynamic-fee transaction (EIP-1559 style: max fee, tip, signing context)")
+	fmt.Println("")
+	fmt.Println("      Supported SIGN_MODEs per TX_TYPE:")
+	fmt.Println("           TX_TYPE 0 (Default-fee):  1, 3")
+	fmt.Println("           TX_TYPE 1 (Dynamic-fee): 1, 3, 4, 5")
+	fmt.Println("")
 	fmt.Println("dputil genesis-sign ETH_ADDRESS DEPOSITOR_QUANTUM_ADDRESS VALIDATOR_QUANTUM_ADDRESS AMOUNT")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_KEY_FILE_DIR, DP_DEPOSITOR_ACC_PWD, DP_VALIDATOR_ACC_PWD")
@@ -171,6 +190,7 @@ func printHelp() {
 
 var rawURL string
 var wg sync.WaitGroup
+var txType = os.Getenv("TX_TYPE")
 
 func main() {
 	if len(os.Args) < 2 {
@@ -181,16 +201,33 @@ func main() {
 	signMode := os.Getenv("SIGN_MODE")
 	if signMode == "5" {
 		defaults.SetCryptoSigningMode(5)
+		fmt.Println("Signing Mode 5")
 	} else if signMode == "4" {
 		defaults.SetCryptoSigningMode(4)
+		fmt.Println("Signing Mode 4")
 	} else if signMode == "3" {
 		defaults.SetCryptoSigningMode(3)
+		fmt.Println("Signing Mode 3")
 	} else if signMode == "2" {
 		defaults.SetCryptoSigningMode(2)
+		fmt.Println("Signing Mode 2")
 	} else if signMode == "1" {
 		defaults.SetCryptoSigningMode(1)
+		fmt.Println("Signing Mode 1")
 	} else if len(signMode) > 0 {
 		fmt.Println("Unknown value for environment variable SIGN_MODE")
+		return
+	} else {
+		defaults.SetCryptoSigningMode(3)
+		fmt.Println("Signing Mode 3")
+	}
+
+	if txType == "" || txType == "0" {
+		fmt.Println("Tx Type: DefaultFee")
+	} else if txType == "1" {
+		fmt.Println("Tx Type: DynamicFee")
+	} else {
+		fmt.Println("Unknown txType", txType)
 		return
 	}
 

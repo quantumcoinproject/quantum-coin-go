@@ -247,53 +247,6 @@ func GetConnectionContext(from string) (*ConnectionContext, error) {
 	}, nil
 }
 
-func sendVia(connectionContext *ConnectionContext, to string, quantity string, nonce uint64) (string, uint64, error) {
-	if connectionContext == nil {
-		return "", 0, errors.New("nil")
-	}
-	fromAddress := common.HexToAddress(connectionContext.From)
-	toAddress := common.HexToAddress(to)
-
-	if nonce == 0 {
-		nonceTmp, err := connectionContext.Client.PendingNonceAt(context.Background(), fromAddress)
-		if err != nil {
-			return "", 0, err
-		}
-		nonce = nonceTmp
-	}
-
-	chainID, err := connectionContext.Client.NetworkID(context.Background())
-	if err != nil {
-		return "", 0, err
-	}
-	gasLimit := uint64(21000)
-	gasPrice, err := connectionContext.Client.SuggestGasPrice(context.Background())
-	if err != nil {
-		return "", 0, err
-	}
-
-	v, err := ParseBigFloat(quantity)
-	if err != nil {
-		return "", 0, err
-	}
-
-	value := etherToWeiFloat(v)
-
-	var data []byte
-	tx := types.NewTransaction(nonce, toAddress, value, gasLimit, gasPrice, data)
-	signedTx, err := types.SignTx(tx, types.NewLondonSigner(chainID), connectionContext.Key.PrivateKey)
-	if err != nil {
-		return "", 0, err
-	}
-	err = connectionContext.Client.SendTransaction(context.Background(), signedTx)
-	if err != nil {
-		return "", 0, err
-	}
-
-	fmt.Println("Sent Transaction", "from", fromAddress, "to", toAddress, "quantity", quantity, "Transaction", signedTx.Hash().Hex())
-	return signedTx.Hash().Hex(), nonce, nil
-}
-
 func send(from string, to string, quantity string, remarks string) (string, error) {
 	keyFile, err := findKeyFile(from)
 	if err != nil {
@@ -380,7 +333,6 @@ func send(from string, to string, quantity string, remarks string) (string, erro
 
 	var data []byte
 
-	txType := os.Getenv("TX_TYPE")
 	var tx *types.Transaction
 	var remarkBytes []byte
 	if len(remarks) > 0 {
@@ -538,6 +490,11 @@ func convertCoins(ethAddress string, ethSignature string, key *signaturealgorith
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = DEFAULT_GAS_LIMIT
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
+
 
 	contract, err := conversion.NewConversion(contractAddress, client)
 	if err != nil {
@@ -593,6 +550,10 @@ func requestConvertCoins(ethAddress string, ethSignature string, key *signaturea
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = DEFAULT_GAS_LIMIT
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	method := conversion.GetContract_Method_requestConversion()
 	abiData, err := conversion.GetConversionContract_ABI()
@@ -690,6 +651,10 @@ func newDeposit(validatorAddress string, depositAmount string, key *signaturealg
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(250000)
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	val, _ := ParseBigFloat(depositAmount)
 	txnOpts.Value = etherToWeiFloat(val)
@@ -764,6 +729,10 @@ func initiateWithdrawal(key *signaturealgorithm.PrivateKey) error {
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = DEFAULT_GAS_LIMIT
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	val, _ := ParseBigFloat("0")
 	txnOpts.Value = etherToWeiFloat(val)
@@ -845,6 +814,11 @@ func completeWithdrawal(key *signaturealgorithm.PrivateKey) error {
 	txnOpts.GasLimit, err = getGasLimit(DEFAULT_GAS_LIMIT)
 	if err != nil {
 		return err
+	}
+
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
 	}
 
 	val, _ := ParseBigFloat("0")
@@ -1254,6 +1228,11 @@ func initiatePartialWithdrawal(key *signaturealgorithm.PrivateKey, amount string
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(100000)
 
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
+
 	val, _ := ParseBigFloat("0")
 	txnOpts.Value = etherToWeiFloat(val)
 
@@ -1317,6 +1296,11 @@ func completePartialWithdrawal(key *signaturealgorithm.PrivateKey) error {
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(50000)
 
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
+
 	val, _ := ParseBigFloat("0")
 	txnOpts.Value = etherToWeiFloat(val)
 
@@ -1373,6 +1357,11 @@ func increaseDeposit(key *signaturealgorithm.PrivateKey, additionalAmount string
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(65000)
 
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
+
 	val, _ := ParseBigFloat(additionalAmount)
 	txnOpts.Value = etherToWeiFloat(val)
 
@@ -1427,6 +1416,11 @@ func changeValidator(key *signaturealgorithm.PrivateKey, newValidatorAddress com
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(175000)
+
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	val, _ := ParseBigFloat("0")
 	txnOpts.Value = etherToWeiFloat(val)
@@ -1533,6 +1527,11 @@ func pauseValidation(key *signaturealgorithm.PrivateKey) error {
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(100000)
 
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
+
 	val, _ := ParseBigFloat("0")
 	txnOpts.Value = etherToWeiFloat(val)
 
@@ -1603,6 +1602,10 @@ func resumeValidation(key *signaturealgorithm.PrivateKey) error {
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(100000)
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	val, _ := ParseBigFloat("0")
 	txnOpts.Value = etherToWeiFloat(val)
@@ -1679,6 +1682,10 @@ func transferTokens(contractAddr string, toAddr string, tokenTransferAmount *big
 		fmt.Println("gas limit error", err)
 		return err
 	}
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	txnOpts.Value = big.NewInt(0)
 
@@ -1735,6 +1742,10 @@ func createToken(tokenName string, tokenSymbol string, tokenTotalSupply *big.Int
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(1500000)
 	txnOpts.Value = big.NewInt(0)
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	var tx *types.Transaction
 	contractAddress, tx, _, err := tokenv2.DeployTokenv2(txnOpts, client, tokenName, tokenSymbol, tokenTotalSupply, tokenDecimals, fromAddress)
@@ -1910,6 +1921,10 @@ func multiTransferTokensInner(contractAddr common.Address, toAddressList []commo
 		txnOpts.GasLimit = minTokenGas
 	}
 	txnOpts.Value = big.NewInt(0)
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	ethConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("%s. Do you confirm above transfers with approximate transaction gas limit of %v?", progress, txnOpts.GasLimit))
 	if err != nil {
@@ -1975,6 +1990,10 @@ func createtokenconversioncontract(key *signaturealgorithm.PrivateKey) error {
 	if err != nil {
 		return err
 	}
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	txnOpts.Value = big.NewInt(0)
 
@@ -2027,6 +2046,10 @@ func submitBurnProof(contractAddr string, burnproof string, key *signaturealgori
 	txnOpts.Nonce = big.NewInt(int64(nonce))
 	txnOpts.GasLimit = uint64(1500000)
 	txnOpts.Value = big.NewInt(0)
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	var tx *types.Transaction
 	contract, err := tokenconversion.NewTokenconversion(contractAddress, client)
@@ -2144,6 +2167,10 @@ func renounceTokenOwnership(contractAddr string, key *signaturealgorithm.Private
 		return err
 	}
 	txnOpts.Value = big.NewInt(0)
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
 
 	var tx *types.Transaction
 	contract, err := tokenv2.NewTokenv2(contractAddress, client)
@@ -2215,6 +2242,10 @@ func tokenApprove(tokenAddress common.Address, spenderAddress common.Address, am
 	if err != nil {
 		fmt.Println("gas limit error", err)
 		return err
+	}
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
 	}
 
 	txnOpts.Value = big.NewInt(0)

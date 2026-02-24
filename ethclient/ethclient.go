@@ -355,10 +355,10 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 
 // TransactionSignatureResult is the result of eth_getTransactionSignature.
 type TransactionSignatureResult struct {
-	TxHash          common.Hash     `json:"transactionHash"`
-	PublicKeyHex    string          `json:"publicKeyHex"`
-	SignatureHex    string          `json:"signatureHex"`
+	TxHash          common.Hash      `json:"transactionHash"`
 	HybridSignature *HybridSignature `json:"hybridSignature"`
+	PublicKeyHex    string           `json:"publicKeyHex"`
+	SignatureHex    string           `json:"signatureHex"`
 }
 
 // HybridSignature mirrors the parsed hybrid signature for JSON-RPC.
