@@ -353,6 +353,37 @@ func (ec *Client) TransactionReceipt(ctx context.Context, txHash common.Hash) (*
 	return r, err
 }
 
+// TransactionSignatureResult is the result of eth_getTransactionSignature.
+type TransactionSignatureResult struct {
+	TxHash          common.Hash     `json:"transactionHash"`
+	PublicKeyHex    string          `json:"publicKeyHex"`
+	SignatureHex    string          `json:"signatureHex"`
+	HybridSignature *HybridSignature `json:"hybridSignature"`
+}
+
+// HybridSignature mirrors the parsed hybrid signature for JSON-RPC.
+type HybridSignature struct {
+	SchemeID   byte              `json:"schemeId"`
+	Message    string            `json:"message"`
+	PublicKeys map[string]string `json:"publicKeys"`
+	Signatures map[string]string `json:"signatures"`
+	Nonce      string            `json:"nonce,omitempty"`
+}
+
+// GetTransactionSignature returns the transaction signature details for the given hash,
+// including public key hex, signature hex, and the parsed hybrid signature (message = signing hash).
+func (ec *Client) GetTransactionSignature(ctx context.Context, hash common.Hash) (*TransactionSignatureResult, error) {
+	var result *TransactionSignatureResult
+	err := ec.c.CallContext(ctx, &result, "eth_getTransactionSignature", hash)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, ethereum.NotFound
+	}
+	return result, nil
+}
+
 type rpcProgress struct {
 	StartingBlock hexutil.Uint64
 	CurrentBlock  hexutil.Uint64
