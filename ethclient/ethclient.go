@@ -179,6 +179,15 @@ func (ec *Client) GetBlockConsensusData(ctx context.Context, number *big.Int) (*
 	return consensusData, err
 }
 
+func (ec *Client) GetBlockConsensusDataWithSignatures(ctx context.Context, number *big.Int) (*proofofstake.ConsensusData, error) {
+	var consensusData *proofofstake.ConsensusData
+	err := ec.c.CallContext(ctx, &consensusData, "proofofstake_getBlockConsensusDataWithSignatures", hexutil.EncodeBig(number))
+	if err == nil && consensusData == nil {
+		err = ethereum.NotFound
+	}
+	return consensusData, err
+}
+
 func (ec *Client) ListValidators(ctx context.Context, number *big.Int) ([]*proofofstake.ValidatorDetails, error) {
 	var validatorList []*proofofstake.ValidatorDetails
 	err := ec.c.CallContext(ctx, &validatorList, "proofofstake_listValidators", hexutil.EncodeBig(number))

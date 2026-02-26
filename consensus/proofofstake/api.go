@@ -22,6 +22,7 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/quantumcoinproject/circl/sign/hybridparser"
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -244,9 +245,10 @@ func (api *API) GetStakingDetails(blockNumberHex string) (*StakingData, error) {
 }
 
 type ExtendedConsensusPacket struct {
-	Signer     common.Address `json:"signer"     gencodec:"required"`
-	PacketType byte           `json:"packetType" gencodec:"required"`
-	Round      byte           `json:"round"      gencodec:"required"`
+	Signer     common.Address                `json:"signer"     gencodec:"required"`
+	PacketType byte                          `json:"packetType" gencodec:"required"`
+	Round      byte                          `json:"round"      gencodec:"required"`
+	Signature  *hybridparser.HybridSignature `json:"hybridSignature"      gencodec:"optional,omitempty"`
 }
 
 type Slashing struct {
@@ -406,6 +408,16 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 
 // GetBlockConsensusData retrieves proofofstake consensus data of the block.
 func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, error) {
+	return api.getBlockConsensusDataInternal(blockNumberHex, false)
+}
+
+// GetBlockConsensusDataWithSignatures retrieves proofofstake consensus data of the block along with signature information.
+func (api *API) GetBlockConsensusDataWithSignatures(blockNumberHex string) (*ConsensusData, error) {
+	return api.getBlockConsensusDataInternal(blockNumberHex, true)
+}
+
+// getBlockConsensusDataInternal retrieves proofofstake consensus data of the block.
+func (api *API) getBlockConsensusDataInternal(blockNumberHex string, includeSignatures bool) (*ConsensusData, error) {
 	var blockNumber uint64
 	var err error
 	if blockNumberHex == "" || len(blockNumberHex) == 0 {
@@ -460,10 +472,19 @@ func (api *API) GetBlockConsensusData(blockNumberHex string) (*ConsensusData, er
 		}
 
 		ePacket := ExtendedConsensusPacket{
-			PacketType: packet.ConsensusData[startIndex],
+			PacketType: packet.ConsensusData[startIndex-1],
 			Round:      round,
 		}
 		ePacket.Signer.CopyFrom(signer)
+
+		if includeSignatures {
+			ePacket.Signature, err = getHybridSig(&packet, blockNumber)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			blockAdditionalConsensusData.ConsensusPackets[i].Signature = make([]byte, 0)
+		}
 
 		consensusData.ExtendedConsensusPackets = append(consensusData.ExtendedConsensusPackets, &ePacket)
 	}

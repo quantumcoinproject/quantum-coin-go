@@ -10,16 +10,17 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"math/big"
+	"os"
+
 	"github.com/quantumcoinproject/circl/sign/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereds"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"io"
-	"io/ioutil"
-	"math/big"
-	"os"
 )
 
 type HybridedsfullSig struct {
@@ -340,6 +341,28 @@ func (s HybridedsfullSig) PublicKeyAndSignatureFromCombinedSignature(digestHash 
 	}
 
 	return signature, pubKey, nil
+}
+
+func (s HybridedsfullSig) PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash []byte, sig []byte, context []byte) (signature []byte, pubKey []byte, digest []byte, err error) {
+	signature, pubKey, err = common.ExtractTwoParts(sig)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if context[0] == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
+		newDigestHash := crypto.Keccak256(digestHash, context)
+		ok := s.Verify(pubKey, newDigestHash, sig)
+		if ok == false {
+			return nil, nil, nil, errors.New("Verify failed")
+		}
+		return signature, pubKey, newDigestHash, nil
+	} else {
+		ok := s.Verify(pubKey, digestHash, sig)
+		if ok == false {
+			return nil, nil, nil, errors.New("Verify failed")
+		}
+		return signature, pubKey, digestHash, nil
+	}
 }
 
 func (s HybridedsfullSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {

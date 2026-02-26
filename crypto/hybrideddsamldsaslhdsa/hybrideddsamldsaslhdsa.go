@@ -10,6 +10,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"math/big"
+	"os"
+
 	"github.com/quantumcoinproject/circl/sign/hybridedmldsaslhdsa"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -17,10 +22,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereddsamldsaslhdsa"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"io"
-	"io/ioutil"
-	"math/big"
-	"os"
 )
 
 type HybridEddsaMldsaSlhdsaSig struct {
@@ -327,6 +328,10 @@ func (s HybridEddsaMldsaSlhdsaSig) PublicKeyAndSignatureFromCombinedSignature(di
 	}
 
 	return signature, pubKey, nil
+}
+
+func (s HybridEddsaMldsaSlhdsaSig) PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash []byte, sig []byte, context []byte) (signature []byte, pubKey []byte, digest []byte, err error) {
+	return s.fullSigAlg.PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash, sig, context)
 }
 
 func (s HybridEddsaMldsaSlhdsaSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {

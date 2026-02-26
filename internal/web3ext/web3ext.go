@@ -86,6 +86,11 @@ web3._extend({
 			call: 'proofofstake_getBlockValidatorDetails',
 			params: 2
 		}),
+		new web3._extend.Method({
+			name: 'getBlockConsensusDataWithSignatures',
+			call: 'proofofstake_getBlockConsensusDataWithSignatures',
+			params: 1
+		}),
 	]
 });
 `
