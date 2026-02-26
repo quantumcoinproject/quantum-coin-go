@@ -4,6 +4,20 @@
 
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/bbbMPyzJTM)
 
+## Building
+
+Requires a Go toolchain compatible with the version declared in [`go.mod`](./go.mod).
+
+Build the node binary:
+
+```bash
+go build -o ./build ./...
+```
+
+### Running the Node
+
+Check the [documentation](https://quantumcoin.org/connecting-to-mainnet.html) portal for information on running the blockchain node client.
+
 ---
 
 ### TL;DR - Post-Quantum Cryptography Summary
@@ -146,30 +160,6 @@ Each command prints the full transaction signature result (including `hybridSign
 
 Using the above, auditors can obtain raw signature material (message, public keys, component signatures) and verify each component against FIPS 204, FIPS 205, and FIPS 186-5 (or the applicable pre-final drafts for schemes 1–2) with their chosen tooling.
 
-### Quick Verification (Locally)
-
-Run unit tests for the PQC/hybrid components:
-
-```bash
-go test ./crypto/...
-go test ./p2p/rlpx
-```
-
-### Prerequisites
-
-Requires a Go toolchain compatible with the version declared in [`go.mod`](./go.mod).
-
-#### Building
-
-Build the node binary:
-
-```bash
-go build -o ./build ./...
-```
-
-### Running the Node
-
-Check the [documentation](https://quantumcoin.org) portal for information on running the blockchain node client.
 
 ### Other Changes from Ethereum
 

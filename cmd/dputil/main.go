@@ -767,12 +767,17 @@ func getTxnSig() {
 	}
 	pretty, err := Prettify(string(out))
 	if err != nil {
-		fmt.Println(string(out))
+		pretty = string(out)
+	}
+
+	filename := strings.TrimPrefix(strings.ToLower(hash), "0x") + ".json"
+	if err := os.WriteFile(filename, []byte(pretty), 0644); err != nil {
+
+		fmt.Println("Error writing file", filename,err)
 		return
 	}
-	fmt.Println(pretty)
-	fmt.Println("")
-	fmt.Println("For detailed information about interpreting above output, please see help document at https://github.com/quantumcoinproject/circl/tree/main/sign/hybridparser")
+	fmt.Println("Wrote transaction signatures to file: ", filename)
+	fmt.Println("For detailed information about interpreting the output, please see help document at https://github.com/quantumcoinproject/circl/tree/main/sign/hybridparser")
 }
 
 func Prettify(str string) (string, error) {
