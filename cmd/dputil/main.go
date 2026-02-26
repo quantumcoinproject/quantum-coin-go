@@ -161,6 +161,9 @@ func printHelp() {
 	fmt.Println("dputil txn TXN_HASH")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil txnsig TXN_HASH")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil createtokenconversioncontract FROM_ADDRESS")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
@@ -249,6 +252,8 @@ func main() {
 		sendTxn()
 	} else if os.Args[1] == "txn" {
 		getTxn()
+	} else if os.Args[1] == "txnsig" {
+		getTxnSig()
 	} else if os.Args[1] == "genesis-sign" {
 		GenesisSign()
 	} else if os.Args[1] == "genesis-verify" {
@@ -702,7 +707,7 @@ func getPeerList() {
 }
 
 func getTxn() {
-	if len(os.Args) < 2 {
+	if len(os.Args) < 3 {
 		printHelp()
 		return
 	}
@@ -736,6 +741,38 @@ func getTxn() {
 	} else {
 		fmt.Println("receipt is nil")
 	}
+}
+
+func getTxnSig() {
+	if len(os.Args) < 3 {
+		printHelp()
+		return
+	}
+
+	hash := os.Args[2]
+
+	result, err := GetTransactionSignature(hash)
+	if err != nil {
+		fmt.Println("GetTransactionSignature Error", err)
+		return
+	}
+	if result == nil {
+		fmt.Println("transaction not found")
+		return
+	}
+	out, err := json.Marshal(result)
+	if err != nil {
+		fmt.Println("Marshal Error", err)
+		return
+	}
+	pretty, err := Prettify(string(out))
+	if err != nil {
+		fmt.Println(string(out))
+		return
+	}
+	fmt.Println(pretty)
+	fmt.Println("")
+	fmt.Println("For detailed information about interpreting above output, please see help document at https://github.com/quantumcoinproject/circl/tree/main/sign/hybridparser")
 }
 
 func Prettify(str string) (string, error) {

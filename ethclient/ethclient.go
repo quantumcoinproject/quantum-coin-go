@@ -372,11 +372,13 @@ type TransactionSignatureResult struct {
 
 // HybridSignature mirrors the parsed hybrid signature for JSON-RPC.
 type HybridSignature struct {
-	SchemeID   byte              `json:"schemeId"`
-	Message    string            `json:"message"`
-	PublicKeys map[string]string `json:"publicKeys"`
-	Signatures map[string]string `json:"signatures"`
-	Nonce      string            `json:"nonce,omitempty"`
+	SchemeID       byte              `json:"schemeId"`
+	SchemeName     string            `json:"schemeName"`
+	Context        string            `json:"context"`
+	AdditionalData map[string]string `json:"additionalData,omitempty"`
+	Message        string            `json:"message"`
+	PublicKeys     map[string]string `json:"publicKeys"`
+	Signatures     map[string]string `json:"signatures"`
 }
 
 // GetTransactionSignature returns the transaction signature details for the given hash,

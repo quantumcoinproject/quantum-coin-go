@@ -1541,11 +1541,13 @@ func (s *PublicTransactionPoolAPI) GetTransactionSignature(ctx context.Context, 
 		PublicKeyHex:    hex.EncodeToString(publicKey),
 		SignatureHex:    hex.EncodeToString(signature),
 		HybridSignature: &HybridSignatureRPC{
-			SchemeID:   parsed.SchemeID,
-			Message:    hex.EncodeToString(message),
-			PublicKeys: parsed.PublicKeys,
-			Signatures: parsed.Signatures,
-			Nonce:      parsed.Nonce,
+			SchemeID:       parsed.SchemeID,
+			SchemeName:     parsed.SchemeName,
+			Context:        parsed.Context,
+			AdditionalData: parsed.AdditionalData,
+			Message:        hex.EncodeToString(message),
+			PublicKeys:     parsed.PublicKeys,
+			Signatures:     parsed.Signatures,
 		},
 	}, nil
 }
@@ -1750,11 +1752,13 @@ type TransactionSignatureResult struct {
 
 // HybridSignatureRPC mirrors hybridparser.HybridSignature for JSON-RPC.
 type HybridSignatureRPC struct {
-	SchemeID   byte              `json:"schemeId"`
-	Message    string            `json:"message"`
-	PublicKeys map[string]string `json:"publicKeys"`
-	Signatures map[string]string `json:"signatures"`
-	Nonce      string            `json:"nonce,omitempty"`
+	SchemeID      byte              `json:"schemeId"`
+	SchemeName    string            `json:"schemeName"`
+	Context       string            `json:"context"`
+	AdditionalData map[string]string `json:"additionalData,omitempty"`
+	Message       string            `json:"message"`
+	PublicKeys    map[string]string `json:"publicKeys"`
+	Signatures    map[string]string `json:"signatures"`
 }
 
 // SignTransaction will sign the given transaction with the from account.
