@@ -6,14 +6,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"io"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"os"
+
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 )
 
 type MockSig struct {
@@ -310,6 +311,10 @@ func (s MockSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []byte, s
 	}
 
 	return signature, pubKey, nil
+}
+
+func (s MockSig) PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash []byte, sig []byte, context []byte) (signature []byte, pubKey []byte, digest []byte, err error) {
+	return nil, nil, nil, errors.New("not applicable")
 }
 
 func (s MockSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {

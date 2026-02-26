@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/quantumcoinproject/circl/sign/hybridparser"
 	"github.com/quantumcoinproject/quantum-coin-go/accounts"
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -810,7 +811,7 @@ func shouldSignFull(blockNumber uint64) bool {
 
 func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNumber uint64) error {
 	// Require minimum hybrid PQC signature length (NIST PQC in hybrid mode).
-	if packet == nil || packet.ConsensusData == nil || len(packet.ConsensusData) < 1 || packet.Signature == nil || len(packet.Signature) < hybrideds.CRYPTO_SIGNATURE_BYTES {
+	if packet == nil || packet.ConsensusData == nil || len(packet.ConsensusData) < 1 || packet.Signature == nil || len(packet.Signature) < hybrideds.CRYPTO_SIGNATURE_BYTES { //packet signature is pubKey + signature, hence this check is valid for all schemes
 		log.Debug("processPacket nil")
 		return errors.New("nil packet")
 	}
@@ -838,6 +839,7 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 	if isBreakGlass || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) { //for verify, it is ok not to check the blockNumber for full
 		log.Debug("processPacket shouldSignFull", "sigAlg", sigAlg.SignatureName(), "IsCryptoBreakglassMode", isBreakGlass,
 			"len(packet.Signature)", len(packet.Signature), "sigAlg.SignatureWithPublicKeyLength()", sigAlg.SignatureWithPublicKeyLength(), "name", sigAlg.SignatureName())
+
 		var signContext []byte
 		if blockNumber < defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
 			signContext = FULL_SIGN_CONTEXT
@@ -1417,27 +1419,15 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 	return nil
 }
 
-func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.Address, error) {
+func parsePacketInternal(packet *eth.ConsensusPacket, blockNumber uint64, parseHybridSignature bool) (pacetType ConsensusPacketType, validator common.Address, startIndex int, hybridSig *hybridparser.HybridSignature, err error) {
+	var sigAlg signaturealgorithm.SignatureAlgorithm
+	if packet == nil || packet.ConsensusData == nil || len(packet.ConsensusData) < 1 || packet.Signature == nil || len(packet.Signature) < hybrideds.CRYPTO_SIGNATURE_BYTES { //packet signature is pubKey + signature, hence this check is valid for all schemes
+		return 0, common.Address{}, 0, nil, errors.New("invalid packet")
+	}
 	dataToVerify := append(packet.ParentHash.Bytes(), packet.ConsensusData...)
 	digestHash := crypto.Keccak256(dataToVerify)
-	sigAlg := cryptobase.GetSigAlgForValidation(blockNumber)
-	pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
-	if err != nil {
-		log.Debug("invalid 1", "err", err)
-		return 0, ZERO_ADDRESS, err
-	}
-	if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
-		log.Debug("invalid 2")
-		return 0, ZERO_ADDRESS, InvalidPacketErr
-	}
+	sigAlg = cryptobase.GetSigAlgForValidation(blockNumber)
 
-	validator, err := sigAlg.PublicKeyToAddress(pubKey)
-	if err != nil {
-		log.Debug("invalid 3", "err", err)
-		return 0, ZERO_ADDRESS, err
-	}
-
-	var startIndex int
 	if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
 		startIndex = 2
 	} else {
@@ -1445,6 +1435,93 @@ func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.
 	}
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
+
+	isBreakGlass := defaults.IsCryptoBreakglassMode(blockNumber)
+	if defaults.IsCryptoBreakglassMode(blockNumber) && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength() {
+		return 0, common.Address{}, 0, nil, errors.New("invalid breakglass signature length")
+	}
+
+	if isBreakGlass || (packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK && len(packet.Signature) != sigAlg.SignatureWithPublicKeyLength()) { //for verify, it is ok not to check the blockNumber for full
+		log.Debug("parsePacketInternal shouldSignFull", "sigAlg", sigAlg.SignatureName(), "IsCryptoBreakglassMode", isBreakGlass,
+			"len(packet.Signature)", len(packet.Signature), "sigAlg.SignatureWithPublicKeyLength()", sigAlg.SignatureWithPublicKeyLength(), "name", sigAlg.SignatureName())
+		var signContext []byte
+		if blockNumber < defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock {
+			signContext = FULL_SIGN_CONTEXT
+		} else {
+			signContext = FULL_SIGN_CONTEXT_V2
+		}
+		sig, pubKeyData, newDigestHash, err := sigAlg.PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash, packet.Signature, signContext)
+		if err != nil {
+			log.Debug("parsePacketInternal invalid 1")
+			return 0, common.Address{}, 0, nil, InvalidPacketErr
+		}
+
+		if sigAlg.VerifyWithContext(pubKeyData, digestHash, packet.Signature, signContext) == false {
+			log.Debug("parsePacketInternal invalid 2")
+			return 0, common.Address{}, 0, nil, InvalidPacketErr
+		}
+
+		if parseHybridSignature {
+			hybridSig, err = hybridparser.ParseHybrid(sig, pubKeyData, newDigestHash)
+			if err != nil {
+				log.Debug("parsePacketInternal invalid 3")
+				return 0, common.Address{}, 0, nil, errors.New("error parsing hybrid signature a")
+			}
+		}
+
+		validator, err = sigAlg.PublicKeyToAddress(&signaturealgorithm.PublicKey{PubData: pubKeyData})
+		if err != nil {
+			log.Debug("invalid 3", "err", err)
+			return 0, common.Address{}, 0, nil, err
+		}
+
+	} else {
+		pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
+		if err != nil {
+			log.Debug("parsePacketInternal invalid 2")
+			return 0, common.Address{}, 0, nil, InvalidPacketErr
+		}
+
+		if sigAlg.Verify(pubKey.PubData, digestHash, packet.Signature) == false {
+			log.Debug("parsePacketInternal invalid 3")
+			return 0, common.Address{}, 0, nil, InvalidPacketErr
+		}
+
+		if parseHybridSignature {
+			sig, pubKeyData, err := sigAlg.PublicKeyAndSignatureFromCombinedSignature(digestHash, packet.Signature)
+			if err != nil {
+				log.Debug("parsePacketInternal invalid 2")
+				return 0, common.Address{}, 0, nil, InvalidPacketErr
+			}
+
+			hybridSig, err = hybridparser.ParseHybrid(sig, pubKeyData, digestHash)
+			if err != nil {
+				log.Debug("parsePacketInternal invalid 3")
+				return 0, common.Address{}, 0, nil, errors.New("error parsing hybrid signature b")
+			}
+		}
+
+		validator, err = sigAlg.PublicKeyToAddress(pubKey)
+		if err != nil {
+			log.Debug("invalid 3", "err", err)
+			return 0, common.Address{}, 0, nil, err
+		}
+	}
+
+	return packetType, validator, startIndex, hybridSig, nil
+}
+
+func getHybridSig(packet *eth.ConsensusPacket, blockNumber uint64) (*hybridparser.HybridSignature, error) {
+	_, _, _, hybridSig, err := parsePacketInternal(packet, blockNumber, true)
+	return hybridSig, err
+}
+
+func parsePacket(packet *eth.ConsensusPacket, blockNumber uint64) (byte, common.Address, error) {
+	packetType, validator, startIndex, _, err := parsePacketInternal(packet, blockNumber, false)
+	if err != nil {
+		return 0, ZERO_ADDRESS, err
+	}
+
 	if packetType == CONSENSUS_PACKET_TYPE_PROPOSE_BLOCK {
 		details := ProposalDetails{}
 

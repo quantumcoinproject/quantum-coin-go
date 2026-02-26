@@ -2,10 +2,11 @@ package signaturealgorithm
 
 import (
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"io"
 	"math/big"
+
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 )
 
 var NotImplementedErr = errors.New("not implemented")
@@ -65,6 +66,7 @@ type SignatureAlgorithm interface {
 	Zeroize(prv *PrivateKey)
 
 	PublicKeyAndSignatureFromCombinedSignature(digestHash []byte, sig []byte) (signature []byte, pubKey []byte, err error)
+	PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash []byte, sig []byte, context []byte) (signature []byte, pubKey []byte, digest []byte, err error)
 
 	CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error)
 

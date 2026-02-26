@@ -299,6 +299,10 @@ func (s HybridEddsaMldsaSlhdsaSig5) VerifyWithContext(pubKey []byte, digestHash 
 	return false
 }
 
+func (s HybridEddsaMldsaSlhdsaSig5) PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash []byte, sig []byte, context []byte) (signature []byte, pubKey []byte, digest []byte, err error) {
+	return nil, nil, nil, errors.New("not applicable")
+}
+
 func (s HybridEddsaMldsaSlhdsaSig5) Verify(pubKey []byte, digestHash []byte, signature []byte) bool {
 	sigBytes, pubKeyBytes, err := common.ExtractTwoParts(signature)
 	if err != nil {

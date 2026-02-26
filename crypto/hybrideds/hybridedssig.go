@@ -334,6 +334,10 @@ func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignature(digestHash []by
 	return signature, pubKey, nil
 }
 
+func (s HybridedsSig) PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash []byte, sig []byte, context []byte) (signature []byte, pubKey []byte, digest []byte, err error) {
+	return s.fullSigAlg.PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash, sig, context)
+}
+
 func (s HybridedsSig) CombinePublicKeySignature(sigBytes []byte, pubKeyBytes []byte) (combinedSignature []byte, err error) {
 	if len(sigBytes) < s.signatureLength {
 		log.Debug("HybridedsSig CombinePublicKeySignature", "sigbytes len", len(sigBytes), "signatureLength", s.signatureLength)

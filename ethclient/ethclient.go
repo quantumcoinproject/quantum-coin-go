@@ -179,6 +179,15 @@ func (ec *Client) GetBlockConsensusData(ctx context.Context, number *big.Int) (*
 	return consensusData, err
 }
 
+func (ec *Client) GetBlockConsensusDataWithSignatures(ctx context.Context, number *big.Int) (*proofofstake.ConsensusData, error) {
+	var consensusData *proofofstake.ConsensusData
+	err := ec.c.CallContext(ctx, &consensusData, "proofofstake_getBlockConsensusDataWithSignatures", hexutil.EncodeBig(number))
+	if err == nil && consensusData == nil {
+		err = ethereum.NotFound
+	}
+	return consensusData, err
+}
+
 func (ec *Client) ListValidators(ctx context.Context, number *big.Int) ([]*proofofstake.ValidatorDetails, error) {
 	var validatorList []*proofofstake.ValidatorDetails
 	err := ec.c.CallContext(ctx, &validatorList, "proofofstake_listValidators", hexutil.EncodeBig(number))
@@ -363,11 +372,13 @@ type TransactionSignatureResult struct {
 
 // HybridSignature mirrors the parsed hybrid signature for JSON-RPC.
 type HybridSignature struct {
-	SchemeID   byte              `json:"schemeId"`
-	Message    string            `json:"message"`
-	PublicKeys map[string]string `json:"publicKeys"`
-	Signatures map[string]string `json:"signatures"`
-	Nonce      string            `json:"nonce,omitempty"`
+	SchemeID       byte              `json:"schemeId"`
+	SchemeName     string            `json:"schemeName"`
+	Context        string            `json:"context"`
+	AdditionalData map[string]string `json:"additionalData,omitempty"`
+	Message        string            `json:"message"`
+	PublicKeys     map[string]string `json:"publicKeys"`
+	Signatures     map[string]string `json:"signatures"`
 }
 
 // GetTransactionSignature returns the transaction signature details for the given hash,

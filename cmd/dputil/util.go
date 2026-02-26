@@ -383,6 +383,15 @@ func GetTransaction(txnHash string) (string, *types.Receipt, error) {
 	return txString, receipt, nil
 }
 
+func GetTransactionSignature(txnHash string) (*ethclient.TransactionSignatureResult, error) {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return nil, err
+	}
+	hash := common.HexToHash(txnHash)
+	return client.GetTransactionSignature(context.Background(), hash)
+}
+
 func peerList() ([]*ethclient.RpcPeer, error) {
 	client, err := ethclient.Dial(rawURL)
 	if err != nil {
