@@ -1,0 +1,66 @@
+name: Devnet Data Creator
+
+on:
+  workflow_run:
+    workflows: ["Ubuntu Release"]
+    types:
+      - completed
+
+jobs:
+  download:
+    runs-on: ubuntu-22.04
+    # Only run when ubuntu-release completed successfully
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download qc-release-ubuntu artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: qc-release-ubuntu
+          run-id: ${{ github.event.workflow_run.id }}
+
+      - name: Extract devnet tarball to folder
+        run: |
+          mkdir -p devnet
+          tar -xzf qc-release-ubuntu-devnet-*.tar.gz -C devnet
+
+      - name: Init with genesis
+        working-directory: devnet
+        run: ./dp --datadir data init genesis.json
+
+      - name: Copy keystore file to data/keystore
+        run: |
+          mkdir -p devnet/data/keystore
+          cp 45d* devnet/data/keystore/
+
+      - name: Run connectvalidator, wait 5 min, then SIGTERM dp
+        working-directory: devnet
+        run: |
+          nohup ./connectvalidator.sh > connectvalidator.log 2>&1 &
+          sleep 300
+          pkill -TERM -f './dp' || true
+          while pgrep -f './dp' >/dev/null; do sleep 2; done
+
+      - name: Compress data folder to devnet-data.zip
+        run: zip -r devnet-data.zip devnet/data
+
+      - name: Upload data.zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devnet-data
+          path: devnet-data.zip
+
+      - name: Get latest release tag
+        id: get_tag
+        run: echo "tag=$(gh release view --json tagName -q .tagName)" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Upload data.zip to release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.get_tag.outputs.tag }}
+          allowUpdates: true
+          artifacts: devnet-data.zip
