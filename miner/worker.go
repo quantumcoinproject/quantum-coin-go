@@ -18,6 +18,11 @@ package miner
 
 import (
 	"errors"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	mapset "github.com/deckarep/golang-set"
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -30,10 +35,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
-	"math/big"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 const (

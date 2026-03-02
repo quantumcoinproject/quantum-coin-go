@@ -2661,7 +2661,7 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 			return err
 		}
 
-		if matched && rndVal == 1 {
+		if defaults.SkipStartupDelay() && matched && rndVal == 1 {
 			log.Warn("Previous block hash before restart matches current parentHash. Will wait for one block to get mined before starting.", "parentHash", parentHash)
 			return errors.New("Waiting for previous block to mine")
 		}
@@ -2684,8 +2684,8 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		cph.lastBlockNumberChangeTime = time.Now()
 	}
 
-	if HasExceededTimeThreshold(cph.initTime, STARTUP_DELAY_MS) == false && rndVal == 1 {
-		log.Info("Waiting to startup...", "elapsed ms", Elapsed(cph.initTime), "pending txn count", len(txns), "STARTUP_DELAY_MS", STARTUP_DELAY_MS)
+	if defaults.SkipStartupDelay() == false && HasExceededTimeThreshold(cph.initTime, STARTUP_DELAY_MS) == false {
+		log.Write(logLevel, "Waiting to startup...", "elapsed ms", Elapsed(cph.initTime), "pending txn count", len(txns), "STARTUP_DELAY_MS", STARTUP_DELAY_MS)
 		return errors.New("starting up")
 	}
 

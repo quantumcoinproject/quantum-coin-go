@@ -538,6 +538,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	}
 
 	if MIN_BLOCK_DEPOSIT.Cmp(minDepositRequired) > 0 {
+		log.Warn("ValidateBlockConsensusDataInner minDepositRequired not met", "minDepositRequired", minDepositRequired)
 		return nil, errors.New("min deposit required error")
 	}
 

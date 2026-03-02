@@ -1,0 +1,13 @@
+{
+    "depositors": [
+      {"address":"0x1a846abe71c8b989e8337c55d608be81c28ab3b2e40c83eaa2a68d516049aec6", "balance" :  "0x7E37BE2022C0914B2680000000", "validatorAddress" : "0x45dc00282f80628911a15775cd821a3747d2c62e14e54d1339f057c9e921be71"}
+    ],
+    "alloc": [
+      {"address":"0x1a846abe71c8b989e8337c55d608be81c28ab3b2e40c83eaa2a68d516049aec6", "balance" :  "0x19D0C156A8E94EE98FE40000"}
+    ],
+    "totalDepositBalance" : "0x7E37BE2022C0914B2680000000",
+    "snapshot": [
+      {"ethAddress":  "0x000000000000000000000000000000000000dEaD", "balance": "0xB395795885222BF50C0A740000"}
+    ],
+    "conversionContractBalance" : "0xB395795885222BF50C0A740000"
+}
