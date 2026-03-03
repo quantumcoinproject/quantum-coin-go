@@ -54,7 +54,7 @@ jobs:
         working-directory: devnet
         run: |
           Unblock-File -Path ".\connectvalidator.ps1"
-          Start-Process -FilePath ".\connectvalidator.ps1" -NoNewWindow
+          Start-Process -FilePath "pwsh" -ArgumentList "-NoProfile", "-File", ".\connectvalidator.ps1" -NoNewWindow
           Start-Sleep -Seconds 300
           Stop-Process -Name "dp" -Force -ErrorAction SilentlyContinue
           while (Get-Process -Name "dp" -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 2 }
