@@ -30,7 +30,7 @@ jobs:
         run: |
           gh release download ${{ steps.get_tag.outputs.tag }} --repo ${{ github.repository }} --dir . \
             --pattern 'qc-release-ubuntu-devnet-*'
-            
+
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -47,8 +47,8 @@ jobs:
       - name: Copy keystore file to data/keystore
         working-directory: devnet
         run: |
-          mkdir -p devnet/data/keystore
-          cp 45d* devnet/data/keystore/ 2>/dev/null || true
+          mkdir -p data/keystore
+          cp 45d* data/keystore/ 2>/dev/null || true
 
       - name: Run connectvalidator, wait 5 min, then SIGTERM dp
         working-directory: devnet
