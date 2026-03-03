@@ -51,9 +51,11 @@ jobs:
       - name: Run connectvalidator, wait 5 min, then SIGTERM dp
         working-directory: devnet
         run: |
-          nohup ./connectvalidator.sh > connectvalidator.log 2>&1 &
+          ./connectvalidator.sh > connectvalidator.log 2>&1 &
+          VALIDATOR_PID=$!
           sleep 300
-          pkill -TERM -f './dp' || true
+          kill -TERM -$VALIDATOR_PID 2>/dev/null || true
+          wait $VALIDATOR_PID 2>/dev/null || true
           while pgrep -f './dp' >/dev/null; do sleep 2; done
 
       - name: Compress devnet folder to mac-devnet.tar.gz
