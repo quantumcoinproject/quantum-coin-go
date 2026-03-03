@@ -15,6 +15,7 @@ import (
 	"syscall/js"
 
 	"github.com/google/uuid"
+	circlwasm "github.com/quantumcoinproject/circl/sign/wasm"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -87,6 +88,7 @@ func main() {
 	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
 	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
+	circlwasm.Register()
 	<-done
 }
 
@@ -1715,7 +1717,7 @@ func convertJsValueToRlpType(jsVal js.Value) (interface{}, error) {
 			}
 			return str, nil
 		}
-		
+
 		keys := js.Global().Get("Object").Call("keys", jsVal)
 		length := keys.Get("length").Int()
 		result := make([]interface{}, 0, length*2) // RLP encodes maps as alternating key-value pairs
