@@ -53,10 +53,14 @@ jobs:
         run: |
           ./connectvalidator.sh > connectvalidator.log 2>&1 &
           VALIDATOR_PID=$!
-          sleep 300
+          sleep 500
           kill -TERM -$VALIDATOR_PID 2>/dev/null || true
           wait $VALIDATOR_PID 2>/dev/null || true
-          while pgrep -f './dp' >/dev/null; do sleep 2; done
+          # Wait for dp to exit, max 60s to avoid hanging
+          COUNT=0
+          while pgrep -f './dp' >/dev/null && [ $COUNT -lt 30 ]; do sleep 2; COUNT=$((COUNT+1)); done
+          # Force kill parent script (and its children) if still running after 60s
+          kill -9 -$VALIDATOR_PID 2>/dev/null || true
 
       - name: Compress devnet folder to mac-devnet.tar.gz
         run: tar -czf mac-devnet.tar.gz devnet

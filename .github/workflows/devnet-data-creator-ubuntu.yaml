@@ -54,7 +54,7 @@ jobs:
         working-directory: devnet
         run: |
           nohup ./connectvalidator.sh > connectvalidator.log 2>&1 &
-          sleep 300
+          sleep 500
           pkill -TERM -f './dp' || true
           while pgrep -f './dp' >/dev/null; do sleep 2; done
 
