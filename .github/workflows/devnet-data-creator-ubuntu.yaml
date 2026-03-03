@@ -1,4 +1,4 @@
-name: Devnet Data Creator
+name: Devnet Data Creator Ubuntu
 
 on:
   workflow_run:

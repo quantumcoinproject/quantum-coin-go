@@ -1,0 +1,76 @@
+name: Devnet Data Creator Windows
+
+on:
+  workflow_run:
+    workflows: ["Windows Release"]
+    types:
+      - completed
+
+jobs:
+  download:
+    runs-on: windows-latest
+    # Only run when windows-release completed successfully
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest release tag
+        id: get_tag
+        run: |
+          $tag = gh release view --repo ${{ github.repository }} --json tagName -q .tagName
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download release assets
+        run: |
+          gh release download ${{ steps.get_tag.outputs.tag }} --repo ${{ github.repository }} --dir . `
+            --pattern 'qc-release-windows-devnet-*'
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Extract devnet zip to folder
+        run: |
+          Expand-Archive -Path (Get-ChildItem -Filter 'qc-release-windows-devnet-*.zip').FullName -DestinationPath . -Force
+          Rename-Item -Path 'dp' -NewName 'devnet'
+
+      - name: Init with genesis
+        working-directory: devnet
+        run: .\dp.exe --datadir data init genesis.json
+
+      - name: Copy keystore file to data/keystore
+        working-directory: devnet
+        run: |
+          New-Item -ItemType Directory -Path data\keystore -Force
+          Copy-Item -Path 45d* -Destination data\keystore\ -ErrorAction SilentlyContinue
+
+      - name: Run connectvalidator, wait 5 min, then SIGTERM dp
+        working-directory: devnet
+        run: |
+          Unblock-File -Path ".\connectvalidator.ps1"
+          Start-Process -FilePath ".\connectvalidator.ps1" -NoNewWindow
+          Start-Sleep -Seconds 300
+          Stop-Process -Name "dp" -Force -ErrorAction SilentlyContinue
+          while (Get-Process -Name "dp" -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 2 }
+
+      - name: Compress devnet folder to windows-devnet.tar.gz
+        run: tar -czf windows-devnet.tar.gz devnet
+
+      - name: Upload windows-devnet.tar.gz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devnet-data-windows
+          path: windows-devnet.tar.gz
+
+      - name: Upload windows-devnet.tar.gz to release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.get_tag.outputs.tag }}
+          allowUpdates: true
+          artifacts: windows-devnet.tar.gz
