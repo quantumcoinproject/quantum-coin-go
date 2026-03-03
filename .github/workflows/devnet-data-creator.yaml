@@ -15,15 +15,20 @@ jobs:
       contents: write
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Get latest release tag
         id: get_tag
-        run: echo "tag=$(gh release view --json tagName -q .tagName)" >> $GITHUB_OUTPUT
+        run: echo "tag=$(gh release view --repo ${{ github.repository }} --json tagName -q .tagName)" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Download release assets
         run: |
-          gh release download ${{ steps.get_tag.outputs.tag }} --dir . \
+          gh release download ${{ steps.get_tag.outputs.tag }} --repo ${{ github.repository }} --dir . \
             --pattern 'qc-release-ubuntu-devnet-*'
             
         env:
