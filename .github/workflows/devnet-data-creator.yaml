@@ -22,12 +22,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Download release assets
-        run: gh release download ${{ steps.get_tag.outputs.tag }} --dir .
+        run: |
+          gh release download ${{ steps.get_tag.outputs.tag }} --dir . \
+            --pattern 'qc-release-ubuntu-devnet-*'
+            
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Extract devnet tarball to folder
         run: |
+          ls -ltr
           mkdir -p devnet
           tar -xzf qc-release-ubuntu-devnet-*.tar.gz -C devnet
 
@@ -36,6 +40,7 @@ jobs:
         run: ./dp --datadir data init genesis.json
 
       - name: Copy keystore file to data/keystore
+        working-directory: devnet
         run: |
           mkdir -p devnet/data/keystore
           cp 45d* devnet/data/keystore/ 2>/dev/null || true
