@@ -10,15 +10,6 @@ import (
 const DEFAULT_CHAIN_ID int64 = 123123
 const MAX_REMARKS_LENGTH = 64
 
-type GasTier uint64
-
-const (
-	GAS_TIER_DEFAULT GasTier = 1
-	GAS_TIER_2X      GasTier = 2
-	GAS_TIER_5X      GasTier = 5
-	GAS_TIER_10X     GasTier = 10
-)
-
 type AccessList []AccessTuple
 
 // AccessTuple is the element type of an access list.

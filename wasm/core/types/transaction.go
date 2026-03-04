@@ -3,11 +3,12 @@ package types
 import (
 	"bytes"
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"math/big"
 	"sync/atomic"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 var (
@@ -22,6 +23,16 @@ var (
 // Transaction types.
 const (
 	DefaultFeeTxType = iota
+	DynamicFeeTxType = iota
+)
+
+type GasTier uint64
+
+const (
+	GAS_TIER_DEFAULT GasTier = 1
+	GAS_TIER_2X      GasTier = 2
+	GAS_TIER_5X      GasTier = 5
+	GAS_TIER_10X     GasTier = 10
 )
 
 // Transaction is an Ethereum transaction.

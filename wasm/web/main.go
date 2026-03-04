@@ -47,14 +47,15 @@ type Transaction2 struct {
 }
 
 type TransactionDetails2 struct {
-	FromAddress common.Address  `json:"fromAddress"`
-	ToAddress   *common.Address `json:"toAddress"`
-	Nonce       uint64          `json:"nonce"`
-	GasLimit    uint64          `json:"gasLimit"`
-	Value       *big.Int        `json:"value"`
-	Data        []byte          `json:"data"`
-	ChainId     *big.Int        `json:"chainId"`
-	Remarks     []byte          `json:"remarks"`
+	FromAddress    common.Address  `json:"fromAddress"`
+	ToAddress      *common.Address `json:"toAddress"`
+	Nonce          uint64          `json:"nonce"`
+	GasLimit       uint64          `json:"gasLimit"`
+	Value          *big.Int        `json:"value"`
+	Data           []byte          `json:"data"`
+	ChainId        *big.Int        `json:"chainId"`
+	Remarks        []byte          `json:"remarks"`
+	SigningContext byte            `json:"signingContext"`
 }
 
 func main() {
@@ -188,9 +189,9 @@ func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
@@ -241,9 +242,9 @@ func TxnHash2(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
@@ -304,9 +305,9 @@ func TxnData2(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
@@ -569,9 +570,17 @@ func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 		remarks = nil
 	}
 
+	var signingContext byte
+	if args[8].IsNull() == false && args[8].IsUndefined() == false {
+		var signingContextString string
+		fmt.Sscan(args[8].String(), &signingContextString, &signingContext)
+	} else {
+		signingContext = 0
+	}
+
 	transactionDetails := TransactionDetails2{
 		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
-		Value: weiVal, Data: data, ChainId: chainId, Remarks: remarks}
+		Value: weiVal, Data: data, ChainId: chainId, Remarks: remarks, SigningContext: signingContext}
 
 	var t Transaction2
 	t.Transaction = append(t.Transaction, transactionDetails)
