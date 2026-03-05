@@ -248,11 +248,11 @@ func TxnHash2(this js.Value, args []js.Value) interface{} {
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
-	pubData := js.Global().Get("Uint8Array").New(args[8])
+	pubData := js.Global().Get("Uint8Array").New(args[9])
 	pubBytes := make([]byte, pubData.Get("length").Int())
 	js.CopyBytesToGo(pubBytes, pubData)
 
-	sigData := js.Global().Get("Uint8Array").New(args[9])
+	sigData := js.Global().Get("Uint8Array").New(args[10])
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
@@ -311,11 +311,11 @@ func TxnData2(this js.Value, args []js.Value) interface{} {
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
-	pubData := js.Global().Get("Uint8Array").New(args[8])
+	pubData := js.Global().Get("Uint8Array").New(args[9])
 	pubBytes := make([]byte, pubData.Get("length").Int())
 	js.CopyBytesToGo(pubBytes, pubData)
 
-	sigData := js.Global().Get("Uint8Array").New(args[9])
+	sigData := js.Global().Get("Uint8Array").New(args[10])
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
