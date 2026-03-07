@@ -3,8 +3,9 @@ package types
 import (
 	"errors"
 	"fmt"
-	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"math/big"
+
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 )
 
 var ErrInvalidChainId = errors.New("invalid chain id for signer")
@@ -67,24 +68,43 @@ func (s londonSigner) Equal(s2 Signer) bool {
 }
 
 func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big.Int, err error) {
-	txdata1, ok1 := tx.inner.(*DefaultFeeTx)
-	if ok1 {
-		// Check that chain ID of tx matches the signer. We also accept ID zero here,
-		// because it indicates that the chain ID was not specified in the tx.
-		if txdata1.ChainID.Sign() != 0 && txdata1.ChainID.Cmp(s.chainId) != 0 {
-			return nil, nil, nil, ErrInvalidChainId
-		}
+	if tx.Type() == DefaultFeeTxType {
+		txdata1, ok1 := tx.inner.(*DefaultFeeTx)
+		if ok1 {
+			// Check that chain ID of tx matches the signer. We also accept ID zero here,
+			// because it indicates that the chain ID was not specified in the tx.
+			if txdata1.ChainID.Sign() != 0 && txdata1.ChainID.Cmp(s.chainId) != 0 {
+				return nil, nil, nil, ErrInvalidChainId
+			}
+			R, S, _, err = decodeSignature(sig)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 
-		R, S, V, err = decodeSignature(sig)
-		if err != nil {
-			return nil, nil, nil, err
+			V = big.NewInt(1)
+			return R, S, V, nil
 		}
-
-		V = big.NewInt(1)
-		return R, S, V, nil
+	} else if tx.Type() == DynamicFeeTxType {
+		txdata1, ok1 := tx.inner.(*DynamicFeeTx)
+		if ok1 {
+			// Check that chain ID of tx matches the signer. We also accept ID zero here,
+			// because it indicates that the chain ID was not specified in the tx.
+			if txdata1.ChainID.Sign() != 0 && txdata1.ChainID.Cmp(s.chainId) != 0 {
+				return nil, nil, nil, ErrInvalidChainId
+			}
+			R, S, _, err = decodeSignature(sig)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+			V = big.NewInt(1)
+			return R, S, V, nil
+		}
+	} else {
+		err = ErrInvalidTxType
+		return nil, nil, nil, ErrInvalidTxType
 	}
 
-	return nil, nil, nil, errors.New("signature error")
+	return nil, nil, nil, errors.New("signaturevalues error b")
 }
 
 // Hash returns the hash to be signed by the sender.
@@ -122,7 +142,7 @@ func decodeSignature(sig []byte) (r, s, v *big.Int, err error) {
 
 	r = new(big.Int).SetBytes(publicKey)
 	s = new(big.Int).SetBytes(signature)
-	v = new(big.Int).SetBytes([]byte{1 + 27})
+	v = big.NewInt(1)
 
 	return r, s, v, nil
 }

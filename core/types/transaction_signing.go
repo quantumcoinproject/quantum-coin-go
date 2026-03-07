@@ -230,9 +230,12 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 			V = big.NewInt(1)
 			return R, S, V, nil
 		}
+	} else {
+		err = ErrInvalidTxType
+		return nil, nil, nil, ErrInvalidTxType
 	}
 
-	return nil, nil, nil, errors.New("signature error")
+	return nil, nil, nil, errors.New("signaturevalues error b")
 }
 
 // Hash returns the hash to be signed by the sender.
