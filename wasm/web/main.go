@@ -186,7 +186,7 @@ func TxnSigningHash(this js.Value, args []js.Value) interface{} {
 func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData2(args)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
@@ -197,7 +197,7 @@ func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 
 	signerHash, err := signer.Hash(tx)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	var message strings.Builder
@@ -205,7 +205,7 @@ func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 		sh := signerHash[i]
 		message.WriteString(string(sh))
 	}
-	return message.String()
+	return jsResult(message.String())
 }
 
 func TxnHash(this js.Value, args []js.Value) interface{} {
@@ -239,7 +239,7 @@ func TxnHash(this js.Value, args []js.Value) interface{} {
 func TxnHash2(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData2(args)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
@@ -258,10 +258,10 @@ func TxnHash2(this js.Value, args []js.Value) interface{} {
 
 	signTx, err := signTxHash(tx, signer, pubBytes, sigBytes)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
-	return signTx.Hash().String()
+	return jsResult(signTx.Hash().String())
 }
 
 func TxnData(this js.Value, args []js.Value) interface{} {
@@ -302,7 +302,7 @@ func TxnData(this js.Value, args []js.Value) interface{} {
 func TxnData2(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData2(args)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
@@ -321,17 +321,17 @@ func TxnData2(this js.Value, args []js.Value) interface{} {
 
 	signTx, err := signTxHash(tx, signer, pubBytes, sigBytes)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	signTxBinary, err := signTx.MarshalBinary()
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	signTxEncode := hexutil.Encode(signTxBinary)
 
-	return signTxEncode
+	return jsResult(signTxEncode)
 }
 
 func ContractData(this js.Value, args []js.Value) interface{} {
@@ -510,6 +510,22 @@ func transactionData(args []js.Value) (transaction Transaction, err error) {
 	t.Transaction = append(t.Transaction, transactionDetails)
 
 	return t, nil
+}
+
+// jsError wraps an error into {result: null, error: "message"}.
+func jsError(err error) any {
+	obj := js.Global().Get("Object").New()
+	obj.Set("result", js.Null())
+	obj.Set("error", err.Error())
+	return obj
+}
+
+// jsResult wraps a successful value into {result: val, error: null}.
+func jsResult(val any) any {
+	obj := js.Global().Get("Object").New()
+	obj.Set("result", val)
+	obj.Set("error", js.Null())
+	return obj
 }
 
 func transactionData2(args []js.Value) (transaction Transaction2, err error) {
