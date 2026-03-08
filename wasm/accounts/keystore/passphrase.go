@@ -202,7 +202,7 @@ func DecryptDataV4(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 
 func decryptKeyV4(keyProtected *encryptedKeyJSONV4, auth string) (keyBytes []byte, keyId []byte, err error) {
 	if keyProtected.Version != 4 {
-		return nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
+		return nil, nil, fmt.Errorf("decryptKeyV4 version not supported: %v", keyProtected.Version)
 	}
 	keyUUID, err := uuid.Parse(keyProtected.Id)
 	if err != nil {
@@ -253,8 +253,8 @@ func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 }
 
 func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
-	if keyProtected.Version != version {
-		return nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
+	if keyProtected.Version != 3 {
+		return nil, nil, fmt.Errorf("decryptKeyV3 version not supported: %v", keyProtected.Version)
 	}
 	keyUUID, err := uuid.Parse(keyProtected.Id)
 	if err != nil {
