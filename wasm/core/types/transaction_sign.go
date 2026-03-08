@@ -119,19 +119,38 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 	if s.chainId.Cmp(tx.ChainId()) != 0 {
 		return common.ZERO_HASH, errors.New("signing failed, chainId mismatch")
 	}
-	return prefixedRlpHash(
-		tx.Type(),
-		[]interface{}{
-			s.chainId,
-			tx.Nonce(),
-			tx.To(),
-			tx.Gas(),
-			tx.MaxGasTier(),
-			tx.Value(),
-			tx.Data(),
-			tx.AccessList(),
-			tx.Remarks(),
-		}), nil
+	if tx.Type() == DefaultFeeTxType {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.Nonce(),
+				tx.To(),
+				tx.Gas(),
+				tx.MaxGasTier(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+				tx.Remarks(),
+			}), nil
+	} else if tx.Type() == DynamicFeeTxType {
+		return prefixedRlpHash(
+			tx.Type(),
+			[]interface{}{
+				s.chainId,
+				tx.Nonce(),
+				tx.To(),
+				tx.Gas(),
+				tx.GasTipCap(),
+				tx.GasFeeCap(),
+				tx.SigningContext(),
+				tx.Value(),
+				tx.Data(),
+				tx.AccessList(),
+				tx.Remarks(),
+			}), nil
+	}
+	return common.Hash{}, errors.New("unknown transaction type")
 }
 
 func decodeSignature(sig []byte) (r, s, v *big.Int, err error) {

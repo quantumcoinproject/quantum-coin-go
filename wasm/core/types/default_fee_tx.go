@@ -130,7 +130,11 @@ func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GetDefaultGasPrice() }
 func (tx *DefaultFeeTx) gasPrice() *big.Int {
 	return GetDefaultGasPrice()
 }
+func (tx *DefaultFeeTx) gasTipCap() *big.Int { return tx.gasPrice() }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
+func (tx *DefaultFeeTx) signingContext() byte {
+	return byte(SigningContextDefault)
+}
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }

@@ -23,12 +23,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 )
 
-type SigningContext byte
-
-const SigningContextDefault SigningContext = 0 //DILITHIUM_ED25519_SPHINCS_COMPACT_ID, MLDSA_ED25519_SLHDSA_COMPACT_ID
-const SigningContextLevel1 SigningContext = 1  //MLDSA_ED25519_SLHDSA_FULL_ID
-const SigningContextLevel2 SigningContext = 2  //MLDSA_ED25519_SLHDSA_FULL_ID
-
 type DynamicFeeTx struct {
 	ChainID        *big.Int
 	Nonce          uint64
@@ -39,7 +33,7 @@ type DynamicFeeTx struct {
 	Value          *big.Int
 	Data           []byte
 	Remarks        []byte
-	SigningContext byte //signature algorithm
+	SigningContext byte
 	AccessList     AccessList
 
 	// Signature values

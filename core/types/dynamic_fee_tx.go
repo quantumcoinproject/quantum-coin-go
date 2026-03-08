@@ -37,7 +37,7 @@ type DynamicFeeTx struct {
 	Value          *big.Int
 	Data           []byte
 	Remarks        []byte
-	SigningContext byte //signature algorithm
+	SigningContext byte
 	AccessList     AccessList
 
 	// Signature values
