@@ -936,17 +936,18 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	// Sealing the genesis block is not supported
 	number := header.Number.Uint64()
 	if number == 0 {
+		log.Debug("FinalizeAndAssembleWithConsensus number 0", "error", errUnknownBlock)
 		return nil, errUnknownBlock
 	}
 
 	blockState, round, err := c.consensusHandler.getBlockState(header.ParentHash)
 	if err != nil {
-		log.Trace("getBlockState", "err", err)
+		log.Debug("getBlockState", "err", err)
 		return nil, err
 	}
 
 	if blockState != BLOCK_STATE_RECEIVED_COMMITS {
-		log.Trace("FinalizeAndAssembleWithConsensus BLOCK_STATE_WAITING_FOR_COMMITS", round)
+		log.Debug("FinalizeAndAssembleWithConsensus BLOCK_STATE_WAITING_FOR_COMMITS", round)
 		return nil, errors.New("Block state not yet BLOCK_STATE_WAITING_FOR_COMMITS")
 	}
 
@@ -959,12 +960,12 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	}
 
 	if err != nil {
-		log.Trace("getBlockConsensusData", "err", err)
+		log.Debug("getBlockConsensusData", "err", err)
 		return nil, err
 	}
 	data, err := rlp.EncodeToBytes(blockConsensusData)
 	if err != nil {
-		log.Trace("EncodeToBytes blockConsensusData", "err", err)
+		log.Debug("EncodeToBytes blockConsensusData", "err", err)
 		return nil, err
 	}
 	header.ConsensusData = make([]byte, len(data))
@@ -972,7 +973,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 
 	data, err = rlp.EncodeToBytes(blockAdditionalConsensusData)
 	if err != nil {
-		log.Trace("EncodeToBytes blockAdditionalConsensusData", "err", err)
+		log.Debug("EncodeToBytes blockAdditionalConsensusData", "err", err)
 		return nil, err
 	}
 	header.UnhashedConsensusData = make([]byte, len(data))
@@ -982,6 +983,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	if header.Number.Uint64() >= defaults.DefaultConfig.DeepCheckStartBlock {
 		extraData, err := EncodeBlockExtraData(errorTransactions, header.Extra, header.Number.Uint64())
 		if err != nil {
+			log.Debug("EncodeBlockExtraData", "error", err)
 			return nil, err
 		}
 		header.Extra = make([]byte, len(extraData))
@@ -990,6 +992,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 
 	err = c.Finalize(chain, header, state, txs, receipts, passedTransactions, errorTransactions, "FinalizeAndAssembleWithConsensus")
 	if err != nil {
+		log.Debug("Finalize", "error", err)
 		return nil, err
 	}
 

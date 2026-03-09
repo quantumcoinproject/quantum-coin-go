@@ -124,7 +124,7 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 
 	_, ok := filteredValidatorDepositMap[validator]
 	if ok == false {
-
+		log.Debug("ParseConsensusPacket validator not part of block", "validator", validator, "count", len(filteredValidatorDepositMap))
 		err = errors.New("validator not part of block")
 		resultsChan <- &PacketParseResult{err: err}
 		return
