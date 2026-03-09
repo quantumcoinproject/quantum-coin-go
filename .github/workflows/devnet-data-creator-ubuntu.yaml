@@ -1,0 +1,75 @@
+name: Devnet Data Creator Ubuntu
+
+on:
+  workflow_run:
+    workflows: ["Ubuntu Release"]
+    types:
+      - completed
+
+jobs:
+  download:
+    runs-on: ubuntu-22.04
+    # Only run when ubuntu-release completed successfully
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest release tag
+        id: get_tag
+        run: echo "tag=$(gh release view --repo ${{ github.repository }} --json tagName -q .tagName)" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download release assets
+        run: |
+          gh release download ${{ steps.get_tag.outputs.tag }} --repo ${{ github.repository }} --dir . \
+            --pattern 'qc-release-ubuntu-devnet-*'
+
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Extract devnet tarball to folder
+        run: |
+          ls -ltr
+          mkdir -p devnet
+          tar -xzf qc-release-ubuntu-devnet-*.tar.gz -C devnet
+
+      - name: Init with genesis
+        working-directory: devnet
+        run: ./dp --datadir data init genesis.json
+
+      - name: Copy keystore file to data/keystore
+        working-directory: devnet
+        run: |
+          mkdir -p data/keystore
+          cp 45d* data/keystore/ 2>/dev/null || true
+
+      - name: Run connectvalidator, wait 5 min, then SIGTERM dp
+        working-directory: devnet
+        run: |
+          nohup ./connectvalidator.sh > connectvalidator.log 2>&1 &
+          sleep 500
+          pkill -TERM -f './dp' || true
+          while pgrep -f './dp' >/dev/null; do sleep 2; done
+
+      - name: Compress devnet folder to ubuntu-devnet.tar.gz
+        run: tar -czf ubuntu-devnet.tar.gz devnet
+
+      - name: Upload ubuntu-devnet.tar.gz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devnet-data
+          path: ubuntu-devnet.tar.gz
+
+      - name: Upload ubuntu-devnet.tar.gz to release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.get_tag.outputs.tag }}
+          allowUpdates: true
+          artifacts: ubuntu-devnet.tar.gz

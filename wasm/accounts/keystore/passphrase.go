@@ -9,13 +9,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/google/uuid"
-	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/scrypt"
-	"io"
-	"io/ioutil"
 )
 
 const (
@@ -38,7 +37,7 @@ const (
 	LightScryptP = 6
 
 	scryptR     = 8
-	scryptDKLen = 32
+	scryptDKLen = 48
 )
 
 func EncryptKey(key *Key, address []byte, auth string,
@@ -46,22 +45,21 @@ func EncryptKey(key *Key, address []byte, auth string,
 
 	keyBytes := key.PrivateKey.PriData
 
-	cryptoStruct, err := EncryptDataV3(keyBytes, []byte(auth), scryptN, scryptP)
+	cryptoStruct, err := EncryptDataV4(keyBytes, []byte(auth), scryptN, scryptP)
 	if err != nil {
 		return nil, err
 	}
-	encryptedKeyJSONV3 := encryptedKeyJSONV3{
-		hex.EncodeToString(address),
+	encryptedKeyJson := encryptedKeyJSONV4{
+		hex.EncodeToString(key.Address[:]),
 		cryptoStruct,
 		key.Id.String(),
 		version,
 	}
-
-	return json.Marshal(encryptedKeyJSONV3)
+	return json.Marshal(encryptedKeyJson)
 }
 
 // Encryptdata encrypts the data given as 'data' with the password 'auth'.
-func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) {
+func EncryptDataV4(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) {
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		panic("reading from crypto/rand failed: " + err.Error())
@@ -80,7 +78,7 @@ func EncryptDataV3(data, auth []byte, scryptN, scryptP int) (CryptoJSON, error) 
 	if err != nil {
 		return CryptoJSON{}, err
 	}
-	mac := crypto.Keccak256(derivedKey[16:32], cipherText)
+	mac := crypto.Keccak256(derivedKey[32:], cipherText)
 
 	scryptParamsJSON := make(map[string]interface{}, 5)
 	scryptParamsJSON["n"] = scryptN
@@ -204,7 +202,7 @@ func DecryptDataV4(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 
 func decryptKeyV4(keyProtected *encryptedKeyJSONV4, auth string) (keyBytes []byte, keyId []byte, err error) {
 	if keyProtected.Version != 4 {
-		return nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
+		return nil, nil, fmt.Errorf("decryptKeyV4 version not supported: %v", keyProtected.Version)
 	}
 	keyUUID, err := uuid.Parse(keyProtected.Id)
 	if err != nil {
@@ -255,8 +253,8 @@ func DecryptDataV3(cryptoJson CryptoJSON, auth string) ([]byte, error) {
 }
 
 func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byte, keyId []byte, err error) {
-	if keyProtected.Version != version {
-		return nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
+	if keyProtected.Version != 3 {
+		return nil, nil, fmt.Errorf("decryptKeyV3 version not supported: %v", keyProtected.Version)
 	}
 	keyUUID, err := uuid.Parse(keyProtected.Id)
 	if err != nil {
@@ -268,61 +266,6 @@ func decryptKeyV3(keyProtected *encryptedKeyJSONV3, auth string) (keyBytes []byt
 		return nil, nil, err
 	}
 	return plainText, keyId, err
-}
-
-func decryptKeyV1(keyProtected *encryptedKeyJSONV1, auth string) (keyBytes []byte, keyId []byte, err error) {
-	keyUUID, err := uuid.Parse(keyProtected.Id)
-	if err != nil {
-		return nil, nil, err
-	}
-	keyId = keyUUID[:]
-	mac, err := hex.DecodeString(keyProtected.Crypto.MAC)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	iv, err := hex.DecodeString(keyProtected.Crypto.CipherParams.IV)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	cipherText, err := hex.DecodeString(keyProtected.Crypto.CipherText)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	derivedKey, err := getKDFKey(keyProtected.Crypto, auth)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	calculatedMAC := crypto.Keccak256(derivedKey[16:32], cipherText)
-	if !bytes.Equal(calculatedMAC, mac) {
-		return nil, nil, ErrDecrypt
-	}
-
-	plainText, err := aesCBCDecrypt(crypto.Keccak256(derivedKey[:32])[:16], cipherText, iv)
-	if err != nil {
-		return nil, nil, err
-	}
-	return plainText, keyId, err
-}
-
-func GetKey(addr common.Address, filename, auth string) (*Key, error) {
-	// Load the key from the keystore and decrypt its contents
-	keyjson, err := ioutil.ReadFile(filename)
-	if err != nil {
-		return nil, err
-	}
-	key, err := DecryptKey(keyjson, auth)
-	if err != nil {
-		return nil, err
-	}
-	// Make sure we're really operating on the requested key (no swap attacks)
-	if key.Address != addr {
-		return nil, fmt.Errorf("key content mismatch: have account %x, want %x", key.Address, addr)
-	}
-	return key, nil
 }
 
 func getKDFKey(cryptoJSON CryptoJSON, auth string) ([]byte, error) {

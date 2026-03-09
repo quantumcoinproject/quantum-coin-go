@@ -252,13 +252,13 @@ func (cs *chainSyncer) nextSyncOp() *chainSyncOp {
 		log.Debug("nextSyncOp exit: less than minPeers connected", "minPeers", minPeers, "cs.handler.peers.len()", cs.handler.peers.len())
 		return nil
 	}
-	// We have enough peers, check TD
-	peer := cs.handler.peers.peerWithHighestTD()
+	mode, ourTD := cs.modeAndLocalHead()
+	peer := cs.handler.peers.getRandomPeer(ourTD)
 	if peer == nil {
-		log.Debug("nextSyncOp exit: no peer with highest TD")
+		log.Debug("nextSyncOp exit: no peer with higher TD")
 		return nil
 	}
-	mode, ourTD := cs.modeAndLocalHead()
+	log.Debug("nextSyncOp: selected peer for sync", "peer", peer.ID(), "ourTD", ourTD)
 	op := peerToSyncOp(mode, peer)
 	if op.td.Cmp(ourTD) <= 0 {
 		log.Debug("nextSyncOp exit: already in sync", "ourTD", ourTD, "peerTD", op.td)

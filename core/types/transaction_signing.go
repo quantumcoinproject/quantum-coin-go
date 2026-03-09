@@ -175,10 +175,12 @@ func (s londonSigner) ChainID() *big.Int {
 func (s londonSigner) Sender(tx *Transaction) (common.Address, error) {
 	V, R, S := tx.RawSignatureValues()
 	if tx.ChainId().Cmp(s.chainId) != 0 {
+		log.Debug("Sender ErrInvalidChainId")
 		return common.Address{}, ErrInvalidChainId
 	}
 	hash, err := s.Hash(tx)
 	if err != nil {
+		log.Debug("Sender ZERO_ADDRESS")
 		return common.ZERO_ADDRESS, err
 	}
 	return recoverPlain(hash, R, S, V)
@@ -230,9 +232,12 @@ func (s londonSigner) SignatureValues(tx *Transaction, sig []byte) (R, S, V *big
 			V = big.NewInt(1)
 			return R, S, V, nil
 		}
+	} else {
+		err = ErrInvalidTxType
+		return nil, nil, nil, ErrInvalidTxType
 	}
 
-	return nil, nil, nil, errors.New("signature error")
+	return nil, nil, nil, errors.New("signaturevalues error b")
 }
 
 // Hash returns the hash to be signed by the sender.
@@ -309,12 +314,14 @@ func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error
 
 	combinedSignature, err := cryptobase.DynamicSigVerifier.CombinePublicKeySignature(sig, pub)
 	if err != nil {
+		log.Debug("combinedSignature", "error", err)
 		return common.Address{}, err
 	}
 
 	// recover the public key (address) from the signature
 	addr, err := cryptobase.DynamicSigVerifier.GetAddress(sighash[:], combinedSignature)
 	if err != nil {
+		log.Debug("GetAddress", "error", err)
 		return common.Address{}, err
 	}
 

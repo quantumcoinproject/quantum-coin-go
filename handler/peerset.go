@@ -263,22 +263,30 @@ func (ps *peerSet) peerWithHighestTD() *eth.Peer {
 	return bestPeer
 }
 
-func (ps *peerSet) getRandomPeer() *eth.Peer {
+func (ps *peerSet) getRandomPeer(selfTd *big.Int) *eth.Peer {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
 	if ps.peers == nil || len(ps.peers) == 0 {
 		return nil
 	}
-	n := rand.Intn(len(ps.peers))
-	i := 0
-	for _, p := range ps.peers {
-		if i == n {
-			return p.Peer
-		}
-		i++
+	// Collect peers with higher total difficulty than self
+	selfTdForCmp := selfTd
+	if selfTdForCmp == nil {
+		selfTdForCmp = big.NewInt(0)
 	}
-	return nil
+	higher := make([]*ethPeer, 0, len(ps.peers))
+	for _, p := range ps.peers {
+		_, td := p.Head()
+		if td != nil && td.Cmp(selfTdForCmp) > 0 {
+			higher = append(higher, p)
+		}
+	}
+	if len(higher) == 0 {
+		return nil
+	}
+	n := rand.Intn(len(higher))
+	return higher[n].Peer
 }
 
 // close disconnects all peers.

@@ -18,6 +18,11 @@ package miner
 
 import (
 	"errors"
+	"math/big"
+	"sync"
+	"sync/atomic"
+	"time"
+
 	mapset "github.com/deckarep/golang-set"
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -30,10 +35,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
-	"math/big"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 const (
@@ -880,7 +881,7 @@ func (w *worker) commit(interval func(), update bool, start time.Time) error {
 	s := w.current.state.Copy()
 	block, err := w.engine.FinalizeAndAssembleWithConsensus(w.chain, w.current.header, s, w.current.txs, receipts, w.current.passedTxs, w.current.errorTxs)
 	if err != nil {
-		log.Trace("commit2", "err", err)
+		log.Warn("FinalizeAndAssembleWithConsensus", "error", err)
 		return err
 	}
 	if w.isRunning() {

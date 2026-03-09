@@ -1,0 +1,79 @@
+name: Devnet Data Creator Mac
+
+on:
+  workflow_run:
+    workflows: ["Mac Release"]
+    types:
+      - completed
+
+jobs:
+  download:
+    runs-on: macos-14
+    # Only run when mac-release completed successfully
+    if: github.event.workflow_run.conclusion == 'success'
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get latest release tag
+        id: get_tag
+        run: echo "tag=$(gh release view --repo ${{ github.repository }} --json tagName -q .tagName)" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Download release assets
+        run: |
+          gh release download ${{ steps.get_tag.outputs.tag }} --repo ${{ github.repository }} --dir . \
+            --pattern 'qc-release-mac-devnet-*'
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Extract devnet tarball to folder
+        run: |
+          mkdir -p devnet
+          tar -xzf qc-release-mac-devnet-*.tar.gz -C devnet
+
+      - name: Init with genesis
+        working-directory: devnet
+        run: ./dp --datadir data init genesis.json
+
+      - name: Copy keystore file to data/keystore
+        working-directory: devnet
+        run: |
+          mkdir -p data/keystore
+          cp 45d* data/keystore/ 2>/dev/null || true
+          
+      - name: Run connectvalidator, wait 5 min, then SIGTERM dp
+        working-directory: devnet
+        run: |
+          ./connectvalidator.sh > connectvalidator.log 2>&1 &
+          VALIDATOR_PID=$!
+          sleep 500
+          kill -TERM -$VALIDATOR_PID 2>/dev/null || true
+          wait $VALIDATOR_PID 2>/dev/null || true
+          # Wait for dp to exit, max 60s to avoid hanging
+          COUNT=0
+          while pgrep -f './dp' >/dev/null && [ $COUNT -lt 30 ]; do sleep 2; COUNT=$((COUNT+1)); done
+          # Force kill parent script (and its children) if still running after 60s
+          kill -9 -$VALIDATOR_PID 2>/dev/null || true
+
+      - name: Compress devnet folder to mac-devnet.tar.gz
+        run: tar -czf mac-devnet.tar.gz devnet
+
+      - name: Upload mac-devnet.tar.gz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devnet-data-mac
+          path: mac-devnet.tar.gz
+
+      - name: Upload mac-devnet.tar.gz to release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.get_tag.outputs.tag }}
+          allowUpdates: true
+          artifacts: mac-devnet.tar.gz

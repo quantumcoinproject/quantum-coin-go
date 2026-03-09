@@ -10,15 +10,6 @@ import (
 const DEFAULT_CHAIN_ID int64 = 123123
 const MAX_REMARKS_LENGTH = 64
 
-type GasTier uint64
-
-const (
-	GAS_TIER_DEFAULT GasTier = 1
-	GAS_TIER_2X      GasTier = 2
-	GAS_TIER_5X      GasTier = 5
-	GAS_TIER_10X     GasTier = 10
-)
-
 type AccessList []AccessTuple
 
 // AccessTuple is the element type of an access list.
@@ -139,7 +130,11 @@ func (tx *DefaultFeeTx) gasFeeCap() *big.Int    { return GetDefaultGasPrice() }
 func (tx *DefaultFeeTx) gasPrice() *big.Int {
 	return GetDefaultGasPrice()
 }
+func (tx *DefaultFeeTx) gasTipCap() *big.Int { return tx.gasPrice() }
 func (tx *DefaultFeeTx) maxGasTier() GasTier { return tx.MaxGasTier }
+func (tx *DefaultFeeTx) signingContext() byte {
+	return byte(SigningContextDefault)
+}
 func (tx *DefaultFeeTx) value() *big.Int     { return tx.Value }
 func (tx *DefaultFeeTx) nonce() uint64       { return tx.Nonce }
 func (tx *DefaultFeeTx) to() *common.Address { return tx.To }

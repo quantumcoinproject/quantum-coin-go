@@ -52,7 +52,17 @@ jobs:
          chmod +x ${{ github.workspace }}/build/dp-release/*.sh
          cd ${{ github.workspace }}/build/dp-release && tar -czf ${{ github.workspace }}/build/qc-release-ubuntu-compact-${{  github.ref_name }}.tar.gz .
          sha256sum ${{ github.workspace }}/build/qc-release-ubuntu-compact-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-ubuntu-compact-${{  github.ref_name }}.txt      
-         
+        
+         rm ${{ github.workspace }}/build/dp-release/connect.sh
+         rm ${{ github.workspace }}/build/dp-release/connectvalidator.sh
+         rm ${{ github.workspace }}/build/dp-release/genesis.json
+         cp ${{ github.workspace }}/consensus/proofofstake/genesis/devnet/genesis.json ${{ github.workspace }}/build/dp-release/genesis.json
+         cp ${{ github.workspace }}/resources/devnet/* ${{ github.workspace }}/build/dp-release/
+         chmod +x ${{ github.workspace }}/build/dp-release/*.sh
+         cd ${{ github.workspace }}/build/dp-release && tar -czf ${{ github.workspace }}/build/qc-release-ubuntu-devnet-${{  github.ref_name }}.tar.gz .
+         sha256sum ${{ github.workspace }}/build/qc-release-ubuntu-devnet-${{  github.ref_name }}.tar.gz >${{ github.workspace }}/build/releasehash-ubuntu-devnet-${{  github.ref_name }}.txt      
+    
+
     - name: 'Upload Artifact'
       uses: actions/upload-artifact@v4
       with:

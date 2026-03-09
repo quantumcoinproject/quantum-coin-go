@@ -19,12 +19,8 @@ package types
 import (
 	"math/big"
 
-	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
-
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/log"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 )
 
 type DynamicFeeTx struct {
@@ -97,14 +93,13 @@ func (tx *DynamicFeeTx) copy() TxData {
 func (tx *DynamicFeeTx) calcGasFee() *big.Int {
 	defaultFee := getGasPrice()
 	var expectedGasPrice *big.Int
-	if tx.SigningContext == byte(crypto.SigningContextDefault) {
+	if tx.SigningContext == byte(SigningContextDefault) {
 		expectedGasPrice = defaultFee
-	} else if tx.SigningContext == byte(crypto.SigningContextLevel1) {
+	} else if tx.SigningContext == byte(SigningContextLevel1) {
 		expectedGasPrice = common.SafeMulBigInt(defaultFee, big.NewInt(defaults.SigningContextLevel1Multiplier))
-	} else if tx.SigningContext == byte(crypto.SigningContextLevel2) {
+	} else if tx.SigningContext == byte(SigningContextLevel2) {
 		expectedGasPrice = common.SafeMulBigInt(defaultFee, big.NewInt(defaults.SigningContextLevel2Multiplier))
 	} else {
-		log.Warn("verifyFields", "SigningContext", tx.SigningContext)
 		return nil
 	}
 	return expectedGasPrice
@@ -131,24 +126,20 @@ func (tx *DynamicFeeTx) verifyFields() bool {
 	if tx.S != nil {
 		signature := tx.S.Bytes()
 		if len(signature) > 1 {
-			algType := crypto.SignatureAlgorithmType(signature[0])
-			if tx.SigningContext == byte(crypto.SigningContextDefault) {
-				if algType != crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID && algType != crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {
-					log.Debug("verifyFields signing context algtype mismatch a", "tx.signingContext", tx.SigningContext, "algType", algType)
+			algType := SignatureAlgorithmType(signature[0])
+			if tx.SigningContext == byte(SigningContextDefault) {
+				if algType != DILITHIUM_ED25519_SPHINCS_COMPACT_ID && algType != MLDSA_ED25519_SLHDSA_COMPACT_ID {
 					return false
 				}
-			} else if tx.SigningContext == byte(crypto.SigningContextLevel1) {
-				if algType != crypto.MLDSA_ED25519_SLHDSA_5_ID {
-					log.Debug("verifyFields signing context algtype mismatch b", "tx.signingContext", tx.SigningContext, "algType", algType)
+			} else if tx.SigningContext == byte(SigningContextLevel1) {
+				if algType != MLDSA_ED25519_SLHDSA_5_ID {
 					return false
 				}
-			} else if tx.SigningContext == byte(crypto.SigningContextLevel2) {
-				if algType != crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID && algType != crypto.MLDSA_ED25519_SLHDSA_FULL_ID {
-					log.Debug("verifyFields signing context algtype mismatch c", "tx.signingContext", tx.SigningContext, "algType", algType)
+			} else if tx.SigningContext == byte(SigningContextLevel2) {
+				if algType != DILITHIUM_ED25519_SPHINCS_FULL_ID && algType != MLDSA_ED25519_SLHDSA_FULL_ID {
 					return false
 				}
 			} else {
-				log.Warn("verifyFields", "SigningContext", tx.SigningContext)
 				return false
 			}
 		}
@@ -156,17 +147,14 @@ func (tx *DynamicFeeTx) verifyFields() bool {
 
 	expectedGasPrice := tx.calcGasFee()
 	if expectedGasPrice == nil {
-		log.Debug("verifyFields nil expectedGasPrice", "tx.gasPrice()", tx.gasPrice(), "signingContext", tx.SigningContext)
 		return false
 	}
 
 	if tx.gasPrice().Cmp(expectedGasPrice) != 0 {
-		log.Debug("verifyFields", "tx.gasPrice()", tx.gasPrice(), "expectedGasFee", expectedGasPrice, "signingContext", tx.SigningContext)
 		return false
 	}
 
-	if tx.maxGasTier() != GasTier(types.GAS_TIER_DEFAULT) {
-		log.Debug("verifyFields", "tx.maxGasTier()", tx.maxGasTier())
+	if tx.maxGasTier() != GasTier(GAS_TIER_DEFAULT) {
 		return false
 	}
 	return len(tx.Remarks) <= MAX_REMARKS_LENGTH
@@ -184,7 +172,7 @@ func (tx *DynamicFeeTx) remarks() []byte {
 	return tx.Remarks
 }
 
-func NewDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte, remarks []byte) *Transaction {
+func NewDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, data []byte, remarks []byte, signingContext SigningContext) *Transaction {
 	tx := NewTx(&DynamicFeeTx{
 		ChainID:        chainId,
 		Nonce:          nonce,

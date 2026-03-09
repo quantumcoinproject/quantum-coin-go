@@ -15,6 +15,7 @@ import (
 	"syscall/js"
 
 	"github.com/google/uuid"
+	circlwasm "github.com/quantumcoinproject/circl/sign/wasm"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -46,14 +47,15 @@ type Transaction2 struct {
 }
 
 type TransactionDetails2 struct {
-	FromAddress common.Address  `json:"fromAddress"`
-	ToAddress   *common.Address `json:"toAddress"`
-	Nonce       uint64          `json:"nonce"`
-	GasLimit    uint64          `json:"gasLimit"`
-	Value       *big.Int        `json:"value"`
-	Data        []byte          `json:"data"`
-	ChainId     *big.Int        `json:"chainId"`
-	Remarks     []byte          `json:"remarks"`
+	FromAddress    common.Address  `json:"fromAddress"`
+	ToAddress      *common.Address `json:"toAddress"`
+	Nonce          uint64          `json:"nonce"`
+	GasLimit       uint64          `json:"gasLimit"`
+	Value          *big.Int        `json:"value"`
+	Data           []byte          `json:"data"`
+	ChainId        *big.Int        `json:"chainId"`
+	Remarks        []byte          `json:"remarks"`
+	SigningContext byte            `json:"signingContext"`
 }
 
 func main() {
@@ -87,6 +89,7 @@ func main() {
 	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
 	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
+	circlwasm.Register()
 	<-done
 }
 
@@ -183,18 +186,18 @@ func TxnSigningHash(this js.Value, args []js.Value) interface{} {
 func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData2(args)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
-	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
 	signerHash, err := signer.Hash(tx)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	var message strings.Builder
@@ -202,7 +205,7 @@ func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 		sh := signerHash[i]
 		message.WriteString(string(sh))
 	}
-	return message.String()
+	return jsResult(message.String())
 }
 
 func TxnHash(this js.Value, args []js.Value) interface{} {
@@ -236,29 +239,29 @@ func TxnHash(this js.Value, args []js.Value) interface{} {
 func TxnHash2(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData2(args)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
-	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
-	pubData := js.Global().Get("Uint8Array").New(args[8])
+	pubData := js.Global().Get("Uint8Array").New(args[9])
 	pubBytes := make([]byte, pubData.Get("length").Int())
 	js.CopyBytesToGo(pubBytes, pubData)
 
-	sigData := js.Global().Get("Uint8Array").New(args[9])
+	sigData := js.Global().Get("Uint8Array").New(args[10])
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
 	signTx, err := signTxHash(tx, signer, pubBytes, sigBytes)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
-	return signTx.Hash().String()
+	return jsResult(signTx.Hash().String())
 }
 
 func TxnData(this js.Value, args []js.Value) interface{} {
@@ -299,36 +302,36 @@ func TxnData(this js.Value, args []js.Value) interface{} {
 func TxnData2(this js.Value, args []js.Value) interface{} {
 	ts, err := transactionData2(args)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
-	tx := wasm.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data, ts.Transaction[0].Remarks)
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
 
 	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
 
-	pubData := js.Global().Get("Uint8Array").New(args[8])
+	pubData := js.Global().Get("Uint8Array").New(args[9])
 	pubBytes := make([]byte, pubData.Get("length").Int())
 	js.CopyBytesToGo(pubBytes, pubData)
 
-	sigData := js.Global().Get("Uint8Array").New(args[9])
+	sigData := js.Global().Get("Uint8Array").New(args[10])
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
 	signTx, err := signTxHash(tx, signer, pubBytes, sigBytes)
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	signTxBinary, err := signTx.MarshalBinary()
 	if err != nil {
-		return nil
+		return jsError(err)
 	}
 
 	signTxEncode := hexutil.Encode(signTxBinary)
 
-	return signTxEncode
+	return jsResult(signTxEncode)
 }
 
 func ContractData(this js.Value, args []js.Value) interface{} {
@@ -509,6 +512,22 @@ func transactionData(args []js.Value) (transaction Transaction, err error) {
 	return t, nil
 }
 
+// jsError wraps an error into {result: null, error: "message"}.
+func jsError(err error) any {
+	obj := js.Global().Get("Object").New()
+	obj.Set("result", js.Null())
+	obj.Set("error", err.Error())
+	return obj
+}
+
+// jsResult wraps a successful value into {result: val, error: null}.
+func jsResult(val any) any {
+	obj := js.Global().Get("Object").New()
+	obj.Set("result", val)
+	obj.Set("error", js.Null())
+	return obj
+}
+
 func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 	fromAddress := common.HexToAddress(args[0].String())
 
@@ -567,9 +586,17 @@ func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 		remarks = nil
 	}
 
+	var signingContext byte
+	if args[8].IsNull() == false && args[8].IsUndefined() == false {
+		var signingContextString string
+		fmt.Sscan(args[8].String(), &signingContextString, &signingContext)
+	} else {
+		signingContext = 0
+	}
+
 	transactionDetails := TransactionDetails2{
 		FromAddress: fromAddress, ToAddress: toAddress, Nonce: nonce, GasLimit: gasLimit,
-		Value: weiVal, Data: data, ChainId: chainId, Remarks: remarks}
+		Value: weiVal, Data: data, ChainId: chainId, Remarks: remarks, SigningContext: signingContext}
 
 	var t Transaction2
 	t.Transaction = append(t.Transaction, transactionDetails)
@@ -1715,7 +1742,7 @@ func convertJsValueToRlpType(jsVal js.Value) (interface{}, error) {
 			}
 			return str, nil
 		}
-		
+
 		keys := js.Global().Get("Object").Call("keys", jsVal)
 		length := keys.Get("length").Int()
 		result := make([]interface{}, 0, length*2) // RLP encodes maps as alternating key-value pairs

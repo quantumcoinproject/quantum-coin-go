@@ -3,11 +3,12 @@ package types
 import (
 	"bytes"
 	"errors"
-	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"math/big"
 	"sync/atomic"
 	"time"
+
+	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 var (
@@ -22,6 +23,16 @@ var (
 // Transaction types.
 const (
 	DefaultFeeTxType = iota
+	DynamicFeeTxType = iota
+)
+
+type GasTier uint64
+
+const (
+	GAS_TIER_DEFAULT GasTier = 1
+	GAS_TIER_2X      GasTier = 2
+	GAS_TIER_5X      GasTier = 5
+	GAS_TIER_10X     GasTier = 10
 )
 
 // Transaction is an Ethereum transaction.
@@ -65,7 +76,10 @@ type TxData interface {
 	data() []byte
 	gas() uint64
 	gasPrice() *big.Int
+	gasTipCap() *big.Int
+	gasFeeCap() *big.Int
 	maxGasTier() GasTier
+	signingContext() byte
 	value() *big.Int
 	nonce() uint64
 	to() *common.Address
@@ -101,6 +115,14 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
 func (tx *Transaction) MaxGasTier() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
+
+// GasTipCap returns the gasTipCap per gas of the transaction.
+func (tx *Transaction) GasTipCap() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
+
+// GasFeeCap returns the fee cap per gas of the transaction.
+func (tx *Transaction) GasFeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
+
+func (tx *Transaction) SigningContext() byte { return tx.inner.signingContext() }
 
 // Value returns the ether amount of the transaction.
 func (tx *Transaction) Value() *big.Int { return new(big.Int).Set(tx.inner.value()) }
