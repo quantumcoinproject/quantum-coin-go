@@ -20,7 +20,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
-	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereds" // hybrid PQC (NIST) helper for compact signatures
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -1250,7 +1250,7 @@ func PublicKeyFromSignature(this js.Value, args []js.Value) interface{} {
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
-	publicKeyBytes, err := pqchelpereds.PublicKeyBytesFromSignatureCompact(digestBytes, sigBytes)
+	publicKeyBytes, err := cryptobase.DynamicSigVerifier.PublicKeyBytesFromSignature(digestBytes, sigBytes)
 	if err != nil {
 		return nil
 	}
@@ -1267,7 +1267,7 @@ func PublicKeyFromPrivateKey(this js.Value, args []js.Value) interface{} {
 	compositePrivateKeyBytes := make([]byte, compositePrivateKeyData.Get("length").Int())
 	js.CopyBytesToGo(compositePrivateKeyBytes, compositePrivateKeyData)
 
-	_, publicKeyBytes, err := pqchelpereds.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
+	_, publicKeyBytes, err := cryptobase.DynamicSigVerifier.PrivateAndPublicFromPrivateKey(compositePrivateKeyBytes)
 	if err != nil {
 		return nil
 	}
@@ -1288,7 +1288,7 @@ func CombinePublicKeySignature(this js.Value, args []js.Value) interface{} {
 	sigBytes := make([]byte, sigData.Get("length").Int())
 	js.CopyBytesToGo(sigBytes, sigData)
 
-	combinedSignatureBytes, err := pqchelpereds.CombinePublicKeySignature(sigBytes, pubBytes)
+	combinedSignatureBytes, err := cryptobase.DynamicSigVerifier.CombinePublicKeySignature(sigBytes, pubBytes)
 	if err != nil {
 		return nil
 	}

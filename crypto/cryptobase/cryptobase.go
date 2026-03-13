@@ -28,6 +28,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideddsamldsaslhdsafull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereddsamldsaslhdsa"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/pqchelpereddsamldsaslhdsa5"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -139,6 +141,19 @@ func (dv DynamicVerifier) PublicKeyAndSignatureFromCombinedSignature(digestHash 
 	} else {
 		return nil, nil, errors.New("PublicKeyAndSignatureFromCombinedSignature invalid signature type")
 	}
+}
+
+func (dv DynamicVerifier) PrivateAndPublicFromPrivateKey(privateKey []byte) (priv []byte, pub []byte, err error) {
+	if privateKey == nil {
+		return nil, nil, errors.New("nil private key")
+	}
+	if len(privateKey) == SigAlgHybridMlDsaEddsaSlhDsaCompact.PrivateKeyLength() {
+		return pqchelpereddsamldsaslhdsa.PrivateAndPublicFromPrivateKey(privateKey)
+	} else if len(privateKey) == SigAlgHybridMlDsaEddsaSlhDsa5.PrivateKeyLength() {
+		return pqchelpereddsamldsaslhdsa5.PrivateAndPublicFromPrivateKey(privateKey)
+	}
+
+	return nil, nil, errors.New("invalid private key length")
 }
 
 func (dv DynamicVerifier) PublicKeyBytesFromSignature(digestHash []byte, sig []byte) ([]byte, error) {
