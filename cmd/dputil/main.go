@@ -222,14 +222,13 @@ func main() {
 		return
 	} else {
 		defaults.SetCryptoSigningMode(3)
-		fmt.Println("Signing Mode 3")
 	}
 
-	if txType == "" || txType == "0" {
+	if txType == "0" {
 		fmt.Println("Tx Type: DefaultFee")
 	} else if txType == "1" {
 		fmt.Println("Tx Type: DynamicFee")
-	} else {
+	} else if txType != "" {
 		fmt.Println("Unknown txType", txType)
 		return
 	}
@@ -738,6 +737,18 @@ func getTxn() {
 			return
 		}
 		fmt.Print(prettyReceipt)
+
+		var txnMap map[string]interface{}
+		if err := json.Unmarshal([]byte(txnJson), &txnMap); err == nil {
+			if gasPriceHex, ok := txnMap["gasPrice"].(string); ok {
+				gasPrice, ok := new(big.Int).SetString(strings.TrimPrefix(gasPriceHex, "0x"), 16)
+				if ok {
+					feeWei := new(big.Int).Mul(gasPrice, new(big.Int).SetUint64(receipt.GasUsed))
+					feeCoins := params.WeiToEther(feeWei)
+					fmt.Printf("\n Txn Fee: %v coins (%v wei) (gas used: %d)\n", feeCoins, feeWei, receipt.GasUsed)
+				}
+			}
+		}
 	} else {
 		fmt.Println("receipt is nil")
 	}
