@@ -24,7 +24,6 @@ import (
 	"math"
 	"math/big"
 	mrand "math/rand"
-	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -32,6 +31,7 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -2211,7 +2211,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	if len(oldChain) > 0 && len(newChain) > 0 {
 		log.Warn("Chain reorg detected", "number", commonBlock.Number(), "hash", commonBlock.Hash(),
 			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "add", len(newChain), "addfrom", newChain[0].Hash())
-		if os.Getenv("EXPERIMENTAL_FAIL_REORG") == "1" {
+		if defaults.FailExperimentalReorg() {
 			log.Warn("EXPERIMENTAL_FAIL_REORG is set")
 			return errors.New("reorg in fail mode")
 		}
