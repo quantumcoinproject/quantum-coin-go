@@ -84,7 +84,7 @@ const ttlScaling = 6
 // if some unforeseen network events shappen. As much as we try to hone in on
 // the most optimal values, it doesn't make any sense to go above a threshold,
 // even if everything is slow and screwy.
-const ttlLimit = 2 * time.Minute
+const ttlLimit = time.Minute
 
 // tuningConfidenceCap is the number of active peers above which to stop detuning
 // the confidence number. The idea here is that once we hone in on the capacity
