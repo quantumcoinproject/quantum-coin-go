@@ -565,6 +565,10 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		return nil
 	}
 
+	if TestHookCheck(blockNumber) != nil {
+		return errors.New("TestHookCheck fail")
+	}
+	
 	cph.blockStateDetailsMap[parentHash] = &BlockStateDetails{
 		blockRoundMap:                make(map[byte]*BlockRoundDetails),
 		filteredValidatorsDepositMap: make(map[common.Address]*big.Int),
@@ -2636,7 +2640,6 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	}
 
 	if cph.initialized == false {
-
 		matched, err := cph.DoesPreviousHashMatch(parentHash)
 		if err != nil {
 			log.Warn("DoesPreviousHashMatch on parent hash failed", "error", err)

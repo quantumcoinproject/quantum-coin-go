@@ -18,6 +18,7 @@ var skipConsensusStartupHashCheck = os.Getenv("SKIP_CONSENSUS_STARTUP_HASH_CHECK
 var skipProposalTimeDiffCheck = os.Getenv("SKIP_PROPOSAL_TIME_DIFF_CHECK")
 var failExperimentalReorg = os.Getenv("EXPERIMENTAL_FAIL_REORG")
 var isConsensusRelay = os.Getenv("IS_CONSENSUS_RELAY")
+var testHookEndpoint = os.Getenv("TEST_HOOK_ENDPOINT")
 
 func SendStaticAndOutboundNodesOnly() bool {
 	return sendStaticNodesOnly == "1"
@@ -80,4 +81,8 @@ func GetMinValidatorsOverride() int {
 	}
 
 	return minVal
+}
+
+func GetTestHookEndpoint() string {
+	return testHookEndpoint
 }
