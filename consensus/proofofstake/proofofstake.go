@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
 	"sync"
 	"time"
 
@@ -91,8 +90,6 @@ var (
 
 	errInvalidGasLimit = errors.New("invalid gas limit")
 )
-
-var SKIP_BLOCK_DEEP_CHECK = os.Getenv("SKIP_BLOCK_DEEP_CHECK")
 
 // SignerFn hashes and signs the data to be signed by a backing account.
 type SignerFn func(signer accounts.Account, mimeType string, message []byte, sigAlg byte) ([]byte, error)
@@ -234,7 +231,7 @@ func recreateTxnMap(selectedTxns []common.Hash, txnAddressMap map[common.Hash]co
 			for k, v := range txnAddressMap {
 				log.Trace("recreateTxnMap txnAddressMap", "k", k, "v", v)
 			}
-			if os.Getenv("SKIP_TXN") == "1" {
+			if defaults.SkipMissingTxn() {
 				log.Warn("SKIP_TXN is set")
 				continue
 			}
@@ -562,7 +559,7 @@ func (c *ProofOfStake) VerifyBlock(chain consensus.ChainHeaderReader, block *typ
 		return err
 	}
 
-	if SKIP_BLOCK_DEEP_CHECK == "1" {
+	if defaults.SkipDeepBlockCheck() {
 		//perform only a mini check
 		if header.ConsensusData == nil || header.UnhashedConsensusData == nil {
 			return errors.New("VerifyBlock ConsensusData is nil")

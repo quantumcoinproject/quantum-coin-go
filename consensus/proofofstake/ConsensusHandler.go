@@ -36,8 +36,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
-var SKIP_TIME_DIFF_CHECK = os.Getenv("SKIP_TIME_DIFF_CHECK")
-
 type GetBlockConsensusContextFn func(key string, blockHash common.Hash) ([32]byte, error)
 type GetValidatorsFn func(blockHash common.Hash) (map[common.Address]*big.Int, error)
 type DoesFinalizedTransactionExistFn func(txnHash common.Hash) (bool, error)
@@ -324,23 +322,13 @@ func GetTimeStatBucket(state string, ms int64) string {
 	} else {
 		return key + "-30s+"
 	}
-
-	return key
 }
 
 func NewConsensusPacketHandler() *ConsensusHandler {
-	minVal := os.Getenv("MIN_VALIDATORS")
-	if len(minVal) > 0 {
-		var err error
-		MIN_VALIDATORS, err = strconv.Atoi(minVal)
-		if err != nil {
-			log.Error("Error parsing MIN_VALIDATORS environment variable")
-			panic(err)
-		}
-		if MIN_VALIDATORS < 1 || MIN_VALIDATORS > MAX_VALIDATORS {
-			log.Error("Invalid MIN_VALIDATORS", "MIN_VALIDATORS", MIN_VALIDATORS)
-			panic("Invalid MIN_VALIDATORS")
-		}
+	minValOverride := defaults.GetMinValidatorsOverride()
+	if minValOverride > 0 {
+		MIN_VALIDATORS = minValOverride
+		log.Warn("MIN_VALIDATORS override", "value", minValOverride)
 	}
 
 	timeStatMap := make(map[string]int)
@@ -375,12 +363,7 @@ func NewConsensusPacketHandler() *ConsensusHandler {
 	timeStatMap[TOTAL_KEY_PREFIX+"-10s-to-30s"] = 0
 	timeStatMap[TOTAL_KEY_PREFIX+"-30s+"] = 0
 
-	isConsensusRelay := false
-	isConsensusRelayEnv := os.Getenv("IS_CONSENSUS_RELAY")
-	if len(isConsensusRelayEnv) > 0 && isConsensusRelayEnv == "1" {
-		log.Info("isConsensusRelay")
-		isConsensusRelay = true
-	}
+	isConsensusRelay := defaults.IsConsensusRelay()
 
 	cph := &ConsensusHandler{
 		blockStateDetailsMap:               make(map[common.Hash]*BlockStateDetails),
@@ -582,6 +565,10 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		return nil
 	}
 
+	if TestHookCheck(blockNumber) != nil {
+		return errors.New("TestHookCheck fail")
+	}
+	
 	cph.blockStateDetailsMap[parentHash] = &BlockStateDetails{
 		blockRoundMap:                make(map[byte]*BlockRoundDetails),
 		filteredValidatorsDepositMap: make(map[common.Address]*big.Int),
@@ -2006,7 +1993,7 @@ func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64)
 		}
 		currTime := time.Unix(currTimeVal, 0)
 
-		if SKIP_TIME_DIFF_CHECK == "" {
+		if defaults.SkipProposalTimeDiffCheck() == false {
 			if currTime.Before(tm) {
 				difference := tm.Sub(currTime)
 				if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
@@ -2554,8 +2541,7 @@ func (cph *ConsensusHandler) shouldBreakglassNilVote(blockNumber uint64) bool {
 }
 
 func (cph *ConsensusHandler) DoesPreviousHashMatch(parentHash common.Hash) (bool, error) {
-	skipCheck := os.Getenv("SKIP_CONSENSUS_STARTUP_HASH_CHECK")
-	if SKIP_HASH_CHECK || (len(skipCheck) > 0 && skipCheck == "1") {
+	if SKIP_HASH_CHECK || defaults.SkipConsensusStartupHashCheck() {
 		log.Warn("SKIP_CONSENSUS_STARTUP_HASH_CHECK is set, skipping hash check")
 		return false, nil
 	}
@@ -2654,7 +2640,6 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 	}
 
 	if cph.initialized == false {
-
 		matched, err := cph.DoesPreviousHashMatch(parentHash)
 		if err != nil {
 			log.Warn("DoesPreviousHashMatch on parent hash failed", "error", err)
