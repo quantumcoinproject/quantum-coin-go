@@ -1,19 +1,93 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 )
+
+// BlockCmd fetches eth_getBlockByNumber (full tx objects) and proofofstake_getBlockConsensusData,
+// writes them to BLOCK_NUMBER.json in the current directory, and prints the block JSON plus the file path.
+func BlockCmd() error {
+	if len(os.Args) < 3 {
+		printHelp()
+		return errors.New("incorrect usage: dputil block BLOCK_NUMBER")
+	}
+
+	blockNumStr := os.Args[2]
+	blockNum, err := strconv.ParseUint(blockNumStr, 10, 64)
+	if err != nil {
+		fmt.Println("Enter block number correctly: ", blockNumStr)
+		return err
+	}
+
+	if len(rawURL) == 0 {
+		return errors.New("DP_RAW_URL environment variable not specified")
+	}
+
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		fmt.Println("Dial failed, ensure DP_RAW_URL is set correctly", err)
+		return err
+	}
+	defer client.Close()
+
+	ctx := context.Background()
+	blockHex := hexutil.EncodeBig(new(big.Int).SetUint64(blockNum))
+
+	var blockRaw json.RawMessage
+	if err := client.GetRpcClient().CallContext(ctx, &blockRaw, "eth_getBlockByNumber", blockHex, true); err != nil {
+		return fmt.Errorf("eth_getBlockByNumber: %w", err)
+	}
+	if len(blockRaw) == 0 || string(blockRaw) == "null" {
+		return fmt.Errorf("eth_getBlockByNumber: block %d not found", blockNum)
+	}
+
+	var consensusRaw json.RawMessage
+	if err := client.GetRpcClient().CallContext(ctx, &consensusRaw, "proofofstake_getBlockConsensusData", blockHex); err != nil {
+		return fmt.Errorf("proofofstake_getBlockConsensusData: %w", err)
+	}
+
+	out := map[string]json.RawMessage{
+		"Block":                     blockRaw,
+		"BlockConsensusData": consensusRaw,
+	}
+
+	filename := blockNumStr + ".json"
+	merged, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filename, merged, 0644); err != nil {
+		return err
+	}
+
+	absPath, err := filepath.Abs(filename)
+	if err != nil {
+		absPath = filename
+	}
+
+	var blockPretty bytes.Buffer
+	if err := json.Indent(&blockPretty, blockRaw, "", "  "); err != nil {
+		return err
+	}
+	fmt.Println(blockPretty.String())
+	fmt.Println("Additional block details written to file: ", absPath)
+
+	return nil
+}
 
 func GetBlockValidatorDetailsCmd() error {
 	if len(os.Args) < 3 {
