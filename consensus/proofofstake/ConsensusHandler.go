@@ -9,7 +9,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"io/ioutil"
-	"math"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -485,11 +484,11 @@ func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool
 		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
 	}
 
-	slotsMissed := float64(valDetails.NilBlockCount.Uint64() / BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER)
+	slotsMissed := valDetails.NilBlockCount.Uint64() / BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER
 	if slotsMissed >= 16 { //to avoid overflow errors
 		slotsMissed = 16
 	}
-	blockDelay := uint64(math.Pow(2.0, slotsMissed))
+	blockDelay := uint64(1) << slotsMissed
 	if blockDelay > maxBlockDelay {
 		blockDelay = maxBlockDelay
 	}
@@ -568,7 +567,7 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	if TestHookCheck(blockNumber) != nil {
 		return errors.New("TestHookCheck fail")
 	}
-	
+
 	cph.blockStateDetailsMap[parentHash] = &BlockStateDetails{
 		blockRoundMap:                make(map[byte]*BlockRoundDetails),
 		filteredValidatorsDepositMap: make(map[common.Address]*big.Int),
