@@ -527,10 +527,13 @@ func (p *PeerHandler) SetCurrentParentHash(parentHash common.Hash, currentBlockN
 	p.localPacketsSentToRelaysCurrentParentHash = 0
 
 	//Cleanup old packets
+	var toRemove []common.Hash
 	for k, v := range p.packetSyncMap {
-		if v.packet.ParentHash.IsEqualTo(p.currentParentHash) == true {
-			continue
+		if v.packet.ParentHash.IsEqualTo(p.currentParentHash) == false {
+			toRemove = append(toRemove, k)
 		}
+	}
+	for _, k := range toRemove {
 		delete(p.packetSyncMap, k)
 	}
 

@@ -575,17 +575,21 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	}
 
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+		var toRemove []common.Address
 		for valAddr, valDetails := range *valDetailsMap {
 			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidatorDepositMap
-				delete(*valDetailsMap, valAddr)
+				toRemove = append(toRemove, valAddr)
 				log.Debug("ValidateBlockConsensusDataInner ValidationPaused remove", "validator", valAddr, "blockNumber", blockNumber)
 				continue
 			}
 			_, ok := filteredValidatorDepositMap[valAddr]
 			if ok == false {
 				log.Debug("ValidateBlockConsensusDataInner filteredValidatorDepositMap remove", "validator", valAddr, "blockNumber", blockNumber)
-				delete(*valDetailsMap, valAddr)
+				toRemove = append(toRemove, valAddr)
 			}
+		}
+		for _, valAddr := range toRemove {
+			delete(*valDetailsMap, valAddr)
 		}
 
 		blockValidatorDetails.ValidatorDetailsList = make([]backupmanager.ValidatorDetailsV2, len(*valDetailsMap))

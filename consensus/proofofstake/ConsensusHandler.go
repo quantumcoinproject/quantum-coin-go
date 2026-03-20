@@ -424,7 +424,7 @@ func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[c
 		i = i + 1
 	}
 
-	sort.Slice(validators, func(i, j int) bool {
+	sort.SliceStable(validators, func(i, j int) bool {
 		vi := crypto.Keccak256Hash(parentHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
 		vj := crypto.Keccak256Hash(parentHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
 		return bytes.Compare(vi, vj) == -1
@@ -537,7 +537,7 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	}
 	blockBytes := common.Uint64ToBytes(blockNumber)
 
-	sort.Slice(validators, func(i, j int) bool {
+	sort.SliceStable(validators, func(i, j int) bool {
 		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
 			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
 			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
@@ -624,15 +624,19 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	}
 
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
+		var toRemove []common.Address
 		for valAddr, valDetails := range validatorDetailsMap {
 			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidators
-				delete(validatorDetailsMap, valAddr)
+				toRemove = append(toRemove, valAddr)
 				continue
 			}
 			_, ok := filteredValidators[valAddr]
 			if ok == false {
-				delete(validatorDetailsMap, valAddr)
+				toRemove = append(toRemove, valAddr)
 			}
+		}
+		for _, valAddr := range toRemove {
+			delete(validatorDetailsMap, valAddr)
 		}
 		blockStateDetails.validatorDetailsMap = &validatorDetailsMap
 	}
@@ -882,6 +886,7 @@ func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash, bl
 		return nil
 	}
 
+	var processedHashes []common.Hash
 	for pktHash, pkt := range packetMap {
 		if pkt.Packet.ParentHash.IsEqualTo(parentHash) {
 			err := cph.processPacket(pkt.Packet, blockNumber)
@@ -889,10 +894,13 @@ func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash, bl
 				log.Debug("processOutOfOrderPackets A", "err", err)
 				continue
 			}
-			delete(packetMap, pktHash)
+			processedHashes = append(processedHashes, pktHash)
 		} else {
 			log.Debug("processOutOfOrderPackets mismatch", "packet parentHash", pkt.Packet.ParentHash, "current parentHash", parentHash)
 		}
+	}
+	for _, pktHash := range processedHashes {
+		delete(packetMap, pktHash)
 	}
 	if len(packetMap) == 0 {
 		delete(cph.outOfOrderPacketsMap, parentHash)
@@ -905,19 +913,26 @@ func (cph *ConsensusHandler) processOutOfOrderPackets(parentHash common.Hash, bl
 	}
 
 	log.Debug("Cleaning up out of order packets")
+	var prHashesToRemove []common.Hash
 	for prHash, pktMap := range cph.outOfOrderPacketsMap {
 		if prHash.IsEqualTo(parentHash) {
 			continue
 		}
+		var keysToRemove []common.Hash
 		for k, v := range pktMap {
-			if Elapsed(v.ReceivedTime) < OOP_PKT_CLEANUP_TIME_MS {
-				continue
+			if Elapsed(v.ReceivedTime) >= OOP_PKT_CLEANUP_TIME_MS {
+				keysToRemove = append(keysToRemove, k)
 			}
+		}
+		for _, k := range keysToRemove {
 			delete(pktMap, k)
 		}
 		if len(pktMap) == 0 {
-			delete(cph.outOfOrderPacketsMap, prHash)
+			prHashesToRemove = append(prHashesToRemove, prHash)
 		}
+	}
+	for _, prHash := range prHashesToRemove {
+		delete(cph.outOfOrderPacketsMap, prHash)
 	}
 	cph.outOfOrderPacketMapLastCleanupTime = time.Now()
 
@@ -2817,11 +2832,15 @@ func (cph *ConsensusHandler) createConsensusPacket(parentHash common.Hash, data 
 }
 
 func (cph *ConsensusHandler) cleanupBroadcast() {
+	var toRemove []common.Hash
 	for k, v := range cph.packetHashLastSentMap {
 		elapsed := Elapsed(v)
 		if elapsed >= BROADCAST_CLEANUP_DELAY {
-			delete(cph.packetHashLastSentMap, k)
+			toRemove = append(toRemove, k)
 		}
+	}
+	for _, k := range toRemove {
+		delete(cph.packetHashLastSentMap, k)
 	}
 }
 
@@ -2991,14 +3010,18 @@ func (cph *ConsensusHandler) requestConsensusData(blockStateDetails *BlockStateD
 }
 
 func (cph *ConsensusHandler) cleanupBlockState() {
+	var toRemove []common.Hash
 	for key, blockStateDetails := range cph.blockStateDetailsMap {
 		if blockStateDetails.parentHash.IsEqualTo(cph.currentParentHash) {
 			continue
 		}
 
 		if Elapsed(blockStateDetails.initTime) >= BLOCK_CLEANUP_TIME_MS {
-			delete(cph.blockStateDetailsMap, key)
+			toRemove = append(toRemove, key)
 		}
+	}
+	for _, key := range toRemove {
+		delete(cph.blockStateDetailsMap, key)
 	}
 }
 

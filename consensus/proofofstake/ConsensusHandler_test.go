@@ -148,11 +148,19 @@ func (m *MockP2PManager) DeleteAllPacketBlocks() bool {
 	m.packetMutex.Lock()
 	defer m.packetMutex.Unlock()
 
-	for k, _ := range m.blockPacketsBetweenValidatorMap {
+	var hashKeys []common.Hash
+	for k := range m.blockPacketsBetweenValidatorMap {
+		hashKeys = append(hashKeys, k)
+	}
+	for _, k := range hashKeys {
 		delete(m.blockPacketsBetweenValidatorMap, k)
 	}
 
-	for k, _ := range m.blockPacketValidatorMap {
+	var addrKeys []common.Address
+	for k := range m.blockPacketValidatorMap {
+		addrKeys = append(addrKeys, k)
+	}
+	for _, k := range addrKeys {
 		delete(m.blockPacketValidatorMap, k)
 	}
 
