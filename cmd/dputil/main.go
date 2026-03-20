@@ -181,6 +181,10 @@ func printHelp() {
 	fmt.Println("dputil getblockvalidatordetails BLOCK_NUMBER")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil block BLOCK_NUMBER")
+	fmt.Println("      Writes BLOCK_NUMBER.json (eth_getBlock + proofofstake_getBlockConsensusData) in the current directory.")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil sendrawtransaction RAW_TX_HEX_OR_FILE_PATH")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
@@ -411,6 +415,11 @@ func main() {
 		}
 	} else if os.Args[1] == "getblockvalidatordetails" {
 		err := GetBlockValidatorDetailsCmd()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "block" {
+		err := BlockCmd()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
