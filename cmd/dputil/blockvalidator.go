@@ -61,7 +61,7 @@ func BlockCmd() error {
 	}
 
 	out := map[string]json.RawMessage{
-		"Block":                     blockRaw,
+		"Block":              blockRaw,
 		"BlockConsensusData": consensusRaw,
 	}
 
@@ -119,25 +119,56 @@ func GetBlockValidatorDetailsCmd() error {
 	fmt.Println("========== GetBlockValidatorDetails (context: BlockValidatorContextValidator / \"1\") ==========")
 	detailsValidator, err := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextValidator)
 	if err != nil {
-		fmt.Println("GetBlockValidatorDetails (Validator context) failed:", err)
-		return err
+		fmt.Println("GetBlockValidatorDetails (Validator context) failed:", err, "context", backupmanager.BlockValidatorContextValidator)
+	} else {
+		printBlockValidatorDetailsDetail("Validator", detailsValidator)
+		if err := writeBlockValidatorDetailsFile(blockNumStr, backupmanager.BlockValidatorContextValidator, detailsValidator); err != nil {
+			fmt.Println("Write JSON (Validator context) failed:", err)
+		}
 	}
-	printBlockValidatorDetailsDetail("Validator", detailsValidator)
 
 	fmt.Println()
 	fmt.Println("========== GetBlockValidatorDetails (context: BlockValidatorContextBlockVerify / \"2\") ==========")
 	detailsBlockVerify, err := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextBlockVerify)
 	if err != nil {
-		fmt.Println("GetBlockValidatorDetails (BlockVerify context) failed:", err)
+		fmt.Println("GetBlockValidatorDetails (BlockVerify context) failed:", err, "context", backupmanager.BlockValidatorContextBlockVerify)
 		return err
+	} else {
+		printBlockValidatorDetailsDetail("BlockVerify", detailsBlockVerify)
+		if err := writeBlockValidatorDetailsFile(blockNumStr, backupmanager.BlockValidatorContextBlockVerify, detailsBlockVerify); err != nil {
+			fmt.Println("Write JSON (BlockVerify context) failed:", err)
+		}
 	}
-	printBlockValidatorDetailsDetail("BlockVerify", detailsBlockVerify)
 
 	fmt.Println()
 	fmt.Println("========== Comparison: differences between Validator and BlockVerify ==========")
 	compareBlockValidatorDetails(detailsValidator, detailsBlockVerify)
 
 	return nil
+}
+
+func writeBlockValidatorDetailsFile(blockNumStr, context string, d *backupmanager.BlockValidatorDetails) error {
+	if d == nil {
+		return nil
+	}
+	// Copy and sort by validator address so saved JSON is deterministic (same order as compareBlockValidatorDetails).
+	copyDetails := *d
+	copyDetails.FilteredValidatorDepositList = make([]backupmanager.ValidatorDeposit, len(d.FilteredValidatorDepositList))
+	copy(copyDetails.FilteredValidatorDepositList, d.FilteredValidatorDepositList)
+	sort.Slice(copyDetails.FilteredValidatorDepositList, func(i, j int) bool {
+		return strings.Compare(copyDetails.FilteredValidatorDepositList[i].ValidatorAddress.Hex(), copyDetails.FilteredValidatorDepositList[j].ValidatorAddress.Hex()) < 0
+	})
+	copyDetails.ValidatorDetailsList = make([]backupmanager.ValidatorDetailsV2, len(d.ValidatorDetailsList))
+	copy(copyDetails.ValidatorDetailsList, d.ValidatorDetailsList)
+	sort.Slice(copyDetails.ValidatorDetailsList, func(i, j int) bool {
+		return strings.Compare(copyDetails.ValidatorDetailsList[i].Validator.Hex(), copyDetails.ValidatorDetailsList[j].Validator.Hex()) < 0
+	})
+	filename := fmt.Sprintf("block-validator-%s-%s.json", blockNumStr, context)
+	b, err := json.MarshalIndent(&copyDetails, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, b, 0644)
 }
 
 func printBlockValidatorDetailsDetail(label string, d *backupmanager.BlockValidatorDetails) {
