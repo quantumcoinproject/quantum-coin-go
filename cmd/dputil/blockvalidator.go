@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -180,12 +179,12 @@ func writeBlockValidatorDetailsFile(blockNumStr, context string, d *backupmanage
 	copyDetails.FilteredValidatorDepositList = make([]backupmanager.ValidatorDeposit, len(d.FilteredValidatorDepositList))
 	copy(copyDetails.FilteredValidatorDepositList, d.FilteredValidatorDepositList)
 	sort.Slice(copyDetails.FilteredValidatorDepositList, func(i, j int) bool {
-		return strings.Compare(copyDetails.FilteredValidatorDepositList[i].ValidatorAddress.Hex(), copyDetails.FilteredValidatorDepositList[j].ValidatorAddress.Hex()) < 0
+		return bytes.Compare(copyDetails.FilteredValidatorDepositList[i].ValidatorAddress[:], copyDetails.FilteredValidatorDepositList[j].ValidatorAddress[:]) < 0
 	})
 	copyDetails.ValidatorDetailsList = make([]backupmanager.ValidatorDetailsV2, len(d.ValidatorDetailsList))
 	copy(copyDetails.ValidatorDetailsList, d.ValidatorDetailsList)
 	sort.Slice(copyDetails.ValidatorDetailsList, func(i, j int) bool {
-		return strings.Compare(copyDetails.ValidatorDetailsList[i].Validator.Hex(), copyDetails.ValidatorDetailsList[j].Validator.Hex()) < 0
+		return bytes.Compare(copyDetails.ValidatorDetailsList[i].Validator[:], copyDetails.ValidatorDetailsList[j].Validator[:]) < 0
 	})
 	filename := fmt.Sprintf("block-validator-%s-%s.json", blockNumStr, context)
 	b, err := json.MarshalIndent(&copyDetails, "", "  ")
@@ -267,12 +266,12 @@ func compareBlockValidatorDetails(a, b *backupmanager.BlockValidatorDetails) {
 	sortedFilteredA := make([]backupmanager.ValidatorDeposit, len(a.FilteredValidatorDepositList))
 	copy(sortedFilteredA, a.FilteredValidatorDepositList)
 	sort.Slice(sortedFilteredA, func(i, j int) bool {
-		return strings.Compare(sortedFilteredA[i].ValidatorAddress.Hex(), sortedFilteredA[j].ValidatorAddress.Hex()) < 0
+		return bytes.Compare(sortedFilteredA[i].ValidatorAddress[:], sortedFilteredA[j].ValidatorAddress[:]) < 0
 	})
 	sortedFilteredB := make([]backupmanager.ValidatorDeposit, len(b.FilteredValidatorDepositList))
 	copy(sortedFilteredB, b.FilteredValidatorDepositList)
 	sort.Slice(sortedFilteredB, func(i, j int) bool {
-		return strings.Compare(sortedFilteredB[i].ValidatorAddress.Hex(), sortedFilteredB[j].ValidatorAddress.Hex()) < 0
+		return bytes.Compare(sortedFilteredB[i].ValidatorAddress[:], sortedFilteredB[j].ValidatorAddress[:]) < 0
 	})
 
 	if len(sortedFilteredA) != len(sortedFilteredB) {
@@ -296,12 +295,12 @@ func compareBlockValidatorDetails(a, b *backupmanager.BlockValidatorDetails) {
 	sortedDetailsA := make([]backupmanager.ValidatorDetailsV2, len(a.ValidatorDetailsList))
 	copy(sortedDetailsA, a.ValidatorDetailsList)
 	sort.Slice(sortedDetailsA, func(i, j int) bool {
-		return strings.Compare(sortedDetailsA[i].Validator.Hex(), sortedDetailsA[j].Validator.Hex()) < 0
+		return bytes.Compare(sortedDetailsA[i].Validator[:], sortedDetailsA[j].Validator[:]) < 0
 	})
 	sortedDetailsB := make([]backupmanager.ValidatorDetailsV2, len(b.ValidatorDetailsList))
 	copy(sortedDetailsB, b.ValidatorDetailsList)
 	sort.Slice(sortedDetailsB, func(i, j int) bool {
-		return strings.Compare(sortedDetailsB[i].Validator.Hex(), sortedDetailsB[j].Validator.Hex()) < 0
+		return bytes.Compare(sortedDetailsB[i].Validator[:], sortedDetailsB[j].Validator[:]) < 0
 	})
 
 	if len(sortedDetailsA) != len(sortedDetailsB) {
