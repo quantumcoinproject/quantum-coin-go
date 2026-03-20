@@ -65,6 +65,30 @@ func BlockCmd() error {
 		"BlockConsensusData": consensusRaw,
 	}
 
+	// GetBlockValidatorDetailsByBlock for both contexts; do not bail if one fails.
+	details1, err1 := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextValidator)
+	if err1 != nil {
+		out["blockValidatorDetails_1"] = json.RawMessage("null")
+	} else {
+		b1, err := json.Marshal(details1)
+		if err != nil {
+			out["blockValidatorDetails_1"] = json.RawMessage("null")
+		} else {
+			out["blockValidatorDetails_1"] = json.RawMessage(b1)
+		}
+	}
+	details2, err2 := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextBlockVerify)
+	if err2 != nil {
+		out["blockValidatorDetails_2"] = json.RawMessage("null")
+	} else {
+		b2, err := json.Marshal(details2)
+		if err != nil {
+			out["blockValidatorDetails_2"] = json.RawMessage("null")
+		} else {
+			out["blockValidatorDetails_2"] = json.RawMessage(b2)
+		}
+	}
+
 	filename := blockNumStr + ".json"
 	merged, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
