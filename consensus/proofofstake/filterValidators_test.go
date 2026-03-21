@@ -3,10 +3,12 @@ package proofofstake
 import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"math/big"
+	"sort"
 	"testing"
 	"time"
 )
@@ -769,4 +771,167 @@ func TestFilterValidators_normalizedeposit_nochanges(t *testing.T) {
 	}
 
 	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock
+}
+
+// hardcodedValidatorListFilter returns a deterministic list of n validator addresses (Keccak256-based) for filter tests.
+func hardcodedValidatorListFilter(n int) []common.Address {
+	seed := []byte("filterValidatorsDeterminismTest")
+	list := make([]common.Address, n)
+	for i := 0; i < n; i++ {
+		h := crypto.Keccak256Hash(seed, common.Uint64ToBytes(uint64(i)))
+		list[i] = common.BytesToAddress(h.Bytes()[12:32])
+	}
+	return list
+}
+
+// buildFilterValidatorsInput_1000Validators builds deposit map and details map for 1000 validators in 10 groups of same deposit.
+// Returns (validatorsDepositMap, validatorsDDetailsMap). Caller must copy deposit map before each filterValidators call (it mutates).
+func buildFilterValidatorsInput_1000Validators(validatorList []common.Address, iter int) (map[common.Address]*big.Int, map[common.Address]*ValidatorDetailsV2) {
+	const numValidators = 1000
+	const numGroups = 10
+	const perGroup = 100
+	validatorsDepositMap := make(map[common.Address]*big.Int)
+	validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+	// 10 sets of validators with same deposit: group 0 = 500B, groups 1-9 = 10B each (so normalizeDeposit can run and we hit all passes).
+	depositsPerGroup := [numGroups]*big.Int{
+		params.EtherToWei(big.NewInt(500000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+		params.EtherToWei(big.NewInt(10000000000)),
+	}
+	// Indices 50-59 in group 0 have NilBlockCount=1 so normalizeDeposit second round hits "if NilBlockCount > 0 { continue }" (skip offline for increase).
+	const nilBlockCountStart, nilBlockCountEnd = 50, 60
+	for i := 0; i < numValidators; i++ {
+		idx := (i + iter) % numValidators
+		addr := validatorList[idx]
+		group := idx / perGroup
+		validatorsDepositMap[addr] = new(big.Int).Set(depositsPerGroup[group])
+		nilBlockCount := new(big.Int)
+		if idx >= nilBlockCountStart && idx < nilBlockCountEnd {
+			nilBlockCount = big.NewInt(1)
+		}
+		validatorsDDetailsMap[addr] = &ValidatorDetailsV2{
+			Validator:     addr,
+			LastNiLBlock:  new(big.Int),
+			NilBlockCount: nilBlockCount,
+		}
+	}
+	return validatorsDepositMap, validatorsDDetailsMap
+}
+
+func sortedSelectedAddressesHex(resultMap map[common.Address]bool) []string {
+	out := make([]string, 0, len(resultMap))
+	for addr := range resultMap {
+		out = append(out, addr.Hex())
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Hardcoded expected output for TestFilterValidatorsDeterminism_1000Validators (block OfflineValidatorV4StartBlock, 10 groups same deposit).
+const (
+	expectedFilteredDepositValue_1000Validators  = "42440000000000000000000000000000"
+	expectedSelectedAddressesHash_1000Validators = "0xb7a2299326e3b776544c010cf0b538040937631ed37b57328dfb1d370c62ae6b"
+)
+
+// Branch coverage for filterValidators and normalizeDeposit in TestFilterValidatorsDeterminism_1000Validators:
+//
+// filterValidators:
+//   - depositValue < MIN_VALIDATOR_DEPOSIT → toRemove: NOT HIT (all deposits >= 10B)
+//   - blockNumber >= OfflineValidatorDeferStartBlock: HIT
+//   - canValidate == false → toRemove: NOT HIT (all canValidate true; NilBlockCount 0 or 1 < threshold)
+//   - blockNumber >= OfflineValidatorV4StartBlock: HIT
+//   - after penalty depositValue < MIN → toRemove: NOT HIT (no penalty below min)
+//   - valCount < MIN_VALIDATORS: NOT HIT
+//   - totalDepositValue < MIN_BLOCK_DEPOSIT: NOT HIT
+//   - len <= MAX_VALIDATORS (take all): NOT HIT (we have 1000 > 128)
+//   - else getMaxFilteredValidators: HIT
+//   - filteredDepositValue < MIN_BLOCK_DEPOSIT after normalize: NOT HIT here; see TestFilterValidators_filteredDepositValueBelowMin_afterNormalize
+//   - minPercentage: SixtySevenVoteStartBlock branch HIT; SixtyVote/else NOT HIT (block is past SixtySeven)
+//
+// normalizeDeposit:
+//   - blockNumber < OfflineValidatorV4StartBlock → return: NOT HIT
+//   - len < MIN_VALIDATORS_NORMALIZATION → return: NOT HIT (1000 >= 12)
+//   - amt > maxCoins (first round reduction): HIT
+//   - NilBlockCount == 0 → add to nonOfflineCoinsAfterReduction: HIT (most validators)
+//   - hasChanges == false → return: NOT HIT
+//   - Second round NilBlockCount > 0 → continue (skip offline): HIT (we add 10 validators with NilBlockCount=1)
+func TestFilterValidatorsDeterminism_1000Validators(t *testing.T) {
+	origBlockNumber := TestFilterValidatorsBlockNumber
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	defer func() { TestFilterValidatorsBlockNumber = origBlockNumber }()
+
+	const numValidators = 1000
+	blockNumber := defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	consensusContext := common.BytesToHash([]byte("filterDeterminismConsensusContext"))
+	validatorList := hardcodedValidatorListFilter(numValidators)
+
+	for iter := 0; iter < 1000; iter++ {
+		validatorsDepositMap, validatorsDDetailsMap := buildFilterValidatorsInput_1000Validators(validatorList, iter)
+		resultMap, filteredDepositValue, _, err := filterValidators(consensusContext, &validatorsDepositMap, blockNumber, &validatorsDDetailsMap)
+		if err != nil {
+			t.Fatalf("iteration %d: filterValidators failed: %v", iter, err)
+		}
+		depositStr := filteredDepositValue.String()
+		sortedHex := sortedSelectedAddressesHex(resultMap)
+		addressesHash := crypto.Keccak256Hash([]byte(fmt.Sprint(sortedHex))).Hex()
+
+		if depositStr != expectedFilteredDepositValue_1000Validators {
+			t.Fatalf("iteration %d: filteredDepositValue %s != expected %s", iter, depositStr, expectedFilteredDepositValue_1000Validators)
+		}
+		if addressesHash != expectedSelectedAddressesHash_1000Validators {
+			t.Fatalf("iteration %d: selected addresses hash %s != expected %s", iter, addressesHash, expectedSelectedAddressesHash_1000Validators)
+		}
+	}
+}
+
+// TestFilterValidators_filteredDepositValueBelowMin_afterNormalize hits the branch where
+// filteredDepositValue < MIN_BLOCK_DEPOSIT after normalizeDeposit (returns error).
+// Setup: 100001 validators — 100000 with 5M ether and NilBlockCount 0, 1 with 5M and NilBlockCount 50.
+// The NilBlockCount 50 validator gets penalty to 0 and is removed. Remaining 100000 × 5M = 500B (totalDepositValue >= MIN_BLOCK_DEPOSIT).
+// Selected 128 all have 5M each → filteredDepositValue = 128×5M = 640M < MIN_BLOCK_DEPOSIT (500B).
+func TestFilterValidators_filteredDepositValueBelowMin_afterNormalize(t *testing.T) {
+	origBlockNumber := TestFilterValidatorsBlockNumber
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	defer func() { TestFilterValidatorsBlockNumber = origBlockNumber }()
+
+	const (
+		numValidatorsSameDeposit = 100000
+		totalValidators          = numValidatorsSameDeposit + 1
+	)
+	deposit5M := params.EtherToWei(big.NewInt(5000000))
+	blockNumber := defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	consensusContext := common.BytesToHash([]byte("filteredDepositBelowMinTest"))
+
+	validatorList := hardcodedValidatorListFilter(totalValidators)
+	validatorsDepositMap := make(map[common.Address]*big.Int)
+	validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+
+	for i := 0; i < totalValidators; i++ {
+		addr := validatorList[i]
+		validatorsDepositMap[addr] = new(big.Int).Set(deposit5M)
+		nilCount := new(big.Int)
+		if i == totalValidators-1 {
+			nilCount = big.NewInt(50)
+		}
+		validatorsDDetailsMap[addr] = &ValidatorDetailsV2{
+			Validator:     addr,
+			LastNiLBlock:  new(big.Int),
+			NilBlockCount: nilCount,
+		}
+	}
+
+	_, _, _, err := filterValidators(consensusContext, &validatorsDepositMap, blockNumber, &validatorsDDetailsMap)
+	if err == nil {
+		t.Fatalf("expected filterValidators to fail with filteredDepositValue < MIN_BLOCK_DEPOSIT after normalize")
+	}
+	if err.Error() != "min block deposit not met for filteredDepositValue" {
+		t.Fatalf("unexpected error: %v", err)
+	}
 }

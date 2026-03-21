@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
@@ -61,8 +60,32 @@ func BlockCmd() error {
 	}
 
 	out := map[string]json.RawMessage{
-		"Block":                     blockRaw,
+		"Block":              blockRaw,
 		"BlockConsensusData": consensusRaw,
+	}
+
+	// GetBlockValidatorDetailsByBlock for both contexts; do not bail if one fails.
+	details1, err1 := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextValidator)
+	if err1 != nil {
+		out["blockValidatorDetails_1"] = json.RawMessage("null")
+	} else {
+		b1, err := json.Marshal(details1)
+		if err != nil {
+			out["blockValidatorDetails_1"] = json.RawMessage("null")
+		} else {
+			out["blockValidatorDetails_1"] = json.RawMessage(b1)
+		}
+	}
+	details2, err2 := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextBlockVerify)
+	if err2 != nil {
+		out["blockValidatorDetails_2"] = json.RawMessage("null")
+	} else {
+		b2, err := json.Marshal(details2)
+		if err != nil {
+			out["blockValidatorDetails_2"] = json.RawMessage("null")
+		} else {
+			out["blockValidatorDetails_2"] = json.RawMessage(b2)
+		}
 	}
 
 	filename := blockNumStr + ".json"
@@ -119,25 +142,56 @@ func GetBlockValidatorDetailsCmd() error {
 	fmt.Println("========== GetBlockValidatorDetails (context: BlockValidatorContextValidator / \"1\") ==========")
 	detailsValidator, err := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextValidator)
 	if err != nil {
-		fmt.Println("GetBlockValidatorDetails (Validator context) failed:", err)
-		return err
+		fmt.Println("GetBlockValidatorDetails (Validator context) failed:", err, "context", backupmanager.BlockValidatorContextValidator)
+	} else {
+		printBlockValidatorDetailsDetail("Validator", detailsValidator)
+		if err := writeBlockValidatorDetailsFile(blockNumStr, backupmanager.BlockValidatorContextValidator, detailsValidator); err != nil {
+			fmt.Println("Write JSON (Validator context) failed:", err)
+		}
 	}
-	printBlockValidatorDetailsDetail("Validator", detailsValidator)
 
 	fmt.Println()
 	fmt.Println("========== GetBlockValidatorDetails (context: BlockValidatorContextBlockVerify / \"2\") ==========")
 	detailsBlockVerify, err := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextBlockVerify)
 	if err != nil {
-		fmt.Println("GetBlockValidatorDetails (BlockVerify context) failed:", err)
+		fmt.Println("GetBlockValidatorDetails (BlockVerify context) failed:", err, "context", backupmanager.BlockValidatorContextBlockVerify)
 		return err
+	} else {
+		printBlockValidatorDetailsDetail("BlockVerify", detailsBlockVerify)
+		if err := writeBlockValidatorDetailsFile(blockNumStr, backupmanager.BlockValidatorContextBlockVerify, detailsBlockVerify); err != nil {
+			fmt.Println("Write JSON (BlockVerify context) failed:", err)
+		}
 	}
-	printBlockValidatorDetailsDetail("BlockVerify", detailsBlockVerify)
 
 	fmt.Println()
 	fmt.Println("========== Comparison: differences between Validator and BlockVerify ==========")
 	compareBlockValidatorDetails(detailsValidator, detailsBlockVerify)
 
 	return nil
+}
+
+func writeBlockValidatorDetailsFile(blockNumStr, context string, d *backupmanager.BlockValidatorDetails) error {
+	if d == nil {
+		return nil
+	}
+	// Copy and sort by validator address so saved JSON is deterministic (same order as compareBlockValidatorDetails).
+	copyDetails := *d
+	copyDetails.FilteredValidatorDepositList = make([]backupmanager.ValidatorDeposit, len(d.FilteredValidatorDepositList))
+	copy(copyDetails.FilteredValidatorDepositList, d.FilteredValidatorDepositList)
+	sort.Slice(copyDetails.FilteredValidatorDepositList, func(i, j int) bool {
+		return bytes.Compare(copyDetails.FilteredValidatorDepositList[i].ValidatorAddress[:], copyDetails.FilteredValidatorDepositList[j].ValidatorAddress[:]) < 0
+	})
+	copyDetails.ValidatorDetailsList = make([]backupmanager.ValidatorDetailsV2, len(d.ValidatorDetailsList))
+	copy(copyDetails.ValidatorDetailsList, d.ValidatorDetailsList)
+	sort.Slice(copyDetails.ValidatorDetailsList, func(i, j int) bool {
+		return bytes.Compare(copyDetails.ValidatorDetailsList[i].Validator[:], copyDetails.ValidatorDetailsList[j].Validator[:]) < 0
+	})
+	filename := fmt.Sprintf("block-validator-%s-%s.json", blockNumStr, context)
+	b, err := json.MarshalIndent(&copyDetails, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filename, b, 0644)
 }
 
 func printBlockValidatorDetailsDetail(label string, d *backupmanager.BlockValidatorDetails) {
@@ -212,12 +266,12 @@ func compareBlockValidatorDetails(a, b *backupmanager.BlockValidatorDetails) {
 	sortedFilteredA := make([]backupmanager.ValidatorDeposit, len(a.FilteredValidatorDepositList))
 	copy(sortedFilteredA, a.FilteredValidatorDepositList)
 	sort.Slice(sortedFilteredA, func(i, j int) bool {
-		return strings.Compare(sortedFilteredA[i].ValidatorAddress.Hex(), sortedFilteredA[j].ValidatorAddress.Hex()) < 0
+		return bytes.Compare(sortedFilteredA[i].ValidatorAddress[:], sortedFilteredA[j].ValidatorAddress[:]) < 0
 	})
 	sortedFilteredB := make([]backupmanager.ValidatorDeposit, len(b.FilteredValidatorDepositList))
 	copy(sortedFilteredB, b.FilteredValidatorDepositList)
 	sort.Slice(sortedFilteredB, func(i, j int) bool {
-		return strings.Compare(sortedFilteredB[i].ValidatorAddress.Hex(), sortedFilteredB[j].ValidatorAddress.Hex()) < 0
+		return bytes.Compare(sortedFilteredB[i].ValidatorAddress[:], sortedFilteredB[j].ValidatorAddress[:]) < 0
 	})
 
 	if len(sortedFilteredA) != len(sortedFilteredB) {
@@ -241,12 +295,12 @@ func compareBlockValidatorDetails(a, b *backupmanager.BlockValidatorDetails) {
 	sortedDetailsA := make([]backupmanager.ValidatorDetailsV2, len(a.ValidatorDetailsList))
 	copy(sortedDetailsA, a.ValidatorDetailsList)
 	sort.Slice(sortedDetailsA, func(i, j int) bool {
-		return strings.Compare(sortedDetailsA[i].Validator.Hex(), sortedDetailsA[j].Validator.Hex()) < 0
+		return bytes.Compare(sortedDetailsA[i].Validator[:], sortedDetailsA[j].Validator[:]) < 0
 	})
 	sortedDetailsB := make([]backupmanager.ValidatorDetailsV2, len(b.ValidatorDetailsList))
 	copy(sortedDetailsB, b.ValidatorDetailsList)
 	sort.Slice(sortedDetailsB, func(i, j int) bool {
-		return strings.Compare(sortedDetailsB[i].Validator.Hex(), sortedDetailsB[j].Validator.Hex()) < 0
+		return bytes.Compare(sortedDetailsB[i].Validator[:], sortedDetailsB[j].Validator[:]) < 0
 	})
 
 	if len(sortedDetailsA) != len(sortedDetailsB) {

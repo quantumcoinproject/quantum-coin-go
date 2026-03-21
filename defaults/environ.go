@@ -19,6 +19,7 @@ var skipProposalTimeDiffCheck = os.Getenv("SKIP_PROPOSAL_TIME_DIFF_CHECK")
 var failExperimentalReorg = os.Getenv("EXPERIMENTAL_FAIL_REORG")
 var isConsensusRelay = os.Getenv("IS_CONSENSUS_RELAY")
 var testHookEndpoint = os.Getenv("TEST_HOOK_ENDPOINT")
+var enableBlockValidatorSave = os.Getenv("BLOCK_VALIDATOR_SAVE")
 
 func SendStaticAndOutboundNodesOnly() bool {
 	return sendStaticNodesOnly == "1"
@@ -38,6 +39,10 @@ func SkipPropagateBlock() bool {
 
 func EnableProposerCheck() bool {
 	return enableProposerCheck == "1"
+}
+
+func EnableBlockValidatorSave() bool {
+	return enableBlockValidatorSave == "1"
 }
 
 func SkipDeepBlockCheck() bool {

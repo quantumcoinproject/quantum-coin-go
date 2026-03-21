@@ -77,7 +77,7 @@ func StartNode(ctx *cli.Context, stack *node.Node) {
 		} else {
 			log.Info("NewBackupManager", "dir", stack.InstanceDir())
 		}
-	} else if defaults.EnableProposerCheck() {
+	} else if defaults.EnableProposerCheck() || defaults.EnableBlockValidatorSave() {
 		_, err := backupmanager.NewConsensusBackupManager(stack.InstanceDir())
 		if err != nil {
 			Fatalf("Error starting protocol stack (consensus backup manager initialize failed: %v", err)

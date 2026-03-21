@@ -20,10 +20,11 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 
 	totalDepositValue := big.NewInt(0)
 	valCount := 0
+	var toRemove []common.Address
 	for val, depositValue := range validatorsDepositMap {
 		if depositValue.Cmp(MIN_VALIDATOR_DEPOSIT) == -1 {
 			log.Trace("Skipping validator with low balance", "val", val, "depositValue", depositValue)
-			delete(validatorsDepositMap, val)
+			toRemove = append(toRemove, val)
 			continue
 		}
 		if blockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock {
@@ -31,7 +32,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 			canVal, _ := canValidate(valDetailsMap[val], blockNumber)
 			if canVal == false {
 				log.Trace("Skipping offline validator", "val", val, "depositValue", depositValue)
-				delete(validatorsDepositMap, val)
+				toRemove = append(toRemove, val)
 				continue
 			}
 			if blockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
@@ -39,7 +40,7 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 				depositValue = getOfflineValidatorDepositAfterPenalty(valDetailsMap[val], blockNumber, depositValue)
 				if depositValue.Cmp(MIN_VALIDATOR_DEPOSIT) == -1 {
 					log.Debug("Skipping validator with low balance AfterPenalty", "val", val, "afterPenalty depositValue", depositValue, "origDepositValue", origDepositValue)
-					delete(validatorsDepositMap, val)
+					toRemove = append(toRemove, val)
 					continue
 				}
 				validatorsDepositMap[val] = depositValue
@@ -48,6 +49,9 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 		log.Debug("filterValidators before normalizeDeposit", "val", val, "depositValue", depositValue, "block", blockNumber)
 		totalDepositValue = common.SafeAddBigInt(totalDepositValue, depositValue)
 		valCount = valCount + 1
+	}
+	for _, val := range toRemove {
+		delete(validatorsDepositMap, val)
 	}
 
 	if valCount < MIN_VALIDATORS {
@@ -188,7 +192,7 @@ func getMaxFilteredValidators(blockNumber uint64, consensusContext common.Hash, 
 
 	//Third pass, fill by consensus context sort order, if the buffer is not full even after second pass. This is to ensure fairness even for validators with lower number of staked coins.
 	//Sort based on consensus context
-	sort.Slice(validatorList, func(i, j int) bool {
+	sort.SliceStable(validatorList, func(i, j int) bool {
 		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
 			vi := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[i].Bytes()).Bytes()
 			vj := crypto.Keccak256Hash(consensusContext.Bytes(), validatorList[j].Bytes()).Bytes()
