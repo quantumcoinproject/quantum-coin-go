@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"testing"
+
 	"github.com/quantumcoinproject/circl/sign/hybrideds"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hybridedsfull"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
-	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"testing"
 )
 
 var (
@@ -45,10 +45,6 @@ func TestHybridedsSeed(t *testing.T) {
 	addr := crypto.PublicKeyBytesToAddress(pKey.PubData)
 	expected := common.HexToAddress("0xa77aAa180c39411D22812F8f9d1e3CeacfB58A8A1aa9De2a408bd9Ff5b81Aad6")
 	if addr.IsEqualTo(expected) == false {
-		//t.Fatal("failed address check")
-		log.Error("warn address check failed")
-	}
-	if addr.IsEqualTo(common.HexToAddress("0x54edbAe96716315015a7e65A6e161689748B1AAF88A0C507fbA967566D816564")) == false {
 		t.Fatal("failed address check")
 	}
 }
