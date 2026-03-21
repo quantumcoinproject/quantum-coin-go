@@ -3,6 +3,7 @@ package proofofstake
 import (
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"math/big"
 	"strconv"
@@ -407,4 +408,51 @@ func TestPacketHandler_canPropose_v3_negative_max_block_delay_greater(t *testing
 		t.Fatalf("failed")
 	}
 	fmt.Println("canPropose_v3_positive", "diff", currentBlock-uint64(lastNilBlock))
+}
+
+// hardcodedValidatorList returns a deterministic list of n validator addresses that look random (Keccak256-based).
+func hardcodedValidatorList(n int) []common.Address {
+	seed := []byte("blockProposerDeterminismTest")
+	list := make([]common.Address, n)
+	for i := 0; i < n; i++ {
+		h := crypto.Keccak256Hash(seed, common.Uint64ToBytes(uint64(i)))
+		list[i] = common.BytesToAddress(h.Bytes()[12:32])
+	}
+	return list
+}
+
+// expectedBlockProposer_1000Validators is the deterministic proposer for block (OfflineValidatorDeferStartBlock+1000)
+// with the hardcoded validator list from hardcodedValidatorList(1000). 32-byte address (66 hex chars including 0x).
+const expectedBlockProposer_1000Validators = "0x00000000000000000000000072a3A4D6bd362C52e536EAD3E8D1a8f930503D71"
+
+// TestBlockProposerDeterminism_1000Validators ensures that for ~1000 validators and block (OfflineValidatorDeferStartBlock+1000),
+// the block proposer is the same no matter how many times the validator map is reconstructed from the same hardcoded list.
+func TestBlockProposerDeterminism_1000Validators(t *testing.T) {
+	const numValidators = 1000
+	blockNumber := defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock + 1000
+	parentHash := common.BytesToHash([]byte(strconv.FormatUint(blockNumber, 10)))
+	expectedProposer := common.HexToAddress(expectedBlockProposer_1000Validators)
+
+	validatorList := hardcodedValidatorList(numValidators)
+
+	for iter := 0; iter < 1000; iter++ {
+		validatorMap := make(map[common.Address]*ValidatorDetailsV2)
+		// Reconstruct map in a different order each iteration: shift indices by iter so insertion order varies.
+		for i := 0; i < numValidators; i++ {
+			idx := (i + iter) % numValidators
+			addr := validatorList[idx]
+			validatorMap[addr] = &ValidatorDetailsV2{
+				Validator:     addr,
+				LastNiLBlock:  new(big.Int),
+				NilBlockCount: new(big.Int),
+			}
+		}
+		proposer, err := getBlockProposerV2(parentHash, &validatorMap, 1, blockNumber)
+		if err != nil {
+			t.Fatalf("iteration %d: getBlockProposerV2 failed: %v", iter, err)
+		}
+		if !proposer.IsEqualTo(expectedProposer) {
+			t.Fatalf("iteration %d: proposer %s != expected %s", iter, proposer.Hex(), expectedBlockProposer_1000Validators)
+		}
+	}
 }

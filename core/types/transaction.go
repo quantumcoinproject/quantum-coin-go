@@ -473,6 +473,12 @@ func NewTransactionsByNonceFromList(signer Signer, txnList *Transactions, parent
 		return nil, nil, err
 	}
 	skippedTransactions = append(skippedTransactions, skipped...)
+	// Sort by tx hash so that the same input always yields the same order (map iteration in
+	// flatten/TxDifference is non-deterministic). Consensus and EncodeBlockExtraData depend on
+	// deterministic error transaction order.
+	sort.Slice(skippedTransactions, func(i, j int) bool {
+		return bytes.Compare(skippedTransactions[i].Hash().Bytes(), skippedTransactions[j].Hash().Bytes()) < 0
+	})
 	return txnByNonce, skippedTransactions, nil
 }
 
@@ -482,9 +488,16 @@ func NewTransactionsByNonceFromList(signer Signer, txnList *Transactions, parent
 func NewTransactionsByNonce(signer Signer, txs map[common.Address]Transactions, parentHash common.Hash) (*TransactionsByNonce, Transactions, error) {
 	before := flatten(txs)
 
+	// Extract keys upfront so deletions don't affect iteration.
+	addresses := make([]common.Address, 0, len(txs))
+	for from := range txs {
+		addresses = append(addresses, from)
+	}
+
 	// Initialize a time based heap with the head transactions
 	heads := make(TxBySortPrefix, 0, len(txs))
-	for from, accTxs := range txs {
+	for _, from := range addresses {
+		accTxs := txs[from]
 		for i := 0; i < len(accTxs); i++ {
 			_, err := Sender(signer, accTxs[i])
 			if err != nil {
@@ -551,6 +564,10 @@ func (t *TransactionsByNonce) GetList() []common.Hash {
 			txnList = append(txnList, accTxs[i].Hash())
 		}
 	}
+
+	sort.Slice(txnList, func(i, j int) bool {
+		return bytes.Compare(txnList[i].Bytes(), txnList[j].Bytes()) < 0
+	})
 
 	return txnList
 }

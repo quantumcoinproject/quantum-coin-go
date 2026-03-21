@@ -18,6 +18,7 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 
@@ -458,6 +460,84 @@ func TestTransactionSortIncreaseDecrease(t *testing.T) {
 			t.Errorf("test count failed")
 		}
 		fmt.Println("count", count)
+	}
+}
+
+// expectedTransactionSortRollingHash is the final Keccak256 chain after enumerating the cursor:
+// each step folds Sender(signer, PeekCursor()) and Nonce() (signatures are non-deterministic, so
+// tx.Hash() is not stable across runs). 1000 accounts × 5 txs, parentHash "test parent hash".
+var expectedTransactionSortRollingHash = common.HexToHash("0x31f18209e9ec65e44a72872c81b94cb86a0fa8a42f5ed51276f5fa2e39f384f7")
+
+func TestTransactionSort1000AccountsDeterministic(t *testing.T) {
+	const numAccounts = 1000
+	const txsPerAccount = 5
+	const numIterations = 10
+	parentHash := common.BytesToHash([]byte("test parent hash"))
+	signer := NewLondonSignerDefaultChain()
+	seedLen := cryptobase.SigAlg.GetRequiredSeedLength()
+
+	// Build deterministic key for account index i.
+	makeKey := func(i int) (*signaturealgorithm.PrivateKey, error) {
+		seed := make([]byte, seedLen)
+		const prefix = "TestTransactionSort1000AccountsDeterministic"
+		copy(seed, prefix)
+		binary.BigEndian.PutUint64(seed[len(prefix):], uint64(i))
+		return cryptobase.SigAlg.GenerateKeyWithSeed(seed)
+	}
+
+	// Build groups: numAccounts accounts, txsPerAccount transactions each (nonce 0..txsPerAccount-1).
+	buildGroups := func() map[common.Address]Transactions {
+		groups := make(map[common.Address]Transactions, numAccounts)
+		for i := 0; i < numAccounts; i++ {
+			key, err := makeKey(i)
+			if err != nil {
+				t.Fatalf("makeKey(%d): %v", i, err)
+			}
+			addr := cryptobase.SigAlg.PublicKeyToAddressNoError(&key.PublicKey)
+			for n := uint64(0); n < txsPerAccount; n++ {
+				tx, err := SignTx(NewTransaction(n, common.Address{}, big.NewInt(100), 100, big.NewInt(1), nil), signer, key)
+				if err != nil {
+					t.Fatalf("SignTx account %d nonce %d: %v", i, n, err)
+				}
+				groups[addr] = append(groups[addr], tx)
+			}
+		}
+		return groups
+	}
+
+	// Rolling hash over cursor order via PeekCursor: each step folds Sender + Nonce (not tx.Hash).
+	rollingHashAfterCursor := func(txset *TransactionsByNonce) common.Hash {
+		h := common.Hash{}
+		steps := 0
+		ok := txset.NextCursor()
+		for ok {
+			txn := txset.PeekCursor()
+			from, err := Sender(signer, txn)
+			if err != nil {
+				t.Fatalf("Sender: %v", err)
+			}
+			var nonce [8]byte
+			binary.BigEndian.PutUint64(nonce[:], txn.Nonce())
+			h = common.BytesToHash(crypto.Keccak256(append(append(h.Bytes(), from.Bytes()...), nonce[:]...)))
+			steps++
+			ok = txset.NextCursor()
+		}
+		if steps != numAccounts*txsPerAccount {
+			t.Fatalf("expected %d cursor steps, got %d", numAccounts*txsPerAccount, steps)
+		}
+		return h
+	}
+
+	for iter := 0; iter < numIterations; iter++ {
+		groups := buildGroups()
+		txset, _, err := NewTransactionsByNonce(signer, groups, parentHash)
+		if err != nil {
+			t.Fatalf("iter %d NewTransactionsByNonce: %v", iter, err)
+		}
+		got := rollingHashAfterCursor(txset)
+		if got != expectedTransactionSortRollingHash {
+			t.Fatalf("iter %d: rolling hash mismatch got %s want %s", iter, got.Hex(), expectedTransactionSortRollingHash.Hex())
+		}
 	}
 }
 

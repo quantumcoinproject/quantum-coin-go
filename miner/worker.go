@@ -17,8 +17,10 @@
 package miner
 
 import (
+	"bytes"
 	"errors"
 	"math/big"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -852,6 +854,9 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 					w.selectedTransactions = append(w.selectedTransactions, v)
 				}
 			}
+			sort.Slice(w.selectedTransactions, func(i, j int) bool {
+				return bytes.Compare(w.selectedTransactions[i].Hash().Bytes(), w.selectedTransactions[j].Hash().Bytes()) < 0
+			})
 		}
 		log.Debug("proposePhase if", "parentHash", parent.Hash(), "number", parent.NumberU64(), "selectedTransactions count", len(w.selectedTransactions))
 	} else {
