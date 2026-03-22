@@ -480,7 +480,7 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 		}
 
 		if precommitDetails.PrecommitHash.IsEqualTo(precommitHash) == false {
-			errors.New("invalid precommithash")
+			return errors.New("invalid precommithash")
 		}
 
 		precommitDepositValue = common.SafeAddBigInt(precommitDepositValue, depositValue)
@@ -498,7 +498,7 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 		}
 
 		if commitDetails.CommitHash.IsEqualTo(commitHash) == false {
-			errors.New("invalid commithash")
+			return errors.New("invalid commithash")
 		}
 
 		commitDepositValue = common.SafeAddBigInt(commitDepositValue, depositValue)

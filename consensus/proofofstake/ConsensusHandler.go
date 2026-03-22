@@ -2280,7 +2280,7 @@ func (cph *ConsensusHandler) broadcastPreviousRoundPackets(parentHash common.Has
 
 	if blockRoundDetails.Round > 1 {
 		for i := byte(1); i < blockRoundDetails.Round; i = i + 1 {
-			prevBlockRoundDetails := blockStateDetails.blockRoundMap[blockStateDetails.currentRound]
+			prevBlockRoundDetails := blockStateDetails.blockRoundMap[i]
 			if prevBlockRoundDetails.selfAckd {
 				log.Debug("Broadcasting selfAckPacket", "parentHash", parentHash, "round", i)
 				err := cph.broadCast(prevBlockRoundDetails.selfAckPacket)
