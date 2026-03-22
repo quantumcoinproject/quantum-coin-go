@@ -257,6 +257,8 @@ type BlockRoundDetails struct {
 
 type BlockStateDetails struct {
 	filteredValidatorsDepositMap      map[common.Address]*big.Int
+	origValidators                    map[common.Address]*big.Int
+	origValidatorDetailsMap           map[common.Address]*ValidatorDetailsV2
 	validatorDetailsMap               *map[common.Address]*ValidatorDetailsV2
 	totalBlockDepositValue            *big.Int
 	blockMinWeightedProposalsRequired *big.Int
@@ -557,6 +559,31 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	return proposer, nil
 }
 
+func copyValidatorDetailsV2(v *ValidatorDetailsV2) *ValidatorDetailsV2 {
+	if v == nil {
+		return nil
+	}
+	cpInt := func(b *big.Int) *big.Int {
+		if b == nil {
+			return nil
+		}
+		return new(big.Int).Set(b)
+	}
+	return &ValidatorDetailsV2{
+		Depositor:          v.Depositor,
+		Validator:          v.Validator,
+		Balance:            cpInt(v.Balance),
+		NetBalance:         cpInt(v.NetBalance),
+		BlockRewards:       cpInt(v.BlockRewards),
+		Slashings:          cpInt(v.Slashings),
+		IsValidationPaused: v.IsValidationPaused,
+		WithdrawalBlock:    cpInt(v.WithdrawalBlock),
+		WithdrawalAmount:   cpInt(v.WithdrawalAmount),
+		LastNiLBlock:       cpInt(v.LastNiLBlock),
+		NilBlockCount:      cpInt(v.NilBlockCount),
+	}
+}
+
 func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Hash, blockNumber uint64) error {
 	_, ok := cph.blockStateDetailsMap[parentHash]
 
@@ -585,6 +612,12 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		delete(cph.blockStateDetailsMap, parentHash)
 		return err
 	}
+	blockStateDetails.origValidators = make(map[common.Address]*big.Int, len(validators))
+	for addr, dep := range validators {
+		if dep != nil {
+			blockStateDetails.origValidators[addr] = new(big.Int).Set(dep)
+		}
+	}
 
 	preFilterValidatorCount := len(validators)
 
@@ -611,6 +644,10 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 		if err != nil {
 			log.Error("listValidatorsFn", "err", err)
 			return err
+		}
+		blockStateDetails.origValidatorDetailsMap = make(map[common.Address]*ValidatorDetailsV2, len(validatorDetailsMap))
+		for addr, vd := range validatorDetailsMap {
+			blockStateDetails.origValidatorDetailsMap[addr] = copyValidatorDetailsV2(vd)
 		}
 	}
 
@@ -1066,10 +1103,10 @@ func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (bloc
 	var blockValidatorDetails *backupmanager.BlockValidatorDetails
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL {
 		blockValidatorDetails, err = ValidateBlockConsensusDataInner(nil, parentHash, blockConsensusData, blockAdditionalConsensusData,
-			&blockStateDetails.filteredValidatorsDepositMap, blockStateDetails.blockNumber, blockStateDetails.validatorDetailsMap, blockStateDetails.consensusContext)
+			&blockStateDetails.origValidators, blockStateDetails.blockNumber, &blockStateDetails.origValidatorDetailsMap, blockStateDetails.consensusContext)
 	} else {
 		blockValidatorDetails, err = ValidateBlockConsensusDataInner(blockRoundDetails.proposalTxns, parentHash, blockConsensusData, blockAdditionalConsensusData,
-			&blockStateDetails.filteredValidatorsDepositMap, blockStateDetails.blockNumber, blockStateDetails.validatorDetailsMap, blockStateDetails.consensusContext)
+			&blockStateDetails.origValidators, blockStateDetails.blockNumber, &blockStateDetails.origValidatorDetailsMap, blockStateDetails.consensusContext)
 	}
 	if blockValidatorDetails != nil {
 		blockValidatorDetails.PreFilterValidatorCount = big.NewInt(int64(blockStateDetails.preFilterValidatorCount))
