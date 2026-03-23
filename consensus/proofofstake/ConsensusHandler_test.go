@@ -230,7 +230,7 @@ func (ct *ConsensusTest) getSigner(packet *eth.ConsensusPacket) (common.Address,
 
 		return validator, nil
 	} else {
-		log.Info("getSigner other", "sigAlg", sigAlg.SignatureName(),
+		log.Debug("getSigner other", "sigAlg", sigAlg.SignatureName(),
 			"testBlock", ct.TEST_CONSENSUS_BLOCK_NUMBER, "curr test block", CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, "test name", ct.testName)
 		pubKey, err := sigAlg.PublicKeyFromSignature(digestHash, packet.Signature)
 		if err != nil {
