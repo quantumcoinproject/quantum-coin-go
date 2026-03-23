@@ -535,77 +535,44 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 	}
 
-	valMap := *validatorDepositMap
-	filteredValidators, totalBlockDepositValue, minDepositRequired, err := filterValidators(consensusContext, &valMap, blockNumber, valDetailsMap)
+	preparedState, err := PrepareConsensusState(consensusContext, *validatorDepositMap, *valDetailsMap, blockNumber)
 	if err != nil {
 		return nil, err
 	}
 
-	if MIN_BLOCK_DEPOSIT.Cmp(minDepositRequired) > 0 {
-		log.Warn("ValidateBlockConsensusDataInner minDepositRequired not met", "minDepositRequired", minDepositRequired)
-		return nil, errors.New("min deposit required error")
-	}
+	filteredValidatorDepositMap := preparedState.FilteredValidatorsDepositMap
+	totalBlockDepositValue := preparedState.TotalBlockDepositValue
+	minDepositRequired := preparedState.MinDepositRequired
+	preparedValDetailsMap := preparedState.ValidatorDetailsMap
 
-	if len(filteredValidators) < MIN_VALIDATORS {
-		return nil, errors.New("filteredValidators MIN_VALIDATORS")
-	}
-
-	if len(filteredValidators) > MAX_VALIDATORS {
-		return nil, errors.New("filteredValidators MAX_VALIDATORS")
-	}
-
-	var filteredValidatorDepositMap map[common.Address]*big.Int
-	filteredValidatorDepositMap = make(map[common.Address]*big.Int)
 	blockValidatorDetails := backupmanager.BlockValidatorDetails{
 		BlockNumber:                  big.NewInt(int64(blockNumber)),
 		ParentHash:                   parentHash,
-		FilteredValidatorDepositList: make([]backupmanager.ValidatorDeposit, len(filteredValidators)),
+		FilteredValidatorDepositList: make([]backupmanager.ValidatorDeposit, len(filteredValidatorDepositMap)),
 	}
 	blockValidatorDetails.ConsensusContext.CopyFrom(consensusContext)
 
 	valIndex := 0
-	for v, _ := range filteredValidators {
-		filteredValidatorDepositMap[v] = valMap[v]
+	for v, dep := range filteredValidatorDepositMap {
 		blockValidatorDetails.FilteredValidatorDepositList[valIndex] = backupmanager.ValidatorDeposit{
 			ValidatorAddress:  v,
-			PostFilterDeposit: valMap[v],
+			PostFilterDeposit: dep,
 		}
 		valIndex++
-		log.Debug("ValidateBlockConsensusDataInner", "validator", v, "deposit value after filtering", valMap[v], "blockNumber", blockNumber, "valIndex", valIndex)
 	}
 
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
-		var toRemove []common.Address
-		for valAddr, valDetails := range *valDetailsMap {
-			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidatorDepositMap
-				toRemove = append(toRemove, valAddr)
-				log.Debug("ValidateBlockConsensusDataInner ValidationPaused remove", "validator", valAddr, "blockNumber", blockNumber)
-				continue
-			}
-			_, ok := filteredValidatorDepositMap[valAddr]
-			if ok == false {
-				log.Debug("ValidateBlockConsensusDataInner filteredValidatorDepositMap remove", "validator", valAddr, "blockNumber", blockNumber)
-				toRemove = append(toRemove, valAddr)
-			}
-		}
-		for _, valAddr := range toRemove {
-			delete(*valDetailsMap, valAddr)
-		}
-
-		blockValidatorDetails.ValidatorDetailsList = make([]backupmanager.ValidatorDetailsV2, len(*valDetailsMap))
+		blockValidatorDetails.ValidatorDetailsList = make([]backupmanager.ValidatorDetailsV2, len(preparedValDetailsMap))
 		valDetailsIndex := 0
-		for _, valDetails := range *valDetailsMap {
+		for _, valDetails := range preparedValDetailsMap {
 			blockValidatorDetails.ValidatorDetailsList[valDetailsIndex] = (backupmanager.ValidatorDetailsV2)(*valDetails)
 			valDetailsIndex++
 		}
-
-		log.Debug("ValidateBlockConsensusDataInner before getBlockProposer", "len(filteredValidatorDepositMap)",
-			len(filteredValidatorDepositMap), "len(valDetailsMap)", len(*valDetailsMap), "blockNumber", blockNumber, "consensusContext", consensusContext)
 	}
 
 	roundBlockValidators := make(map[byte]common.Address)
 	for r := byte(1); r <= blockConsensusData.Round; r++ {
-		roundBlockValidators[r], err = getBlockProposer(parentHash, &filteredValidatorDepositMap, r, valDetailsMap, blockNumber, consensusContext)
+		roundBlockValidators[r], err = getBlockProposer(parentHash, &filteredValidatorDepositMap, r, &preparedValDetailsMap, blockNumber, consensusContext)
 		if err != nil {
 			return nil, err
 		}
@@ -616,7 +583,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		return nil, errors.New("nil ConsensusPackets")
 	}
 
-	packetRoundMap, err := ParseConsensusPackets(parentHash, &blockAdditionalConsensusData.ConsensusPackets, filteredValidatorDepositMap, blockNumber, valDetailsMap, consensusContext)
+	packetRoundMap, err := ParseConsensusPackets(parentHash, &blockAdditionalConsensusData.ConsensusPackets, filteredValidatorDepositMap, blockNumber, &preparedValDetailsMap, consensusContext)
 	if err != nil {
 		return nil, err
 	}

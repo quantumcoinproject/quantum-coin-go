@@ -653,39 +653,17 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 
 	_, isValPresentPreFilter := validators[cph.account.Address]
 
-	var filteredValidators map[common.Address]bool
-	filteredValidators, blockStateDetails.totalBlockDepositValue, blockStateDetails.blockMinWeightedProposalsRequired, err = filterValidators(blockStateDetails.consensusContext, &validators, blockNumber, &validatorDetailsMap)
+	preparedState, err := PrepareConsensusState(blockStateDetails.consensusContext, validators, validatorDetailsMap, blockNumber)
 	if err != nil {
 		delete(cph.blockStateDetailsMap, parentHash)
 		return err
 	}
 
+	blockStateDetails.totalBlockDepositValue = preparedState.TotalBlockDepositValue
+	blockStateDetails.blockMinWeightedProposalsRequired = preparedState.MinDepositRequired
+	blockStateDetails.filteredValidatorsDepositMap = preparedState.FilteredValidatorsDepositMap
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
-		var toRemove []common.Address
-		for valAddr, valDetails := range validatorDetailsMap {
-			if valDetails.IsValidationPaused { //filteredValidators will already have skipped paused validators, no need to skip again for filteredValidators
-				toRemove = append(toRemove, valAddr)
-				continue
-			}
-			_, ok := filteredValidators[valAddr]
-			if ok == false {
-				toRemove = append(toRemove, valAddr)
-			}
-		}
-		for _, valAddr := range toRemove {
-			delete(validatorDetailsMap, valAddr)
-		}
-		blockStateDetails.validatorDetailsMap = &validatorDetailsMap
-	}
-
-	if blockStateDetails.totalBlockDepositValue.Cmp(MIN_BLOCK_DEPOSIT) == -1 {
-		delete(cph.blockStateDetailsMap, parentHash)
-		return errors.New("min block deposit not met")
-	}
-
-	for addr, _ := range filteredValidators {
-		depositValue := validators[addr]
-		blockStateDetails.filteredValidatorsDepositMap[addr] = depositValue
+		blockStateDetails.validatorDetailsMap = &preparedState.ValidatorDetailsMap
 	}
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
