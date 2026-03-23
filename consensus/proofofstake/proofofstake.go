@@ -957,7 +957,7 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 	}
 
 	if err != nil {
-		log.Debug("getBlockConsensusData", "err", err)
+		log.Warn("FinalizeAndAssembleWithConsensus getBlockConsensusData", "error", err)
 		return nil, err
 	}
 	data, err := rlp.EncodeToBytes(blockConsensusData)
