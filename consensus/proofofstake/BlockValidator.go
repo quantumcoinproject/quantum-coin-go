@@ -42,7 +42,7 @@ var ContinueOnProposerCheckError = !defaults.EnableProposerCheck()
 var validatorError = "validator not part of block"
 
 func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *eth.ConsensusPacket, filteredValidatorDepositMap map[common.Address]*big.Int,
-	blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, consensusContext common.Hash, resultsChan chan *PacketParseResult) {
+	blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, consensusContext common.Hash, roundProposers map[byte]common.Address, resultsChan chan *PacketParseResult) {
 
 	defer wg.Done()
 
@@ -145,8 +145,9 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 			return
 		}
 
-		blockProposer, err := getBlockProposer(parentHash, &filteredValidatorDepositMap, details.Round, validatorDetailsMap, blockNumber, consensusContext)
-		if err != nil {
+		blockProposer, ok := roundProposers[details.Round]
+		if !ok {
+			err = errors.New("round proposer not precomputed")
 			resultsChan <- &PacketParseResult{err: err}
 			return
 		}
@@ -243,7 +244,7 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 }
 
 func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.ConsensusPacket, filteredValidatorDepositMap map[common.Address]*big.Int,
-	blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, consensusContext common.Hash) (packetRoundMap map[byte]*PacketMap, err error) {
+	blockNumber uint64, validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, consensusContext common.Hash, roundProposers map[byte]common.Address) (packetRoundMap map[byte]*PacketMap, err error) {
 	packetRoundMap = make(map[byte]*PacketMap)
 
 	packets := *consensusPackets
@@ -258,7 +259,7 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 
 	for _, packet := range packets {
 		wg.Add(1)
-		go ParseConsensusPacket(&wg, parentHash, &packet, filteredValidatorDepositMap, blockNumber, validatorDetailsMap, consensusContext, ch)
+		go ParseConsensusPacket(&wg, parentHash, &packet, filteredValidatorDepositMap, blockNumber, validatorDetailsMap, consensusContext, roundProposers, ch)
 	}
 	results := make([]*PacketParseResult, len(packets))
 
@@ -386,7 +387,8 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 }
 
 func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, voteType VoteType,
-	filteredValidatorDepositMap *map[common.Address]*big.Int, totalBlockDepositValue *big.Int, minDepositRequired *big.Int, txns []common.Hash, blockNumber uint64, proposedBlockTime uint64) error {
+	filteredValidatorDepositMap *map[common.Address]*big.Int, totalBlockDepositValue *big.Int, minDepositRequired *big.Int, txns []common.Hash, blockNumber uint64, proposedBlockTime uint64,
+	nilVoteProposalHashes map[byte]common.Hash, nilVotePrecommitHashes map[byte]common.Hash) error {
 	valMap := *filteredValidatorDepositMap
 
 	okVotesDepositValue := big.NewInt(0)
@@ -402,7 +404,11 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 		}
 	} else {
 		log.Debug("GetCombinedTxnHash b", "parentHash", parentHash, "round", round)
-		proposalHash.CopyFrom(getNilVoteProposalHash(parentHash, round))
+		ph, err := lookupNilVoteProposalHash(nilVoteProposalHashes, round)
+		if err != nil {
+			return err
+		}
+		proposalHash.CopyFrom(ph)
 		if txns != nil && len(txns) > 0 {
 			return errors.New("invalid transactions with nil vote")
 		}
@@ -458,7 +464,11 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 			return errors.New("VOTE_TYPE_NIL nilVotesDepositValue error")
 		}
 
-		precommitHash = getNilVotePreCommitHash(parentHash, round)
+		var err error
+		precommitHash, err = lookupNilVotePrecommitHash(nilVotePrecommitHashes, round)
+		if err != nil {
+			return err
+		}
 	} else {
 		if okVotesDepositValue.Cmp(minDepositRequired) < 0 {
 			return errors.New("VOTE_TYPE_OK okVotesDepositValue error")
@@ -571,7 +581,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 	var err error
 	roundBlockValidators := make(map[byte]common.Address)
 	for r := byte(1); r <= blockConsensusData.Round; r++ {
-		roundBlockValidators[r], err = getBlockProposer(parentHash, &filteredValidatorDepositMap, r, &preparedValDetailsMap, blockNumber, consensusContext)
+		roundBlockValidators[r], err = lookupRoundProposer(preparedState.RoundProposers, r)
 		if err != nil {
 			return nil, err
 		}
@@ -582,7 +592,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		return nil, errors.New("nil ConsensusPackets")
 	}
 
-	packetRoundMap, err := ParseConsensusPackets(parentHash, &blockAdditionalConsensusData.ConsensusPackets, filteredValidatorDepositMap, blockNumber, &preparedValDetailsMap, consensusContext)
+	packetRoundMap, err := ParseConsensusPackets(parentHash, &blockAdditionalConsensusData.ConsensusPackets, filteredValidatorDepositMap, blockNumber, &preparedValDetailsMap, consensusContext, preparedState.RoundProposers)
 	if err != nil {
 		return nil, err
 	}
@@ -598,11 +608,18 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 			return nil, errors.New("ValidateBlockConsensusData BlockProposer false")
 		}
 
-		if blockConsensusData.ProposalHash.IsEqualTo(getNilVoteProposalHash(parentHash, blockConsensusData.Round)) == false {
+		expProp, err := lookupNilVoteProposalHash(preparedState.NilVoteProposalHashes, blockConsensusData.Round)
+		if err != nil {
+			return nil, err
+		}
+		if blockConsensusData.ProposalHash.IsEqualTo(expProp) == false {
 			return nil, errors.New("proposal hash check failed")
 		}
 
-		precommitHash := getNilVotePreCommitHash(parentHash, blockConsensusData.Round)
+		precommitHash, err := lookupNilVotePrecommitHash(preparedState.NilVotePrecommitHashes, blockConsensusData.Round)
+		if err != nil {
+			return nil, err
+		}
 		if blockConsensusData.PrecommitHash.IsEqualTo(precommitHash) == false {
 			return nil, errors.New("precommitHash hash check failed")
 		}
@@ -630,7 +647,8 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 
 		packetMap := packetRoundMap[blockConsensusData.Round]
-		err = ValidatePackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_NIL, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime)
+		err = ValidatePackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_NIL, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime,
+			preparedState.NilVoteProposalHashes, preparedState.NilVotePrecommitHashes)
 		if err != nil {
 			return nil, err
 		}
@@ -692,7 +710,8 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 
 		packetMap := packetRoundMap[blockConsensusData.Round]
-		err = ValidatePackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_OK, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime)
+		err = ValidatePackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_OK, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime,
+			preparedState.NilVoteProposalHashes, preparedState.NilVotePrecommitHashes)
 		if err != nil {
 			return nil, err
 		}

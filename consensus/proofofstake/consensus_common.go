@@ -16,6 +16,54 @@ type PreparedConsensusState struct {
 	ValidatorDetailsMap          map[common.Address]*ValidatorDetailsV2
 	TotalBlockDepositValue       *big.Int
 	MinDepositRequired           *big.Int
+	// RoundProposers holds getBlockProposer results for rounds 1..MAX_ROUND (same inputs as filtering).
+	RoundProposers map[byte]common.Address
+	// NilVoteProposalHashes and NilVotePrecommitHashes are keyed by round 1..MAX_ROUND (same as getNilVote*).
+	NilVoteProposalHashes  map[byte]common.Hash
+	NilVotePrecommitHashes map[byte]common.Hash
+}
+
+func validatePreparedDerivedMaps(roundProposers map[byte]common.Address, nilProp, nilPre map[byte]common.Hash) error {
+	want := int(MAX_ROUND)
+	if len(roundProposers) != want || len(nilProp) != want || len(nilPre) != want {
+		return errors.New("PrepareConsensusState invalid derived map lengths")
+	}
+	for r := byte(1); r <= MAX_ROUND; r++ {
+		if _, ok := roundProposers[r]; !ok {
+			return errors.New("PrepareConsensusState missing round proposer")
+		}
+		if _, ok := nilProp[r]; !ok {
+			return errors.New("PrepareConsensusState missing nil vote proposal hash")
+		}
+		if _, ok := nilPre[r]; !ok {
+			return errors.New("PrepareConsensusState missing nil vote precommit hash")
+		}
+	}
+	return nil
+}
+
+func lookupRoundProposer(m map[byte]common.Address, round byte) (common.Address, error) {
+	p, ok := m[round]
+	if !ok {
+		return common.Address{}, errors.New("round proposer not precomputed")
+	}
+	return p, nil
+}
+
+func lookupNilVoteProposalHash(m map[byte]common.Hash, round byte) (common.Hash, error) {
+	h, ok := m[round]
+	if !ok {
+		return common.Hash{}, errors.New("nil vote proposal hash not precomputed")
+	}
+	return h, nil
+}
+
+func lookupNilVotePrecommitHash(m map[byte]common.Hash, round byte) (common.Hash, error) {
+	h, ok := m[round]
+	if !ok {
+		return common.Hash{}, errors.New("nil vote precommit hash not precomputed")
+	}
+	return h, nil
 }
 
 // PreparedConsensusData is the result of loading validator state from chain and running PrepareConsensusState.
@@ -81,7 +129,7 @@ func PrepareConsensusData(
 		}
 	}
 
-	prepared, err := PrepareConsensusState(consensusContext, validators, validatorDetailsMap, blockNumber)
+	prepared, err := PrepareConsensusState(parentHash, consensusContext, validators, validatorDetailsMap, blockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -100,15 +148,39 @@ func preparedConsensusStateFromBlockState(d *BlockStateDetails) *PreparedConsens
 	if d.validatorDetailsMap != nil {
 		vd = *d.validatorDetailsMap
 	}
+	var rp map[byte]common.Address
+	if len(d.roundProposers) > 0 {
+		rp = make(map[byte]common.Address, len(d.roundProposers))
+		for k, v := range d.roundProposers {
+			rp[k] = v
+		}
+	}
+	var np, npc map[byte]common.Hash
+	if len(d.nilVoteProposalHashes) > 0 {
+		np = make(map[byte]common.Hash, len(d.nilVoteProposalHashes))
+		for k, v := range d.nilVoteProposalHashes {
+			np[k] = v
+		}
+	}
+	if len(d.nilVotePrecommitHashes) > 0 {
+		npc = make(map[byte]common.Hash, len(d.nilVotePrecommitHashes))
+		for k, v := range d.nilVotePrecommitHashes {
+			npc[k] = v
+		}
+	}
 	return &PreparedConsensusState{
 		FilteredValidatorsDepositMap: d.filteredValidatorsDepositMap,
 		ValidatorDetailsMap:          vd,
 		TotalBlockDepositValue:       d.totalBlockDepositValue,
 		MinDepositRequired:           d.blockMinWeightedProposalsRequired,
+		RoundProposers:               rp,
+		NilVoteProposalHashes:        np,
+		NilVotePrecommitHashes:       npc,
 	}
 }
 
 func PrepareConsensusState(
+	parentHash common.Hash,
 	consensusContext common.Hash,
 	validatorDepositMap map[common.Address]*big.Int,
 	validatorDetailsMap map[common.Address]*ValidatorDetailsV2,
@@ -175,10 +247,30 @@ func PrepareConsensusState(
 			len(filteredValidatorDepositMap), "len(detailsMapCopy)", len(detailsMapCopy), "blockNumber", blockNumber, "consensusContext", consensusContext)
 	}
 
+	roundProposers := make(map[byte]common.Address, MAX_ROUND)
+	nilVoteProposalHashes := make(map[byte]common.Hash, MAX_ROUND)
+	nilVotePrecommitHashes := make(map[byte]common.Hash, MAX_ROUND)
+	for r := byte(1); r <= MAX_ROUND; r++ {
+		prop, err := getBlockProposer(parentHash, &filteredValidatorDepositMap, r, &detailsMapCopy, blockNumber, consensusContext)
+		if err != nil {
+			return nil, err
+		}
+		roundProposers[r] = prop
+		nilVoteProposalHashes[r] = getNilVoteProposalHash(parentHash, r)
+		nilVotePrecommitHashes[r] = getNilVotePreCommitHash(parentHash, r)
+	}
+
+	if err := validatePreparedDerivedMaps(roundProposers, nilVoteProposalHashes, nilVotePrecommitHashes); err != nil {
+		return nil, err
+	}
+
 	return &PreparedConsensusState{
 		FilteredValidatorsDepositMap: filteredValidatorDepositMap,
 		ValidatorDetailsMap:          detailsMapCopy,
 		TotalBlockDepositValue:       totalBlockDepositValue,
 		MinDepositRequired:           minDepositRequired,
+		RoundProposers:               roundProposers,
+		NilVoteProposalHashes:        nilVoteProposalHashes,
+		NilVotePrecommitHashes:       nilVotePrecommitHashes,
 	}, nil
 }

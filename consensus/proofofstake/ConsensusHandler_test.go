@@ -268,7 +268,7 @@ func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) err
 	left := p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER
 	right := CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER
 	if left != right {
-		fmt.Println("BroadcastConsensusData left", left, "right", right)
+		//fmt.Println("BroadcastConsensusData left", left, "right", right)
 		return nil
 	}
 
@@ -637,7 +637,7 @@ func ValidateBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager,
 		if valDetailsMap != nil {
 			valDetails = *valDetailsMap
 		}
-		preparedInner, err := PrepareConsensusState(consensusContext, *validatorMap, valDetails, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
+		preparedInner, err := PrepareConsensusState(parentHash, consensusContext, *validatorMap, valDetails, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 		if err != nil {
 			t.Fatalf("PrepareConsensusState failed: %v", err)
 		}
