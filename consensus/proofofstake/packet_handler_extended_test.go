@@ -4,24 +4,19 @@ import (
 	"fmt"
 	"testing"
 	"time"
-    "flag"
+
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
-var runVeryLongTest = flag.Bool("very-long", false, "runs very long tests")
-
 func TestPacketHandler_min_basic_time_hash(t *testing.T) {
-	if !*runVeryLongTest {
-		t.SkipNow()
-	}
-	CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, t.Name())
+	CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
 	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
@@ -63,13 +58,10 @@ func TestPacketHandler_min_basic_time_hash(t *testing.T) {
 }
 
 func testPacketHandler_block_proposer_timedout(t *testing.T) {
-	if !*runVeryLongTest {
-		t.SkipNow()
-	}
 	numKeys := 4
 	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	c := 1
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
 	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
@@ -103,9 +95,6 @@ func testPacketHandler_block_proposer_timedout(t *testing.T) {
 }
 
 func TestPacketHandler_block_proposer_timedout(t *testing.T) {
-	if !*runVeryLongTest {
-		t.SkipNow()
-	}
 	for i := 1; i <= TEST_ITERATIONS; i++ {
 		fmt.Println("iteration", i)
 		testPacketHandler_block_proposer_timedout(t)

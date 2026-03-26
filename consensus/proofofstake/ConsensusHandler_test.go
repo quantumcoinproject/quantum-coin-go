@@ -274,7 +274,7 @@ func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) err
 
 	pHash := getTestParentHash(p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	if pHash.IsEqualTo(packet.ParentHash) == false {
-		fmt.Println("BroadcastConsensusData pHash", pHash, "isEqualTo", packet.ParentHash)
+		fmt.Println("BroadcastConsensusData mismatch", "pHash", pHash, "isEqualTo", packet.ParentHash)
 		return nil
 	}
 	p.consensusTest.HandlerLock.Lock()
