@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
@@ -113,6 +114,9 @@ func TestPacketHandler_block_proposer_timedout(t *testing.T) {
 func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
 	var blockNumbers = []uint64{10000001}
+	if err := defaults.SetCryptoBreakGlassBlock(0); err != nil {
+		t.Fatalf("failed reset breakglass: %v", err)
+	}
 	err := defaults.SetCryptoBreakGlassBlock(10000001)
 	if err != nil {
 		t.Fatalf("failed")
@@ -128,9 +132,16 @@ func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T
 			testPacketHandler_basic(4, b, t)
 		}
 	}
+	// Allow async BroadcastConsensusData goroutines to finish before clearing breakglass (same as TestPacketHandler_breakglass).
+	time.Sleep(10 * time.Second)
 	err = defaults.SetCryptoBreakGlassBlock(0)
 	if err != nil {
 		t.Fatalf("failed")
+	}
+	defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID))
+	// Async BroadcastConsensusData may still run; mismatch CurrentConsensusTest so MockP2PHandler drops them before getSigner.
+	if CurrentConsensusTest != nil {
+		CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER = 0
 	}
 
 	fmt.Println("TestPacketHandler_offline_validator_block_full_sign_breakglass done")

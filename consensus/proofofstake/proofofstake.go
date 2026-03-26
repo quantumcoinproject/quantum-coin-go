@@ -585,21 +585,7 @@ func (c *ProofOfStake) VerifyBlock(chain consensus.ChainHeaderReader, block *typ
 		return nil
 	}
 
-	validatorDepositMap, err := c.GetValidators(header.ParentHash)
-	if err != nil {
-		log.Trace("VerifyBlock 3", "err", err)
-		return err
-	}
-
-	var valDetailsMap map[common.Address]*ValidatorDetailsV2
-	if number >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
-		valDetailsMap, err = c.ListValidatorsAsMap(header.ParentHash)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = ValidateBlockConsensusData(block, &validatorDepositMap, &valDetailsMap, c.GetConsensusContext, c.GetValidators)
+	err = ValidateBlockConsensusData(block, nil, nil, c.GetConsensusContext, c.GetValidators, c.ListValidatorsAsMap)
 	if err != nil {
 		log.Trace("ValidateBlockConsensusData", "err", err)
 	}

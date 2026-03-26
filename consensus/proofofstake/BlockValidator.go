@@ -3,7 +3,6 @@ package proofofstake
 import (
 	"errors"
 	"math/big"
-	"strconv"
 	"sync"
 	"time"
 
@@ -512,7 +511,7 @@ func ValidatePackets(parentHash common.Hash, round byte, packetMap *PacketMap, v
 }
 
 func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, blockConsensusData *BlockConsensusData, blockAdditionalConsensusData *BlockAdditionalConsensusData,
-	validatorDepositMap *map[common.Address]*big.Int, blockNumber uint64, valDetailsMap *map[common.Address]*ValidatorDetailsV2, consensusContext common.Hash) (*backupmanager.BlockValidatorDetails, error) {
+	preparedState *PreparedConsensusState, blockNumber uint64, consensusContext common.Hash) (*backupmanager.BlockValidatorDetails, error) {
 	if blockConsensusData.Round < 1 {
 		return nil, errors.New("ValidateBlockConsensusData round min")
 	}
@@ -535,9 +534,8 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 	}
 
-	preparedState, err := PrepareConsensusState(consensusContext, *validatorDepositMap, *valDetailsMap, blockNumber)
-	if err != nil {
-		return nil, err
+	if preparedState == nil {
+		return nil, errors.New("ValidateBlockConsensusDataInner preparedState nil")
 	}
 
 	filteredValidatorDepositMap := preparedState.FilteredValidatorsDepositMap
@@ -570,6 +568,7 @@ func ValidateBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash,
 		}
 	}
 
+	var err error
 	roundBlockValidators := make(map[byte]common.Address)
 	for r := byte(1); r <= blockConsensusData.Round; r++ {
 		roundBlockValidators[r], err = getBlockProposer(parentHash, &filteredValidatorDepositMap, r, &preparedValDetailsMap, blockNumber, consensusContext)
@@ -729,8 +728,12 @@ func ValidateBlockProposalTime(blockNumber uint64, proposedTime uint64) bool {
 	return true
 }
 
+// ValidateBlockConsensusData validates consensus fields on a block. validatorDepositMap and valDetailsMap are
+// deprecated and ignored; validator state is loaded via getValidatorsFn and listValidatorsFn.
 func ValidateBlockConsensusData(block *types.Block, validatorDepositMap *map[common.Address]*big.Int,
-	valDetailsMap *map[common.Address]*ValidatorDetailsV2, getBlockConsensusContext GetBlockConsensusContextFn, getValidatorsFn GetValidatorsFn) error {
+	valDetailsMap *map[common.Address]*ValidatorDetailsV2, getBlockConsensusContext GetBlockConsensusContextFn, getValidatorsFn GetValidatorsFn, listValidatorsFn ListValidatorsAsMapFn) error {
+	_ = validatorDepositMap
+	_ = valDetailsMap
 	header := block.Header()
 
 	if header.ConsensusData == nil || header.UnhashedConsensusData == nil {
@@ -773,32 +776,15 @@ func ValidateBlockConsensusData(block *types.Block, validatorDepositMap *map[com
 		return errors.New("ValidateBlockProposalTime failed")
 	}
 
-	//Consensus Context
-	var consensusContext common.Hash
 	blockNumber := header.Number.Uint64()
-	var preFilterValidatorCount int
-	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
-		validators, err := getValidatorsFn(header.ParentHash)
-		if err != nil {
-			return err
-		}
-
-		preFilterValidatorCount = len(validators)
-
-		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
-		if err != nil {
-			return err
-		}
-		blockContext, err := getBlockConsensusContext(contextKey, header.ParentHash)
-		if err != nil {
-			return err
-		}
-		consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
-		log.Debug("consensusContext", "blockContext", blockContext, "post consensusContext", consensusContext,
-			"preFilterValidatorCount", preFilterValidatorCount, "block", header.Number.Uint64())
+	preparedData, err := PrepareConsensusData(header.ParentHash, blockNumber, getValidatorsFn, getBlockConsensusContext, listValidatorsFn, common.Hash{})
+	if err != nil {
+		return err
 	}
+	consensusContext := preparedData.ConsensusContext
+	preFilterValidatorCount := preparedData.PreFilterValidatorCount
 
-	blockValidatorDetails, err := ValidateBlockConsensusDataInner(txnList, header.ParentHash, blockConsensusData, blockAdditionalConsensusData, validatorDepositMap, header.Number.Uint64(), valDetailsMap, consensusContext)
+	blockValidatorDetails, err := ValidateBlockConsensusDataInner(txnList, header.ParentHash, blockConsensusData, blockAdditionalConsensusData, preparedData.Prepared, blockNumber, consensusContext)
 	if blockValidatorDetails != nil && backupmanager.GetConsensusInstance() != nil { //save even if error
 		blockValidatorDetails.PreFilterValidatorCount = big.NewInt(int64(preFilterValidatorCount))
 		errBackup := backupmanager.GetConsensusInstance().BackupBlockValidatorDetails(blockValidatorDetails, backupmanager.BlockValidatorContextBlockVerify)

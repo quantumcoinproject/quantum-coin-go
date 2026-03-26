@@ -606,59 +606,27 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	blockStateDetails := cph.blockStateDetailsMap[parentHash]
 	cph.lastRequestConsensusDataTime = time.Now()
 
-	validators, err := cph.getValidatorsFn(parentHash)
+	preparedData, err := PrepareConsensusData(parentHash, blockNumber, cph.getValidatorsFn, cph.getBlockConsensusContext, cph.listValidatorsFn, parentHash)
 	if err != nil {
-		log.Error("getValidatorsFn", "err", err)
+		log.Error("PrepareConsensusData", "err", err)
 		delete(cph.blockStateDetailsMap, parentHash)
 		return err
 	}
-	blockStateDetails.origValidators = make(map[common.Address]*big.Int, len(validators))
-	for addr, dep := range validators {
+
+	blockStateDetails.consensusContext = preparedData.ConsensusContext
+	blockStateDetails.preFilterValidatorCount = preparedData.PreFilterValidatorCount
+
+	blockStateDetails.origValidators = make(map[common.Address]*big.Int, len(preparedData.ValidatorsDepositMap))
+	for addr, dep := range preparedData.ValidatorsDepositMap {
 		if dep != nil {
 			blockStateDetails.origValidators[addr] = new(big.Int).Set(dep)
 		}
 	}
+	blockStateDetails.origValidatorDetailsMap = preparedData.OrigValidatorDetailsMap
 
-	preFilterValidatorCount := len(validators)
+	_, isValPresentPreFilter := preparedData.ValidatorsDepositMap[cph.account.Address]
 
-	//Consensus Context
-	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
-		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
-		if err != nil {
-			return err
-		}
-		blockContext, err := cph.getBlockConsensusContext(contextKey, parentHash)
-		if err != nil {
-			return err
-		}
-		blockStateDetails.consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
-		blockStateDetails.preFilterValidatorCount = preFilterValidatorCount
-		log.Debug("initializeBlockStateIfRequired", "blockContext", blockContext, "post consensusContext", blockStateDetails.consensusContext, "blockContext", blockContext[:], "blockNumber", blockNumber)
-	} else {
-		blockStateDetails.consensusContext = parentHash
-	}
-
-	var validatorDetailsMap map[common.Address]*ValidatorDetailsV2
-	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
-		validatorDetailsMap, err = cph.listValidatorsFn(parentHash)
-		if err != nil {
-			log.Error("listValidatorsFn", "err", err)
-			return err
-		}
-		blockStateDetails.origValidatorDetailsMap = make(map[common.Address]*ValidatorDetailsV2, len(validatorDetailsMap))
-		for addr, vd := range validatorDetailsMap {
-			blockStateDetails.origValidatorDetailsMap[addr] = copyValidatorDetailsV2(vd)
-		}
-	}
-
-	_, isValPresentPreFilter := validators[cph.account.Address]
-
-	preparedState, err := PrepareConsensusState(blockStateDetails.consensusContext, validators, validatorDetailsMap, blockNumber)
-	if err != nil {
-		delete(cph.blockStateDetailsMap, parentHash)
-		return err
-	}
-
+	preparedState := preparedData.Prepared
 	blockStateDetails.totalBlockDepositValue = preparedState.TotalBlockDepositValue
 	blockStateDetails.blockMinWeightedProposalsRequired = preparedState.MinDepositRequired
 	blockStateDetails.filteredValidatorsDepositMap = preparedState.FilteredValidatorsDepositMap
@@ -1078,13 +1046,14 @@ func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (bloc
 		blockAdditionalConsensusData.ConsensusPackets[i] = eth.NewConsensusPacket(&packet)
 	}
 
+	preparedForInner := preparedConsensusStateFromBlockState(blockStateDetails)
 	var blockValidatorDetails *backupmanager.BlockValidatorDetails
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL {
 		blockValidatorDetails, err = ValidateBlockConsensusDataInner(nil, parentHash, blockConsensusData, blockAdditionalConsensusData,
-			&blockStateDetails.origValidators, blockStateDetails.blockNumber, &blockStateDetails.origValidatorDetailsMap, blockStateDetails.consensusContext)
+			preparedForInner, blockStateDetails.blockNumber, blockStateDetails.consensusContext)
 	} else {
 		blockValidatorDetails, err = ValidateBlockConsensusDataInner(blockRoundDetails.proposalTxns, parentHash, blockConsensusData, blockAdditionalConsensusData,
-			&blockStateDetails.origValidators, blockStateDetails.blockNumber, &blockStateDetails.origValidatorDetailsMap, blockStateDetails.consensusContext)
+			preparedForInner, blockStateDetails.blockNumber, blockStateDetails.consensusContext)
 	}
 	if blockValidatorDetails != nil {
 		blockValidatorDetails.PreFilterValidatorCount = big.NewInt(int64(blockStateDetails.preFilterValidatorCount))
@@ -1700,7 +1669,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 	currentRoundDepositSoFar := big.NewInt(0)
 	currentRoundCommitsDepositSoFar := big.NewInt(0)
 	for val, depositAmount := range blockStateDetails.filteredValidatorsDepositMap {
-		_, okCommit := valCommitMap[val]
+		_, okCommit := valCommitMap[val] //bug: valCommitMap is never filled
 		if okCommit {
 			currentRoundCommitsDepositSoFar = common.SafeAddBigInt(depositAmount, currentRoundCommitsDepositSoFar)
 			log.Debug("currentRoundCommitsDepositSoFar", "val", val, "depositAmount", depositAmount, "currentRoundCommitsDepositSoFar", currentRoundCommitsDepositSoFar)
@@ -2206,7 +2175,7 @@ func (cph *ConsensusHandler) ackBlockProposalTimeout(parentHash common.Hash) err
 		"blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired)
 
 	if okVotesDepositCount.Cmp(blockStateDetails.blockMinWeightedProposalsRequired) >= 0 {
-		//do nothing
+		//Do nothing since these votes were likely received after timeout. Wait for transition to next round.
 	} else if nilVotesDepositCount.Cmp(blockStateDetails.blockMinWeightedProposalsRequired) >= 0 { //handle timeout differently?
 		blockRoundDetails.state = BLOCK_STATE_WAITING_FOR_PRECOMMITS
 		blockRoundDetails.precommitInitTime = time.Now()
