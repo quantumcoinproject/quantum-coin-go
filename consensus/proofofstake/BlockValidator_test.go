@@ -101,7 +101,9 @@ func BlockNilTest(blockConsensusData *BlockConsensusData, blockAdditionalConsens
 
 	block := types.NewBlock(header, txs[:], receipts, trie.NewStackTrie(nil))
 	valMap := make(map[common.Address]*big.Int)
-	err := ValidateBlockConsensusData(block, &valMap, nil, DummyGetBlockConsensusContext, nil)
+	getValidatorsStub := func(common.Hash) (map[common.Address]*big.Int, error) { return valMap, nil }
+	listValidatorsStub := func(common.Hash) (map[common.Address]*ValidatorDetailsV2, error) { return nil, nil }
+	err := ValidateBlockConsensusData(block, &valMap, nil, DummyGetBlockConsensusContext, getValidatorsStub, listValidatorsStub)
 	if err == nil || strings.Compare(err.Error(), expectedError) != 0 {
 		debug.PrintStack()
 		t.Fatalf("BlockNilTest failed")

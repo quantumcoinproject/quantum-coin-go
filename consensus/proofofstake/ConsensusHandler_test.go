@@ -268,13 +268,13 @@ func (p *MockP2PHandler) BroadcastConsensusData(packet *eth.ConsensusPacket) err
 	left := p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER
 	right := CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER
 	if left != right {
-		fmt.Println("BroadcastConsensusData left", left, "right", right)
+		//fmt.Println("BroadcastConsensusData left", left, "right", right)
 		return nil
 	}
 
 	pHash := getTestParentHash(p.consensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	if pHash.IsEqualTo(packet.ParentHash) == false {
-		fmt.Println("BroadcastConsensusData pHash", pHash, "isEqualTo", packet.ParentHash)
+		fmt.Println("BroadcastConsensusData mismatch", "pHash", pHash, "isEqualTo", packet.ParentHash)
 		return nil
 	}
 	p.consensusTest.HandlerLock.Lock()
@@ -633,7 +633,15 @@ func ValidateBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager,
 		}
 		consensusContext := crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(len(*validatorMap))))
 
-		_, err = ValidateBlockConsensusDataInner(txns, parentHash, blockConsensusData, blockAdditionalConsensusData, validatorMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, valDetailsMap, consensusContext)
+		var valDetails map[common.Address]*ValidatorDetailsV2
+		if valDetailsMap != nil {
+			valDetails = *valDetailsMap
+		}
+		preparedInner, err := PrepareConsensusState(parentHash, consensusContext, *validatorMap, valDetails, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
+		if err != nil {
+			t.Fatalf("PrepareConsensusState failed: %v", err)
+		}
+		_, err = ValidateBlockConsensusDataInner(txns, parentHash, blockConsensusData, blockAdditionalConsensusData, preparedInner, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, consensusContext)
 		if err != nil {
 			t.Fatalf("ValidateBlockConsensusDataInner failed")
 		}
@@ -2077,7 +2085,12 @@ func TestPacketHandler_breakglass(t *testing.T) {
 	fmt.Println("TestPacketHandler_breakglass starting")
 
 	breakglassBlock := uint64(5000000)
-	defaults.SetCryptoBreakGlassBlock(breakglassBlock)
+	if err := defaults.SetCryptoBreakGlassBlock(0); err != nil {
+		t.Fatalf("failed reset breakglass: %v", err)
+	}
+	if err := defaults.SetCryptoBreakGlassBlock(breakglassBlock); err != nil {
+		t.Fatalf("failed set breakglass: %v", err)
+	}
 	if defaults.IsCryptoBreakglassMode(breakglassBlock) == false {
 		t.Fatalf("failed IsCryptoBreakglassMode")
 		return

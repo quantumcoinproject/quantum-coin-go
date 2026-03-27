@@ -2,24 +2,21 @@ package proofofstake
 
 import (
 	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
 func TestPacketHandler_min_basic_time_hash(t *testing.T) {
-	if os.Getenv("EXTENDED_TESTS") == "" {
-		t.Skip("skipped")
-	}
-	CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK
 	numKeys := 4
-	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, t.Name())
+	CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER = defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
 	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
@@ -61,13 +58,10 @@ func TestPacketHandler_min_basic_time_hash(t *testing.T) {
 }
 
 func testPacketHandler_block_proposer_timedout(t *testing.T) {
-	if os.Getenv("EXTENDED_TESTS") == "" {
-		t.Skip("skipped")
-	}
 	numKeys := 4
 	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
-	parentHash := common.BytesToHash([]byte{1})
+	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	c := 1
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
 	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
@@ -101,9 +95,6 @@ func testPacketHandler_block_proposer_timedout(t *testing.T) {
 }
 
 func TestPacketHandler_block_proposer_timedout(t *testing.T) {
-	if os.Getenv("EXTENDED_TESTS") == "" {
-		t.Skip("skipped")
-	}
 	for i := 1; i <= TEST_ITERATIONS; i++ {
 		fmt.Println("iteration", i)
 		testPacketHandler_block_proposer_timedout(t)
@@ -113,6 +104,9 @@ func TestPacketHandler_block_proposer_timedout(t *testing.T) {
 func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
 	var blockNumbers = []uint64{10000001}
+	if err := defaults.SetCryptoBreakGlassBlock(0); err != nil {
+		t.Fatalf("failed reset breakglass: %v", err)
+	}
 	err := defaults.SetCryptoBreakGlassBlock(10000001)
 	if err != nil {
 		t.Fatalf("failed")
@@ -128,9 +122,16 @@ func TestPacketHandler_offline_validator_block_full_sign_breakglass(t *testing.T
 			testPacketHandler_basic(4, b, t)
 		}
 	}
+	// Allow async BroadcastConsensusData goroutines to finish before clearing breakglass (same as TestPacketHandler_breakglass).
+	time.Sleep(10 * time.Second)
 	err = defaults.SetCryptoBreakGlassBlock(0)
 	if err != nil {
 		t.Fatalf("failed")
+	}
+	defaults.SetCryptoSigningMode(byte(crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID))
+	// Async BroadcastConsensusData may still run; mismatch CurrentConsensusTest so MockP2PHandler drops them before getSigner.
+	if CurrentConsensusTest != nil {
+		CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER = 0
 	}
 
 	fmt.Println("TestPacketHandler_offline_validator_block_full_sign_breakglass done")
