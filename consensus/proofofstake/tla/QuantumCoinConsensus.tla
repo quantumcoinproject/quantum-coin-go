@@ -106,10 +106,16 @@ PrecommitDeposit(r) ==
 CommitDeposit(r) ==
     DepositSum[{vote.validator : vote \in {v \in commitVotes : v.round = r}}]
 
+(* Deposit weight of distinct validators that have sent any ack in a given round,
+   regardless of vote type. Each validator is counted once even if they equivocated. *)
+AckDeposit(r) ==
+    DepositSum[{vote.validator : vote \in {v \in ackVotes : v.round = r}}]
+
 (* Deposit weight of validators that have sent any ack in a higher round *)
 HigherRoundAckDeposit(r) ==
     IF r >= MaxRound THEN 0
     ELSE DepositSum[{vote.validator : vote \in {v \in ackVotes : v.round > r}}]
+
 
 --------------------------------------------------------------------------
 (* Initial state: Round 1, all validators waiting for proposal *)
@@ -261,17 +267,18 @@ FinalizeBlock(v) ==
 --------------------------------------------------------------------------
 (* STEP 14: Round escalation -- only from Round 1 *)
 
-(* An honest validator stuck in ACK_PROPOSAL phase triggers escalation *)
+(* An honest validator stuck in ACK_PROPOSAL phase triggers escalation.
+   In the Go code, escalation from ACK can be triggered by timeout alone
+   or by evidence that higher-round participants make the current round
+   unreachable. AckDeposit counts each validator once even if they equivocated. *)
 EscalateFromAck(v) ==
     /\ v \in Honest
     /\ round = 1
     /\ state[v] = "WAITING_FOR_ACK_PROPOSAL"
-    /\ \/ \* Ack timeout and not enough OK or NIL votes
-          /\ AckDepositForType("OK", round) < Threshold
-          /\ AckDepositForType("NIL", round) < Threshold
-          /\ \/ HigherRoundAckDeposit(round) + AckDepositForType("OK", round)
-                + AckDepositForType("NIL", round) >= Threshold
-             \/ TRUE  \* nondeterministic timeout
+    /\ AckDepositForType("OK", round) < Threshold
+    /\ AckDepositForType("NIL", round) < Threshold
+    /\ \/ HigherRoundAckDeposit(round) + AckDeposit(round) >= Threshold
+       \/ TRUE  \* nondeterministic timeout
     /\ round' = 2
     /\ state' = [w \in Validators |->
         IF w \in Honest /\ state[w] \in {"WAITING_FOR_PROPOSAL", "WAITING_FOR_ACK_PROPOSAL"}
@@ -282,7 +289,14 @@ EscalateFromAck(v) ==
     /\ timedOut' = [w \in Validators |-> FALSE]
     /\ UNCHANGED <<ackVotes, precommitVotes, commitVotes, blockVoteType, finalized>>
 
-(* An honest validator stuck in PRECOMMIT phase triggers escalation *)
+(* An honest validator stuck in PRECOMMIT phase triggers escalation.
+   In the Go code, escalation from PRECOMMIT requires timeout AND
+   higher-round deposit evidence. The TLA+ model uses a global round
+   and does not model out-of-order cross-round messages, so the
+   higher-round evidence condition cannot be expressed directly.
+   Instead, escalation is guarded only by the precommit deficit,
+   which is a sound over-approximation: if safety holds with more
+   liberal escalation, it holds with the stricter Go implementation. *)
 EscalateFromPrecommit(v) ==
     /\ v \in Honest
     /\ round = 1

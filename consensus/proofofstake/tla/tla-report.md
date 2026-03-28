@@ -1,4 +1,4 @@
-# TLA+ Model Checking Report
+# QuantumCoin TLA+ Model Checking Report
 
 > **See also:** [Consensus Protocol Description](../README.md) -- human-readable step-by-step specification of the protocol that was formally verified.
 >
@@ -6,7 +6,7 @@
 
 Verification results for the QuantumCoin proof-of-stake consensus protocol TLA+ specification.
 
-**Date:** 2026-03-27
+**Date:** 2026-03-28
 **TLC Version:** 2026.03.27.000708 (rev: aace794)
 **Platform:** Windows 11, OpenJDK 21.0.10, 16 cores, 21.8 GB heap
 
@@ -57,10 +57,10 @@ The Boundary and Unsafe configurations differ by just 1 percentage point, provid
 
 | Metric | Value |
 |--------|-------|
-| States generated | 811,709 |
+| States generated | 811,601 |
 | Distinct states | 299,337 |
 | State graph depth | 29 |
-| Runtime | 15 seconds |
+| Runtime | 14 seconds |
 
 ---
 
@@ -91,10 +91,10 @@ The ASSUME is satisfied: `33 * 3 = 99 < 100` (strictly less than 1/3).
 
 | Metric | Value |
 |--------|-------|
-| States generated | 811,709 |
+| States generated | 811,601 |
 | Distinct states | 299,337 |
 | State graph depth | 29 |
-| Runtime | 15 seconds |
+| Runtime | 14 seconds |
 
 ---
 
@@ -120,25 +120,25 @@ TLC found a counterexample in 14 steps:
 
 1. v2 (honest, deposit 33) times out waiting for a proposal and sends `ACK_PROPOSAL` with `NIL`.
 2. v3 (Byzantine, deposit 17) equivocates: sends both `OK` and `NIL` `ACK_PROPOSAL` votes for the same round.
-3. v4 (Byzantine, deposit 17) also equivocates with both `OK` and `NIL`.
-4. Because both `OK` and `NIL` thresholds are met simultaneously:
-   - OK deposit: v1(33) + v3(17) + v4(17) = **67** >= 67 threshold
-   - NIL deposit: v2(33) + v3(17) + v4(17) = **67** >= 67 threshold
-5. Honest validators disagree on the vote type:
-   - v1 sees 67% OK and precommits `OK`.
-   - v2 sees 67% NIL and precommits `NIL`.
-6. Both honest validators proceed through `PRECOMMIT` and `COMMIT` and finalize with conflicting vote types: **v1 = OK, v2 = NIL**.
+3. v3 skips ahead through `PRECOMMIT` and `COMMIT` phases (phase skipping).
+4. v4 (Byzantine, deposit 17) also equivocates with both `OK` and `NIL`.
+5. v2 sees NIL deposit = v2(33) + v3(17) + v4(17) = **67** >= 67 threshold, and precommits `NIL`.
+6. v1 (honest, deposit 33) proposes and acks `OK`. Now OK deposit = v1(33) + v3(17) + v4(17) = **67** >= 67 threshold.
+7. v1 sees 67% OK and precommits `OK`.
+8. Both honest validators proceed through `COMMIT` (commit deposit = v1 + v2 + v3 = 83 >= 67) and finalize with conflicting vote types: **v1 = OK, v2 = NIL**.
 
-This demonstrates that when Byzantine deposit exceeds 33%, equivocation can simultaneously satisfy quorum for both `OK` and `NIL`, breaking Agreement. The violation occurs at just 34% -- only 1 percentage point above the boundary where all properties pass (33%).
+The equivocation by v3 and v4 allows both `OK` and `NIL` quorums to reach the 67% threshold at different points in the execution. v2 advances on the NIL path first, and v1 advances on the OK path later -- the conflicting quorums do not need to form at the same instant. The violation occurs at just 34% Byzantine deposit -- only 1 percentage point above the boundary where all properties pass (33%).
 
 ### State Space (partial, stopped at first violation)
 
 | Metric | Value |
 |--------|-------|
-| States generated | 283,054 |
-| Distinct states | 102,854 |
+| States generated | ~275,000 |
+| Distinct states | ~100,000 |
 | State graph depth | 17 |
 | Runtime | 2 seconds |
+
+*Note: Partial state counts vary across runs because TLC stops at the first violation, and the exact frontier explored depends on worker thread scheduling.*
 
 ---
 
@@ -196,7 +196,7 @@ The specification models the following Byzantine behaviors, all explored nondete
 
 The QuantumCoin consensus protocol, as modeled in `QuantumCoinConsensus.tla`, satisfies all safety invariants and the termination liveness property when Byzantine validators control **<= 33%** of total weighted deposit. This was verified exhaustively across two configurations:
 
-- **Safe** (25% Byzantine): 811,709 states explored, all properties pass.
-- **Boundary** (33% Byzantine): 811,709 states explored, all properties pass.
+- **Safe** (25% Byzantine): 811,601 states explored, all properties pass.
+- **Boundary** (33% Byzantine): 811,601 states explored, all properties pass.
 
 When Byzantine deposit exceeds 33%, the **Agreement** invariant is violated via equivocation, as demonstrated by the Unsafe configuration (34% Byzantine, just 1% above the boundary). This confirms that the 33% bound is both necessary and sufficient for safety under the Byzantine fault model.

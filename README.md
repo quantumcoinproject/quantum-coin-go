@@ -20,6 +20,20 @@ Check the [documentation](https://quantumcoin.org/connecting-to-mainnet.html) po
 
 ---
 
+### Proof-of-Stake Consensus
+
+QuantumCoin uses a custom Proof-of-Stake (PoS) consensus engine with stake-weighted, multi-round Byzantine Fault Tolerant (BFT) consensus for immediate deterministic finality. Each block progresses through four message phases -- `PROPOSAL`, `ACK_PROPOSAL`, `PRECOMMIT`, `COMMIT` -- with a 67% (2/3) weighted deposit threshold for phase transitions. The protocol tolerates up to 1/3 Byzantine validators and guarantees safety unconditionally; liveness is guaranteed under partial synchrony assumptions (bounded message delay after GST), consistent with the FLP impossibility result.
+
+| Document | Description |
+|----------|-------------|
+| [Consensus Protocol](./consensus/proofofstake/README.md) | Step-by-step protocol specification: phases, vote types, round escalation, fault model, FLP assumptions, and glossary. |
+| [TLA+ Specification](./consensus/proofofstake/tla/README.md) | Formal TLA+ model of the protocol: Byzantine behaviors modeled, safety/liveness properties verified, fairness encoding, and model configurations. |
+| [TLA+ Verification Report](./consensus/proofofstake/tla/tla-report.md) | TLC model checking results: exhaustive state-space exploration for Safe (25%), Boundary (33%), and Unsafe (34%) Byzantine configurations with counterexample analysis. |
+
+The consensus code lives under [`./consensus/proofofstake`](./consensus/proofofstake).
+
+---
+
 ### TL;DR - Post-Quantum Cryptography Summary
 
 | Component | PQC Algorithm | NIST Standard | Classical Algorithm | Hybrid |
@@ -168,7 +182,7 @@ Using the above, auditors can obtain raw signature material (message, public key
 
 2. **Rewritten RLPx protocol**: The RLPx protocol has been completely rewritten and modularized to use post-quantum cryptography. The final client and server encryption keys are derived similarly to TLS 1.3 as detailed in RFC 8446. A PQC-capable KEM is used for key exchange, and the resulting key material is used as input to HMAC HKDF functions (RFC 5869). However, unlike TLS, instead of trusting a certificate, the node's identity is verified via its hybrid PQC key pair. The private key corresponds to the hybrid PQC key pair used to secure the account using digital signatures. These changes are in the [`./p2p/rlpx`](./p2p/rlpx) package.
 
-3. **New consensus engine**: A new consensus engine (Proof-of-Stake) has been added. It uses 3-phase BFT consensus for immediate deterministic finality. Timeout values are adjusted to improve liveness within the bounds of the **FLP theorem**.
+3. **New consensus engine**: See [Proof-of-Stake Consensus](#proof-of-stake-consensus).
 
 ## Known Issues
 
