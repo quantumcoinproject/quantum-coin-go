@@ -21,11 +21,13 @@ suitable for model checking with TLC.
 
 ## Fault Tolerance
 
-The specification formally asserts that Byzantine validators control less than 1/3 of total deposit:
+The model-checking wrapper (`MCQuantumCoinConsensus.tla`) formally asserts that Byzantine validators control less than 1/3 of total deposit:
 
 ```
 ASSUME ByzantineDeposit * 3 < TotalDeposit
 ```
+
+This ASSUME is placed in the model-checking module (not the main spec) so that `MCQuantumCoinConsensusUnsafe.tla` can extend the same spec without violating the assumption. The main spec defines the `ByzantineDeposit` operator used by this ASSUME.
 
 This mirrors the standard BFT requirement: with a 67% threshold, any two quorums overlap by at least 34%, which exceeds the maximum Byzantine deposit (< 33%). This guarantees that any two quorums share at least one honest validator, preventing conflicting finalizations.
 

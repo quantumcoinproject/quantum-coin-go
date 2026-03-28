@@ -1,4 +1,4 @@
-# Proof-of-Stake Consensus Protocol
+# QuantumCoin Proof-of-Stake Consensus Protocol
 
 > **See also:** [TLA+ Formal Specification](tla/README.md) -- formal model of this protocol for automated verification with the TLC model checker.
 >
@@ -137,7 +137,7 @@ Has the 67% threshold been reached?
 >
 > **11.2) No:**
 >
-> > If round = 1: if the precommit timeout is exceeded, or if validators already
+> > If round = 1: if the precommit timeout is exceeded, and validators already
 > > participating in Round 2 hold enough deposit that Round 1 can never
 > > reach the 67% threshold: goto step 14.
 > >
