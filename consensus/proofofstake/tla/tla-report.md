@@ -108,13 +108,13 @@ The ASSUME is satisfied: `33 * 3 = 99 < 100` (strictly less than 1/3).
 | Proposers | v1 (Round 1), v2 (Round 2) |
 | Byzantine | v3, v4 (combined 34% deposit, just above 33%) |
 
-The ASSUME is violated: `34 * 3 = 102 >= 100`. This configuration uses `MCQuantumCoinConsensusUnsafe.tla`, which extends the main spec directly and omits the ASSUME.
+The ASSUME is violated as expected: `34 * 3 = 102 >= 100`. This configuration uses `MCQuantumCoinConsensusUnsafe.tla`, which extends the main spec directly and omits the ASSUME.
 
 ### Results
 
-| Property | Type | Result |
-|----------|------|--------|
-| Agreement | Safety (invariant) | **VIOLATED** |
+| Property | Type | Result                  |
+|----------|------|-------------------------|
+| Agreement | Safety (invariant) | **VIOLATED** (expected) |
 
 TLC found a counterexample in 14 steps:
 
@@ -129,7 +129,7 @@ TLC found a counterexample in 14 steps:
 
 The equivocation by v3 and v4 allows both `OK` and `NIL` quorums to reach the 67% threshold at different points in the execution. v2 advances on the NIL path first, and v1 advances on the OK path later -- the conflicting quorums do not need to form at the same instant. The violation occurs at just 34% Byzantine deposit -- only 1 percentage point above the boundary where all properties pass (33%).
 
-### State Space (partial, stopped at first violation)
+### State Space (partial, stopped at first violation (expected))
 
 | Metric | Value |
 |--------|-------|
@@ -138,7 +138,7 @@ The equivocation by v3 and v4 allows both `OK` and `NIL` quorums to reach the 67
 | State graph depth | 17 |
 | Runtime | 2 seconds |
 
-*Note: Partial state counts vary across runs because TLC stops at the first violation, and the exact frontier explored depends on worker thread scheduling.*
+*Note: Partial state counts vary across runs because TLC stops at the first violation (expected), and the exact frontier explored depends on worker thread scheduling.*
 
 ---
 
