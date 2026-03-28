@@ -3163,7 +3163,7 @@ func (cph *ConsensusHandler) OnPeerConnected(peerId string) error {
 
 func (cph *ConsensusHandler) OnPeerDisconnected(peerId string) error {
 	log.Debug("OnPeerDisconnected", "peerId", peerId)
-	cph.peerHandler.OnPeerDisconnected(peerId)
+	cph.peerHandler.OnPeerConnected(peerId) //todo: fix bug
 	return nil
 }
 

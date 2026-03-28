@@ -1,5 +1,9 @@
 # Proof-of-Stake Consensus Protocol
 
+> **See also:** [TLA+ Formal Specification](tla/README.md) -- formal model of this protocol for automated verification with the TLC model checker.
+>
+> **See also:** [TLA+ Verification Report](tla/tla-report.md) -- results of exhaustive model checking, including properties verified and fault tolerance boundary analysis.
+
 This document describes the block-level consensus protocol used by QuantumCoin's proof-of-stake system. It specifies the sequence of message exchanges between validators required to produce each block. The protocol is a stake-weighted, multi-round BFT (Byzantine Fault Tolerant) consensus with four message phases per round: `PROPOSAL`, `ACK_PROPOSAL`, `PRECOMMIT`, and `COMMIT` (4 phases for proposer and 3 phases for non-proposers).
 
 ---
@@ -21,6 +25,25 @@ This document describes the block-level consensus protocol used by QuantumCoin's
 | **67% Threshold** | The minimum weighted deposit required for a phase transition: A phase completes when the sum of deposits of validators who sent the required message meets or exceeds this threshold. |
 | **Timeout** | A duration after which a validator that has not received an expected message proceeds with a `NIL` vote or escalates to the next round. |
 | **Block Finalization** | A block is finalized when 67% weighted `COMMIT` votes are collected. The block may contain transactions (`OK` vote) or be empty (`NIL` vote). |
+| **Byzantine Validator** | A validator that deviates from the protocol. May send conflicting votes to different peers (equivocation), selectively withhold proposals, vote arbitrarily in any phase, or skip phases entirely. |
+
+---
+
+## Fault Model
+
+The protocol is Byzantine Fault Tolerant (BFT) and tolerates up to **< 1/3** of total weighted deposit controlled by Byzantine validators. This bound derives from the 67% threshold: any two quorums of 67% must overlap by at least 34%, which exceeds the maximum Byzantine deposit (< 33.3%), guaranteeing that any two quorums share at least one honest validator.
+
+Byzantine validators may exhibit the following behaviors:
+
+- **Equivocation**: Send `OK` votes to some peers and `NIL` votes to others for the same `ACK_PROPOSAL`.
+- **Selective delivery**: A Byzantine proposer may deliver a `PROPOSAL` to only a subset of validators.
+- **Arbitrary voting**: Vote `OK` or `NIL` in any phase regardless of protocol rules.
+- **Phase skipping**: Advance to later phases (e.g., `PRECOMMIT`, `COMMIT`) without completing earlier ones.
+
+As long as Byzantine validators control less than 1/3 of total deposit, the protocol guarantees:
+
+- **Safety**: No two honest validators finalize with different vote types.
+- **Liveness**: All honest validators eventually finalize under partial synchrony (timeouts).
 
 ---
 
