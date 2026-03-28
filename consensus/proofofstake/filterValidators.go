@@ -234,16 +234,25 @@ func normalizeDeposit(blockNumber uint64, valDepMap *map[common.Address]*big.Int
 	valDetailsMap := *validatorDetailsMap
 	depMap := *valDepMap
 
+	sortedAddrs := make([]common.Address, 0, len(depMap))
+	for addr := range depMap {
+		sortedAddrs = append(sortedAddrs, addr)
+	}
+	sort.Slice(sortedAddrs, func(i, j int) bool {
+		return bytes.Compare(sortedAddrs[i].Bytes(), sortedAddrs[j].Bytes()) < 0
+	})
+
 	//Find total deposit
-	for _, amt := range *valDepMap {
-		totalDeposit = common.SafeAddBigInt(totalDeposit, amt)
+	for _, amt := range sortedAddrs {
+		totalDeposit = common.SafeAddBigInt(totalDeposit, depMap[amt])
 	}
 	coinsReduced := big.NewInt(0)
 	nonOfflineCoinsAfterReduction := big.NewInt(0)
 
 	//First round, normalize deposit
 	hasChanges := false
-	for val, amt := range *valDepMap {
+	for _, val := range sortedAddrs {
+		amt := depMap[val]
 		maxCoins := common.SafeRelativePercentageBigInt(totalDeposit, maxPercentage)
 		if amt.Cmp(maxCoins) > 0 {
 			reduction := common.SafeSubBigInt(amt, maxCoins)
@@ -263,10 +272,11 @@ func normalizeDeposit(blockNumber uint64, valDepMap *map[common.Address]*big.Int
 	}
 
 	//Second round, normalize deposit to make 100% again
-	for val, amt := range *valDepMap {
+	for _, val := range sortedAddrs {
 		if valDetailsMap[val].NilBlockCount.Uint64() > 0 {
 			continue
 		}
+		amt := depMap[val]
 		amountToIncrease := common.SafeDivBigInt(common.SafeMulBigInt(coinsReduced, amt), nonOfflineCoinsAfterReduction)
 		before := depMap[val]
 		depMap[val] = common.SafeAddBigInt(depMap[val], amountToIncrease)
