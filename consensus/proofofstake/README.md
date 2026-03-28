@@ -22,7 +22,7 @@ This document describes the block-level consensus protocol used by QuantumCoin's
 | **`OK`** | A vote type indicating the validator accepts the proposed block (with transactions). Only used in rounds where `round < MAX_ROUND`. |
 | **`NIL`** | A vote type indicating the validator votes for an empty block. Used when a `PROPOSAL` times out, or unconditionally in Round 2. |
 | **Deposit** | The amount of coins staked by a validator. All vote thresholds are weighted by deposit, not by validator count. |
-| **67% Threshold** | The minimum weighted deposit required for a phase transition: A phase completes when the sum of deposits of validators who sent the required message meets or exceeds this threshold. |
+| **67% Threshold** | The minimum weighted deposit required for a phase transition: A phase completes when the sum of deposits of validators who sent the required message meets or exceeds this threshold. The 67% value is rounded up from 2/3 (66.67%). This exact fraction is required so that any two quorums overlap by more than 1/3, which exceeds the maximum Byzantine deposit -- guaranteeing at least one honest validator exists in every quorum intersection. |
 | **Timeout** | A duration after which a validator that has not received an expected message proceeds with a `NIL` vote or escalates to the next round. |
 | **Block Finalization** | A block is finalized when 67% weighted `COMMIT` votes are collected. The block may contain transactions (`OK` vote) or be empty (`NIL` vote). |
 | **Byzantine Validator** | A validator that deviates from the protocol. May send conflicting votes to different peers (equivocation), selectively withhold proposals, vote arbitrarily in any phase, or skip phases entirely. |
@@ -44,6 +44,24 @@ As long as Byzantine validators control less than 1/3 of total deposit, the prot
 
 - **Safety**: No two honest validators finalize with different vote types.
 - **Liveness**: All honest validators eventually finalize under partial synchrony (timeouts).
+
+---
+
+## FLP Impossibility and Liveness Assumptions
+
+The FLP impossibility result (Fischer, Lynch, Paterson, 1985) proves that no deterministic consensus protocol can guarantee both safety and liveness in a purely asynchronous network where even a single process may crash. In a fully asynchronous model, messages can be delayed indefinitely, making it impossible to distinguish a crashed node from a slow one.
+
+FLP's impossibility applies to purely asynchronous networks with no timing guarantees. QuantumCoin protocol cannot operate under that model -- it assumes **partial synchrony**. The key assumptions that enable liveness:
+
+1. **Bounded message delay (eventually):** The network is assumed to become synchronous after some unknown Global Stabilization Time (GST). Before GST, messages may be delayed arbitrarily (and liveness is not guaranteed). After GST, all messages between honest validators are delivered within a bounded time.
+
+2. **Timeouts:** Each phase has a timeout duration. If a validator does not receive the expected message within the timeout, it proceeds with a `NIL` vote (for proposals) or escalates to the next round (for `ACK_PROPOSAL` and `PRECOMMIT` phases). Timeouts serve as the synchrony oracle: they translate the bounded-delay assumption into concrete protocol actions.
+
+3. **Round escalation:** If Round 1 stalls (neither `OK` nor `NIL` reaches the 67% threshold), validators escalate to Round 2 -- a forced `NIL` round where all validators vote `NIL` unconditionally. This guarantees that at least one round produces a finalized block, provided the network eventually delivers messages.
+
+4. **Honest majority:** At least 2/3 of total weighted deposit is controlled by honest validators who follow the protocol and whose messages are eventually delivered.
+
+Under these assumptions, the protocol guarantees liveness: every honest validator eventually finalizes a block. Safety (Agreement) holds unconditionally -- even during periods of asynchrony before GST, no two honest validators will finalize with conflicting vote types.
 
 ---
 

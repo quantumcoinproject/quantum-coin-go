@@ -54,6 +54,40 @@ The spec models the following Byzantine behaviors, all of which are explored non
 
 - **Termination** -- All honest validators eventually finalize.
 
+## FLP Impossibility and Liveness in the TLA+ Model
+
+The FLP impossibility result (Fischer, Lynch, Paterson, 1985) proves that no deterministic consensus protocol can guarantee both safety and liveness in a purely asynchronous system. This specification passes both safety and liveness checks because the TLA+ model does **not** assume a purely asynchronous network -- it encodes partial synchrony assumptions that the real protocol relies on.
+
+### Network Assumptions
+
+FLP assumes a purely asynchronous network with no timing guarantees whatsoever. The QuantumCoin consensus protocol cannot operate under that model. Instead, it requires **partial synchrony**: the network eventually delivers messages within bounded time after some unknown Global Stabilization Time (GST). Before GST, safety still holds but liveness is not guaranteed. After GST, timeouts and round escalation ensure progress.
+
+### How the TLA+ spec encodes partial synchrony
+
+The spec uses **weak fairness** to model the eventual message delivery assumption:
+
+```
+Fairness == \A v \in Honest : WF_vars(HonestActions(v))
+Spec == Init /\ [][Next]_vars /\ Fairness
+```
+
+`WF_vars(HonestActions(v))` means: if the actions of honest validator `v` are continuously enabled, then `v` must eventually take a step. This prevents infinite starvation of any honest validator and is the TLA+ analog of "messages are eventually delivered."
+
+Concretely, this fairness condition guarantees:
+
+| Protocol mechanism | TLA+ encoding | What it ensures |
+|---|---|---|
+| Proposal delivery or timeout | `WF` on `ReceiveProposal(v)` and `ProposalTimeout(v)` | Every honest non-proposer eventually receives the proposal or times out |
+| ACK_PROPOSAL voting | `WF` on `SendAckProposal(v)` | Every honest validator that received a proposal or timed out eventually sends its ACK |
+| Phase transitions | `WF` on `SendPrecommit(v)`, `SendCommit(v)`, `FinalizeBlock(v)` | Once thresholds are met, honest validators eventually advance |
+| Round escalation | `WF` on `EscalateFromAck(v)`, `EscalateFromPrecommit(v)` | If Round 1 is stuck, honest validators eventually escalate to Round 2 |
+
+Timeouts are modeled nondeterministically (`\/ TRUE` in escalation guards and `ProposalTimeout`) rather than with explicit clocks. This is a sound over-approximation: any behavior possible under concrete timeouts is also possible under nondeterministic timeouts.
+
+### Relationship to FLP
+
+FLP applies to purely asynchronous systems with **no** timing or fairness assumptions. The `WF_vars` fairness condition is precisely the assumption that places this protocol outside FLP's scope -- it guarantees that enabled actions eventually occur, which corresponds to the partial synchrony assumption that messages are eventually delivered. Under partial synchrony, liveness is achievable alongside safety, as shown by Dwork, Lynch, and Stockmeyer (1988). The protocol does not "solve" or circumvent FLP; it simply operates under stronger assumptions than those FLP considers.
+
 ## Model Configurations
 
 ### Safe (default): `QuantumCoinConsensus.cfg`
