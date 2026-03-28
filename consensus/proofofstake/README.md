@@ -39,6 +39,7 @@ Byzantine validators may exhibit the following behaviors:
 - **Selective delivery**: A Byzantine proposer may deliver a `PROPOSAL` to only a subset of validators.
 - **Arbitrary voting**: Vote `OK` or `NIL` in any phase regardless of protocol rules.
 - **Phase skipping**: Advance to later phases (e.g., `PRECOMMIT`, `COMMIT`) without completing earlier ones.
+- **Crash / abstention**: Stop participating entirely (go offline, crash, or withhold all votes). This is a special case of Byzantine behavior -- a Byzantine validator that chooses to do nothing is indistinguishable from a crashed one.
 
 As long as Byzantine validators control less than 1/3 of total deposit, the protocol guarantees:
 
