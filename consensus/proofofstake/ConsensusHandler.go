@@ -279,9 +279,9 @@ type BlockStateDetails struct {
 	commitTime      int64
 	blockNumber     uint64
 
-	roundProposers           map[byte]common.Address
-	nilVoteProposalHashes    map[byte]common.Hash
-	nilVotePrecommitHashes   map[byte]common.Hash
+	roundProposers         map[byte]common.Address
+	nilVoteProposalHashes  map[byte]common.Hash
+	nilVotePrecommitHashes map[byte]common.Hash
 }
 
 type ProposalDetails struct {
@@ -3163,7 +3163,7 @@ func (cph *ConsensusHandler) OnPeerConnected(peerId string) error {
 
 func (cph *ConsensusHandler) OnPeerDisconnected(peerId string) error {
 	log.Debug("OnPeerDisconnected", "peerId", peerId)
-	cph.peerHandler.OnPeerConnected(peerId)
+	cph.peerHandler.OnPeerDisconnected(peerId)
 	return nil
 }
 
