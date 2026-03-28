@@ -16,6 +16,7 @@ import (
 
 const MinConsensusNetworkProtocolVersion = byte(5)
 const ConsensusNetworkProtocolVersion = byte(5)
+const MaxPacketSyncMapSize = 50000
 
 type GetLatestBlockNumberFn func() uint64
 
@@ -45,7 +46,6 @@ type PeerHandler struct {
 	syncPeerMap            map[string]bool                    //List of peers who have requested for consensus sync (i.e. ConsensusRelaying consensus packets)
 	packetSyncMap          map[common.Hash]*PacketSyncDetails //packet hash is the key
 
-	parentHashLock     sync.Mutex
 	currentParentHash  common.Hash
 	currentBlockNumber uint64
 
@@ -90,11 +90,15 @@ func NewPeerHandler(isConsensusRelay bool, getLatestBlockNumberFn GetLatestBlock
 }
 
 func (p *PeerHandler) SetP2PHandler(handler *handler.P2PHandler, localPeerId string) {
+	p.peerLock.Lock()
+	defer p.peerLock.Unlock()
 	p.p2pHandler = handler
 	p.localPeerId = localPeerId
 }
 
 func (p *PeerHandler) SetSignFn(signFn SignerFn, account accounts.Account) {
+	p.peerLock.Lock()
+	defer p.peerLock.Unlock()
 	p.signFn = signFn
 	p.account = account
 }
@@ -146,6 +150,10 @@ func (p *PeerHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, fromPee
 	} else {
 		startIndex = 1
 	}
+	if len(packet.ConsensusData) < startIndex {
+		log.Debug("HandleConsensusPacket consensus data too short", "fromPeerId", fromPeerId, "len", len(packet.ConsensusData), "startIndex", startIndex)
+		return InvalidPacketErr
+	}
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
 
@@ -175,11 +183,12 @@ func (p *PeerHandler) HandleConsensusPacket(packet *eth.ConsensusPacket, fromPee
 		if p.consensusRelayMap[fromPeerId] == true {
 			p.packetsReceivedFromRelayTotalCurrentParentHash = p.packetsReceivedFromRelayTotalCurrentParentHash + 1
 		}
+		isSyncPeer := p.syncPeerMap[fromPeerId]
 		p.peerLock.Unlock()
 
 		if p.isConsensusRelay {
 			go p.BroadcastToSyncPeers(packet, fromPeerId)
-			if p.syncPeerMap[fromPeerId] == true { //if received from sync peers, send to other relays
+			if isSyncPeer {
 				go p.BroadcastToConsensusRelays(packet, fromPeerId)
 			}
 		}
@@ -301,7 +310,7 @@ func (p *PeerHandler) ConnectAvailableConsensusRelay() {
 	log.Trace("PeerHandler ConnectConsensusRelay Unlock")
 
 	for k, v := range p.peerMap {
-		if v.capabilityDetails.IsConsensusRelay {
+		if v != nil && v.capabilityDetails != nil && v.capabilityDetails.IsConsensusRelay {
 			go p.SendRequestConsensusSyncPacket(k)
 			break
 		}
@@ -354,6 +363,10 @@ func (p *PeerHandler) ShouldRebroadCast(packet *eth.ConsensusPacket, fromPeerId 
 }
 
 func (p *PeerHandler) BroadcastLocalPacket(packet *eth.ConsensusPacket) int {
+	if packet == nil {
+		log.Debug("BroadcastLocalPacket nil packet")
+		return 0
+	}
 	if p.isConsensusRelay == true {
 		syncPeerCount := p.BroadcastToSyncPeers(packet, p.localPeerId)
 		consensusRelayCount := p.BroadcastToConsensusRelays(packet, p.localPeerId)
@@ -364,6 +377,13 @@ func (p *PeerHandler) BroadcastLocalPacket(packet *eth.ConsensusPacket) int {
 }
 
 func (p *PeerHandler) BroadcastToConsensusRelays(packet *eth.ConsensusPacket, fromPeerId string) int {
+	if packet == nil {
+		log.Debug("BroadcastToConsensusRelays nil packet", "fromPeerId", fromPeerId)
+		return 0
+	}
+	if p.p2pHandler == nil {
+		return 0
+	}
 	p.peerLock.Lock()
 	defer p.peerLock.Unlock()
 
@@ -372,40 +392,50 @@ func (p *PeerHandler) BroadcastToConsensusRelays(packet *eth.ConsensusPacket, fr
 	var packetSyncDetails *PacketSyncDetails
 	packetSyncDetails, ok := p.packetSyncMap[packet.Hash()]
 	if ok == false {
-		packetSyncDetails = &PacketSyncDetails{
-			incomingPeerMap: make(map[string]bool),
-			packet:          packet,
-			sendPeerMap:     make(map[string]bool),
+		if len(p.packetSyncMap) >= MaxPacketSyncMapSize {
+			log.Warn("BroadcastToConsensusRelays packetSyncMap at capacity, skipping tracking", "size", len(p.packetSyncMap))
+		} else {
+			packetSyncDetails = &PacketSyncDetails{
+				incomingPeerMap: make(map[string]bool),
+				packet:          packet,
+				sendPeerMap:     make(map[string]bool),
+			}
+			p.packetSyncMap[packet.Hash()] = packetSyncDetails
 		}
+	}
+
+	if packetSyncDetails != nil {
+		sendPeerMap := packetSyncDetails.sendPeerMap
+		incomingPeerMap := packetSyncDetails.incomingPeerMap
+		incomingPeerMap[fromPeerId] = true
+
+		alreadySentCount := 0
+		for k, _ := range p.consensusRelayMap {
+			_, ok := sendPeerMap[k]
+			if ok {
+				alreadySentCount = alreadySentCount + 1
+				continue
+			}
+			_, ok = incomingPeerMap[k]
+			if ok {
+				alreadySentCount = alreadySentCount + 1
+				continue
+			}
+			sendList = append(sendList, []string{k}...)
+			sendPeerMap[k] = true
+		}
+
+		packetSyncDetails.sendPeerMap = sendPeerMap
+		packetSyncDetails.incomingPeerMap = incomingPeerMap
 		p.packetSyncMap[packet.Hash()] = packetSyncDetails
-	}
 
-	sendPeerMap := packetSyncDetails.sendPeerMap
-	incomingPeerMap := packetSyncDetails.incomingPeerMap
-	incomingPeerMap[fromPeerId] = true
-
-	alreadySentCount := 0
-	for k, _ := range p.consensusRelayMap {
-		_, ok := sendPeerMap[k]
-		if ok {
-			alreadySentCount = alreadySentCount + 1
-			continue
+		log.Debug("BroadcastToConsensusRelays", "relay count", len(p.consensusRelayMap), "send list count", len(sendList), "alreadySentCount", alreadySentCount, "packetHash", packet.Hash(), "parentHash", packet.ParentHash)
+	} else {
+		for k, _ := range p.consensusRelayMap {
+			sendList = append(sendList, []string{k}...)
 		}
-		_, ok = incomingPeerMap[k]
-		if ok {
-			alreadySentCount = alreadySentCount + 1
-			continue
-		}
-		sendList = append(sendList, []string{k}...)
-		sendPeerMap[k] = true
+		log.Debug("BroadcastToConsensusRelays no tracking", "relay count", len(p.consensusRelayMap), "send list count", len(sendList), "packetHash", packet.Hash(), "parentHash", packet.ParentHash)
 	}
-
-	packetSyncDetails.sendPeerMap = sendPeerMap
-	packetSyncDetails.incomingPeerMap = incomingPeerMap
-
-	p.packetSyncMap[packet.Hash()] = packetSyncDetails
-
-	log.Debug("BroadcastToConsensusRelays", "relay count", len(p.consensusRelayMap), "send list count", len(sendList), "alreadySentCount", alreadySentCount, "packetHash", packet.Hash(), "parentHash", packet.ParentHash)
 	p.packetsSentToRelaysCurrentParentHash = p.packetsSentToRelaysCurrentParentHash + int64(len(sendList))
 	if fromPeerId == p.localPeerId {
 		p.localPacketsSentToRelaysCurrentParentHash = p.localPacketsSentToRelaysCurrentParentHash + int64(len(sendList))
@@ -417,12 +447,19 @@ func (p *PeerHandler) BroadcastToConsensusRelays(packet *eth.ConsensusPacket, fr
 }
 
 func (p *PeerHandler) BroadcastToSyncPeers(packet *eth.ConsensusPacket, fromPeerId string) int {
+	if packet == nil {
+		log.Debug("BroadcastToSyncPeers nil packet", "fromPeerId", fromPeerId)
+		return 0
+	}
+	if p.p2pHandler == nil {
+		return 0
+	}
 	log.Trace("BroadcastToSyncPeers", "fromPeerId", fromPeerId, "packetHash", packet.Hash(), "parentHash", packet.ParentHash)
 	p.peerLock.Lock()
 	defer p.peerLock.Unlock()
 	log.Trace("BroadcastToSyncPeers unlock")
 
-	if packet.ParentHash.IsEqualTo(p.GetCurrentParentHash()) == false {
+	if packet.ParentHash.IsEqualTo(p.currentParentHash) == false {
 		log.Trace("BroadcastToSyncPeers unlock parentHash not matched")
 		return 0
 	}
@@ -430,46 +467,61 @@ func (p *PeerHandler) BroadcastToSyncPeers(packet *eth.ConsensusPacket, fromPeer
 	var packetSyncDetails *PacketSyncDetails
 	packetSyncDetails, ok := p.packetSyncMap[packet.Hash()]
 	if ok == false {
-		packetSyncDetails = &PacketSyncDetails{
-			incomingPeerMap: make(map[string]bool),
-			packet:          packet,
-			sendPeerMap:     make(map[string]bool),
+		if len(p.packetSyncMap) >= MaxPacketSyncMapSize {
+			log.Warn("BroadcastToSyncPeers packetSyncMap at capacity, skipping tracking", "size", len(p.packetSyncMap))
+		} else {
+			packetSyncDetails = &PacketSyncDetails{
+				incomingPeerMap: make(map[string]bool),
+				packet:          packet,
+				sendPeerMap:     make(map[string]bool),
+			}
+			p.packetSyncMap[packet.Hash()] = packetSyncDetails
 		}
-		p.packetSyncMap[packet.Hash()] = packetSyncDetails
 	}
-
-	incomingPeerMap := packetSyncDetails.incomingPeerMap
-	incomingPeerMap[fromPeerId] = true
-
-	sendPeerMap := packetSyncDetails.sendPeerMap
 
 	sendPeerList := make([]string, 0)
 
-	alreadySentCount := 0
-	for peerId, _ := range p.syncPeerMap {
-		if peerId == fromPeerId {
-			continue
+	if packetSyncDetails != nil {
+		incomingPeerMap := packetSyncDetails.incomingPeerMap
+		incomingPeerMap[fromPeerId] = true
+
+		sendPeerMap := packetSyncDetails.sendPeerMap
+
+		alreadySentCount := 0
+		for peerId, _ := range p.syncPeerMap {
+			if peerId == fromPeerId {
+				continue
+			}
+			_, ok := sendPeerMap[peerId]
+			if ok {
+				alreadySentCount = alreadySentCount + 1
+				continue
+			}
+			_, ok = incomingPeerMap[peerId]
+			if ok {
+				alreadySentCount = alreadySentCount + 1
+				continue
+			}
+			sendPeerList = append(sendPeerList, []string{peerId}...)
+			sendPeerMap[peerId] = true
 		}
-		_, ok := sendPeerMap[peerId]
-		if ok {
-			alreadySentCount = alreadySentCount + 1
-			continue
+
+		packetSyncDetails.incomingPeerMap = incomingPeerMap
+		packetSyncDetails.sendPeerMap = sendPeerMap
+		p.packetSyncMap[packet.Hash()] = packetSyncDetails
+
+		log.Debug("BroadcastToSyncPeers", "sendPeerMap count", len(sendPeerList), "sendPeerList count", len(sendPeerList), "syncPeerMap count", len(p.syncPeerMap), "alreadySentCount", alreadySentCount,
+			"packetHash", packet.Hash(), "parentHash", packet.ParentHash)
+	} else {
+		for peerId, _ := range p.syncPeerMap {
+			if peerId == fromPeerId {
+				continue
+			}
+			sendPeerList = append(sendPeerList, []string{peerId}...)
 		}
-		_, ok = incomingPeerMap[peerId]
-		if ok {
-			alreadySentCount = alreadySentCount + 1
-			continue
-		}
-		sendPeerList = append(sendPeerList, []string{peerId}...)
-		sendPeerMap[peerId] = true
+		log.Debug("BroadcastToSyncPeers no tracking", "sendPeerList count", len(sendPeerList), "syncPeerMap count", len(p.syncPeerMap),
+			"packetHash", packet.Hash(), "parentHash", packet.ParentHash)
 	}
-
-	packetSyncDetails.incomingPeerMap = incomingPeerMap
-	packetSyncDetails.sendPeerMap = sendPeerMap
-	p.packetSyncMap[packet.Hash()] = packetSyncDetails
-
-	log.Debug("BroadcastToSyncPeers", "sendPeerMap count", len(sendPeerList), "sendPeerList count", len(sendPeerList), "syncPeerMap count", len(p.syncPeerMap), "alreadySentCount", alreadySentCount,
-		"packetHash", packet.Hash(), "parentHash", packet.ParentHash)
 
 	p.packetsSentCurrentParentHash = p.packetsSentCurrentParentHash + int64(len(sendPeerList))
 	go p.p2pHandler.SendConsensusPacket(sendPeerList, packet)
@@ -478,15 +530,12 @@ func (p *PeerHandler) BroadcastToSyncPeers(packet *eth.ConsensusPacket, fromPeer
 }
 
 func (p *PeerHandler) GetCurrentParentHash() common.Hash {
-	p.parentHashLock.Lock()
-	defer p.parentHashLock.Unlock()
+	p.peerLock.Lock()
+	defer p.peerLock.Unlock()
 	return p.currentParentHash
 }
 
 func (p *PeerHandler) SetCurrentParentHash(parentHash common.Hash, currentBlockNumber uint64) {
-	p.parentHashLock.Lock()
-	defer p.parentHashLock.Unlock()
-
 	p.peerLock.Lock()
 	defer p.peerLock.Unlock()
 
@@ -529,6 +578,10 @@ func (p *PeerHandler) SetCurrentParentHash(parentHash common.Hash, currentBlockN
 	//Cleanup old packets
 	var toRemove []common.Hash
 	for k, v := range p.packetSyncMap {
+		if v == nil || v.packet == nil {
+			toRemove = append(toRemove, k)
+			continue
+		}
 		if v.packet.ParentHash.IsEqualTo(p.currentParentHash) == false {
 			toRemove = append(toRemove, k)
 		}
@@ -550,7 +603,6 @@ func (p *PeerHandler) SetCurrentParentHash(parentHash common.Hash, currentBlockN
 
 func (p *PeerHandler) SendCapabilityToDeltaPeers() {
 	p.peerLock.Lock()
-	defer p.peerLock.Unlock()
 
 	peerList := make([]string, 0)
 
@@ -561,12 +613,13 @@ func (p *PeerHandler) SendCapabilityToDeltaPeers() {
 	}
 	log.Info("SendCapabilityToDeltaPeers", "total peer count", len(p.peerMap), "send peer count", len(peerList))
 
+	p.peerLock.Unlock()
+
 	p.SendCapabilityPacket(peerList)
 }
 
 func (p *PeerHandler) SendCapabilityToAllPeers() {
 	p.peerLock.Lock()
-	defer p.peerLock.Unlock()
 
 	log.Info("SendCapabilityToAllPeers")
 
@@ -577,6 +630,8 @@ func (p *PeerHandler) SendCapabilityToAllPeers() {
 	}
 
 	log.Info("SendCapabilityToAllPeers", "send peer count", len(peerList))
+
+	p.peerLock.Unlock()
 
 	p.SendCapabilityPacket(peerList)
 }
