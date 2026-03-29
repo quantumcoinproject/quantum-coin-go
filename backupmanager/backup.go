@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -51,6 +52,33 @@ type ValidatorDetailsV2 struct {
 	NilBlockCount      *big.Int       `json:"nilBlockCount" gencodec:"required"`
 }
 
+// PreparedConsensusState is a JSON snapshot of the derived validator set and per-round consensus inputs
+// produced by proof-of-stake preparation (filtered deposits, quorum totals, round proposers, NIL-vote hashes).
+// It mirrors the in-memory proofofstake.PreparedConsensusState used during block consensus validation.
+type PreparedConsensusState struct {
+	// FilteredValidatorsDepositMap maps each validator address that survived filtering to its post-filter deposit weight (stake used in quorum math).
+	FilteredValidatorsDepositMap map[common.Address]*big.Int `json:"filteredValidatorsDepositMap,omitempty"`
+
+	// ValidatorDetailsMap is staking metadata per filtered validator (balance, pause flags, withdrawal fields, etc.).
+	// Omitted or empty when the block height does not load extended validator records.
+	ValidatorDetailsMap map[common.Address]ValidatorDetailsV2 `json:"validatorDetailsMap,omitempty"`
+
+	// TotalBlockDepositValue is the sum of filtered validator deposits for the block (denominator for vote weights).
+	TotalBlockDepositValue *big.Int `json:"totalBlockDepositValue,omitempty"`
+
+	// MinDepositRequired is the minimum combined stake required to carry a proposal or vote phase at this height.
+	MinDepositRequired *big.Int `json:"minDepositRequired,omitempty"`
+
+	// RoundProposers maps consensus round index (1-based, through the chain’s maximum round count) to the scheduled block proposer address.
+	RoundProposers map[byte]common.Address `json:"roundProposers,omitempty"`
+
+	// NilVoteProposalHashes maps each round index to the canonical NIL proposal hash expected for that round.
+	NilVoteProposalHashes map[byte]common.Hash `json:"nilVoteProposalHashes,omitempty"`
+
+	// NilVotePrecommitHashes maps each round index to the canonical NIL precommit hash expected for that round.
+	NilVotePrecommitHashes map[byte]common.Hash `json:"nilVotePrecommitHashes,omitempty"`
+}
+
 type BlockValidatorDetails struct {
 	BlockNumber                  *big.Int             `json:"blockNumber" gencodec:"required"`
 	ParentHash                   common.Hash          `json:"parentHash" gencodec:"required"`
@@ -59,6 +87,9 @@ type BlockValidatorDetails struct {
 
 	PreFilterValidatorCount *big.Int    `json:"preFilterValidatorCount" gencodec:"required"`
 	ConsensusContext        common.Hash `json:"consensusContext" gencodec:"required"`
+
+	// PreparedConsensusState is the full preparation snapshot (maps, quorum totals, per-round proposer and NIL hashes). Stored as JSON in the consensus backup DB (see BackupBlockValidatorDetails).
+	PreparedConsensusState *PreparedConsensusState `json:"preparedConsensusState,omitempty" rlp:"-"`
 }
 
 var singleInstance *BackupManager
@@ -293,9 +324,9 @@ func (b *BackupManager) BackupBlockValidatorDetails(details *BlockValidatorDetai
 	b.consensusBackupLock.Lock()
 	defer b.consensusBackupLock.Unlock()
 
-	data, err := rlp.EncodeToBytes(details)
+	data, err := json.Marshal(details)
 	if err != nil {
-		log.Trace("EncodeToBytes BlockValidatorDetails", "err", err)
+		log.Trace("json.Marshal BlockValidatorDetails", "err", err)
 		return err
 	}
 
@@ -328,11 +359,11 @@ func (b *BackupManager) GetBlockValidatorDetails(blockNumber uint64, context str
 	}
 
 	details := BlockValidatorDetails{}
-	//details.FilteredValidatorDepositList = make([]*ValidatorDeposit, 0)
 
-	err = rlp.DecodeBytes(detailsBytes, &details)
-	if err != nil {
-		return nil, err
+	if err := json.Unmarshal(detailsBytes, &details); err != nil {
+		if err2 := rlp.DecodeBytes(detailsBytes, &details); err2 != nil {
+			return nil, fmt.Errorf("decode BlockValidatorDetails: json=%v; rlp=%w", err, err2)
+		}
 	}
 
 	return &details, nil

@@ -806,6 +806,7 @@ func ValidateBlockConsensusData(block *types.Block, validatorDepositMap *map[com
 	blockValidatorDetails, err := ValidateBlockConsensusDataInner(txnList, header.ParentHash, blockConsensusData, blockAdditionalConsensusData, preparedData.Prepared, blockNumber, consensusContext)
 	if blockValidatorDetails != nil && backupmanager.GetConsensusInstance() != nil { //save even if error
 		blockValidatorDetails.PreFilterValidatorCount = big.NewInt(int64(preFilterValidatorCount))
+		blockValidatorDetails.PreparedConsensusState = preparedConsensusStateToBackup(preparedData.Prepared)
 		errBackup := backupmanager.GetConsensusInstance().BackupBlockValidatorDetails(blockValidatorDetails, backupmanager.BlockValidatorContextBlockVerify)
 		if errBackup != nil {
 			log.Warn("ValidateBlockConsensusDataInner backup consensus", "errBackup", errBackup)

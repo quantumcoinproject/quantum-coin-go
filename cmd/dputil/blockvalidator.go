@@ -13,6 +13,7 @@ import (
 	"strconv"
 
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
+	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 )
@@ -356,6 +357,11 @@ func compareBlockValidatorDetails(a, b *backupmanager.BlockValidatorDetails) {
 		}
 	}
 
+	if !preparedConsensusStateEqual(a.PreparedConsensusState, b.PreparedConsensusState) {
+		fmt.Printf("  PreparedConsensusState: DIFFERENT\n")
+		diff = true
+	}
+
 	if !diff {
 		fmt.Println("  No differences; both contexts returned identical data.")
 	}
@@ -369,4 +375,105 @@ func cmpBigInt(x, y *big.Int) bool {
 		return true
 	}
 	return x.Cmp(y) != 0
+}
+
+func preparedConsensusStateEqual(a, b *backupmanager.PreparedConsensusState) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if cmpBigInt(a.TotalBlockDepositValue, b.TotalBlockDepositValue) {
+		return false
+	}
+	if cmpBigInt(a.MinDepositRequired, b.MinDepositRequired) {
+		return false
+	}
+	if !addrBigIntMapEqual(a.FilteredValidatorsDepositMap, b.FilteredValidatorsDepositMap) {
+		return false
+	}
+	if !addrValidatorDetailsMapEqual(a.ValidatorDetailsMap, b.ValidatorDetailsMap) {
+		return false
+	}
+	if !byteAddrMapEqual(a.RoundProposers, b.RoundProposers) {
+		return false
+	}
+	if !byteHashMapEqual(a.NilVoteProposalHashes, b.NilVoteProposalHashes) {
+		return false
+	}
+	if !byteHashMapEqual(a.NilVotePrecommitHashes, b.NilVotePrecommitHashes) {
+		return false
+	}
+	return true
+}
+
+func addrBigIntMapEqual(am, bm map[common.Address]*big.Int) bool {
+	if len(am) != len(bm) {
+		return false
+	}
+	for k, av := range am {
+		bv, ok := bm[k]
+		if !ok || cmpBigInt(av, bv) {
+			return false
+		}
+	}
+	return true
+}
+
+func addrValidatorDetailsMapEqual(am, bm map[common.Address]backupmanager.ValidatorDetailsV2) bool {
+	if len(am) != len(bm) {
+		return false
+	}
+	for k, av := range am {
+		bv, ok := bm[k]
+		if !ok {
+			return false
+		}
+		if av.Depositor != bv.Depositor || av.Validator != bv.Validator {
+			return false
+		}
+		if cmpBigInt(av.Balance, bv.Balance) || cmpBigInt(av.NetBalance, bv.NetBalance) {
+			return false
+		}
+		if cmpBigInt(av.BlockRewards, bv.BlockRewards) || cmpBigInt(av.Slashings, bv.Slashings) {
+			return false
+		}
+		if av.IsValidationPaused != bv.IsValidationPaused {
+			return false
+		}
+		if cmpBigInt(av.WithdrawalBlock, bv.WithdrawalBlock) || cmpBigInt(av.WithdrawalAmount, bv.WithdrawalAmount) {
+			return false
+		}
+		if cmpBigInt(av.LastNiLBlock, bv.LastNiLBlock) || cmpBigInt(av.NilBlockCount, bv.NilBlockCount) {
+			return false
+		}
+	}
+	return true
+}
+
+func byteAddrMapEqual(am, bm map[byte]common.Address) bool {
+	if len(am) != len(bm) {
+		return false
+	}
+	for k, av := range am {
+		bv, ok := bm[k]
+		if !ok || av != bv {
+			return false
+		}
+	}
+	return true
+}
+
+func byteHashMapEqual(am, bm map[byte]common.Hash) bool {
+	if len(am) != len(bm) {
+		return false
+	}
+	for k, av := range am {
+		bv, ok := bm[k]
+		if !ok || av != bv {
+			return false
+		}
+	}
+	return true
 }

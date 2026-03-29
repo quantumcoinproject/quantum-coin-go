@@ -1082,6 +1082,7 @@ func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (bloc
 	}
 	if blockValidatorDetails != nil {
 		blockValidatorDetails.PreFilterValidatorCount = big.NewInt(int64(blockStateDetails.preFilterValidatorCount))
+		blockValidatorDetails.PreparedConsensusState = preparedConsensusStateToBackup(preparedForInner)
 	}
 
 	if err != nil {
