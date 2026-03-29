@@ -63,12 +63,12 @@ func (n BlockNonce) MarshalText() ([]byte, error) {
 func (n *BlockNonce) UnmarshalText(input []byte) error {
 	return hexutil.UnmarshalFixedText("BlockNonce", input, n[:])
 }
-
 //go:generate gencodec -type Header -field-override headerMarshaling -out gen_header_json.go
+
 
 // Header represents a block header in the Ethereum blockchain.
 type Header struct {
-	ParentHash    common.Hash    `json:"parentHash"       genco_tedec:"required"`
+	ParentHash    common.Hash    `json:"parentHash"       gencodec:"required"`
 	Coinbase      common.Address `json:"miner"            gencodec:"required"`
 	Root          common.Hash    `json:"stateRoot"        gencodec:"required"`
 	TxHash        common.Hash    `json:"transactionsRoot" gencodec:"required"`
@@ -91,13 +91,15 @@ type Header struct {
 
 // field type overrides for gencodec
 type headerMarshaling struct {
-	Difficulty *hexutil.Big
-	Number     *hexutil.Big
-	GasLimit   hexutil.Uint64
-	GasUsed    hexutil.Uint64
-	Time       hexutil.Uint64
-	Extra      hexutil.Bytes
-	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
+	Difficulty            *hexutil.Big
+	Number                *hexutil.Big
+	GasLimit              hexutil.Uint64
+	GasUsed               hexutil.Uint64
+	Time                  hexutil.Uint64
+	Extra                 hexutil.Bytes
+	ConsensusData         hexutil.Bytes
+	UnhashedConsensusData hexutil.Bytes
+	Hash                  common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
@@ -244,6 +246,10 @@ func CopyHeader(h *Header) *Header {
 	if len(h.Extra) > 0 {
 		cpy.Extra = make([]byte, len(h.Extra))
 		copy(cpy.Extra, h.Extra)
+	}
+	if len(h.ConsensusData) > 0 {
+		cpy.ConsensusData = make([]byte, len(h.ConsensusData))
+		copy(cpy.ConsensusData, h.ConsensusData)
 	}
 	return &cpy
 }

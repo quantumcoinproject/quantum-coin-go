@@ -282,6 +282,8 @@ type BlockStateDetails struct {
 	roundProposers         map[byte]common.Address
 	nilVoteProposalHashes  map[byte]common.Hash
 	nilVotePrecommitHashes map[byte]common.Hash
+
+	blockProposerV2Traces []*backupmanager.BlockProposerV2RoundTrace
 }
 
 type ProposalDetails struct {
@@ -407,41 +409,6 @@ func (cph *ConsensusHandler) isValidator(parentHash common.Hash) (bool, error) {
 	return found, nil
 }
 
-func getBlockProposer(parentHash common.Hash, filteredValidatorDepositMap *map[common.Address]*big.Int, round byte,
-	validatorDetailsMap *map[common.Address]*ValidatorDetailsV2, blockNumber uint64, contextHash common.Hash) (common.Address, error) {
-	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
-		return getBlockProposerV2(contextHash, validatorDetailsMap, round, blockNumber) //passing contextHash instead of parentHash
-	}
-
-	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
-		return getBlockProposerV2(parentHash, validatorDetailsMap, round, blockNumber)
-	}
-	var proposer common.Address
-
-	if len(*filteredValidatorDepositMap) < MIN_VALIDATORS {
-		return proposer, errors.New("min validators not found")
-	}
-
-	validators := make([]common.Address, len(*filteredValidatorDepositMap))
-	i := 0
-	for k, _ := range *filteredValidatorDepositMap {
-		validators[i].CopyFrom(k)
-		log.Debug("getBlockProposer validator", "v", validators[i], "i", i)
-		i = i + 1
-	}
-
-	sort.SliceStable(validators, func(i, j int) bool {
-		vi := crypto.Keccak256Hash(parentHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
-		vj := crypto.Keccak256Hash(parentHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
-		return bytes.Compare(vi, vj) == -1
-	})
-
-	proposer = validators[0]
-	log.Debug("getBlockProposer", "proposer", proposer, "round", round)
-
-	return proposer, nil
-}
-
 func getOfflineValidatorDepositAfterPenalty(valDetails *ValidatorDetailsV2, currentBlockNumber uint64, depositValue *big.Int) *big.Int {
 	if currentBlockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock || valDetails.NilBlockCount.Uint64() <= 2 {
 		return depositValue
@@ -456,111 +423,6 @@ func getOfflineValidatorDepositAfterPenalty(valDetails *ValidatorDetailsV2, curr
 	log.Debug("getOfflineValidatorDepositAfterPenalty", "val", valDetails.Validator, "penalty", penalty, "penaltyPercent", penaltyPercent,
 		"NilBlockCount", valDetails.NilBlockCount.Uint64(), "newDepositValue", newDepositValue)
 	return newDepositValue
-}
-
-func canValidate(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
-	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
-		return true, currentBlockNumber
-	}
-	if valDetails.NilBlockCount.Uint64() < OFFLINE_VALIDATOR_DEFER_THRESHOLD {
-		return true, currentBlockNumber
-	}
-
-	nextValidationBlock := valDetails.LastNiLBlock.Uint64() + OFFLINE_VALIDATOR_DEFER_COUNT
-	result := currentBlockNumber >= nextValidationBlock
-
-	log.Debug("canValidate", "validator", valDetails.Validator, "result", result, "currentBlockNumber", currentBlockNumber, "LastNiLBlock", valDetails.LastNiLBlock,
-		"NilBlockCount", valDetails.NilBlockCount, "nextValidationBlock", nextValidationBlock)
-
-	return result, nextValidationBlock
-}
-
-func canPropose(valDetails *ValidatorDetailsV2, currentBlockNumber uint64) (bool, uint64) {
-	if valDetails.LastNiLBlock.Cmp(new(big.Int)) == 0 {
-		log.Debug("canPropose no nil block", "currentBlockNumber", currentBlockNumber, "canPropose", true, "validator", valDetails.Validator)
-		return true, currentBlockNumber
-	}
-
-	var maxBlockDelay uint64
-	if currentBlockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock {
-		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V3
-	} else if currentBlockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK {
-		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT_V2
-	} else {
-		maxBlockDelay = BLOCK_PROPOSER_OFFLINE_MAX_DELAY_BLOCK_COUNT
-	}
-
-	slotsMissed := valDetails.NilBlockCount.Uint64() / BLOCK_PROPOSER_OFFLINE_NIL_BLOCK_MULTIPLIER
-	if slotsMissed >= 16 { //to avoid overflow errors
-		slotsMissed = 16
-	}
-	blockDelay := uint64(1) << slotsMissed
-	if blockDelay > maxBlockDelay {
-		blockDelay = maxBlockDelay
-	}
-
-	if valDetails.NilBlockCount.Uint64() > 1 && currentBlockNumber >= defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
-		blockDelay = blockDelay + defaults.DefaultConfig.PosConfig.MinOfflineProposerBlockDelay
-	}
-
-	nextProposalBlock := valDetails.LastNiLBlock.Uint64() + blockDelay
-	result := currentBlockNumber >= nextProposalBlock
-	log.Debug("canPropose", "LastNiLBlock", valDetails.LastNiLBlock, "NilBlockCount", valDetails.NilBlockCount,
-		"slotsMissed", slotsMissed, "blockDelay", blockDelay, "nextProposalBlock", nextProposalBlock, "maxBlockDelay", maxBlockDelay,
-		"currentBlockNumber", currentBlockNumber, "canPropose", result, "validator", valDetails.Validator)
-	return result, nextProposalBlock
-}
-
-func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Address]*ValidatorDetailsV2, round byte, blockNumber uint64) (common.Address, error) {
-	var proposer common.Address
-
-	if len(*validatorMap) < MIN_VALIDATORS {
-		return proposer, errors.New("getBlockProposerV2 min validators not found")
-	}
-
-	selectedValMap := make(map[common.Address]*ValidatorDetailsV2)
-	for valAddr, valDetails := range *validatorMap {
-		canProp, _ := canPropose(valDetails, blockNumber)
-		log.Debug("getBlockProposerV2", "valAddr", valAddr, "canPropose", canProp)
-		if canProp == false {
-			continue
-		}
-		selectedValMap[valAddr] = valDetails
-	}
-
-	//If fewer proposers than MIN_VALIDATORS, then select everyone, something is wrong
-	if len(selectedValMap) < MIN_VALIDATORS {
-		for valAddr, valDetails := range *validatorMap {
-			selectedValMap[valAddr] = valDetails
-		}
-	}
-
-	validators := make([]common.Address, len(selectedValMap))
-	j := 0
-	for valAddr, _ := range selectedValMap {
-		validators[j] = valAddr
-		j = j + 1
-	}
-	blockBytes := common.Uint64ToBytes(blockNumber)
-
-	sort.SliceStable(validators, func(i, j int) bool {
-		if blockNumber < defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock {
-			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}).Bytes()
-			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}).Bytes()
-			return bytes.Compare(vi, vj) == -1
-		} else {
-			vi := crypto.Keccak256Hash(contextHash.Bytes(), validators[i].Bytes(), []byte{round}, blockBytes).Bytes()
-			vj := crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}, blockBytes).Bytes()
-			return bytes.Compare(vi, vj) == -1
-		}
-	})
-
-	proposer = validators[0]
-
-	log.Debug("getBlockProposerV2 final", "proposer", proposer, "round", round, "contextHash", contextHash, "valCount selected", len(validators), "valcount before", len(*validatorMap),
-		"OfflineValidatorV4StartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, "blockBytes", blockBytes)
-
-	return proposer, nil
 }
 
 func copyValidatorDetailsV2(v *ValidatorDetailsV2) *ValidatorDetailsV2 {
@@ -655,6 +517,11 @@ func (cph *ConsensusHandler) initializeBlockStateIfRequired(parentHash common.Ha
 	blockStateDetails.nilVotePrecommitHashes = make(map[byte]common.Hash, len(preparedState.NilVotePrecommitHashes))
 	for r, h := range preparedState.NilVotePrecommitHashes {
 		blockStateDetails.nilVotePrecommitHashes[r] = h
+	}
+
+	if preparedState.BlockProposerV2Traces != nil {
+		blockStateDetails.blockProposerV2Traces = make([]*backupmanager.BlockProposerV2RoundTrace, len(preparedState.BlockProposerV2Traces))
+		copy(blockStateDetails.blockProposerV2Traces, preparedState.BlockProposerV2Traces)
 	}
 
 	_, ok = blockStateDetails.filteredValidatorsDepositMap[cph.account.Address]
@@ -963,7 +830,7 @@ func (cph *ConsensusHandler) getBlockRoundState(parentHash common.Hash, round by
 }
 
 func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (blockConsensusData *BlockConsensusData,
-	blockAdditionalConsensusData *BlockAdditionalConsensusData, bvDetails *backupmanager.BlockValidatorDetails, err error) {
+	blockAdditionalConsensusData *BlockAdditionalConsensusData, extendedDetails *backupmanager.BlockExtendedDetails, err error) {
 	cph.outerPacketLock.Lock()
 	defer cph.outerPacketLock.Unlock()
 
@@ -1072,23 +939,28 @@ func (cph *ConsensusHandler) getBlockConsensusData(parentHash common.Hash) (bloc
 	}
 
 	preparedForInner := preparedConsensusStateFromBlockState(blockStateDetails)
-	var blockValidatorDetails *backupmanager.BlockValidatorDetails
+	var blockExtendedDetails *backupmanager.BlockExtendedDetails
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL {
-		blockValidatorDetails, err = ValidateBlockConsensusDataInner(nil, parentHash, blockConsensusData, blockAdditionalConsensusData,
+		blockExtendedDetails, err = VerifyBlockConsensusDataInner(nil, parentHash, blockConsensusData, blockAdditionalConsensusData,
 			preparedForInner, blockStateDetails.blockNumber, blockStateDetails.consensusContext)
 	} else {
-		blockValidatorDetails, err = ValidateBlockConsensusDataInner(blockRoundDetails.proposalTxns, parentHash, blockConsensusData, blockAdditionalConsensusData,
+		blockExtendedDetails, err = VerifyBlockConsensusDataInner(blockRoundDetails.proposalTxns, parentHash, blockConsensusData, blockAdditionalConsensusData,
 			preparedForInner, blockStateDetails.blockNumber, blockStateDetails.consensusContext)
 	}
-	if blockValidatorDetails != nil {
-		blockValidatorDetails.PreFilterValidatorCount = big.NewInt(int64(blockStateDetails.preFilterValidatorCount))
+	if blockExtendedDetails != nil {
+		blockExtendedDetails.PreFilterValidatorCount = big.NewInt(int64(blockStateDetails.preFilterValidatorCount))
+		blockExtendedDetails.PreparedConsensusState = preparedConsensusStateToBackup(preparedForInner)
+		if blockStateDetails.blockProposerV2Traces != nil {
+			blockExtendedDetails.BlockProposerV2Traces = make([]*backupmanager.BlockProposerV2RoundTrace, len(blockStateDetails.blockProposerV2Traces))
+			copy(blockExtendedDetails.BlockProposerV2Traces, blockStateDetails.blockProposerV2Traces)
+		}
 	}
 
 	if err != nil {
-		return nil, nil, blockValidatorDetails, err
+		return nil, nil, blockExtendedDetails, err
 	}
 
-	return blockConsensusData, blockAdditionalConsensusData, blockValidatorDetails, nil
+	return blockConsensusData, blockAdditionalConsensusData, blockExtendedDetails, nil
 }
 
 func (cph *ConsensusHandler) getBlockRound(parentHash common.Hash, round byte) (blockRoundState *BlockRoundDetails, err error) {
@@ -1261,7 +1133,7 @@ func (cph *ConsensusHandler) handleProposeBlockPacket(validator common.Address, 
 		return errors.New("invalid proposer")
 	}
 
-	if ValidateBlockProposalTimeConsensus(blockStateDetails.blockNumber, proposalDetails.BlockTime) == false {
+	if VerifyBlockProposalTimeConsensus(blockStateDetails.blockNumber, proposalDetails.BlockTime) == false {
 		return errors.New("block time validation failed, skipping packet")
 	}
 
@@ -1998,16 +1870,16 @@ func GetProposalTime(blockNumber uint64) uint64 {
 	}
 }
 
-func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64) bool {
+func VerifyBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64) bool {
 	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK {
 		if proposedTime == 0 {
-			log.Debug("ValidateBlockProposalTimeConsensus false case 1", "blockNumber", blockNumber, "proposedTime", proposedTime)
+			log.Debug("VerifyBlockProposalTimeConsensus false case 1", "blockNumber", blockNumber, "proposedTime", proposedTime)
 			return false
 		}
 
 		tm := time.Unix(int64(proposedTime), 0)
 		if tm.Second() != 0 || tm.Nanosecond() != 0 { //No granularity at anything other than minute level allowed, to reduce ability to manipulate blockHash
-			log.Debug("ValidateBlockProposalTimeConsensus false case 2", "blockNumber", blockNumber, "proposedTime", proposedTime)
+			log.Debug("VerifyBlockProposalTimeConsensus false case 2", "blockNumber", blockNumber, "proposedTime", proposedTime)
 			return false
 		}
 		currTimeVal := time.Now().UTC().Unix() //Note that packet may have arrived late. So, these comparisions are approximate.
@@ -2020,14 +1892,14 @@ func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64)
 			if currTime.Before(tm) {
 				difference := tm.Sub(currTime)
 				if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
-					log.Debug("ValidateBlockProposalTimeConsensus false case 3", "blockNumber", blockNumber, "proposedTime", proposedTime,
+					log.Debug("VerifyBlockProposalTimeConsensus false case 3", "blockNumber", blockNumber, "proposedTime", proposedTime,
 						"currTime", currTime, "currTimeVal", currTimeVal, "difference", difference)
 					return false
 				}
 			} else if currTime.After(tm) {
 				difference := currTime.Sub(tm)
 				if difference.Minutes() > ALLOWED_TIME_SKEW_MINUTES {
-					log.Debug("ValidateBlockProposalTimeConsensus false case 4", "blockNumber", blockNumber, "proposedTime", proposedTime,
+					log.Debug("VerifyBlockProposalTimeConsensus false case 4", "blockNumber", blockNumber, "proposedTime", proposedTime,
 						"currTime", currTime, "currTimeVal", currTimeVal, "difference", difference)
 					return false
 				}
@@ -2035,12 +1907,12 @@ func ValidateBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64)
 		}
 	} else {
 		if proposedTime != 0 {
-			log.Debug("ValidateBlockProposalTimeConsensus false case 5", "blockNumber", blockNumber, "proposedTime", proposedTime)
+			log.Debug("VerifyBlockProposalTimeConsensus false case 5", "blockNumber", blockNumber, "proposedTime", proposedTime)
 			return false
 		}
 	}
 
-	log.Debug("ValidateBlockProposalTimeConsensus ok", "blockNumber", blockNumber, "proposedTime", proposedTime)
+	log.Debug("VerifyBlockProposalTimeConsensus ok", "blockNumber", blockNumber, "proposedTime", proposedTime)
 	return true
 }
 

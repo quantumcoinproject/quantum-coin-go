@@ -39,6 +39,7 @@ Byzantine validators may exhibit the following behaviors:
 - **Selective delivery**: A Byzantine proposer may deliver a `PROPOSAL` to only a subset of validators.
 - **Arbitrary voting**: Vote `OK` or `NIL` in any phase regardless of protocol rules.
 - **Phase skipping**: Advance to later phases (e.g., `PRECOMMIT`, `COMMIT`) without completing earlier ones.
+- **Crash / abstention**: Stop participating entirely (go offline, crash, or withhold all votes). This is a special case of Byzantine behavior -- a Byzantine validator that chooses to do nothing is indistinguishable from a crashed one.
 
 As long as Byzantine validators control less than 1/3 of total deposit, the protocol guarantees:
 
@@ -182,3 +183,23 @@ Has the 67% threshold been reached?
 > `ACK_PROPOSAL`. This produces an empty block, guaranteeing the chain makes progress.
 >
 > 14.2) Goto step 5 with round = 2.
+
+---
+
+## Why Round 2 Forces Empty Blocks
+
+When Round 1 cannot reach the 67% threshold -- because some validators accepted the proposal and others timed out waiting for it, with neither side holding enough deposit -- the protocol must resolve the deadlock.
+
+An alternative design would allow additional rounds where validators retry with a new proposer and vote freely (accept or reject). This has two problems:
+
+1. **No convergence guarantee.** If the network is partitioned or degraded, every retry round can stall for the same reason: honest validators have different views, leading to a split vote. Adding rounds N, N+1, N+2, ... does not fix the underlying problem -- it just repeats it. The chain could stall indefinitely, violating liveness.
+
+2. **Increased attack surface.** Each additional round with free voting gives Byzantine validators another opportunity to equivocate (send conflicting votes to different peers), selectively withhold proposals, or manipulate the proposer rotation to influence the outcome.
+
+Forcing an empty block in Round 2 solves both problems by **eliminating the source of disagreement**: every honest validator votes for an empty block unconditionally, regardless of whether it received a proposal. Since honest validators control > 2/3 of deposit, the threshold is guaranteed to be reached. This makes Round 2 succeed by construction.
+
+The trade-off is that one block's worth of transactions is lost (the block is empty). But the chain makes progress with deterministic finality, and the next block starts fresh under normal Round 1 rules.
+
+A further advantage of finalizing quickly (even with an empty block) over adding retry rounds is that **validator selection is performed independently for each block**. The validator set for block N+1 is derived from on-chain state at block N and may differ from the set at block N. By advancing to a new block, the protocol obtains a potentially different validator set -- one that may include better-connected nodes or exclude validators that were unreachable during the previous block. In contrast, additional rounds within the same block reuse the same validator set that already failed to reach consensus, offering no opportunity for the network topology to improve the outcome. Finalizing an empty block and re-entering validator selection thus converts a per-block liveness failure into a per-block retry with independent sampling, improving the probability of successful consensus on subsequent blocks even under persistent but non-uniform network degradation.
+
+Under sustained network degradation affecting all validator sets equally, the chain may produce consecutive empty blocks.

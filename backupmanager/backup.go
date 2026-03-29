@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -11,6 +12,7 @@ import (
 	"sync"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -29,8 +31,8 @@ type BackupManager struct {
 	consensusdb         *ethdb.Database
 }
 
-const BlockValidatorContextValidator = "1"
-const BlockValidatorContextBlockVerify = "2"
+const BlockExtendedContextValidator = "1"
+const BlockExtendedContextBlockVerify = "2"
 
 type ValidatorDeposit struct {
 	ValidatorAddress  common.Address `json:"validatorAddress" gencodec:"required"`
@@ -51,14 +53,119 @@ type ValidatorDetailsV2 struct {
 	NilBlockCount      *big.Int       `json:"nilBlockCount" gencodec:"required"`
 }
 
-type BlockValidatorDetails struct {
+// PreparedConsensusState is a JSON snapshot of the derived validator set and per-round consensus inputs
+// produced by proof-of-stake preparation (filtered deposits, quorum totals, round proposers, NIL-vote hashes).
+// It mirrors the in-memory proofofstake.PreparedConsensusState used during block consensus validation.
+type PreparedConsensusState struct {
+	// FilteredValidatorsDepositMap maps each validator address that survived filtering to its post-filter deposit weight (stake used in quorum math).
+	FilteredValidatorsDepositMap map[common.Address]*big.Int `json:"filteredValidatorsDepositMap,omitempty"`
+
+	// ValidatorDetailsMap is staking metadata per filtered validator (balance, pause flags, withdrawal fields, etc.).
+	// Omitted or empty when the block height does not load extended validator records.
+	ValidatorDetailsMap map[common.Address]ValidatorDetailsV2 `json:"validatorDetailsMap,omitempty"`
+
+	// TotalBlockDepositValue is the sum of filtered validator deposits for the block (denominator for vote weights).
+	TotalBlockDepositValue *big.Int `json:"totalBlockDepositValue,omitempty"`
+
+	// MinDepositRequired is the minimum combined stake required to carry a proposal or vote phase at this height.
+	MinDepositRequired *big.Int `json:"minDepositRequired,omitempty"`
+
+	// RoundProposers maps consensus round index (1-based, through the chain’s maximum round count) to the scheduled block proposer address.
+	RoundProposers map[byte]common.Address `json:"roundProposers,omitempty"`
+
+	// NilVoteProposalHashes maps each round index to the canonical NIL proposal hash expected for that round.
+	NilVoteProposalHashes map[byte]common.Hash `json:"nilVoteProposalHashes,omitempty"`
+
+	// NilVotePrecommitHashes maps each round index to the canonical NIL precommit hash expected for that round.
+	NilVotePrecommitHashes map[byte]common.Hash `json:"nilVotePrecommitHashes,omitempty"`
+}
+
+// BlockProposerV2TraceInput is passed into getBlockProposerV2 so the returned trace records how the selection hash relates to the parent block.
+type BlockProposerV2TraceInput struct {
+	// ParentHash is the parent block hash for the block being prepared (always the real parent, not the context key).
+	ParentHash common.Hash `json:"parentHash"`
+	// UsedConsensusContext is true when the first argument to getBlockProposerV2 is the derived consensus context hash; false when it is the parent hash (pre-context-based or transitional path).
+	UsedConsensusContext bool `json:"usedConsensusContext"`
+}
+
+// BlockProposerV2ValidatorEval captures one validator's full staking record and the boolean result of canPropose for that height.
+type BlockProposerV2ValidatorEval struct {
+	// ValidatorAddress is the validator key in the preparation map (same as ValidatorDetails.Validator in normal cases).
+	ValidatorAddress common.Address `json:"validatorAddress"`
+	// ValidatorDetails is the full ValidatorDetailsV2 snapshot used for eligibility (deep copy for debugging).
+	ValidatorDetails ValidatorDetailsV2 `json:"validatorDetails"`
+	// CanPropose is whether canPropose returned true for this validator at this block (first pass, before MIN_VALIDATORS fallback).
+	CanPropose bool `json:"canPropose"`
+}
+
+// BlockProposerV2SortComparison records one sort.SliceStable less(i,j) call (tie-break digests and validators at comparison time).
+type BlockProposerV2SortComparison struct {
+	IndexI     int            `json:"indexI"`
+	IndexJ     int            `json:"indexJ"`
+	ValidatorI common.Address `json:"validatorI"`
+	ValidatorJ common.Address `json:"validatorJ"`
+	Vi         common.Hash    `json:"vi"`
+	Vj         common.Hash    `json:"vj"`
+	CmpResult  int            `json:"cmpResult"`
+	// ContextHash is the selection hash (consensus context or parent) fed into Keccak256 for this comparison.
+	ContextHash common.Hash `json:"contextHash"`
+	Round       byte        `json:"round"`
+	// BlockBytes is the uint64 block number as little-endian bytes (same slice passed to Keccak when SortUsesBlockNumberInHash is true).
+	BlockBytes hexutil.Bytes `json:"blockBytes"`
+}
+
+// BlockProposerV2RoundTrace is a full, JSON-friendly record of one getBlockProposerV2 invocation (inputs, per-validator canPropose evaluation, sort keys, and winner).
+type BlockProposerV2RoundTrace struct {
+	// Round is the consensus round index (1-based).
+	Round byte `json:"round"`
+	// BlockNumber is the child block height for which the proposer is computed.
+	BlockNumber uint64 `json:"blockNumber"`
+	// ParentHash is the parent block hash (from trace input).
+	ParentHash common.Hash `json:"parentHash"`
+	// SelectionHash is the hash passed into getBlockProposerV2 as the first argument (consensus context or parent, per fork rules).
+	SelectionHash common.Hash `json:"selectionHash"`
+	// UsedConsensusContext matches BlockProposerV2TraceInput.UsedConsensusContext.
+	UsedConsensusContext bool `json:"usedConsensusContext"`
+	// MinValidatorsRequired is MIN_VALIDATORS for this build.
+	MinValidatorsRequired int `json:"minValidatorsRequired"`
+	// InputValidatorCount is len(validatorMap) before filtering.
+	InputValidatorCount int `json:"inputValidatorCount"`
+	// AfterFilterCount is how many validators passed canPropose before any fallback.
+	AfterFilterCount int `json:"afterFilterCount"`
+	// FallbackExpandedToAll is true when fewer than MIN_VALIDATORS passed the filter and everyone was re-included.
+	FallbackExpandedToAll bool `json:"fallbackExpandedToAll"`
+	// SortUsesBlockNumberInHash is true when tie-break hashing includes uint64 block bytes (OfflineValidatorV4StartBlock and above).
+	SortUsesBlockNumberInHash bool `json:"sortUsesBlockNumberInHash"`
+	// Config snapshots (defaults at evaluation time) affecting canPropose and sort.
+	ConfigOfflineValidatorDeferStartBlock uint64 `json:"configOfflineValidatorDeferStartBlock"`
+	ConfigBlockProposerOfflineV2StartBlock uint64 `json:"configBlockProposerOfflineV2StartBlock"`
+	ConfigOfflineValidatorV4StartBlock      uint64 `json:"configOfflineValidatorV4StartBlock"`
+	ConfigMinOfflineProposerBlockDelay     uint64 `json:"configMinOfflineProposerBlockDelay"`
+	ConfigMaxBlockDelayV1                  uint64 `json:"configMaxBlockDelayV1"`
+	ConfigMaxBlockDelayV2                  uint64 `json:"configMaxBlockDelayV2"`
+	ConfigMaxBlockDelayV3                  uint64 `json:"configMaxBlockDelayV3"`
+	// ValidatorEvaluations lists every validator in the input map with full details and the canPropose result (sorted by validator address for stable diffs).
+	ValidatorEvaluations []BlockProposerV2ValidatorEval `json:"validatorEvaluations"`
+	// SortComparisons lists each less(i,j) evaluation during sort.SliceStable (vi/vj digests and addresses at comparison time).
+	SortComparisons []BlockProposerV2SortComparison `json:"sortComparisons"`
+	// SelectedProposer is validators[0] after sorting (the algorithm output).
+	SelectedProposer common.Address `json:"selectedProposer"`
+}
+
+type BlockExtendedDetails struct {
 	BlockNumber                  *big.Int             `json:"blockNumber" gencodec:"required"`
 	ParentHash                   common.Hash          `json:"parentHash" gencodec:"required"`
-	FilteredValidatorDepositList []ValidatorDeposit   `json:"filteredValidatorDepositList" gencodec:"required"`
-	ValidatorDetailsList         []ValidatorDetailsV2 `json:"validatorDetailsList" gencodec:"optional"`
+	FilteredDeposits             []ValidatorDeposit   `json:"filteredValidatorDepositList" gencodec:"required"`
+	StakingValidatorDetails      []ValidatorDetailsV2 `json:"validatorDetailsList" gencodec:"optional"`
 
 	PreFilterValidatorCount *big.Int    `json:"preFilterValidatorCount" gencodec:"required"`
 	ConsensusContext        common.Hash `json:"consensusContext" gencodec:"required"`
+
+	// PreparedConsensusState is the full preparation snapshot (maps, quorum totals, per-round proposer and NIL hashes). Stored as JSON in the consensus backup DB (see BackupBlockExtendedDetails).
+	PreparedConsensusState *PreparedConsensusState `json:"preparedConsensusState,omitempty" rlp:"-"`
+
+	// BlockProposerV2Traces has one entry per consensus round (index round-1). Entries are nil for rounds that used the legacy getBlockProposer (non-V2) path.
+	BlockProposerV2Traces []*BlockProposerV2RoundTrace `json:"blockProposerV2Traces,omitempty" rlp:"-"`
 }
 
 var singleInstance *BackupManager
@@ -289,13 +396,13 @@ func (b *BackupManager) TrsansactionExists(hash common.Hash) error {
 	return nil
 }
 
-func (b *BackupManager) BackupBlockValidatorDetails(details *BlockValidatorDetails, context string) error {
+func (b *BackupManager) BackupBlockExtendedDetails(details *BlockExtendedDetails, context string) error {
 	b.consensusBackupLock.Lock()
 	defer b.consensusBackupLock.Unlock()
 
-	data, err := rlp.EncodeToBytes(details)
+	data, err := json.Marshal(details)
 	if err != nil {
-		log.Trace("EncodeToBytes BlockValidatorDetails", "err", err)
+		log.Trace("json.Marshal BlockExtendedDetails", "err", err)
 		return err
 	}
 
@@ -307,11 +414,11 @@ func (b *BackupManager) BackupBlockValidatorDetails(details *BlockValidatorDetai
 		return err
 	}
 
-	log.Debug("BackupBlockValidatorDetails", "block", details.BlockNumber.Uint64(), "context", context)
+	log.Debug("BackupBlockExtendedDetails", "block", details.BlockNumber.Uint64(), "context", context)
 	return nil
 }
 
-func (b *BackupManager) GetBlockValidatorDetails(blockNumber uint64, context string) (*BlockValidatorDetails, error) {
+func (b *BackupManager) GetBlockExtendedDetails(blockNumber uint64, context string) (*BlockExtendedDetails, error) {
 	b.consensusBackupLock.Lock()
 	defer b.consensusBackupLock.Unlock()
 
@@ -327,12 +434,12 @@ func (b *BackupManager) GetBlockValidatorDetails(blockNumber uint64, context str
 		return nil, err
 	}
 
-	details := BlockValidatorDetails{}
-	//details.FilteredValidatorDepositList = make([]*ValidatorDeposit, 0)
+	details := BlockExtendedDetails{}
 
-	err = rlp.DecodeBytes(detailsBytes, &details)
-	if err != nil {
-		return nil, err
+	if err := json.Unmarshal(detailsBytes, &details); err != nil {
+		if err2 := rlp.DecodeBytes(detailsBytes, &details); err2 != nil {
+			return nil, fmt.Errorf("decode BlockExtendedDetails: json=%v; rlp=%w", err, err2)
+		}
 	}
 
 	return &details, nil

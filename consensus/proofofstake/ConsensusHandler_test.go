@@ -566,11 +566,11 @@ func (ct *ConsensusTest) WaitBlockCommit(parentHash common.Hash, mockp2pHandler 
 	}
 }
 
-func ValidateBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager, validatorMap *map[common.Address]*big.Int, valDetailsMap *map[common.Address]*ValidatorDetailsV2, t *testing.T) {
+func VerifyBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager, validatorMap *map[common.Address]*big.Int, valDetailsMap *map[common.Address]*ValidatorDetailsV2, t *testing.T) {
 	for _, handler := range p2p.mockP2pHandlers {
 		blockState, _, err := handler.consensusHandler.getBlockState(parentHash)
 		if err != nil {
-			fmt.Println("ValidateBlockConsensusData getBlockState", err)
+			fmt.Println("VerifyBlockConsensusData getBlockState", err)
 			t.Fatalf("failed")
 		}
 		if blockState != BLOCK_STATE_RECEIVED_COMMITS {
@@ -583,14 +583,14 @@ func ValidateBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager,
 
 		blockConsensusData, blockAdditionalConsensusData, _, err := handler.consensusHandler.getBlockConsensusData(parentHash)
 		if err != nil {
-			fmt.Println("ValidateBlockConsensusData getBlockConsensusData", "err", err, "val", handler.validator)
+			fmt.Println("VerifyBlockConsensusData getBlockConsensusData", "err", err, "val", handler.validator)
 			t.Fatalf("failed")
 		} else {
-			fmt.Println("ValidateBlockConsensusData getBlockConsensusData ok", handler.validator)
+			fmt.Println("VerifyBlockConsensusData getBlockConsensusData ok", handler.validator)
 		}
 
 		if blockConsensusData == nil || blockAdditionalConsensusData == nil {
-			fmt.Println("ValidateBlockConsensusData nil")
+			fmt.Println("VerifyBlockConsensusData nil")
 			t.Fatalf("failed")
 		}
 
@@ -641,9 +641,9 @@ func ValidateBlockConsensusDataTest(parentHash common.Hash, p2p *MockP2PManager,
 		if err != nil {
 			t.Fatalf("PrepareConsensusState failed: %v", err)
 		}
-		_, err = ValidateBlockConsensusDataInner(txns, parentHash, blockConsensusData, blockAdditionalConsensusData, preparedInner, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, consensusContext)
+		_, err = VerifyBlockConsensusDataInner(txns, parentHash, blockConsensusData, blockAdditionalConsensusData, preparedInner, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, consensusContext)
 		if err != nil {
-			t.Fatalf("ValidateBlockConsensusDataInner failed")
+			t.Fatalf("VerifyBlockConsensusDataInner failed")
 		}
 	}
 }
@@ -673,18 +673,18 @@ func ValidateTest(validatorMap *map[common.Address]*big.Int, valDetailsMap *map[
 		}
 		if i >= minPass {
 			PrintState(parentHash, p2p.mockP2pHandlers, startTime)
-			ValidateBlockConsensusDataTest(parentHash, p2p, validatorMap, valDetailsMap, t)
+			VerifyBlockConsensusDataTest(parentHash, p2p, validatorMap, valDetailsMap, t)
 			return true
 		}
 		if j >= minPass {
 			PrintState(parentHash, p2p.mockP2pHandlers, startTime)
-			ValidateBlockConsensusDataTest(parentHash, p2p, validatorMap, valDetailsMap, t)
+			VerifyBlockConsensusDataTest(parentHash, p2p, validatorMap, valDetailsMap, t)
 			log.Error("minpass failure", "j", j, "minPass", minPass)
 			return false
 		}
 		if count == maxWaitCount {
 			PrintState(parentHash, p2p.mockP2pHandlers, startTime)
-			ValidateBlockConsensusDataTest(parentHash, p2p, validatorMap, valDetailsMap, t)
+			VerifyBlockConsensusDataTest(parentHash, p2p, validatorMap, valDetailsMap, t)
 			log.Error("maxWaitCount failure", "count", count, "maxWaitCount", maxWaitCount)
 			return false
 		} else {
@@ -823,7 +823,7 @@ func testPacketHandler_min_basic(t *testing.T) {
 	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	skipped := false
 	c := 0
@@ -873,7 +873,7 @@ func testPacketHandler_extended_failure(t *testing.T, numKeys int, minPass int, 
 	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	for _, handler := range p2p.mockP2pHandlers {
 		h := handler
@@ -934,7 +934,7 @@ func testPacketHandler_min_negative(t *testing.T, numKeys int, minPass int, unre
 	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	c := 1
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 	skipList := make(map[common.Address]bool)
 
 	for _, handler := range p2p.mockP2pHandlers {
@@ -973,7 +973,7 @@ func testPacketHandler_no_round2_then_round2(t *testing.T, numKeys int, minPass 
 	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
 	c := 1
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 	skipCount := 0
 	unresponsiveValCount := 2
 	var valSkipList []common.Address
@@ -1080,7 +1080,7 @@ func TestPacketHandler_no_round2_then_round2(t *testing.T) {
 func testPacketHandler_bifurcated(t *testing.T) {
 	_, p2p, valMap, valDetailsMap := NewConsensusTest(4, 1, t.Name())
 	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 	c := 0
 	startTime := time.Now().UnixNano() / int64(time.Millisecond)
 
@@ -1487,7 +1487,7 @@ func testPacketHandler_split_increasing_txns_some_unresponsive(t *testing.T, num
 	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
 	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	j := 0
 	numTxns := 0
@@ -1640,7 +1640,7 @@ func testPacketHandler_packet_loss_txns_some_unresponsive(t *testing.T, numVal i
 	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
 
 	parentHash := getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
-	proposer, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
+	proposer, _, _ := getBlockProposer(parentHash, valMap, 1, valDetailsMap, CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER, common.ZERO_HASH)
 
 	j := 0
 	numTxns := 0
@@ -1838,46 +1838,46 @@ func TestBlockProposalTime(t *testing.T) {
 	}
 }
 
-func TestValidateBlockProposalTime(t *testing.T) {
-	if ValidateBlockProposalTime(1, GetProposalTime(1)) == false {
+func TestVerifyBlockProposalTime(t *testing.T) {
+	if VerifyBlockProposalTime(1, GetProposalTime(1)) == false {
 		t.Fatalf("failed 1")
 	}
 
-	if ValidateBlockProposalTime(256, GetProposalTime(256)) == false {
+	if VerifyBlockProposalTime(256, GetProposalTime(256)) == false {
 		t.Fatalf("failed 2")
 	}
 
-	if ValidateBlockProposalTime(2, GetProposalTime(2)) == false {
+	if VerifyBlockProposalTime(2, GetProposalTime(2)) == false {
 		t.Fatalf("failed 3")
 	}
 
-	if ValidateBlockProposalTime(1, GetProposalTime(1)+1) == true {
+	if VerifyBlockProposalTime(1, GetProposalTime(1)+1) == true {
 		t.Fatalf("failed 4")
 	}
 
-	if ValidateBlockProposalTime(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, GetProposalTime(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK)) == false {
+	if VerifyBlockProposalTime(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, GetProposalTime(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK)) == false {
 		t.Fatalf("failed 5")
 	}
 }
 
-func TestValidateBlockProposalTimeConsensus(t *testing.T) {
-	if ValidateBlockProposalTimeConsensus(1, GetProposalTime(1)) == false {
+func TestVerifyBlockProposalTimeConsensus(t *testing.T) {
+	if VerifyBlockProposalTimeConsensus(1, GetProposalTime(1)) == false {
 		t.Fatalf("failed 1")
 	}
 
-	if ValidateBlockProposalTimeConsensus(256, GetProposalTime(256)) == false {
+	if VerifyBlockProposalTimeConsensus(256, GetProposalTime(256)) == false {
 		t.Fatalf("failed 2")
 	}
 
-	if ValidateBlockProposalTimeConsensus(2, GetProposalTime(2)) == false {
+	if VerifyBlockProposalTimeConsensus(2, GetProposalTime(2)) == false {
 		t.Fatalf("failed 3")
 	}
 
-	if ValidateBlockProposalTimeConsensus(1, GetProposalTime(2)) == true {
+	if VerifyBlockProposalTimeConsensus(1, GetProposalTime(2)) == true {
 		t.Fatalf("failed 4")
 	}
 
-	if ValidateBlockProposalTimeConsensus(1, GetProposalTime(1)+1) == true {
+	if VerifyBlockProposalTimeConsensus(1, GetProposalTime(1)+1) == true {
 		t.Fatalf("failed 5")
 	}
 
@@ -1885,7 +1885,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(1, uint64(tm)) == false {
+	if VerifyBlockProposalTimeConsensus(1, uint64(tm)) == false {
 		t.Fatalf("failed 6")
 	}
 
@@ -1893,7 +1893,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(1, uint64(tm)) == false {
+	if VerifyBlockProposalTimeConsensus(1, uint64(tm)) == false {
 		t.Fatalf("failed 7")
 	}
 
@@ -1901,7 +1901,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(1, uint64(tm)) == false {
+	if VerifyBlockProposalTimeConsensus(1, uint64(tm)) == false {
 		t.Fatalf("failed 8")
 	}
 
@@ -1909,7 +1909,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(1, uint64(tm)) == true {
+	if VerifyBlockProposalTimeConsensus(1, uint64(tm)) == true {
 		t.Fatalf("failed 9")
 	}
 
@@ -1917,7 +1917,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(1, uint64(tm)) == false {
+	if VerifyBlockProposalTimeConsensus(1, uint64(tm)) == false {
 		t.Fatalf("failed 10")
 	}
 
@@ -1925,7 +1925,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(1, uint64(tm)) == false {
+	if VerifyBlockProposalTimeConsensus(1, uint64(tm)) == false {
 		t.Fatalf("failed 11")
 	}
 
@@ -1933,7 +1933,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(1, uint64(tm)) == false {
+	if VerifyBlockProposalTimeConsensus(1, uint64(tm)) == false {
 		t.Fatalf("failed 12")
 	}
 
@@ -1941,7 +1941,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(1, uint64(tm)) == true {
+	if VerifyBlockProposalTimeConsensus(1, uint64(tm)) == true {
 		t.Fatalf("failed 13")
 	}
 
@@ -1949,7 +1949,7 @@ func TestValidateBlockProposalTimeConsensus(t *testing.T) {
 	if tm%60 != 0 {
 		tm = tm - (tm % 60)
 	}
-	if ValidateBlockProposalTimeConsensus(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, uint64(tm)) == false {
+	if VerifyBlockProposalTimeConsensus(defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, uint64(tm)) == false {
 		t.Fatalf("failed 14")
 	}
 }

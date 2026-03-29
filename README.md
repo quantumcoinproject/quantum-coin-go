@@ -203,7 +203,7 @@ Please make sure your contributions adhere to our coding guidelines:
 
 - Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e. use [gofmt](https://golang.org/cmd/gofmt/)).
 - Code must be documented according to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
-- Pull requests need to be based on and opened against the `dogep` branch.
+- Pull requests need to be based on and opened against the `main` branch.
 - Commit messages should be prefixed with the package(s) they modify.
   - E.g. "eth, rpc: make trace configs optional"
 

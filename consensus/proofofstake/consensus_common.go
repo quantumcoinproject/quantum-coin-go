@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strconv"
 
+	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
@@ -21,6 +22,8 @@ type PreparedConsensusState struct {
 	// NilVoteProposalHashes and NilVotePrecommitHashes are keyed by round 1..MAX_ROUND (same as getNilVote*).
 	NilVoteProposalHashes  map[byte]common.Hash
 	NilVotePrecommitHashes map[byte]common.Hash
+	// BlockProposerV2Traces has round r at index r-1; nil when that round used the legacy getBlockProposer path.
+	BlockProposerV2Traces []*backupmanager.BlockProposerV2RoundTrace
 }
 
 func validatePreparedDerivedMaps(roundProposers map[byte]common.Address, nilProp, nilPre map[byte]common.Hash) error {
@@ -176,7 +179,95 @@ func preparedConsensusStateFromBlockState(d *BlockStateDetails) *PreparedConsens
 		RoundProposers:               rp,
 		NilVoteProposalHashes:        np,
 		NilVotePrecommitHashes:       npc,
+		BlockProposerV2Traces:        d.blockProposerV2Traces,
 	}
+}
+
+// preparedConsensusDataFromBlockStateDetails rebuilds the same logical snapshot PrepareConsensusData would
+// produce for this block state (without re-reading chain).
+func preparedConsensusDataFromBlockStateDetails(d *BlockStateDetails) *PreparedConsensusData {
+	if d == nil {
+		return nil
+	}
+	return &PreparedConsensusData{
+		ConsensusContext:        d.consensusContext,
+		PreFilterValidatorCount: d.preFilterValidatorCount,
+		ValidatorsDepositMap:    d.origValidators,
+		OrigValidatorDetailsMap: d.origValidatorDetailsMap,
+		Prepared:                preparedConsensusStateFromBlockState(d),
+	}
+}
+
+func copyBigIntPtr(x *big.Int) *big.Int {
+	if x == nil {
+		return nil
+	}
+	return new(big.Int).Set(x)
+}
+
+func validatorDetailsV2ToBackup(v *ValidatorDetailsV2) backupmanager.ValidatorDetailsV2 {
+	if v == nil {
+		return backupmanager.ValidatorDetailsV2{}
+	}
+	return backupmanager.ValidatorDetailsV2{
+		Depositor:          v.Depositor,
+		Validator:          v.Validator,
+		Balance:            copyBigIntPtr(v.Balance),
+		NetBalance:         copyBigIntPtr(v.NetBalance),
+		BlockRewards:       copyBigIntPtr(v.BlockRewards),
+		Slashings:          copyBigIntPtr(v.Slashings),
+		IsValidationPaused: v.IsValidationPaused,
+		WithdrawalBlock:    copyBigIntPtr(v.WithdrawalBlock),
+		WithdrawalAmount:   copyBigIntPtr(v.WithdrawalAmount),
+		LastNiLBlock:       copyBigIntPtr(v.LastNiLBlock),
+		NilBlockCount:      copyBigIntPtr(v.NilBlockCount),
+	}
+}
+
+// preparedConsensusStateToBackup builds a JSON-serializable backupmanager.PreparedConsensusState (deep copy).
+func preparedConsensusStateToBackup(p *PreparedConsensusState) *backupmanager.PreparedConsensusState {
+	if p == nil {
+		return nil
+	}
+	out := &backupmanager.PreparedConsensusState{
+		TotalBlockDepositValue: copyBigIntPtr(p.TotalBlockDepositValue),
+		MinDepositRequired:     copyBigIntPtr(p.MinDepositRequired),
+	}
+	if len(p.FilteredValidatorsDepositMap) > 0 {
+		out.FilteredValidatorsDepositMap = make(map[common.Address]*big.Int, len(p.FilteredValidatorsDepositMap))
+		for k, v := range p.FilteredValidatorsDepositMap {
+			if v != nil {
+				out.FilteredValidatorsDepositMap[k] = new(big.Int).Set(v)
+			} else {
+				out.FilteredValidatorsDepositMap[k] = nil
+			}
+		}
+	}
+	if len(p.ValidatorDetailsMap) > 0 {
+		out.ValidatorDetailsMap = make(map[common.Address]backupmanager.ValidatorDetailsV2, len(p.ValidatorDetailsMap))
+		for k, v := range p.ValidatorDetailsMap {
+			out.ValidatorDetailsMap[k] = validatorDetailsV2ToBackup(v)
+		}
+	}
+	if len(p.RoundProposers) > 0 {
+		out.RoundProposers = make(map[byte]common.Address, len(p.RoundProposers))
+		for k, v := range p.RoundProposers {
+			out.RoundProposers[k] = v
+		}
+	}
+	if len(p.NilVoteProposalHashes) > 0 {
+		out.NilVoteProposalHashes = make(map[byte]common.Hash, len(p.NilVoteProposalHashes))
+		for k, v := range p.NilVoteProposalHashes {
+			out.NilVoteProposalHashes[k] = v
+		}
+	}
+	if len(p.NilVotePrecommitHashes) > 0 {
+		out.NilVotePrecommitHashes = make(map[byte]common.Hash, len(p.NilVotePrecommitHashes))
+		for k, v := range p.NilVotePrecommitHashes {
+			out.NilVotePrecommitHashes[k] = v
+		}
+	}
+	return out
 }
 
 func PrepareConsensusState(
@@ -250,12 +341,14 @@ func PrepareConsensusState(
 	roundProposers := make(map[byte]common.Address, MAX_ROUND)
 	nilVoteProposalHashes := make(map[byte]common.Hash, MAX_ROUND)
 	nilVotePrecommitHashes := make(map[byte]common.Hash, MAX_ROUND)
+	blockProposerV2Traces := make([]*backupmanager.BlockProposerV2RoundTrace, MAX_ROUND)
 	for r := byte(1); r <= MAX_ROUND; r++ {
-		prop, err := getBlockProposer(parentHash, &filteredValidatorDepositMap, r, &detailsMapCopy, blockNumber, consensusContext)
+		prop, tr, err := getBlockProposer(parentHash, &filteredValidatorDepositMap, r, &detailsMapCopy, blockNumber, consensusContext)
 		if err != nil {
 			return nil, err
 		}
 		roundProposers[r] = prop
+		blockProposerV2Traces[r-1] = tr
 		nilVoteProposalHashes[r] = getNilVoteProposalHash(parentHash, r)
 		nilVotePrecommitHashes[r] = getNilVotePreCommitHash(parentHash, r)
 	}
@@ -272,5 +365,6 @@ func PrepareConsensusState(
 		RoundProposers:               roundProposers,
 		NilVoteProposalHashes:        nilVoteProposalHashes,
 		NilVotePrecommitHashes:       nilVotePrecommitHashes,
+		BlockProposerV2Traces:        blockProposerV2Traces,
 	}, nil
 }

@@ -725,16 +725,16 @@ func (api *API) GetBlockConsensusContext(blockNumber uint64) ([32]byte, error) {
 	return api.proofofstake.GetConsensusContext(key, currentheader.Hash())
 }
 
-func (api *API) GetBlockValidatorDetails(blockNumber uint64, context string) (*backupmanager.BlockValidatorDetails, error) {
+func (api *API) GetBlockExtendedDetails(blockNumber uint64, context string) (*backupmanager.BlockExtendedDetails, error) {
 	if backupmanager.GetConsensusInstance() == nil {
 		return nil, errors.New("GetConsensusInstance is nil")
 	}
 
-	if context != backupmanager.BlockValidatorContextValidator && context != backupmanager.BlockValidatorContextBlockVerify {
-		return nil, errors.New("GetBlockValidatorDetails context needs to be 1 or 2")
+	if context != backupmanager.BlockExtendedContextValidator && context != backupmanager.BlockExtendedContextBlockVerify {
+		return nil, errors.New("GetBlockExtendedDetails context needs to be 1 or 2")
 	}
 
-	return backupmanager.GetConsensusInstance().GetBlockValidatorDetails(blockNumber, context)
+	return backupmanager.GetConsensusInstance().GetBlockExtendedDetails(blockNumber, context)
 }
 
 type ConversionSummary struct {

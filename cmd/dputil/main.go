@@ -178,7 +178,7 @@ func printHelp() {
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil sethead BLOCK_NUMBER")
 	fmt.Println("      Set the following environment variables:")
-	fmt.Println("dputil getblockvalidatordetails BLOCK_NUMBER")
+	fmt.Println("dputil getblockextendeddetails BLOCK_NUMBER")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil block BLOCK_NUMBER")
@@ -413,8 +413,8 @@ func main() {
 		if err != nil {
 			fmt.Println("Error", err)
 		}
-	} else if os.Args[1] == "getblockvalidatordetails" {
-		err := GetBlockValidatorDetailsCmd()
+	} else if os.Args[1] == "getblockextendeddetails" {
+		err := GetBlockExtendedDetailsCmd()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
