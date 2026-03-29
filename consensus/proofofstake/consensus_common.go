@@ -22,6 +22,8 @@ type PreparedConsensusState struct {
 	// NilVoteProposalHashes and NilVotePrecommitHashes are keyed by round 1..MAX_ROUND (same as getNilVote*).
 	NilVoteProposalHashes  map[byte]common.Hash
 	NilVotePrecommitHashes map[byte]common.Hash
+	// BlockProposerV2Traces has round r at index r-1; nil when that round used the legacy getBlockProposer path.
+	BlockProposerV2Traces []*backupmanager.BlockProposerV2RoundTrace
 }
 
 func validatePreparedDerivedMaps(roundProposers map[byte]common.Address, nilProp, nilPre map[byte]common.Hash) error {
@@ -177,6 +179,7 @@ func preparedConsensusStateFromBlockState(d *BlockStateDetails) *PreparedConsens
 		RoundProposers:               rp,
 		NilVoteProposalHashes:        np,
 		NilVotePrecommitHashes:       npc,
+		BlockProposerV2Traces:        d.blockProposerV2Traces,
 	}
 }
 
@@ -338,12 +341,14 @@ func PrepareConsensusState(
 	roundProposers := make(map[byte]common.Address, MAX_ROUND)
 	nilVoteProposalHashes := make(map[byte]common.Hash, MAX_ROUND)
 	nilVotePrecommitHashes := make(map[byte]common.Hash, MAX_ROUND)
+	blockProposerV2Traces := make([]*backupmanager.BlockProposerV2RoundTrace, MAX_ROUND)
 	for r := byte(1); r <= MAX_ROUND; r++ {
-		prop, err := getBlockProposer(parentHash, &filteredValidatorDepositMap, r, &detailsMapCopy, blockNumber, consensusContext)
+		prop, tr, err := getBlockProposer(parentHash, &filteredValidatorDepositMap, r, &detailsMapCopy, blockNumber, consensusContext)
 		if err != nil {
 			return nil, err
 		}
 		roundProposers[r] = prop
+		blockProposerV2Traces[r-1] = tr
 		nilVoteProposalHashes[r] = getNilVoteProposalHash(parentHash, r)
 		nilVotePrecommitHashes[r] = getNilVotePreCommitHash(parentHash, r)
 	}
@@ -360,5 +365,6 @@ func PrepareConsensusState(
 		RoundProposers:               roundProposers,
 		NilVoteProposalHashes:        nilVoteProposalHashes,
 		NilVotePrecommitHashes:       nilVotePrecommitHashes,
+		BlockProposerV2Traces:        blockProposerV2Traces,
 	}, nil
 }

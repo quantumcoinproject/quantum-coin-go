@@ -65,27 +65,27 @@ func BlockCmd() error {
 		"BlockConsensusData": consensusRaw,
 	}
 
-	// GetBlockValidatorDetailsByBlock for both contexts; do not bail if one fails.
-	details1, err1 := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextValidator)
+	// GetBlockExtendedDetailsByBlock for both contexts; do not bail if one fails.
+	details1, err1 := client.GetBlockExtendedDetailsByBlock(ctx, blockNum, backupmanager.BlockExtendedContextValidator)
 	if err1 != nil {
-		out["blockValidatorDetails_1"] = json.RawMessage("null")
+		out["blockExtendedDetails_1"] = json.RawMessage("null")
 	} else {
 		b1, err := json.Marshal(details1)
 		if err != nil {
-			out["blockValidatorDetails_1"] = json.RawMessage("null")
+			out["blockExtendedDetails_1"] = json.RawMessage("null")
 		} else {
-			out["blockValidatorDetails_1"] = json.RawMessage(b1)
+			out["blockExtendedDetails_1"] = json.RawMessage(b1)
 		}
 	}
-	details2, err2 := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextBlockVerify)
+	details2, err2 := client.GetBlockExtendedDetailsByBlock(ctx, blockNum, backupmanager.BlockExtendedContextBlockVerify)
 	if err2 != nil {
-		out["blockValidatorDetails_2"] = json.RawMessage("null")
+		out["blockExtendedDetails_2"] = json.RawMessage("null")
 	} else {
 		b2, err := json.Marshal(details2)
 		if err != nil {
-			out["blockValidatorDetails_2"] = json.RawMessage("null")
+			out["blockExtendedDetails_2"] = json.RawMessage("null")
 		} else {
-			out["blockValidatorDetails_2"] = json.RawMessage(b2)
+			out["blockExtendedDetails_2"] = json.RawMessage(b2)
 		}
 	}
 
@@ -113,10 +113,10 @@ func BlockCmd() error {
 	return nil
 }
 
-func GetBlockValidatorDetailsCmd() error {
+func GetBlockExtendedDetailsCmd() error {
 	if len(os.Args) < 3 {
 		printHelp()
-		return errors.New("incorrect usage: dputil getblockvalidatordetails BLOCK_NUMBER")
+		return errors.New("incorrect usage: dputil getblockextendeddetails BLOCK_NUMBER")
 	}
 
 	blockNumStr := os.Args[2]
@@ -139,55 +139,55 @@ func GetBlockValidatorDetailsCmd() error {
 
 	ctx := context.Background()
 
-	// Call with BlockValidatorContextValidator ("1")
-	fmt.Println("========== GetBlockValidatorDetails (context: BlockValidatorContextValidator / \"1\") ==========")
-	detailsValidator, err := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextValidator)
+	// Call with BlockExtendedContextValidator ("1")
+	fmt.Println("========== GetBlockExtendedDetails (context: BlockExtendedContextValidator / \"1\") ==========")
+	detailsValidator, err := client.GetBlockExtendedDetailsByBlock(ctx, blockNum, backupmanager.BlockExtendedContextValidator)
 	if err != nil {
-		fmt.Println("GetBlockValidatorDetails (Validator context) failed:", err, "context", backupmanager.BlockValidatorContextValidator)
+		fmt.Println("GetBlockExtendedDetails (Validator context) failed:", err, "context", backupmanager.BlockExtendedContextValidator)
 	} else {
-		printBlockValidatorDetailsDetail("Validator", detailsValidator)
-		if err := writeBlockValidatorDetailsFile(blockNumStr, backupmanager.BlockValidatorContextValidator, detailsValidator); err != nil {
+		printBlockExtendedDetailsDetail("Validator", detailsValidator)
+		if err := writeBlockExtendedDetailsFile(blockNumStr, backupmanager.BlockExtendedContextValidator, detailsValidator); err != nil {
 			fmt.Println("Write JSON (Validator context) failed:", err)
 		}
 	}
 
 	fmt.Println()
-	fmt.Println("========== GetBlockValidatorDetails (context: BlockValidatorContextBlockVerify / \"2\") ==========")
-	detailsBlockVerify, err := client.GetBlockValidatorDetailsByBlock(ctx, blockNum, backupmanager.BlockValidatorContextBlockVerify)
+	fmt.Println("========== GetBlockExtendedDetails (context: BlockExtendedContextBlockVerify / \"2\") ==========")
+	detailsBlockVerify, err := client.GetBlockExtendedDetailsByBlock(ctx, blockNum, backupmanager.BlockExtendedContextBlockVerify)
 	if err != nil {
-		fmt.Println("GetBlockValidatorDetails (BlockVerify context) failed:", err, "context", backupmanager.BlockValidatorContextBlockVerify)
+		fmt.Println("GetBlockExtendedDetails (BlockVerify context) failed:", err, "context", backupmanager.BlockExtendedContextBlockVerify)
 		return err
 	} else {
-		printBlockValidatorDetailsDetail("BlockVerify", detailsBlockVerify)
-		if err := writeBlockValidatorDetailsFile(blockNumStr, backupmanager.BlockValidatorContextBlockVerify, detailsBlockVerify); err != nil {
+		printBlockExtendedDetailsDetail("BlockVerify", detailsBlockVerify)
+		if err := writeBlockExtendedDetailsFile(blockNumStr, backupmanager.BlockExtendedContextBlockVerify, detailsBlockVerify); err != nil {
 			fmt.Println("Write JSON (BlockVerify context) failed:", err)
 		}
 	}
 
 	fmt.Println()
 	fmt.Println("========== Comparison: differences between Validator and BlockVerify ==========")
-	compareBlockValidatorDetails(detailsValidator, detailsBlockVerify)
+	compareBlockExtendedDetails(detailsValidator, detailsBlockVerify)
 
 	return nil
 }
 
-func writeBlockValidatorDetailsFile(blockNumStr, context string, d *backupmanager.BlockValidatorDetails) error {
+func writeBlockExtendedDetailsFile(blockNumStr, context string, d *backupmanager.BlockExtendedDetails) error {
 	if d == nil {
 		return nil
 	}
-	// Copy and sort by validator address so saved JSON is deterministic (same order as compareBlockValidatorDetails).
+	// Copy and sort by validator address so saved JSON is deterministic (same order as compareBlockExtendedDetails).
 	copyDetails := *d
-	copyDetails.FilteredValidatorDepositList = make([]backupmanager.ValidatorDeposit, len(d.FilteredValidatorDepositList))
-	copy(copyDetails.FilteredValidatorDepositList, d.FilteredValidatorDepositList)
-	sort.Slice(copyDetails.FilteredValidatorDepositList, func(i, j int) bool {
-		return bytes.Compare(copyDetails.FilteredValidatorDepositList[i].ValidatorAddress[:], copyDetails.FilteredValidatorDepositList[j].ValidatorAddress[:]) < 0
+	copyDetails.FilteredDeposits = make([]backupmanager.ValidatorDeposit, len(d.FilteredDeposits))
+	copy(copyDetails.FilteredDeposits, d.FilteredDeposits)
+	sort.Slice(copyDetails.FilteredDeposits, func(i, j int) bool {
+		return bytes.Compare(copyDetails.FilteredDeposits[i].ValidatorAddress[:], copyDetails.FilteredDeposits[j].ValidatorAddress[:]) < 0
 	})
-	copyDetails.ValidatorDetailsList = make([]backupmanager.ValidatorDetailsV2, len(d.ValidatorDetailsList))
-	copy(copyDetails.ValidatorDetailsList, d.ValidatorDetailsList)
-	sort.Slice(copyDetails.ValidatorDetailsList, func(i, j int) bool {
-		return bytes.Compare(copyDetails.ValidatorDetailsList[i].Validator[:], copyDetails.ValidatorDetailsList[j].Validator[:]) < 0
+	copyDetails.StakingValidatorDetails = make([]backupmanager.ValidatorDetailsV2, len(d.StakingValidatorDetails))
+	copy(copyDetails.StakingValidatorDetails, d.StakingValidatorDetails)
+	sort.Slice(copyDetails.StakingValidatorDetails, func(i, j int) bool {
+		return bytes.Compare(copyDetails.StakingValidatorDetails[i].Validator[:], copyDetails.StakingValidatorDetails[j].Validator[:]) < 0
 	})
-	filename := fmt.Sprintf("block-validator-%s-%s.json", blockNumStr, context)
+	filename := fmt.Sprintf("block-extended-%s-%s.json", blockNumStr, context)
 	b, err := json.MarshalIndent(&copyDetails, "", "  ")
 	if err != nil {
 		return err
@@ -195,21 +195,21 @@ func writeBlockValidatorDetailsFile(blockNumStr, context string, d *backupmanage
 	return os.WriteFile(filename, b, 0644)
 }
 
-func printBlockValidatorDetailsDetail(label string, d *backupmanager.BlockValidatorDetails) {
+func printBlockExtendedDetailsDetail(label string, d *backupmanager.BlockExtendedDetails) {
 	if d == nil {
-		fmt.Printf("[%s] BlockValidatorDetails is nil\n", label)
+		fmt.Printf("[%s] BlockExtendedDetails is nil\n", label)
 		return
 	}
 	fmt.Printf("[%s] BlockNumber: %s\n", label, bigIntStr(d.BlockNumber))
 	fmt.Printf("[%s] ParentHash: %s\n", label, d.ParentHash.Hex())
 	fmt.Printf("[%s] PreFilterValidatorCount: %s\n", label, bigIntStr(d.PreFilterValidatorCount))
 	fmt.Printf("[%s] ConsensusContext: %s\n", label, d.ConsensusContext.Hex())
-	fmt.Printf("[%s] FilteredValidatorDepositList (len=%d):\n", label, len(d.FilteredValidatorDepositList))
-	for i, v := range d.FilteredValidatorDepositList {
+	fmt.Printf("[%s] FilteredDeposits (len=%d):\n", label, len(d.FilteredDeposits))
+	for i, v := range d.FilteredDeposits {
 		fmt.Printf("  [%s]   [%d] ValidatorAddress=%s PostFilterDeposit=%s\n", label, i, v.ValidatorAddress.Hex(), bigIntStr(v.PostFilterDeposit))
 	}
-	fmt.Printf("[%s] ValidatorDetailsList (len=%d):\n", label, len(d.ValidatorDetailsList))
-	for i, v := range d.ValidatorDetailsList {
+	fmt.Printf("[%s] StakingValidatorDetails (len=%d):\n", label, len(d.StakingValidatorDetails))
+	for i, v := range d.StakingValidatorDetails {
 		fmt.Printf("  [%s]   [%d] Depositor=%s Validator=%s Balance=%s NetBalance=%s BlockRewards=%s Slashings=%s IsValidationPaused=%v WithdrawalBlock=%s WithdrawalAmount=%s LastNiLBlock=%s NilBlockCount=%s\n",
 			label, i, v.Depositor.Hex(), v.Validator.Hex(), bigIntStr(v.Balance), bigIntStr(v.NetBalance), bigIntStr(v.BlockRewards), bigIntStr(v.Slashings),
 			v.IsValidationPaused, bigIntStr(v.WithdrawalBlock), bigIntStr(v.WithdrawalAmount), bigIntStr(v.LastNiLBlock), bigIntStr(v.NilBlockCount))
@@ -230,7 +230,7 @@ func bigIntStr(b *big.Int) string {
 	return b.String()
 }
 
-func compareBlockValidatorDetails(a, b *backupmanager.BlockValidatorDetails) {
+func compareBlockExtendedDetails(a, b *backupmanager.BlockExtendedDetails) {
 	if a == nil && b == nil {
 		fmt.Println("Both are nil; no differences.")
 		return
@@ -264,94 +264,94 @@ func compareBlockValidatorDetails(a, b *backupmanager.BlockValidatorDetails) {
 	}
 
 	// Sort both lists by validator address before comparing
-	sortedFilteredA := make([]backupmanager.ValidatorDeposit, len(a.FilteredValidatorDepositList))
-	copy(sortedFilteredA, a.FilteredValidatorDepositList)
+	sortedFilteredA := make([]backupmanager.ValidatorDeposit, len(a.FilteredDeposits))
+	copy(sortedFilteredA, a.FilteredDeposits)
 	sort.Slice(sortedFilteredA, func(i, j int) bool {
 		return bytes.Compare(sortedFilteredA[i].ValidatorAddress[:], sortedFilteredA[j].ValidatorAddress[:]) < 0
 	})
-	sortedFilteredB := make([]backupmanager.ValidatorDeposit, len(b.FilteredValidatorDepositList))
-	copy(sortedFilteredB, b.FilteredValidatorDepositList)
+	sortedFilteredB := make([]backupmanager.ValidatorDeposit, len(b.FilteredDeposits))
+	copy(sortedFilteredB, b.FilteredDeposits)
 	sort.Slice(sortedFilteredB, func(i, j int) bool {
 		return bytes.Compare(sortedFilteredB[i].ValidatorAddress[:], sortedFilteredB[j].ValidatorAddress[:]) < 0
 	})
 
 	if len(sortedFilteredA) != len(sortedFilteredB) {
-		fmt.Printf("  FilteredValidatorDepositList length: DIFFERENT  Validator=%d  BlockVerify=%d\n", len(sortedFilteredA), len(sortedFilteredB))
+		fmt.Printf("  FilteredDeposits length: DIFFERENT  Validator=%d  BlockVerify=%d\n", len(sortedFilteredA), len(sortedFilteredB))
 		diff = true
 	} else {
 		for i := range sortedFilteredA {
 			av, bv := sortedFilteredA[i], sortedFilteredB[i]
 			if av.ValidatorAddress != bv.ValidatorAddress {
-				fmt.Printf("  FilteredValidatorDepositList[%d].ValidatorAddress: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, av.ValidatorAddress.Hex(), bv.ValidatorAddress.Hex())
+				fmt.Printf("  FilteredDeposits[%d].ValidatorAddress: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, av.ValidatorAddress.Hex(), bv.ValidatorAddress.Hex())
 				diff = true
 			}
 			if cmpBigInt(av.PostFilterDeposit, bv.PostFilterDeposit) {
-				fmt.Printf("  FilteredValidatorDepositList[%d].PostFilterDeposit: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.PostFilterDeposit), bigIntStr(bv.PostFilterDeposit))
+				fmt.Printf("  FilteredDeposits[%d].PostFilterDeposit: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.PostFilterDeposit), bigIntStr(bv.PostFilterDeposit))
 				diff = true
 			}
 		}
 	}
 
 	// Sort both lists by validator address before comparing
-	sortedDetailsA := make([]backupmanager.ValidatorDetailsV2, len(a.ValidatorDetailsList))
-	copy(sortedDetailsA, a.ValidatorDetailsList)
+	sortedDetailsA := make([]backupmanager.ValidatorDetailsV2, len(a.StakingValidatorDetails))
+	copy(sortedDetailsA, a.StakingValidatorDetails)
 	sort.Slice(sortedDetailsA, func(i, j int) bool {
 		return bytes.Compare(sortedDetailsA[i].Validator[:], sortedDetailsA[j].Validator[:]) < 0
 	})
-	sortedDetailsB := make([]backupmanager.ValidatorDetailsV2, len(b.ValidatorDetailsList))
-	copy(sortedDetailsB, b.ValidatorDetailsList)
+	sortedDetailsB := make([]backupmanager.ValidatorDetailsV2, len(b.StakingValidatorDetails))
+	copy(sortedDetailsB, b.StakingValidatorDetails)
 	sort.Slice(sortedDetailsB, func(i, j int) bool {
 		return bytes.Compare(sortedDetailsB[i].Validator[:], sortedDetailsB[j].Validator[:]) < 0
 	})
 
 	if len(sortedDetailsA) != len(sortedDetailsB) {
-		fmt.Printf("  ValidatorDetailsList length: DIFFERENT  Validator=%d  BlockVerify=%d\n", len(sortedDetailsA), len(sortedDetailsB))
+		fmt.Printf("  StakingValidatorDetails length: DIFFERENT  Validator=%d  BlockVerify=%d\n", len(sortedDetailsA), len(sortedDetailsB))
 		diff = true
 	} else {
 		for i := range sortedDetailsA {
 			av, bv := sortedDetailsA[i], sortedDetailsB[i]
 			if av.Depositor != bv.Depositor {
-				fmt.Printf("  ValidatorDetailsList[%d].Depositor: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, av.Depositor.Hex(), bv.Depositor.Hex())
+				fmt.Printf("  StakingValidatorDetails[%d].Depositor: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, av.Depositor.Hex(), bv.Depositor.Hex())
 				diff = true
 			}
 			if av.Validator != bv.Validator {
-				fmt.Printf("  ValidatorDetailsList[%d].Validator: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, av.Validator.Hex(), bv.Validator.Hex())
+				fmt.Printf("  StakingValidatorDetails[%d].Validator: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, av.Validator.Hex(), bv.Validator.Hex())
 				diff = true
 			}
 			if cmpBigInt(av.Balance, bv.Balance) {
-				fmt.Printf("  ValidatorDetailsList[%d].Balance: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.Balance), bigIntStr(bv.Balance))
+				fmt.Printf("  StakingValidatorDetails[%d].Balance: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.Balance), bigIntStr(bv.Balance))
 				diff = true
 			}
 			if cmpBigInt(av.NetBalance, bv.NetBalance) {
-				fmt.Printf("  ValidatorDetailsList[%d].NetBalance: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.NetBalance), bigIntStr(bv.NetBalance))
+				fmt.Printf("  StakingValidatorDetails[%d].NetBalance: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.NetBalance), bigIntStr(bv.NetBalance))
 				diff = true
 			}
 			if cmpBigInt(av.BlockRewards, bv.BlockRewards) {
-				fmt.Printf("  ValidatorDetailsList[%d].BlockRewards: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.BlockRewards), bigIntStr(bv.BlockRewards))
+				fmt.Printf("  StakingValidatorDetails[%d].BlockRewards: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.BlockRewards), bigIntStr(bv.BlockRewards))
 				diff = true
 			}
 			if cmpBigInt(av.Slashings, bv.Slashings) {
-				fmt.Printf("  ValidatorDetailsList[%d].Slashings: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.Slashings), bigIntStr(bv.Slashings))
+				fmt.Printf("  StakingValidatorDetails[%d].Slashings: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.Slashings), bigIntStr(bv.Slashings))
 				diff = true
 			}
 			if av.IsValidationPaused != bv.IsValidationPaused {
-				fmt.Printf("  ValidatorDetailsList[%d].IsValidationPaused: DIFFERENT  Validator=%v  BlockVerify=%v\n", i, av.IsValidationPaused, bv.IsValidationPaused)
+				fmt.Printf("  StakingValidatorDetails[%d].IsValidationPaused: DIFFERENT  Validator=%v  BlockVerify=%v\n", i, av.IsValidationPaused, bv.IsValidationPaused)
 				diff = true
 			}
 			if cmpBigInt(av.WithdrawalBlock, bv.WithdrawalBlock) {
-				fmt.Printf("  ValidatorDetailsList[%d].WithdrawalBlock: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.WithdrawalBlock), bigIntStr(bv.WithdrawalBlock))
+				fmt.Printf("  StakingValidatorDetails[%d].WithdrawalBlock: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.WithdrawalBlock), bigIntStr(bv.WithdrawalBlock))
 				diff = true
 			}
 			if cmpBigInt(av.WithdrawalAmount, bv.WithdrawalAmount) {
-				fmt.Printf("  ValidatorDetailsList[%d].WithdrawalAmount: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.WithdrawalAmount), bigIntStr(bv.WithdrawalAmount))
+				fmt.Printf("  StakingValidatorDetails[%d].WithdrawalAmount: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.WithdrawalAmount), bigIntStr(bv.WithdrawalAmount))
 				diff = true
 			}
 			if cmpBigInt(av.LastNiLBlock, bv.LastNiLBlock) {
-				fmt.Printf("  ValidatorDetailsList[%d].LastNiLBlock: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.LastNiLBlock), bigIntStr(bv.LastNiLBlock))
+				fmt.Printf("  StakingValidatorDetails[%d].LastNiLBlock: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.LastNiLBlock), bigIntStr(bv.LastNiLBlock))
 				diff = true
 			}
 			if cmpBigInt(av.NilBlockCount, bv.NilBlockCount) {
-				fmt.Printf("  ValidatorDetailsList[%d].NilBlockCount: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.NilBlockCount), bigIntStr(bv.NilBlockCount))
+				fmt.Printf("  StakingValidatorDetails[%d].NilBlockCount: DIFFERENT  Validator=%s  BlockVerify=%s\n", i, bigIntStr(av.NilBlockCount), bigIntStr(bv.NilBlockCount))
 				diff = true
 			}
 		}

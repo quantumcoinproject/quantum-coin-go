@@ -459,7 +459,7 @@ func (c *ProofOfStake) verifySeal(chain consensus.ChainHeaderReader, header *typ
 	}
 
 	if header.ConsensusData == nil || header.UnhashedConsensusData == nil {
-		log.Trace("ValidateBlockConsensusData nil")
+		log.Trace("VerifyBlockConsensusData nil")
 		return errors.New("nil consensusdata")
 	}
 
@@ -480,24 +480,24 @@ func (c *ProofOfStake) verifySeal(chain consensus.ChainHeaderReader, header *typ
 	}
 
 	if blockConsensusData.PrecommitHash.IsEqualTo(ZERO_HASH) {
-		return errors.New("ValidateBlockConsensusData PrecommitHash ProposalHash zero_hash")
+		return errors.New("VerifyBlockConsensusData PrecommitHash ProposalHash zero_hash")
 	}
 
 	if blockConsensusData.Round > 1 {
 		if len(blockConsensusData.SlashedBlockProposers) < int(blockConsensusData.Round-1) {
-			return errors.New("ValidateBlockConsensusData SlashedBlockProposers length")
+			return errors.New("VerifyBlockConsensusData SlashedBlockProposers length")
 		}
 	}
 
 	if blockConsensusData.VoteType == VOTE_TYPE_NIL {
 		if blockConsensusData.BlockProposer.IsEqualTo(ZERO_ADDRESS) == false {
-			return errors.New("ValidateBlockConsensusData BlockProposer false")
+			return errors.New("VerifyBlockConsensusData BlockProposer false")
 		}
 
 		//todo: deep validate block proposers
 	} else if blockConsensusData.VoteType == VOTE_TYPE_OK {
 		if blockConsensusData.BlockProposer.IsEqualTo(ZERO_ADDRESS) {
-			return errors.New("ValidateBlockConsensusData BlockProposer true")
+			return errors.New("VerifyBlockConsensusData BlockProposer true")
 		}
 	} else {
 		return errors.New("unknown VoteType")
@@ -578,16 +578,16 @@ func (c *ProofOfStake) VerifyBlock(chain consensus.ChainHeaderReader, block *typ
 		}
 
 		if blockAdditionalConsensusData.ConsensusPackets == nil {
-			return errors.New("ValidateBlockConsensusData ConsensusPackets is nil")
+			return errors.New("VerifyBlockConsensusData ConsensusPackets is nil")
 		}
 
 		log.Info("VerifyBlock SKIP_BLOCK_DEEP_CHECK is set, skipping deep check. Do not use this mode except for testing", "number", header.Number.Uint64(), "hash", header.Hash())
 		return nil
 	}
 
-	err = ValidateBlockConsensusData(block, nil, nil, c.GetConsensusContext, c.GetValidators, c.ListValidatorsAsMap)
+	err = VerifyBlockConsensusData(block, nil, nil, c.GetConsensusContext, c.GetValidators, c.ListValidatorsAsMap)
 	if err != nil {
-		log.Trace("ValidateBlockConsensusData", "err", err)
+		log.Trace("VerifyBlockConsensusData", "err", err)
 	}
 
 	return err
@@ -934,11 +934,11 @@ func (c *ProofOfStake) FinalizeAndAssembleWithConsensus(chain consensus.ChainHea
 		return nil, errors.New("Block state not yet BLOCK_STATE_WAITING_FOR_COMMITS")
 	}
 
-	blockConsensusData, blockAdditionalConsensusData, blockValidatorDetails, err := c.consensusHandler.getBlockConsensusData(header.ParentHash)
-	if blockValidatorDetails != nil && backupmanager.GetConsensusInstance() != nil { //save even if error
-		errBackup := backupmanager.GetConsensusInstance().BackupBlockValidatorDetails(blockValidatorDetails, backupmanager.BlockValidatorContextValidator)
+	blockConsensusData, blockAdditionalConsensusData, blockExtendedDetails, err := c.consensusHandler.getBlockConsensusData(header.ParentHash)
+	if blockExtendedDetails != nil && backupmanager.GetConsensusInstance() != nil { //save even if error
+		errBackup := backupmanager.GetConsensusInstance().BackupBlockExtendedDetails(blockExtendedDetails, backupmanager.BlockExtendedContextValidator)
 		if errBackup != nil {
-			log.Warn("ValidateBlockConsensusDataInner backup consensus", "errBackup", errBackup)
+			log.Warn("VerifyBlockConsensusDataInner backup consensus", "errBackup", errBackup)
 		}
 	}
 
