@@ -65,7 +65,7 @@ func BlockCmd() error {
 		"BlockConsensusData": consensusRaw,
 	}
 
-	// GetBlockExtendedDetailsByBlock for both contexts; do not bail if one fails.
+	// GetBlockExtendedDetailsByBlock for each context; do not bail if one fails.
 	details1, err1 := client.GetBlockExtendedDetailsByBlock(ctx, blockNum, backupmanager.BlockExtendedContextValidator)
 	if err1 != nil {
 		out["blockExtendedDetails_1"] = json.RawMessage("null")
@@ -86,6 +86,28 @@ func BlockCmd() error {
 			out["blockExtendedDetails_2"] = json.RawMessage("null")
 		} else {
 			out["blockExtendedDetails_2"] = json.RawMessage(b2)
+		}
+	}
+	details3, err3 := client.GetBlockExtendedDetailsByBlock(ctx, blockNum, backupmanager.BlockExtendedContextValidatorError)
+	if err3 != nil {
+		out["blockExtendedDetails_3"] = json.RawMessage("null")
+	} else {
+		b3, err := json.Marshal(details3)
+		if err != nil {
+			out["blockExtendedDetails_3"] = json.RawMessage("null")
+		} else {
+			out["blockExtendedDetails_3"] = json.RawMessage(b3)
+		}
+	}
+	details4, err4 := client.GetBlockExtendedDetailsByBlock(ctx, blockNum, backupmanager.BlockExtendedContextBlockVerifyError)
+	if err4 != nil {
+		out["blockExtendedDetails_4"] = json.RawMessage("null")
+	} else {
+		b4, err := json.Marshal(details4)
+		if err != nil {
+			out["blockExtendedDetails_4"] = json.RawMessage("null")
+		} else {
+			out["blockExtendedDetails_4"] = json.RawMessage(b4)
 		}
 	}
 

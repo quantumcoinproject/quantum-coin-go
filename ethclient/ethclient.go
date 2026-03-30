@@ -207,7 +207,8 @@ func (ec *Client) ListConversionDetails(ctx context.Context) (*proofofstake.Conv
 }
 
 // GetBlockExtendedDetailsByBlock returns extended block consensus details for the given block number and context.
-// context must be backupmanager.BlockExtendedContextValidator ("1") or backupmanager.BlockExtendedContextBlockVerify ("2").
+// context must be one of backupmanager.BlockExtendedContextValidator ("1"), BlockExtendedContextBlockVerify ("2"),
+// BlockExtendedContextValidatorError ("3"), or BlockExtendedContextBlockVerifyError ("4").
 func (ec *Client) GetBlockExtendedDetailsByBlock(ctx context.Context, blockNumber uint64, context string) (*backupmanager.BlockExtendedDetails, error) {
 	var details *backupmanager.BlockExtendedDetails
 	err := ec.c.CallContext(ctx, &details, "proofofstake_getBlockExtendedDetails", blockNumber, context)

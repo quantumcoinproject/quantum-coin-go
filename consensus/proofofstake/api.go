@@ -730,8 +730,11 @@ func (api *API) GetBlockExtendedDetails(blockNumber uint64, context string) (*ba
 		return nil, errors.New("GetConsensusInstance is nil")
 	}
 
-	if context != backupmanager.BlockExtendedContextValidator && context != backupmanager.BlockExtendedContextBlockVerify {
-		return nil, errors.New("GetBlockExtendedDetails context needs to be 1 or 2")
+	if context != backupmanager.BlockExtendedContextValidator &&
+		context != backupmanager.BlockExtendedContextBlockVerify &&
+		context != backupmanager.BlockExtendedContextValidatorError &&
+		context != backupmanager.BlockExtendedContextBlockVerifyError {
+		return nil, errors.New("GetBlockExtendedDetails context needs to be 1, 2, 3, or 4")
 	}
 
 	return backupmanager.GetConsensusInstance().GetBlockExtendedDetails(blockNumber, context)
