@@ -642,7 +642,7 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 			}
 		}
 
-		if len(nilVotedProposers) > int(blockConsensusData.Round) {
+		if len(blockConsensusData.SlashedBlockProposers) != 1 {
 			return nil, errors.New("unexpected number of nilVotedProposers")
 		}
 
@@ -703,8 +703,8 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 					}
 				}
 			}
-			if len(blockConsensusData.SlashedBlockProposers) < int(blockConsensusData.Round-1) {
-				log.Debug("SlashedBlockProposers", "len(nilVotedProposers)", len(nilVotedProposers), "int(blockConsensusData.Round)", int(blockConsensusData.Round))
+			if len(blockConsensusData.SlashedBlockProposers) != int(blockConsensusData.Round-1) {
+				log.Debug("SlashedBlockProposers", "len(SlashedBlockProposers)", len(blockConsensusData.SlashedBlockProposers), "round", blockConsensusData.Round)
 				return nil, errors.New("VerifyBlockConsensusData SlashedBlockProposers length")
 			}
 		}
