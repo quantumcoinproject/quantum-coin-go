@@ -693,24 +693,8 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 			}
 		}
 
-		if blockConsensusData.Round > 1 {
-			for r := byte(1); r < blockConsensusData.Round; r++ {
-				_, ok := nilVotedProposers[roundBlockProposers[r]]
-				if ok == false {
-					log.Warn("NilVotesProposer 2", "roundBlockProposers[r]", roundBlockProposers[r], "r", r, "parentHash", parentHash)
-					if ContinueOnProposerCheckError == false {
-						return &blockExtendedDetails, errors.New("nilVotedProposers 2")
-					}
-				}
-			}
-			if len(blockConsensusData.SlashedBlockProposers) != int(blockConsensusData.Round-1) {
-				log.Debug("SlashedBlockProposers", "len(SlashedBlockProposers)", len(blockConsensusData.SlashedBlockProposers), "round", blockConsensusData.Round)
-				return nil, errors.New("VerifyBlockConsensusData SlashedBlockProposers length")
-			}
-		} else {
-			if len(blockConsensusData.SlashedBlockProposers) != 0 {
-				return nil, errors.New("VerifyBlockConsensusData SlashedBlockProposers should be empty for round 1 OK vote")
-			}
+		if len(blockConsensusData.SlashedBlockProposers) != 0 {
+			return nil, errors.New("VerifyBlockConsensusData SlashedBlockProposers should be empty for OK vote")
 		}
 
 		packetMap := packetRoundMap[blockConsensusData.Round]
