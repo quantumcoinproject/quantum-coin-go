@@ -707,6 +707,10 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 				log.Debug("SlashedBlockProposers", "len(SlashedBlockProposers)", len(blockConsensusData.SlashedBlockProposers), "round", blockConsensusData.Round)
 				return nil, errors.New("VerifyBlockConsensusData SlashedBlockProposers length")
 			}
+		} else {
+			if len(blockConsensusData.SlashedBlockProposers) != 0 {
+				return nil, errors.New("VerifyBlockConsensusData SlashedBlockProposers should be empty for round 1 OK vote")
+			}
 		}
 
 		packetMap := packetRoundMap[blockConsensusData.Round]
