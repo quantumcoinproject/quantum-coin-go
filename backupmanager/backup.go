@@ -33,6 +33,8 @@ type BackupManager struct {
 
 const BlockExtendedContextValidator = "1"
 const BlockExtendedContextBlockVerify = "2"
+const BlockExtendedContextValidatorError = "3"
+const BlockExtendedContextBlockVerifyError = "4"
 
 type ValidatorDeposit struct {
 	ValidatorAddress  common.Address `json:"validatorAddress" gencodec:"required"`
@@ -137,9 +139,9 @@ type BlockProposerV2RoundTrace struct {
 	// SortUsesBlockNumberInHash is true when tie-break hashing includes uint64 block bytes (OfflineValidatorV4StartBlock and above).
 	SortUsesBlockNumberInHash bool `json:"sortUsesBlockNumberInHash"`
 	// Config snapshots (defaults at evaluation time) affecting canPropose and sort.
-	ConfigOfflineValidatorDeferStartBlock uint64 `json:"configOfflineValidatorDeferStartBlock"`
+	ConfigOfflineValidatorDeferStartBlock  uint64 `json:"configOfflineValidatorDeferStartBlock"`
 	ConfigBlockProposerOfflineV2StartBlock uint64 `json:"configBlockProposerOfflineV2StartBlock"`
-	ConfigOfflineValidatorV4StartBlock      uint64 `json:"configOfflineValidatorV4StartBlock"`
+	ConfigOfflineValidatorV4StartBlock     uint64 `json:"configOfflineValidatorV4StartBlock"`
 	ConfigMinOfflineProposerBlockDelay     uint64 `json:"configMinOfflineProposerBlockDelay"`
 	ConfigMaxBlockDelayV1                  uint64 `json:"configMaxBlockDelayV1"`
 	ConfigMaxBlockDelayV2                  uint64 `json:"configMaxBlockDelayV2"`
@@ -153,10 +155,10 @@ type BlockProposerV2RoundTrace struct {
 }
 
 type BlockExtendedDetails struct {
-	BlockNumber                  *big.Int             `json:"blockNumber" gencodec:"required"`
-	ParentHash                   common.Hash          `json:"parentHash" gencodec:"required"`
-	FilteredDeposits             []ValidatorDeposit   `json:"filteredValidatorDepositList" gencodec:"required"`
-	StakingValidatorDetails      []ValidatorDetailsV2 `json:"validatorDetailsList" gencodec:"optional"`
+	BlockNumber             *big.Int             `json:"blockNumber" gencodec:"required"`
+	ParentHash              common.Hash          `json:"parentHash" gencodec:"required"`
+	FilteredDeposits        []ValidatorDeposit   `json:"filteredValidatorDepositList" gencodec:"required"`
+	StakingValidatorDetails []ValidatorDetailsV2 `json:"validatorDetailsList" gencodec:"optional"`
 
 	PreFilterValidatorCount *big.Int    `json:"preFilterValidatorCount" gencodec:"required"`
 	ConsensusContext        common.Hash `json:"consensusContext" gencodec:"required"`

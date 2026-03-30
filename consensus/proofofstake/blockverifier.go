@@ -579,13 +579,13 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 	}
 
 	var err error
-	roundBlockValidators := make(map[byte]common.Address)
+	roundBlockProposers := make(map[byte]common.Address)
 	for r := byte(1); r <= blockConsensusData.Round; r++ {
-		roundBlockValidators[r], err = lookupRoundProposer(preparedState.RoundProposers, r)
+		roundBlockProposers[r], err = lookupRoundProposer(preparedState.RoundProposers, r)
 		if err != nil {
 			return nil, err
 		}
-		log.Debug("roundBlockValidators[r]", "r", r, "roundBlockValidators[r]", roundBlockValidators[r])
+		log.Debug("roundBlockProposers[r]", "r", r, "roundBlockProposers[r]", roundBlockProposers[r])
 	}
 
 	if blockAdditionalConsensusData.ConsensusPackets == nil {
@@ -626,9 +626,9 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 
 		for r := byte(1); r <= blockConsensusData.Round; r++ {
 			if r < MAX_ROUND {
-				_, ok := nilVotedProposers[roundBlockValidators[r]]
+				_, ok := nilVotedProposers[roundBlockProposers[r]]
 				if ok == false {
-					log.Warn("NilVotesProposer doesn't match expected", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash, "expected proposer", slashedBlockProposer)
+					log.Warn("NilVotesProposer doesn't match", "blockNumber", blockNumber, "roundBlockProposers[r]", roundBlockProposers[r], "r", r, "parentHash", parentHash, "slashedBlockProposer", slashedBlockProposer, "ContinueOnProposerCheckError", ContinueOnProposerCheckError)
 					if ContinueOnProposerCheckError == false {
 						return &blockExtendedDetails, errors.New("nilVotedProposers 1")
 					}
@@ -659,9 +659,9 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 			return nil, errors.New("VerifyBlockConsensusData BlockProposer true")
 		}
 
-		if blockConsensusData.BlockProposer.IsEqualTo(roundBlockValidators[blockConsensusData.Round]) == false {
+		if blockConsensusData.BlockProposer.IsEqualTo(roundBlockProposers[blockConsensusData.Round]) == false {
 			log.Warn("VerifyBlockConsensusData BlockProposer mismatch", "blockConsensusData.BlockProposer", blockConsensusData.BlockProposer,
-				"roundBlockValidators[blockConsensusData.Round]", roundBlockValidators[blockConsensusData.Round])
+				"roundBlockProposers[blockConsensusData.Round]", roundBlockProposers[blockConsensusData.Round])
 			if ContinueOnProposerCheckError == false {
 				return &blockExtendedDetails, errors.New("VerifyBlockConsensusData BlockProposer true")
 			}
@@ -695,9 +695,9 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 
 		if blockConsensusData.Round > 1 {
 			for r := byte(1); r < blockConsensusData.Round; r++ {
-				_, ok := nilVotedProposers[roundBlockValidators[r]]
+				_, ok := nilVotedProposers[roundBlockProposers[r]]
 				if ok == false {
-					log.Warn("NilVotesProposer 2", "roundBlockValidators[r]", roundBlockValidators[r], "r", r, "parentHash", parentHash)
+					log.Warn("NilVotesProposer 2", "roundBlockProposers[r]", roundBlockProposers[r], "r", r, "parentHash", parentHash)
 					if ContinueOnProposerCheckError == false {
 						return &blockExtendedDetails, errors.New("nilVotedProposers 2")
 					}
@@ -811,7 +811,11 @@ func VerifyBlockConsensusData(block *types.Block, validatorDepositMap *map[commo
 			blockExtendedDetails.BlockProposerV2Traces = make([]*backupmanager.BlockProposerV2RoundTrace, len(preparedData.Prepared.BlockProposerV2Traces))
 			copy(blockExtendedDetails.BlockProposerV2Traces, preparedData.Prepared.BlockProposerV2Traces)
 		}
-		errBackup := backupmanager.GetConsensusInstance().BackupBlockExtendedDetails(blockExtendedDetails, backupmanager.BlockExtendedContextBlockVerify)
+		blockExtendedContext := backupmanager.BlockExtendedContextBlockVerify
+		if err != nil {
+			blockExtendedContext = backupmanager.BlockExtendedContextBlockVerifyError
+		}
+		errBackup := backupmanager.GetConsensusInstance().BackupBlockExtendedDetails(blockExtendedDetails, blockExtendedContext)
 		if errBackup != nil {
 			log.Warn("VerifyBlockConsensusDataInner backup consensus", "errBackup", errBackup)
 		}
