@@ -8,7 +8,6 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -160,7 +159,6 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 	}
 	blockBytes := common.Uint64ToBytes(blockNumber)
 
-	var sortComparisons []backupmanager.BlockProposerV2SortComparison
 	sort.SliceStable(validators, func(i, j int) bool {
 		var vi, vj common.Hash
 		var cmpResult int
@@ -173,21 +171,8 @@ func getBlockProposerV2(contextHash common.Hash, validatorMap *map[common.Addres
 			vj = crypto.Keccak256Hash(contextHash.Bytes(), validators[j].Bytes(), []byte{round}, blockBytes)
 			cmpResult = bytes.Compare(vi.Bytes(), vj.Bytes())
 		}
-		sortComparisons = append(sortComparisons, backupmanager.BlockProposerV2SortComparison{
-			IndexI:      i,
-			IndexJ:      j,
-			ValidatorI:  validators[i],
-			ValidatorJ:  validators[j],
-			Vi:          vi,
-			Vj:          vj,
-			CmpResult:   cmpResult,
-			ContextHash: contextHash,
-			Round:       round,
-			BlockBytes:  hexutil.Bytes(blockBytes),
-		})
 		return cmpResult == -1
 	})
-	trace.SortComparisons = sortComparisons
 
 	proposer = validators[0]
 	trace.SelectedProposer = proposer
