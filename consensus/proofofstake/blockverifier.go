@@ -520,6 +520,145 @@ func VerifyPackets(parentHash common.Hash, round byte, packetMap *PacketMap, vot
 	return nil
 }
 
+// VerifyPacketsPreviousRound validates packets for a round that did NOT reach consensus
+// (i.e. a round prior to the deciding round). It enforces structural validity of each
+// packet but does NOT require quorum on any phase, since by definition the round failed
+// to decide. It also validates that quorum was NOT reached on both OK and NIL ACKs
+// simultaneously, which would be contradictory with the round having failed.
+func VerifyPacketsPreviousRound(parentHash common.Hash, round byte, packetMap *PacketMap,
+	filteredValidatorDepositMap *map[common.Address]*big.Int, totalBlockDepositValue *big.Int,
+	minDepositRequired *big.Int, blockNumber uint64,
+	nilVoteProposalHashes map[byte]common.Hash, nilVotePrecommitHashes map[byte]common.Hash) error {
+
+	valMap := *filteredValidatorDepositMap
+
+	nilProposalHash, err := lookupNilVoteProposalHash(nilVoteProposalHashes, round)
+	if err != nil {
+		return err
+	}
+
+	// --- Proposal packets ---
+	// Collect the OK proposal hash from the proposal if available, so precommit/commit
+	// validation can use it even when no OK ACK votes are present in the packet map.
+	var okProposalHash common.Hash
+	hasOkProposalHash := false
+
+	for v, proposalDetails := range packetMap.proposalDetailsMap {
+		_, ok := valMap[v]
+		if ok == false {
+			return errors.New("previous round proposal unrecognized validator")
+		}
+		if proposalDetails.Round != round {
+			return errors.New("previous round proposal invalid round")
+		}
+		if hasOkProposalHash == false && proposalDetails.Txns != nil {
+			if blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
+				okProposalHash = GetCombinedTxnHashWithTime(parentHash, round, proposalDetails.Txns, proposalDetails.BlockTime)
+			} else {
+				okProposalHash = GetCombinedTxnHash(parentHash, round, proposalDetails.Txns)
+			}
+			hasOkProposalHash = true
+		}
+	}
+
+	// --- ACK packets ---
+	okVotesDepositValue := big.NewInt(0)
+	nilVotesDepositValue := big.NewInt(0)
+
+	for v, proposalAckDetails := range packetMap.proposalAckDetailsMap {
+		depositValue, ok := valMap[v]
+		if ok == false {
+			return errors.New("previous round unrecognized validator")
+		}
+
+		if proposalAckDetails.Round != round {
+			return errors.New("previous round invalid round")
+		}
+
+		if proposalAckDetails.ProposalAckVoteType == VOTE_TYPE_NIL {
+			if proposalAckDetails.ProposalHash.IsEqualTo(nilProposalHash) == false {
+				return errors.New("previous round invalid nil proposal hash")
+			}
+			nilVotesDepositValue = common.SafeAddBigInt(nilVotesDepositValue, depositValue)
+		} else if proposalAckDetails.ProposalAckVoteType == VOTE_TYPE_OK {
+			if hasOkProposalHash == false {
+				okProposalHash.CopyFrom(proposalAckDetails.ProposalHash)
+				hasOkProposalHash = true
+			}
+			okVotesDepositValue = common.SafeAddBigInt(okVotesDepositValue, depositValue)
+		} else {
+			return errors.New("previous round invalid vote type")
+		}
+
+		totalVotesDepositValue := common.SafeAddBigInt(nilVotesDepositValue, okVotesDepositValue)
+		if totalVotesDepositValue.Cmp(totalBlockDepositValue) > 0 {
+			return errors.New("previous round invalid totalVotesDepositValue")
+		}
+	}
+
+	if okVotesDepositValue.Cmp(minDepositRequired) >= 0 && nilVotesDepositValue.Cmp(minDepositRequired) >= 0 {
+		return errors.New("previous round both ok and nil reached quorum")
+	}
+
+	totalAckDeposit := common.SafeAddBigInt(okVotesDepositValue, nilVotesDepositValue)
+	if totalAckDeposit.Cmp(minDepositRequired) < 0 {
+		return errors.New("previous round total votes below quorum")
+	}
+
+	// --- Precommit packets ---
+	// Precommits may exist if the round progressed past ACKs before stalling.
+	// Each precommit hash must match either the OK or NIL expected precommit for this round.
+	// A validator may have received precommit packets without having the corresponding ACK
+	// or proposal packets, so we derive the OK precommit hash when available from any source.
+	nilPrecommitHash, err := lookupNilVotePrecommitHash(nilVotePrecommitHashes, round)
+	if err != nil {
+		return err
+	}
+	var okPrecommitHash common.Hash
+	if hasOkProposalHash {
+		okPrecommitHash = getOkVotePreCommitHash(parentHash, okProposalHash, round)
+	}
+
+	for v, precommitDetails := range packetMap.precommitDetailsMap {
+		_, ok := valMap[v]
+		if ok == false {
+			return errors.New("previous round precommit unrecognized validator")
+		}
+		if precommitDetails.PrecommitHash.IsEqualTo(nilPrecommitHash) {
+			continue
+		}
+		if hasOkProposalHash && precommitDetails.PrecommitHash.IsEqualTo(okPrecommitHash) {
+			continue
+		}
+		return errors.New("previous round invalid precommit hash")
+	}
+
+	// --- Commit packets ---
+	// Commits may exist if the round progressed past precommits before stalling.
+	// Same logic: accept if the commit hash derives from either the NIL or OK precommit path.
+	nilCommitHash := getCommitHash(nilPrecommitHash)
+	var okCommitHash common.Hash
+	if hasOkProposalHash {
+		okCommitHash = getCommitHash(okPrecommitHash)
+	}
+
+	for v, commitDetails := range packetMap.commitDetailsMap {
+		_, ok := valMap[v]
+		if ok == false {
+			return errors.New("previous round commit unrecognized validator")
+		}
+		if commitDetails.CommitHash.IsEqualTo(nilCommitHash) {
+			continue
+		}
+		if hasOkProposalHash && commitDetails.CommitHash.IsEqualTo(okCommitHash) {
+			continue
+		}
+		return errors.New("previous round invalid commit hash")
+	}
+
+	return nil
+}
+
 func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, blockConsensusData *BlockConsensusData, blockAdditionalConsensusData *BlockAdditionalConsensusData,
 	preparedState *PreparedConsensusState, blockNumber uint64, consensusContext common.Hash) (*backupmanager.BlockExtendedDetails, error) {
 	if blockConsensusData.Round < 1 {
@@ -624,6 +763,10 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 			return nil, errors.New("precommitHash hash check failed")
 		}
 
+		if len(blockConsensusData.SlashedBlockProposers) != 1 {
+			return nil, errors.New("unexpected number of nilVotedProposers")
+		}
+
 		for r := byte(1); r <= blockConsensusData.Round; r++ {
 			if r < MAX_ROUND {
 				_, ok := nilVotedProposers[roundBlockProposers[r]]
@@ -640,17 +783,20 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 				log.Debug("could not find packetMap for round", "r", r)
 				return nil, errors.New("could not find packetMap for round")
 			}
-		}
 
-		if len(blockConsensusData.SlashedBlockProposers) != 1 {
-			return nil, errors.New("unexpected number of nilVotedProposers")
-		}
-
-		packetMap := packetRoundMap[blockConsensusData.Round]
-		err = VerifyPackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_NIL, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime,
-			preparedState.NilVoteProposalHashes, preparedState.NilVotePrecommitHashes)
-		if err != nil {
-			return nil, err
+			if r < blockConsensusData.Round {
+				err = VerifyPacketsPreviousRound(parentHash, r, packetRoundMap[r], &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockNumber,
+					preparedState.NilVoteProposalHashes, preparedState.NilVotePrecommitHashes)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				err = VerifyPackets(parentHash, r, packetRoundMap[r], VOTE_TYPE_NIL, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime,
+					preparedState.NilVoteProposalHashes, preparedState.NilVotePrecommitHashes)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 
 		//todo: deep validate block proposers
@@ -697,11 +843,26 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 			return nil, errors.New("VerifyBlockConsensusData SlashedBlockProposers should be empty for OK vote")
 		}
 
-		packetMap := packetRoundMap[blockConsensusData.Round]
-		err = VerifyPackets(parentHash, blockConsensusData.Round, packetMap, VOTE_TYPE_OK, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime,
-			preparedState.NilVoteProposalHashes, preparedState.NilVotePrecommitHashes)
-		if err != nil {
-			return nil, err
+		for r := byte(1); r <= blockConsensusData.Round; r++ {
+			_, ok := packetRoundMap[r]
+			if ok == false {
+				log.Debug("could not find packetMap for round", "r", r)
+				return nil, errors.New("could not find packetMap for round")
+			}
+
+			if r < blockConsensusData.Round {
+				err = VerifyPacketsPreviousRound(parentHash, r, packetRoundMap[r], &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockNumber,
+					preparedState.NilVoteProposalHashes, preparedState.NilVotePrecommitHashes)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				err = VerifyPackets(parentHash, r, packetRoundMap[r], VOTE_TYPE_OK, &filteredValidatorDepositMap, totalBlockDepositValue, minDepositRequired, blockConsensusData.SelectedTransactions, blockNumber, blockConsensusData.BlockTime,
+					preparedState.NilVoteProposalHashes, preparedState.NilVotePrecommitHashes)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 
 	} else {
