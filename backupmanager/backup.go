@@ -12,7 +12,6 @@ import (
 	"sync"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/core/rawdb"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -100,22 +99,6 @@ type BlockProposerV2ValidatorEval struct {
 	CanPropose bool `json:"canPropose"`
 }
 
-// BlockProposerV2SortComparison records one sort.SliceStable less(i,j) call (tie-break digests and validators at comparison time).
-type BlockProposerV2SortComparison struct {
-	IndexI     int            `json:"indexI"`
-	IndexJ     int            `json:"indexJ"`
-	ValidatorI common.Address `json:"validatorI"`
-	ValidatorJ common.Address `json:"validatorJ"`
-	Vi         common.Hash    `json:"vi"`
-	Vj         common.Hash    `json:"vj"`
-	CmpResult  int            `json:"cmpResult"`
-	// ContextHash is the selection hash (consensus context or parent) fed into Keccak256 for this comparison.
-	ContextHash common.Hash `json:"contextHash"`
-	Round       byte        `json:"round"`
-	// BlockBytes is the uint64 block number as little-endian bytes (same slice passed to Keccak when SortUsesBlockNumberInHash is true).
-	BlockBytes hexutil.Bytes `json:"blockBytes"`
-}
-
 // BlockProposerV2RoundTrace is a full, JSON-friendly record of one getBlockProposerV2 invocation (inputs, per-validator canPropose evaluation, sort keys, and winner).
 type BlockProposerV2RoundTrace struct {
 	// Round is the consensus round index (1-based).
@@ -148,8 +131,6 @@ type BlockProposerV2RoundTrace struct {
 	ConfigMaxBlockDelayV3                  uint64 `json:"configMaxBlockDelayV3"`
 	// ValidatorEvaluations lists every validator in the input map with full details and the canPropose result (sorted by validator address for stable diffs).
 	ValidatorEvaluations []BlockProposerV2ValidatorEval `json:"validatorEvaluations"`
-	// SortComparisons lists each less(i,j) evaluation during sort.SliceStable (vi/vj digests and addresses at comparison time).
-	SortComparisons []BlockProposerV2SortComparison `json:"sortComparisons"`
 	// SelectedProposer is validators[0] after sorting (the algorithm output).
 	SelectedProposer common.Address `json:"selectedProposer"`
 }

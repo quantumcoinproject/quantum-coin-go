@@ -555,8 +555,8 @@ func (c *ProofOfStake) VerifyBlock(chain consensus.ChainHeaderReader, block *typ
 	}
 
 	if number != currentNumber+1 || header.ParentHash.IsEqualTo(currentHeader.Hash()) == false {
-		log.Trace("VerifyBlock 2", "err", err)
-		return err
+		log.Trace("VerifyBlock 2", "number", number, "currentNumber", currentNumber)
+		return errors.New("invalid block number or parent hash mismatch")
 	}
 
 	if defaults.SkipDeepBlockCheck() {
