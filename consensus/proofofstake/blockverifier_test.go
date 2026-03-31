@@ -37,7 +37,7 @@ func largeNumber(megabytes int) *big.Int {
 func TestBlock_NilNegative(t *testing.T) {
 
 	//Case 1
-	BlockNilTest(nil, nil, t, "ValidateBlockConsensusData nil")
+	BlockNilTest(nil, nil, t, "VerifyBlockConsensusData nil")
 
 	//Case 2
 	blockConsensusData := &BlockConsensusData{
@@ -47,7 +47,7 @@ func TestBlock_NilNegative(t *testing.T) {
 		SelectedTransactions:  make([]common.Hash, 0),
 	}
 
-	BlockNilTest(blockConsensusData, nil, t, "ValidateBlockConsensusData nil")
+	BlockNilTest(blockConsensusData, nil, t, "VerifyBlockConsensusData nil")
 }
 
 func BlockNilTest(blockConsensusData *BlockConsensusData, blockAdditionalConsensusData *BlockAdditionalConsensusData, t *testing.T, expectedError string) {
@@ -103,7 +103,7 @@ func BlockNilTest(blockConsensusData *BlockConsensusData, blockAdditionalConsens
 	valMap := make(map[common.Address]*big.Int)
 	getValidatorsStub := func(common.Hash) (map[common.Address]*big.Int, error) { return valMap, nil }
 	listValidatorsStub := func(common.Hash) (map[common.Address]*ValidatorDetailsV2, error) { return nil, nil }
-	err := ValidateBlockConsensusData(block, &valMap, nil, DummyGetBlockConsensusContext, getValidatorsStub, listValidatorsStub)
+	err := VerifyBlockConsensusData(block, &valMap, nil, DummyGetBlockConsensusContext, getValidatorsStub, listValidatorsStub)
 	if err == nil || strings.Compare(err.Error(), expectedError) != 0 {
 		debug.PrintStack()
 		t.Fatalf("BlockNilTest failed")

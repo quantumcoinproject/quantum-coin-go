@@ -37,9 +37,9 @@ export LD_LIBRARY_PATH=$HOME/dp
 
 An example relay configuration is given below. 
 
-1) Copy the default genesis file at https://github.com/quantumcoinproject/quantum-coin-go/blob/dogep/consensus/proofofstake/genesis/genesis.json to the same folder as relay.
+1) Copy the default genesis file at https://github.com/quantumcoinproject/quantum-coin-go/blob/main/consensus/proofofstake/genesis/genesis.json to the same folder as relay.
 2) Do not change the value of `maxSupply` for mainnet.
-3) Example configuration file is at: https://github.com/quantumcoinproject/quantum-coin-go/blob/dogep/cmd/relay/config.json
+3) Example configuration file is at: https://github.com/quantumcoinproject/quantum-coin-go/blob/main/cmd/relay/config.json
 4) `nodeUrl` should point to a QuantumCoin node connected to the blockchain. The node should be started with the following options: ``` --http --http.addr "127.0.0.1" --http.port 8445 --syncmode full --gcmode=archive```
 5) Alternatively, if the relay is running in the same machine as the QuantumCoin node, you may also specify the IPC endpoint for `nodeUrl` instead. Windows: ```\\.\pipe\geth.ipc``` Linux: ```.\data\geth.ipc```
 5) Do not expose relay directly over a network. If the relay APIs have to be accessed from another machine, then add a TLS layer such a Layer 7 load balancer in front of the relay.  

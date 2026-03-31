@@ -19,6 +19,7 @@ package types
 import (
 	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/hashingalgorithm"
@@ -276,4 +277,289 @@ func TestBlockTransactionsRoot(t *testing.T) {
 	block3 := NewBlock(header, txs, receipts, newHasher())
 	rawHash, _ = signedTx2.RawHash()
 	fmt.Println("block", "block transactions root", block3.TxHash(), "Hash", signedTx2.Hash(), "rawHash", rawHash)
+}
+
+// headerTestBaseline returns a fully populated header for Hash / IsEqualTo tests.
+func headerTestBaseline() *Header {
+	var bloom Bloom
+	bloom[0] = 0xab
+	bloom[len(bloom)-1] = 0xcd
+	return &Header{
+		ParentHash:            common.HexToHash("0x1111111111111111111111111111111111111111111111111111111111111111"),
+		Coinbase:              common.HexToAddress("0x2222222222222222222222222222222222222222"),
+		Root:                  common.HexToHash("0x3333333333333333333333333333333333333333333333333333333333333333"),
+		TxHash:                common.HexToHash("0x4444444444444444444444444444444444444444444444444444444444444444"),
+		ReceiptHash:           common.HexToHash("0x5555555555555555555555555555555555555555555555555555555555555555"),
+		Bloom:                 bloom,
+		Difficulty:            big.NewInt(1001),
+		Number:                big.NewInt(2002),
+		GasLimit:              3003,
+		GasUsed:               4004,
+		Time:                  5005,
+		Extra:                 []byte{0x01, 0x02},
+		Author:                common.HexToHash("0x6666666666666666666666666666666666666666666666666666666666666666"),
+		ConsensusData:         []byte{0xde, 0xad},
+		MixDigest:             common.HexToHash("0x7777777777777777777777777777777777777777777777777777777777777777"),
+		Nonce:                 EncodeNonce(0x8888888800000000),
+		UnhashedConsensusData: []byte{0xca, 0xfe},
+	}
+}
+
+func TestHeaderJSONRoundTripPreservesHash(t *testing.T) {
+	h := headerTestBaseline()
+	want := h.Hash()
+	blob, err := json.Marshal(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Header
+	if err := json.Unmarshal(blob, &out); err != nil {
+		t.Fatal(err)
+	}
+	got := out.Hash()
+	if !got.IsEqualTo(want) {
+		t.Fatalf("Hash() changed after JSON round-trip: got %v want %v\njson=%s", got, want, blob)
+	}
+}
+
+func TestHeaderJSONRoundTripPreservesHash_emptySlices(t *testing.T) {
+	h := headerTestBaseline()
+	h.Extra = []byte{}
+	h.ConsensusData = []byte{}
+	h.UnhashedConsensusData = []byte{}
+	blob, err := json.Marshal(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Header
+	if err := json.Unmarshal(blob, &out); err != nil {
+		t.Fatalf("unmarshal: %v\njson=%s", err, blob)
+	}
+	want := h.Hash()
+	got := out.Hash()
+	if !got.IsEqualTo(want) {
+		t.Fatalf("Hash() changed: got %v want %v\njson=%s", got, want, blob)
+	}
+}
+
+func TestHeaderJSONRoundTripPreservesHash_nilByteSlices(t *testing.T) {
+	h := headerTestBaseline()
+	h.Extra = nil
+	h.ConsensusData = nil
+	h.UnhashedConsensusData = nil
+	blob, err := json.Marshal(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out Header
+	if err := json.Unmarshal(blob, &out); err != nil {
+		t.Fatalf("unmarshal: %v\njson=%s", err, blob)
+	}
+	want := h.Hash()
+	got := out.Hash()
+	if !got.IsEqualTo(want) {
+		t.Fatalf("Hash() changed: got %v want %v\njson=%s", got, want, blob)
+	}
+}
+
+// TestHeaderHashFieldSensitivity checks that Header.Hash() (RLP-based) changes when any
+// hashed field changes, and stays the same when only UnhashedConsensusData changes.
+func TestHeaderHashFieldSensitivity(t *testing.T) {
+	baseline := headerTestBaseline()
+
+	baseHash := baseline.Hash()
+	if baseHash.IsEqualTo(common.Hash{}) {
+		t.Fatal("baseline header hash is zero")
+	}
+	if h2 := baseline.Hash(); !h2.IsEqualTo(baseHash) {
+		t.Fatalf("Hash() not stable: %v vs %v", baseHash, h2)
+	}
+
+	assertHashChanges := func(name string, mutate func(*Header)) {
+		t.Helper()
+		t.Run(name, func(t *testing.T) {
+			h := CopyHeader(baseline)
+			mutate(h)
+			if got := h.Hash(); got.IsEqualTo(baseHash) {
+				t.Fatalf("hash unchanged after mutating %s: %v", name, got)
+			}
+		})
+	}
+
+	assertHashSame := func(name string, mutate func(*Header)) {
+		t.Helper()
+		t.Run(name, func(t *testing.T) {
+			h := CopyHeader(baseline)
+			mutate(h)
+			if got := h.Hash(); !got.IsEqualTo(baseHash) {
+				t.Fatalf("hash changed after mutating %s: got %v want %v", name, got, baseHash)
+			}
+		})
+	}
+
+	assertHashChanges("ParentHash", func(h *Header) {
+		h.ParentHash = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	})
+	assertHashChanges("Coinbase", func(h *Header) {
+		h.Coinbase = common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
+	})
+	assertHashChanges("Root", func(h *Header) {
+		h.Root = common.HexToHash("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+	})
+	assertHashChanges("TxHash", func(h *Header) {
+		h.TxHash = common.HexToHash("0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+	})
+	assertHashChanges("ReceiptHash", func(h *Header) {
+		h.ReceiptHash = common.HexToHash("0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+	})
+	assertHashChanges("Bloom", func(h *Header) {
+		h.Bloom[0] ^= 0xff
+	})
+	assertHashChanges("Difficulty", func(h *Header) {
+		h.Difficulty = new(big.Int).Add(h.Difficulty, big.NewInt(1))
+	})
+	assertHashChanges("Number", func(h *Header) {
+		h.Number = new(big.Int).Add(h.Number, big.NewInt(1))
+	})
+	assertHashChanges("GasLimit", func(h *Header) { h.GasLimit++ })
+	assertHashChanges("GasUsed", func(h *Header) { h.GasUsed++ })
+	assertHashChanges("Time", func(h *Header) { h.Time++ })
+	assertHashChanges("Extra", func(h *Header) {
+		h.Extra = append([]byte(nil), append(h.Extra, 0xff)...)
+	})
+	assertHashChanges("Author", func(h *Header) {
+		h.Author = common.HexToHash("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	})
+	assertHashChanges("ConsensusData", func(h *Header) {
+		h.ConsensusData = append([]byte(nil), append(h.ConsensusData, 0xff)...)
+	})
+	assertHashChanges("MixDigest", func(h *Header) {
+		h.MixDigest = common.HexToHash("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	})
+	assertHashChanges("Nonce", func(h *Header) {
+		h.Nonce = EncodeNonce(1)
+	})
+
+	assertHashSame("UnhashedConsensusData", func(h *Header) {
+		h.UnhashedConsensusData = []byte{0x00, 0x11, 0x22, 0x33}
+	})
+	assertHashSame("UnhashedConsensusData_nil", func(h *Header) {
+		h.UnhashedConsensusData = nil
+	})
+}
+
+// TestHeaderIsEqualTo checks Header.IsEqualTo: true for identical headers (including
+// UnhashedConsensusData), false when any hashed field differs, and false when only
+// UnhashedConsensusData differs (hashed payload still matches).
+func TestHeaderIsEqualTo(t *testing.T) {
+	baseline := headerTestBaseline()
+
+	t.Run("identical_copy", func(t *testing.T) {
+		other := CopyHeader(baseline)
+		if !baseline.IsEqualTo(other) {
+			t.Fatal("expected baseline equal to deep copy")
+		}
+		if !other.IsEqualTo(baseline) {
+			t.Fatal("expected symmetry with deep copy")
+		}
+	})
+
+	t.Run("self", func(t *testing.T) {
+		if !baseline.IsEqualTo(baseline) {
+			t.Fatal("expected self equal")
+		}
+	})
+
+	t.Run("both_nil_unhashed_still_equal_when_hashed_match", func(t *testing.T) {
+		a := CopyHeader(baseline)
+		b := CopyHeader(baseline)
+		a.UnhashedConsensusData = nil
+		b.UnhashedConsensusData = nil
+		if !a.IsEqualTo(b) {
+			t.Fatal("expected equal when both unhashed are nil and rest matches")
+		}
+	})
+
+	assertNotEqual := func(name string, mutate func(*Header)) {
+		t.Helper()
+		t.Run(name, func(t *testing.T) {
+			other := CopyHeader(baseline)
+			mutate(other)
+			if baseline.IsEqualTo(other) {
+				t.Fatalf("expected not equal after mutating %s on other", name)
+			}
+			if other.IsEqualTo(baseline) {
+				t.Fatalf("expected not equal (symmetric) after mutating %s on other", name)
+			}
+		})
+	}
+
+	assertNotEqual("ParentHash", func(h *Header) {
+		h.ParentHash = common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+	})
+	assertNotEqual("Coinbase", func(h *Header) {
+		h.Coinbase = common.HexToAddress("0xffffffffffffffffffffffffffffffffffffffff")
+	})
+	assertNotEqual("Root", func(h *Header) {
+		h.Root = common.HexToHash("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+	})
+	assertNotEqual("TxHash", func(h *Header) {
+		h.TxHash = common.HexToHash("0xdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd")
+	})
+	assertNotEqual("ReceiptHash", func(h *Header) {
+		h.ReceiptHash = common.HexToHash("0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
+	})
+	assertNotEqual("Bloom", func(h *Header) {
+		h.Bloom[0] ^= 0xff
+	})
+	assertNotEqual("Difficulty", func(h *Header) {
+		h.Difficulty = new(big.Int).Add(h.Difficulty, big.NewInt(1))
+	})
+	assertNotEqual("Number", func(h *Header) {
+		h.Number = new(big.Int).Add(h.Number, big.NewInt(1))
+	})
+	assertNotEqual("GasLimit", func(h *Header) { h.GasLimit++ })
+	assertNotEqual("GasUsed", func(h *Header) { h.GasUsed++ })
+	assertNotEqual("Time", func(h *Header) { h.Time++ })
+	assertNotEqual("Extra", func(h *Header) {
+		h.Extra = append([]byte(nil), append(h.Extra, 0xff)...)
+	})
+	assertNotEqual("Author", func(h *Header) {
+		h.Author = common.HexToHash("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	})
+	assertNotEqual("ConsensusData", func(h *Header) {
+		h.ConsensusData = append([]byte(nil), append(h.ConsensusData, 0xff)...)
+	})
+	assertNotEqual("MixDigest", func(h *Header) {
+		h.MixDigest = common.HexToHash("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	})
+	assertNotEqual("Nonce", func(h *Header) {
+		h.Nonce = EncodeNonce(1)
+	})
+
+	t.Run("UnhashedConsensusData_differs_same_Hash", func(t *testing.T) {
+		other := CopyHeader(baseline)
+		other.UnhashedConsensusData = []byte{0x01, 0x02, 0x03}
+		h1 := baseline.Hash()
+		h2 := other.Hash()
+		if !h1.IsEqualTo(h2) {
+			t.Fatal("sanity: Hash() should match when only UnhashedConsensusData differs")
+		}
+		if baseline.IsEqualTo(other) {
+			t.Fatal("expected not equal when UnhashedConsensusData differs")
+		}
+		if other.IsEqualTo(baseline) {
+			t.Fatal("expected not equal (symmetric) when UnhashedConsensusData differs")
+		}
+	})
+
+	t.Run("UnhashedConsensusData_nil_vs_nonempty", func(t *testing.T) {
+		a := CopyHeader(baseline)
+		b := CopyHeader(baseline)
+		a.UnhashedConsensusData = nil
+		b.UnhashedConsensusData = []byte{0xca, 0xfe}
+		if a.IsEqualTo(b) {
+			t.Fatal("expected not equal: nil vs non-nil unhashed payload")
+		}
+	})
 }

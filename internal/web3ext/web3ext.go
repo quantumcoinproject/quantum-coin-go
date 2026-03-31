@@ -82,8 +82,8 @@ web3._extend({
 			params: 0
 		}),
 		new web3._extend.Method({
-			name: 'getBlockValidatorDetails',
-			call: 'proofofstake_getBlockValidatorDetails',
+			name: 'getBlockExtendedDetails',
+			call: 'proofofstake_getBlockExtendedDetails',
 			params: 2
 		}),
 		new web3._extend.Method({
