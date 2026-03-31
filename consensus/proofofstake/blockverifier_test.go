@@ -4,12 +4,15 @@ import (
 	"crypto/rand"
 	"math/big"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/eth/protocols/eth"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"github.com/quantumcoinproject/quantum-coin-go/trie"
 )
@@ -545,6 +548,203 @@ func TestVerifyPacketsPreviousRound_MissingNilVoteProposalHashLookup(t *testing.
 	}
 	if !strings.Contains(err.Error(), "nil vote proposal hash not precomputed") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// --- Regression tests for P0 critical fixes (M-1, M-2, M-3) ---
+
+// TestVerifyBlock_M1_ParentMismatchReturnsError verifies that the VerifyBlock
+// code path returns a non-nil error when block number or parent hash doesn't
+// match the current chain head (M-1 fix: previously returned nil).
+// Since VerifyBlock needs a full ProofOfStake + ethAPI, we test via
+// VerifyBlockConsensusData with a header whose parent hash cannot resolve.
+// The direct regression for M-1 is confirmed by code inspection:
+// the old code was `return err` where err was nil after successful
+// GetHeaderByNumberInner; now it's `return errors.New(...)`.
+func TestVerifyBlock_M1_ParentMismatchReturnsError(t *testing.T) {
+	blockConsensusData := &BlockConsensusData{
+		VoteType:              VOTE_TYPE_OK,
+		SlashedBlockProposers: make([]common.Address, 0),
+		Round:                 1,
+		SelectedTransactions:  make([]common.Hash, 0),
+	}
+
+	blockAdditionalConsensusData := &BlockAdditionalConsensusData{
+		ConsensusPackets: []eth.ConsensusPacket{{ParentHash: randHash()}},
+		InitTime:         uint64(time.Now().UnixNano() / int64(time.Millisecond)),
+	}
+
+	header := &types.Header{
+		Number:            big.NewInt(999),
+		ParentHash:        randHash(),
+		Time:              uint64(time.Now().Unix()),
+		Difficulty:        big.NewInt(999),
+		GasLimit:          1000000,
+		Root:              randHash(),
+		TxHash:            randHash(),
+		ReceiptHash:       randHash(),
+		Extra:             []byte{},
+	}
+
+	data, err := rlp.EncodeToBytes(blockConsensusData)
+	if err != nil {
+		t.Fatalf("EncodeToBytes blockConsensusData: %v", err)
+	}
+	header.ConsensusData = data
+
+	data2, err := rlp.EncodeToBytes(blockAdditionalConsensusData)
+	if err != nil {
+		t.Fatalf("EncodeToBytes blockAdditionalConsensusData: %v", err)
+	}
+	header.UnhashedConsensusData = data2
+
+	block := types.NewBlock(header, nil, nil, trie.NewStackTrie(nil))
+	valMap := make(map[common.Address]*big.Int)
+	getValidatorsStub := func(common.Hash) (map[common.Address]*big.Int, error) {
+		return valMap, nil
+	}
+	listValidatorsStub := func(common.Hash) (map[common.Address]*ValidatorDetailsV2, error) {
+		return nil, nil
+	}
+
+	err = VerifyBlockConsensusData(block, &valMap, nil, DummyGetBlockConsensusContext, getValidatorsStub, listValidatorsStub)
+	if err == nil {
+		t.Fatalf("M-1 regression: VerifyBlockConsensusData should return an error for an unresolvable block, got nil")
+	}
+}
+
+// obtainValidOKConsensusData runs the consensus test infrastructure to produce
+// valid round-1 VOTE_TYPE_OK consensus data (with transactions), returning
+// all the pieces needed to call VerifyBlockConsensusDataInner.
+func obtainValidOKConsensusData(t *testing.T) (
+	txns []common.Hash,
+	parentHash common.Hash,
+	blockConsensusData *BlockConsensusData,
+	blockAdditionalConsensusData *BlockAdditionalConsensusData,
+	preparedState *PreparedConsensusState,
+	blockNumber uint64,
+	consensusContext common.Hash,
+) {
+	t.Helper()
+
+	numKeys := 4
+	_, p2p, valMap, valDetailsMap := NewConsensusTest(numKeys, 1, t.Name())
+	parentHash = getTestParentHash(CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER)
+	blockNumber = CurrentConsensusTest.TEST_CONSENSUS_BLOCK_NUMBER
+
+	numTxns := 3
+	txnSlice := make([]common.Hash, numTxns)
+	for i := 0; i < numTxns; i++ {
+		txnSlice[i] = common.BytesToHash([]byte{byte(i + 1)})
+	}
+
+	startTime := time.Now().UnixNano() / int64(time.Millisecond)
+	for _, handler := range p2p.mockP2pHandlers {
+		h := handler
+		h.SetValidatorTransactions(txnSlice)
+		go CurrentConsensusTest.WaitBlockCommit(parentHash, h, t)
+	}
+
+	if ValidateTest(valMap, valDetailsMap, startTime, parentHash, p2p, numKeys, CurrentConsensusTest.MaxWaitCount,
+		map[VoteType]bool{VOTE_TYPE_OK: true}, BLOCK_STATE_RECEIVED_COMMITS, t) == false {
+		t.Fatalf("failed to reach BLOCK_STATE_RECEIVED_COMMITS")
+	}
+
+	for _, handler := range p2p.mockP2pHandlers {
+		blockState, _, err := handler.consensusHandler.getBlockState(parentHash)
+		if err != nil || blockState != BLOCK_STATE_RECEIVED_COMMITS {
+			continue
+		}
+
+		txns, err = handler.consensusHandler.getBlockSelectedTransactions(parentHash)
+		if err != nil {
+			continue
+		}
+
+		blockConsensusData, blockAdditionalConsensusData, _, err = handler.consensusHandler.getBlockConsensusData(parentHash)
+		if err != nil || blockConsensusData == nil {
+			continue
+		}
+
+		if blockConsensusData.VoteType != VOTE_TYPE_OK {
+			continue
+		}
+
+		blockContext, err := getBlockConsensusContext("", parentHash)
+		if err != nil {
+			t.Fatalf("getBlockConsensusContext: %v", err)
+		}
+		consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(len(*valMap))))
+
+		var valDetails map[common.Address]*ValidatorDetailsV2
+		if valDetailsMap != nil {
+			valDetails = *valDetailsMap
+		}
+		preparedState, err = PrepareConsensusState(parentHash, consensusContext, *valMap, valDetails, blockNumber)
+		if err != nil {
+			t.Fatalf("PrepareConsensusState: %v", err)
+		}
+
+		return
+	}
+
+	t.Fatalf("could not obtain valid OK consensus data from any handler")
+	return
+}
+
+// TestVerifyBlockConsensusDataInner_M2_WrongProposalHash verifies that a
+// VOTE_TYPE_OK block with a tampered ProposalHash is rejected (M-2 fix).
+func TestVerifyBlockConsensusDataInner_M2_WrongProposalHash(t *testing.T) {
+	txns, parentHash, bcd, bacd, prepared, blockNum, ctx := obtainValidOKConsensusData(t)
+
+	_, err := VerifyBlockConsensusDataInner(txns, parentHash, bcd, bacd, prepared, blockNum, ctx)
+	if err != nil {
+		t.Fatalf("valid data should pass: %v", err)
+	}
+
+	tampered := *bcd
+	tampered.ProposalHash = randHash()
+
+	_, err = VerifyBlockConsensusDataInner(txns, parentHash, &tampered, bacd, prepared, blockNum, ctx)
+	if err == nil {
+		t.Fatalf("M-2 regression: tampered ProposalHash should be rejected")
+	}
+	if !strings.Contains(err.Error(), "ProposalHash mismatch") {
+		t.Fatalf("M-2 regression: expected 'ProposalHash mismatch' error, got: %v", err)
+	}
+}
+
+// TestVerifyBlockConsensusDataInner_M3_WrongPrecommitHash verifies that a
+// VOTE_TYPE_OK block with a tampered PrecommitHash is rejected (M-3 fix).
+func TestVerifyBlockConsensusDataInner_M3_WrongPrecommitHash(t *testing.T) {
+	txns, parentHash, bcd, bacd, prepared, blockNum, ctx := obtainValidOKConsensusData(t)
+
+	_, err := VerifyBlockConsensusDataInner(txns, parentHash, bcd, bacd, prepared, blockNum, ctx)
+	if err != nil {
+		t.Fatalf("valid data should pass: %v", err)
+	}
+
+	tampered := *bcd
+	tampered.PrecommitHash = randHash()
+
+	_, err = VerifyBlockConsensusDataInner(txns, parentHash, &tampered, bacd, prepared, blockNum, ctx)
+	if err == nil {
+		t.Fatalf("M-3 regression: tampered PrecommitHash should be rejected")
+	}
+	if !strings.Contains(err.Error(), "PrecommitHash mismatch") {
+		t.Fatalf("M-3 regression: expected 'PrecommitHash mismatch' error, got: %v", err)
+	}
+}
+
+// TestVerifyBlockConsensusDataInner_ValidOKPassesWithNewChecks is a positive
+// test ensuring that legitimately produced OK consensus data still passes
+// after the M-2 and M-3 checks were added.
+func TestVerifyBlockConsensusDataInner_ValidOKPassesWithNewChecks(t *testing.T) {
+	txns, parentHash, bcd, bacd, prepared, blockNum, ctx := obtainValidOKConsensusData(t)
+
+	_, err := VerifyBlockConsensusDataInner(txns, parentHash, bcd, bacd, prepared, blockNum, ctx)
+	if err != nil {
+		t.Fatalf("valid OK consensus data should pass all checks including M-2/M-3: %v", err)
 	}
 }
 

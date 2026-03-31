@@ -818,6 +818,23 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 			return nil, errors.New("VerifyBlockConsensusData ProposalHash zero_hash")
 		}
 
+		var expectedProposalHash common.Hash
+		if blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
+			expectedProposalHash = GetCombinedTxnHashWithTime(parentHash, blockConsensusData.Round, blockConsensusData.SelectedTransactions, blockConsensusData.BlockTime)
+		} else {
+			expectedProposalHash = GetCombinedTxnHash(parentHash, blockConsensusData.Round, blockConsensusData.SelectedTransactions)
+		}
+		if blockConsensusData.ProposalHash.IsEqualTo(expectedProposalHash) == false {
+			log.Debug("VerifyBlockConsensusData ProposalHash mismatch", "expected", expectedProposalHash, "actual", blockConsensusData.ProposalHash)
+			return nil, errors.New("VerifyBlockConsensusData ProposalHash mismatch")
+		}
+
+		expectedPrecommitHash := getOkVotePreCommitHash(parentHash, expectedProposalHash, blockConsensusData.Round)
+		if blockConsensusData.PrecommitHash.IsEqualTo(expectedPrecommitHash) == false {
+			log.Debug("VerifyBlockConsensusData PrecommitHash mismatch", "expected", expectedPrecommitHash, "actual", blockConsensusData.PrecommitHash)
+			return nil, errors.New("VerifyBlockConsensusData PrecommitHash mismatch")
+		}
+
 		if blockConsensusData.SelectedTransactions == nil {
 			if len(txns) > 0 {
 				return nil, errors.New("VerifyBlockConsensusData txns is non-empty but SelectedTransactions is nil")
