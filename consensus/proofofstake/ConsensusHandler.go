@@ -2624,6 +2624,10 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		"pending txns", len(txns), "TotalIncomingPackets", cph.packetStats.TotalIncomingPacketCount, "newRoundReason", blockRoundDetails.newRoundReason,
 		"session startBlockNumber", cph.startBlockNumber, "session duration", time.Since(cph.initTime), "session blocksSkippedValidation", blockStateDetails.blocksSkippedValidation)
 
+	// Consensus-step functions below (proposeBlock, ackBlockProposal, precommitBlock, etc.)
+	// return error, but the caller (HandleTransactions) only expects either nil (success/finalized)
+	// or the sentinel "not ready yet" error to schedule a retry. Individual step errors are already
+	// logged inside each function, so propagating them here would break the retry loop contract.
 	if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL {
 		blockRoundDetails.selfKnownTransactions = make(map[common.Hash]bool) //reset, since txn list could have changed (added or removed)
 		for _, txn := range txns {
@@ -2678,6 +2682,8 @@ func (cph *ConsensusHandler) HandleConsensus(parentHash common.Hash, txns []comm
 		cph.requestConsensusData(blockStateDetails)
 		cph.commitBlock(parentHash)
 	} else if blockRoundDetails.state == BLOCK_STATE_RECEIVED_COMMITS {
+		// broadCast is best-effort; failures are transient network issues and the
+		// commit will be retried or fetched by peers, so it is safe to ignore.
 		cph.broadCast(blockRoundDetails.selfCommitPacket)
 		err = nil
 	}

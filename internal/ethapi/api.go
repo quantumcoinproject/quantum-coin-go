@@ -1178,7 +1178,11 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	// because the return value of ChainId is zero for those transactions.
 	var signer types.Signer
 	signer = types.LatestSignerForChainID(tx.ChainId())
-	from, _ := types.Sender(signer, tx)
+	from, err := types.Sender(signer, tx)
+	if err != nil {
+		log.Error("types.Sender failed", "hash", tx.Hash(), "err", err)
+		return nil
+	}
 	v, r, s := tx.RawSignatureValues()
 	result := &RPCTransaction{
 		Type:           hexutil.Uint64(tx.Type()),
@@ -1203,6 +1207,9 @@ func newRPCTransaction(tx *types.Transaction, blockHash common.Hash, blockNumber
 	copy(result.RBlob, r.Bytes())
 	copy(result.SBlob, s.Bytes())
 
+	// Intentionally returning nil (not an error) on hash/verify failure: the function
+	// signature has no error return and callers treat nil as "not found", which is the
+	// desired RPC behaviour for transactions that cannot be verified.
 	signerHash, err := signer.Hash(tx)
 	if err != nil {
 		log.Error("hash failed", "err", err)
@@ -1415,35 +1422,51 @@ func (s *PublicTransactionPoolAPI) GetBlockTransactionCountByHash(ctx context.Co
 }
 
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
-func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) *RPCTransaction {
-	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
-		return newRPCTransactionFromBlockIndex(block, uint64(index))
+func (s *PublicTransactionPoolAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) (*RPCTransaction, error) {
+	block, err := s.b.BlockByNumber(ctx, blockNr)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if block != nil {
+		return newRPCTransactionFromBlockIndex(block, uint64(index)), nil
+	}
+	return nil, nil
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
-func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) *RPCTransaction {
-	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
-		return newRPCTransactionFromBlockIndex(block, uint64(index))
+func (s *PublicTransactionPoolAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) (*RPCTransaction, error) {
+	block, err := s.b.BlockByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if block != nil {
+		return newRPCTransactionFromBlockIndex(block, uint64(index)), nil
+	}
+	return nil, nil
 }
 
 // GetRawTransactionByBlockNumberAndIndex returns the bytes of the transaction for the given block number and index.
-func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) hexutil.Bytes {
-	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
-		return newRPCRawTransactionFromBlockIndex(block, uint64(index))
+func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) (hexutil.Bytes, error) {
+	block, err := s.b.BlockByNumber(ctx, blockNr)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if block != nil {
+		return newRPCRawTransactionFromBlockIndex(block, uint64(index)), nil
+	}
+	return nil, nil
 }
 
 // GetRawTransactionByBlockHashAndIndex returns the bytes of the transaction for the given block hash and index.
-func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) hexutil.Bytes {
-	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
-		return newRPCRawTransactionFromBlockIndex(block, uint64(index))
+func (s *PublicTransactionPoolAPI) GetRawTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) (hexutil.Bytes, error) {
+	block, err := s.b.BlockByHash(ctx, blockHash)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	if block != nil {
+		return newRPCRawTransactionFromBlockIndex(block, uint64(index)), nil
+	}
+	return nil, nil
 }
 
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
