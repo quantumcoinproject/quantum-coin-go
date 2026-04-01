@@ -28,11 +28,11 @@ func (h Header) MarshalJSON() ([]byte, error) {
 		GasUsed               hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
 		Time                  hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
 		Extra                 hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		Author                common.Hash    `json:"author"           gencodec:"required"`
-		ConsensusData         hexutil.Bytes  `json:"consensusData"    gencodec:"required"`
+		Author                common.Hash    `json:"author,omitempty"`
+		ConsensusData         hexutil.Bytes  `json:"consensusData,omitempty"`
 		MixDigest             common.Hash    `json:"mixHash"`
 		Nonce                 BlockNonce     `json:"nonce"`
-		UnhashedConsensusData hexutil.Bytes  `json:"unhashedConsensusData"  gencodec:"required"`
+		UnhashedConsensusData hexutil.Bytes  `json:"unhashedConsensusData,omitempty"`
 		Hash                  common.Hash    `json:"hash"`
 	}
 	var enc Header
@@ -72,11 +72,11 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		GasUsed               *hexutil.Uint64 `json:"gasUsed"          gencodec:"required"`
 		Time                  *hexutil.Uint64 `json:"timestamp"        gencodec:"required"`
 		Extra                 *hexutil.Bytes  `json:"extraData"        gencodec:"required"`
-		Author                *common.Hash    `json:"author"           gencodec:"required"`
-		ConsensusData         *hexutil.Bytes  `json:"consensusData"    gencodec:"required"`
+		Author                *common.Hash    `json:"author,omitempty"`
+		ConsensusData         *hexutil.Bytes  `json:"consensusData,omitempty"`
 		MixDigest             *common.Hash    `json:"mixHash"`
 		Nonce                 *BlockNonce     `json:"nonce"`
-		UnhashedConsensusData *hexutil.Bytes  `json:"unhashedConsensusData"  gencodec:"required"`
+		UnhashedConsensusData *hexutil.Bytes  `json:"unhashedConsensusData,omitempty"`
 	}
 	var dec Header
 	if err := json.Unmarshal(input, &dec); err != nil {
@@ -130,23 +130,26 @@ func (h *Header) UnmarshalJSON(input []byte) error {
 		return errors.New("missing required field 'extraData' for Header")
 	}
 	h.Extra = *dec.Extra
-	if dec.Author == nil {
-		return errors.New("missing required field 'author' for Header")
+	if dec.Author != nil {
+		h.Author = *dec.Author
+	} else {
+		h.Author = common.Hash{}
 	}
-	h.Author = *dec.Author
-	if dec.ConsensusData == nil {
-		return errors.New("missing required field 'consensusData' for Header")
+	if dec.ConsensusData != nil {
+		h.ConsensusData = *dec.ConsensusData
+	} else {
+		h.ConsensusData = nil
 	}
-	h.ConsensusData = *dec.ConsensusData
 	if dec.MixDigest != nil {
 		h.MixDigest = *dec.MixDigest
 	}
 	if dec.Nonce != nil {
 		h.Nonce = *dec.Nonce
 	}
-	if dec.UnhashedConsensusData == nil {
-		return errors.New("missing required field 'unhashedConsensusData' for Header")
+	if dec.UnhashedConsensusData != nil {
+		h.UnhashedConsensusData = *dec.UnhashedConsensusData
+	} else {
+		h.UnhashedConsensusData = nil
 	}
-	h.UnhashedConsensusData = *dec.UnhashedConsensusData
 	return nil
 }
