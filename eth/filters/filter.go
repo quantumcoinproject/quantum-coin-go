@@ -196,6 +196,9 @@ func (f *Filter) indexedLogs(ctx context.Context, end uint64) ([]*types.Log, err
 			// Retrieve the suggested block and pull any truly matching logs
 			header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(number))
 			if header == nil || err != nil {
+				if err == nil {
+					err = errors.New("unknown block")
+				}
 				return logs, err
 			}
 			found, err := f.checkMatches(ctx, header)
@@ -218,6 +221,9 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 	for ; f.begin <= int64(end); f.begin++ {
 		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
+			if err == nil {
+				err = errors.New("unknown block")
+			}
 			return logs, err
 		}
 		found, err := f.blockLogs(ctx, header)
