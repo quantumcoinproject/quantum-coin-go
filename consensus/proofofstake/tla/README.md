@@ -11,13 +11,27 @@ suitable for model checking with TLC.
 
 | File | Description |
 |------|-------------|
-| `QuantumCoinConsensus.tla` | Main specification: models the 4-phase BFT protocol with Byzantine faults (including equivocation), deposit-weighted voting, two-round escalation, and OK/NIL vote types. Defines `ByzantineDeposit` for use in the fault tolerance `ASSUME`. |
+| `QuantumCoinConsensus.tla` | Main specification: models the 4-phase BFT protocol with Byzantine faults (including equivocation and proposer equivocation), deposit-weighted voting, two-round escalation, OK/NIL vote types, and proposal identity tracking. |
 | `MCQuantumCoinConsensus.tla` | Model-checking module: instantiates the spec with 4 validators and concrete constants. Contains Safe and Boundary configurations. |
 | `MCQuantumCoinConsensusUnsafe.tla` | Unsafe model-checking module: 2 Byzantine validators (combined 34% deposit), bypasses the < 33% `ASSUME` to demonstrate safety violations just above the fault tolerance threshold. |
 | `QuantumCoinConsensus.cfg` | TLC configuration for the Safe model (1 Byzantine, 25% deposit). |
 | `QuantumCoinConsensusBoundary.cfg` | TLC configuration for the Boundary model (1 Byzantine, 33% deposit, at the limit). |
 | `QuantumCoinConsensusUnsafe.cfg` | TLC configuration for the Unsafe model (2 Byzantine, combined 34% deposit). Expected to find violations. |
 | `tla_test.go` | Go test harness: invokes TLC from `go test` and fails on any counterexamples or invariant violations. |
+
+## Proposal Identity Modeling
+
+The specification tracks **proposal identity** — an abstract identifier representing the hash of a proposed block. This models the hash-binding property of the real protocol, where each acknowledgment, precommit, and commit message is cryptographically chained to a specific proposal hash.
+
+A Byzantine proposer can send **different proposals** to different honest validators (equivocating proposer). Honest validators bind their votes to the specific proposal they received: if validator A receives proposal `pA` and validator B receives proposal `pB`, they vote for different certified values. The quorum formation operators require matching on both `(voteType, proposalId)` — votes for different proposal identities do not combine, even if they share the same vote type.
+
+The `Agreement` invariant checks that any two honest validators that finalize must agree on **both** vote type and proposal identity, covering:
+- **OK vs. NIL** conflicts (already covered in the prior spec version)
+- **OK(blockA) vs. OK(blockB)** conflicts from an equivocating proposer (new)
+
+### Optimization: worst-case Byzantine voting
+
+To keep the state space tractable, Byzantine validators emit votes for **all** `(voteType, proposalId)` combinations at once in each phase, rather than nondeterministically choosing a subset. This is a sound over-approximation: if safety holds when every Byzantine validator equivocates maximally, it holds for any subset of equivocation. This reduces the branching factor from exponential (powerset of vote combinations) to deterministic (one action per Byzantine validator per phase).
 
 ## Fault Tolerance
 
@@ -35,9 +49,10 @@ This mirrors the standard BFT requirement: with a 67% threshold, any two quorums
 
 The spec models the following Byzantine behaviors, all of which are explored nondeterministically by TLC:
 
-- **Equivocation**: A Byzantine validator sends both `OK` and `NIL` `ACK_PROPOSAL` votes for the same round, so different honest peers observe different vote types.
+- **Equivocation**: A Byzantine validator sends `ACK_PROPOSAL` votes for all `(voteType, proposalId)` combinations for the same round, so different honest peers can form quorums for different certified values.
+- **Proposer equivocation**: A Byzantine proposer delivers different proposal identities to different honest validators, attempting to create two competing OK quorums for different blocks.
 - **Selective proposal delivery**: A Byzantine proposer delivers the `PROPOSAL` to an arbitrary subset of validators (including possibly none).
-- **Arbitrary voting**: Byzantine validators can send `ACK_PROPOSAL`, `PRECOMMIT`, and `COMMIT` votes regardless of preconditions.
+- **Arbitrary voting**: Byzantine validators send `ACK_PROPOSAL`, `PRECOMMIT`, and `COMMIT` votes for all `(voteType, proposalId)` combinations regardless of preconditions.
 - **Phase skipping**: Byzantine validators advance through protocol phases without waiting for thresholds.
 
 ## Properties Verified
@@ -45,10 +60,10 @@ The spec models the following Byzantine behaviors, all of which are explored non
 ### Safety (checked as invariants)
 
 - **TypeOK** -- All variables remain within their declared types.
-- **Agreement** -- No two honest validators finalize with different vote types.
+- **Agreement** -- No two honest validators finalize with different blocks. Covers both vote-type disagreement (OK vs. NIL) and proposal-identity disagreement (OK/pA vs. OK/pB).
 - **Validity** -- If all honest validators voted OK, no honest validator finalizes as NIL.
 - **Round2Consistency** -- Any honest finalization in Round 2 has vote type NIL.
-- **CommitIntegrity** -- No honest validator finalizes without >= 67% commit deposit weight.
+- **CommitIntegrity** -- No honest validator finalizes without >= 67% commit deposit weight for its specific certified value.
 
 ### Liveness (checked as temporal properties)
 
@@ -98,6 +113,7 @@ FLP applies to purely asynchronous systems with **no** timing or fairness assump
 | Deposits | 25 each (total = 100) |
 | Byzantine | v4 (25% deposit) |
 | Proposers | v1 (Round 1), v2 (Round 2) |
+| ProposalIds | pA, pB |
 
 All properties should **pass**.
 
@@ -109,6 +125,7 @@ All properties should **pass**.
 | Deposits | v1=23, v2=22, v3=22, v4=33 (total = 100) |
 | Byzantine | v4 (33% deposit, at the limit) |
 | Proposers | v1 (Round 1), v2 (Round 2) |
+| ProposalIds | pA, pB |
 
 All properties should **pass**, demonstrating safety holds at exactly 33%.
 
@@ -120,6 +137,7 @@ All properties should **pass**, demonstrating safety holds at exactly 33%.
 | Deposits | v1=33, v2=33, v3=17, v4=17 (total = 100) |
 | Byzantine | v3, v4 (combined 34% deposit, just above 33%) |
 | Proposers | v1 (Round 1), v2 (Round 2) |
+| ProposalIds | pA, pB |
 
 Safety properties are expected to **fail**, demonstrating that the protocol cannot tolerate > 33% Byzantine deposit. The violation occurs at just 34% -- only 1% above the passing boundary.
 
@@ -138,19 +156,19 @@ variable to its absolute path.
 
 ```bash
 cd consensus/proofofstake/tla
-java -jar tla2tools.jar -config QuantumCoinConsensus.cfg -workers auto -deadlock MCQuantumCoinConsensus
+java -XX:+UseParallelGC -jar tla2tools.jar -config QuantumCoinConsensus.cfg -workers auto -deadlock MCQuantumCoinConsensus
 ```
 
 ### Boundary configuration
 
 ```bash
-java -jar tla2tools.jar -config QuantumCoinConsensusBoundary.cfg -workers auto -deadlock MCQuantumCoinConsensus
+java -XX:+UseParallelGC -jar tla2tools.jar -config QuantumCoinConsensusBoundary.cfg -workers auto -deadlock MCQuantumCoinConsensus
 ```
 
 ### Unsafe configuration (expected to find violations)
 
 ```bash
-java -jar tla2tools.jar -config QuantumCoinConsensusUnsafe.cfg -workers auto -deadlock MCQuantumCoinConsensusUnsafe
+java -XX:+UseParallelGC -jar tla2tools.jar -config QuantumCoinConsensusUnsafe.cfg -workers auto -deadlock MCQuantumCoinConsensusUnsafe
 ```
 
 ### Via Go test harness
