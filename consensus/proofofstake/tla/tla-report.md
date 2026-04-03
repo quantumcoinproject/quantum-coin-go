@@ -6,9 +6,25 @@
 
 Verification results for the QuantumCoin proof-of-stake consensus protocol TLA+ specification.
 
-**Date:** 2026-03-28
-**TLC Version:** 2026.03.27.000708 (rev: aace794)
+**Date:** 2026-04-02
+**TLC Version:** 2026.03.31.154134 (rev: becec35)
 **Platform:** Windows 11, OpenJDK 21.0.10, 16 cores, 21.8 GB heap
+
+---
+
+## What the Specification Models
+
+The TLA+ specification models the core consensus protocol: 4-phase BFT voting (PROPOSAL, ACK, PRECOMMIT, COMMIT), deposit-weighted quorum thresholds, two-round escalation, and Byzantine faults including:
+
+- **Proposer equivocation**: A Byzantine proposer sends different proposal identities to different honest validators.
+- **Vote equivocation**: A Byzantine validator sends votes for all `(voteType, proposalId)` combinations, so different honest peers can form quorums for different certified values.
+- **Selective proposal delivery**: A Byzantine proposer delivers to an arbitrary subset of validators.
+- **Phase skipping**: Byzantine validators advance through phases without waiting for thresholds.
+- **Crash/abstention**: Modeled implicitly via nondeterministic Byzantine inaction.
+
+Each vote (ACK, PRECOMMIT, COMMIT) carries a **proposal identity** that models the hash-binding property of the real protocol. Quorum formation requires matching on both `(voteType, proposalId)` — votes for different proposal identities do not combine. This enables the model to detect both OK-vs-NIL conflicts and OK(blockA)-vs-OK(blockB) conflicts from an equivocating proposer.
+
+Byzantine voting uses a worst-case over-approximation: each Byzantine validator emits votes for all `(voteType, proposalId)` combinations in each phase, rather than choosing nondeterministically. This is sound because if safety holds under maximal equivocation, it holds for any subset.
 
 ---
 
@@ -41,6 +57,7 @@ The Boundary and Unsafe configurations differ by just 1 percentage point, provid
 | Threshold | 67 |
 | Proposers | v1 (Round 1), v2 (Round 2) |
 | Byzantine | v4 (25% deposit) |
+| ProposalIds | pA, pB |
 
 ### Results
 
@@ -57,10 +74,10 @@ The Boundary and Unsafe configurations differ by just 1 percentage point, provid
 
 | Metric | Value |
 |--------|-------|
-| States generated | 811,601 |
-| Distinct states | 299,337 |
-| State graph depth | 29 |
-| Runtime | 14 seconds |
+| States generated | 43,911 |
+| Distinct states | 15,951 |
+| State graph depth | 26 |
+| Runtime | 2 seconds |
 
 ---
 
@@ -73,6 +90,7 @@ The Boundary and Unsafe configurations differ by just 1 percentage point, provid
 | Threshold | 67 |
 | Proposers | v1 (Round 1), v2 (Round 2) |
 | Byzantine | v4 (33% deposit, at the limit) |
+| ProposalIds | pA, pB |
 
 The ASSUME is satisfied: `33 * 3 = 99 < 100` (strictly less than 1/3).
 
@@ -91,10 +109,10 @@ The ASSUME is satisfied: `33 * 3 = 99 < 100` (strictly less than 1/3).
 
 | Metric | Value |
 |--------|-------|
-| States generated | 811,601 |
-| Distinct states | 299,337 |
-| State graph depth | 29 |
-| Runtime | 14 seconds |
+| States generated | 43,911 |
+| Distinct states | 15,951 |
+| State graph depth | 26 |
+| Runtime | 2 seconds |
 
 ---
 
@@ -107,6 +125,7 @@ The ASSUME is satisfied: `33 * 3 = 99 < 100` (strictly less than 1/3).
 | Threshold | 67 |
 | Proposers | v1 (Round 1), v2 (Round 2) |
 | Byzantine | v3, v4 (combined 34% deposit, just above 33%) |
+| ProposalIds | pA, pB |
 
 The ASSUME is violated as expected: `34 * 3 = 102 >= 100`. This configuration uses `MCQuantumCoinConsensusUnsafe.tla`, which extends the main spec directly and omits the ASSUME.
 
@@ -116,26 +135,30 @@ The ASSUME is violated as expected: `34 * 3 = 102 >= 100`. This configuration us
 |----------|------|-------------------------|
 | Agreement | Safety (invariant) | **VIOLATED** (expected) |
 
-TLC found a counterexample in 14 steps:
+TLC found a counterexample in 16 steps:
 
-1. v2 (honest, deposit 33) times out waiting for a proposal and sends `ACK_PROPOSAL` with `NIL`.
-2. v3 (Byzantine, deposit 17) equivocates: sends both `OK` and `NIL` `ACK_PROPOSAL` votes for the same round.
-3. v3 skips ahead through `PRECOMMIT` and `COMMIT` phases (phase skipping).
-4. v4 (Byzantine, deposit 17) also equivocates with both `OK` and `NIL`.
-5. v2 sees NIL deposit = v2(33) + v3(17) + v4(17) = **67** >= 67 threshold, and precommits `NIL`.
-6. v1 (honest, deposit 33) proposes and acks `OK`. Now OK deposit = v1(33) + v3(17) + v4(17) = **67** >= 67 threshold.
-7. v1 sees 67% OK and precommits `OK`.
-8. Both honest validators proceed through `COMMIT` (commit deposit = v1 + v2 + v3 = 83 >= 67) and finalize with conflicting vote types: **v1 = OK, v2 = NIL**.
+1. v2 (honest, deposit 33) times out waiting for a proposal.
+2. v3 (Byzantine, deposit 17) sends ack votes for all `(voteType, proposalId)` combinations — equivocating across OK, NIL, pA, pB, and NilProposal.
+3. v2 sends `ACK_PROPOSAL` with `NIL` / `NIL_PROPOSAL` (timed out, no proposal received).
+4. v3 (Byzantine) skips to `PRECOMMIT`, sending precommit votes for all combinations.
+5. v4 (Byzantine, deposit 17) sends ack votes for all `(voteType, proposalId)` combinations.
+6. v2 sees NIL/NIL_PROPOSAL deposit = v2(33) + v3(17) + v4(17) = **67** >= 67 threshold. Precommits `NIL` / `NIL_PROPOSAL`.
+7. v1 (honest, deposit 33) proposes block `pA` and acks `OK` / `pA`. Now OK/pA deposit = v1(33) + v3(17) + v4(17) = **67** >= 67 threshold.
+8. v1 precommits `OK` / `pA`.
+9. v4 (Byzantine) sends precommit votes for all combinations.
+10. v1 and v2 each send commit votes for their respective certified values.
+11. v3 and v4 (Byzantine) send commit votes for all combinations.
+12. v1 finalizes with **OK / pA**. v2 finalizes with **NIL / NIL_PROPOSAL**. **Agreement violated.**
 
-The equivocation by v3 and v4 allows both `OK` and `NIL` quorums to reach the 67% threshold at different points in the execution. v2 advances on the NIL path first, and v1 advances on the OK path later -- the conflicting quorums do not need to form at the same instant. The violation occurs at just 34% Byzantine deposit -- only 1 percentage point above the boundary where all properties pass (33%).
+The equivocation by v3 and v4 allows both OK/pA and NIL/NIL_PROPOSAL quorums to reach the 67% threshold at different points in the execution. v2 advances on the NIL path first, and v1 advances on the OK path later — the conflicting quorums do not need to form at the same instant. The violation occurs at just 34% Byzantine deposit — only 1 percentage point above the boundary where all properties pass (33%).
 
 ### State Space (partial, stopped at first violation (expected))
 
 | Metric | Value |
 |--------|-------|
-| States generated | ~275,000 |
-| Distinct states | ~100,000 |
-| State graph depth | 17 |
+| States generated | ~28,000 |
+| Distinct states | ~10,000 |
+| State graph depth | 20 |
 | Runtime | 2 seconds |
 
 *Note: Partial state counts vary across runs because TLC stops at the first violation (expected), and the exact frontier explored depends on worker thread scheduling.*
@@ -146,8 +169,8 @@ The equivocation by v3 and v4 allows both `OK` and `NIL` quorums to reach the 67
 
 The 67% threshold creates an overlap guarantee between any two quorums. For two quorums Q1 and Q2, each with >= 67% of total deposit, their intersection must contain at least `67 + 67 - 100 = 34%` of deposit.
 
-- **At <= 33% Byzantine**: The 34% overlap exceeds the Byzantine deposit. Any two quorums must share at least one honest validator, ensuring all honest validators agree.
-- **At > 33% Byzantine**: The 34% overlap can be entirely Byzantine. Equivocating Byzantine validators can appear in two quorums while voting differently, enabling conflicting finalizations.
+- **At <= 33% Byzantine**: The 34% overlap exceeds the Byzantine deposit. Any two quorums must share at least one honest validator, ensuring all honest validators agree on both vote type and proposal identity.
+- **At > 33% Byzantine**: The 34% overlap can be entirely Byzantine. Equivocating Byzantine validators can appear in two quorums while voting for different certified values, enabling conflicting finalizations.
 
 The TLC results confirm this mathematically: 33% passes, 34% fails.
 
@@ -158,10 +181,10 @@ The TLC results confirm this mathematically: 33% passes, 34% fails.
 ### Safety (checked as invariants -- hold in every reachable state)
 
 - **TypeOK**: All variables remain within their declared types throughout execution.
-- **Agreement**: No two honest validators finalize with different vote types (`OK` vs `NIL`). This is the core BFT safety guarantee.
+- **Agreement**: No two honest validators finalize with different blocks. This checks both `blockVoteType` and `blockProposalId` agreement, covering OK-vs-NIL conflicts and OK(blockA)-vs-OK(blockB) conflicts from an equivocating proposer. This is the core BFT safety guarantee.
 - **Validity**: If all honest validators voted `OK`, no honest validator finalizes as `NIL`. Prevents the Byzantine minority from forcing an empty block when the honest majority agrees on a real block.
 - **Round2Consistency**: Any honest validator that finalizes in Round 2 has vote type `NIL`, consistent with Round 2 being a forced `NIL` round.
-- **CommitIntegrity**: No honest validator finalizes without at least 67% weighted `COMMIT` deposit.
+- **CommitIntegrity**: No honest validator finalizes without at least 67% weighted `COMMIT` deposit for its specific `(voteType, proposalId)` certified value.
 
 ### Liveness (checked as temporal properties -- must eventually hold)
 
@@ -185,9 +208,10 @@ The specification models the following Byzantine behaviors, all explored nondete
 
 | Behavior | Description |
 |----------|-------------|
-| Equivocation | A Byzantine validator sends both `OK` and `NIL` `ACK_PROPOSAL` votes for the same round, so different honest peers observe different vote types. |
+| Proposer equivocation | A Byzantine proposer delivers different proposal identities to different honest validators, attempting to create competing OK quorums for different blocks. |
+| Vote equivocation | A Byzantine validator sends votes for all `(voteType, proposalId)` combinations for the same round, so different honest peers can observe votes for different certified values. |
 | Selective proposal delivery | A Byzantine proposer delivers the `PROPOSAL` to an arbitrary subset of validators (including possibly none). |
-| Arbitrary voting | Byzantine validators send `ACK_PROPOSAL`, `PRECOMMIT`, and `COMMIT` votes regardless of preconditions. |
+| Arbitrary voting | Byzantine validators send `ACK_PROPOSAL`, `PRECOMMIT`, and `COMMIT` votes for all `(voteType, proposalId)` combinations regardless of preconditions. |
 | Phase skipping | Byzantine validators advance through protocol phases without waiting for thresholds. |
 
 ---
@@ -196,7 +220,9 @@ The specification models the following Byzantine behaviors, all explored nondete
 
 The QuantumCoin consensus protocol, as modeled in `QuantumCoinConsensus.tla`, satisfies all safety invariants and the termination liveness property when Byzantine validators control **<= 33%** of total weighted deposit. This was verified exhaustively across two configurations:
 
-- **Safe** (25% Byzantine): 811,601 states explored, all properties pass.
-- **Boundary** (33% Byzantine): 811,601 states explored, all properties pass.
+- **Safe** (25% Byzantine): 43,911 states explored, all properties pass.
+- **Boundary** (33% Byzantine): 43,911 states explored, all properties pass.
+
+The `Agreement` invariant now verifies safety at the **block-identity level**: it checks that finalized honest validators agree on both vote type and proposal identity, covering both OK-vs-NIL conflicts and the equivocating-proposer scenario (OK(blockA) vs. OK(blockB)). This corresponds to the block-identity-level safety claim in the whitepaper's Section 5.
 
 When Byzantine deposit exceeds 33%, the **Agreement** invariant is violated via equivocation, as demonstrated by the Unsafe configuration (34% Byzantine, just 1% above the boundary). This confirms that the 33% bound is both necessary and sufficient for safety under the Byzantine fault model.

@@ -39,6 +39,8 @@ MC_MaxRound == 2
 
 MC_Byzantine == {"v4"}
 
+MC_ProposalIds == {"pA", "pB"}
+
 --------------------------------------------------------------------------
 (* Boundary configuration: 1 of 4, deposits at the 33% boundary.
    v4 has 33 out of 100 total = exactly 33%.

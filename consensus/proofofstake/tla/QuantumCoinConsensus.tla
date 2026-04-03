@@ -3,7 +3,18 @@
  * TLA+ specification of the QuantumCoin proof-of-stake consensus protocol.
  *
  * Models the 4-phase BFT consensus (PROPOSAL, ACK_PROPOSAL, PRECOMMIT, COMMIT)
- * with deposit-weighted voting, 2-round escalation, and Byzantine faults.
+ * with deposit-weighted voting, 2-round escalation, and Byzantine faults
+ * including proposer equivocation (sending different proposals to different
+ * validators).
+ *
+ * Proposal identity: Each proposal carries an abstract identifier from the
+ * finite set ProposalIds. A Byzantine proposer may send different proposal
+ * identities to different validators (equivocating proposer). Honest
+ * validators bind their votes to the specific proposal identity they
+ * received, and quorum formation requires matching on both vote type and
+ * proposal identity. This models the hash-binding property of the real
+ * protocol where ACK, PRECOMMIT, and COMMIT messages are chained to a
+ * specific proposal hash.
  *
  * See consensus/proofofstake/README.md for the protocol steps this spec models.
  *)
@@ -15,16 +26,25 @@ CONSTANTS
     Deposits,           \* Function: Validator -> Nat (staked deposit per validator)
     Proposer,           \* Function: Round -> Validator (proposer for each round)
     MaxRound,           \* Maximum number of rounds (fixed at 2)
-    Byzantine           \* Subset of Validators that may act arbitrarily
+    Byzantine,          \* Subset of Validators that may act arbitrarily
+    ProposalIds         \* Finite set of abstract proposal identifiers (e.g. {"pA", "pB"})
 
 ASSUME MaxRound = 2
 ASSUME Byzantine \subseteq Validators
+ASSUME ProposalIds /= {}
 
 Honest == Validators \ Byzantine
 
 Rounds == 1..MaxRound
 
 VoteTypes == {"OK", "NIL"}
+
+\* NilProposal is the deterministic nil-proposal identity used for NIL votes.
+\* It must not be a member of ProposalIds (which represent real proposals).
+NilProposal == "NIL_PROPOSAL"
+
+\* The full set of proposal identifiers that can appear in votes.
+AllProposalIds == ProposalIds \cup {NilProposal}
 
 TotalDeposit == LET S == {Deposits[v] : v \in Validators}
                 IN LET Sum[ss \in SUBSET Validators] ==
@@ -52,39 +72,42 @@ States == {
 }
 
 (*
- * An AckVote record: who voted, what type, and for which round.
- * Byzantine validators may send different vote types to different peers,
- * so ackVotes is the set of all votes that have been "observed" globally.
+ * Vote records now carry a proposalId field, modeling the hash-binding
+ * property of the real protocol. An honest validator's ACK, PRECOMMIT,
+ * and COMMIT are all bound to the same (voteType, proposalId) pair.
+ * Byzantine validators may send votes with arbitrary proposalId values.
  *)
-AckVoteShape == [validator : Validators, voteType : VoteTypes, round : Rounds]
-PrecommitVoteShape == [validator : Validators, round : Rounds]
-CommitVoteShape == [validator : Validators, round : Rounds]
+AckVoteShape == [validator : Validators, voteType : VoteTypes, proposalId : AllProposalIds, round : Rounds]
+PrecommitVoteShape == [validator : Validators, voteType : VoteTypes, proposalId : AllProposalIds, round : Rounds]
+CommitVoteShape == [validator : Validators, voteType : VoteTypes, proposalId : AllProposalIds, round : Rounds]
 
 VARIABLES
     round,              \* Current round number (global, since all honest advance together)
     state,              \* Function: Validator -> States (per-validator state)
     proposed,           \* Function: Round -> BOOLEAN (has proposer sent PROPOSAL this round)
-    proposalReceived,   \* Function: Validator -> BOOLEAN (has this validator received the PROPOSAL)
+    proposalReceived,   \* Function: Validator -> AllProposalIds \cup {"NONE"} (which proposal this validator received)
     timedOut,           \* Function: Validator -> BOOLEAN (has this validator's proposal wait timed out)
     ackVotes,           \* Set of AckVote records received so far
     precommitVotes,     \* Set of PrecommitVote records received so far
     commitVotes,        \* Set of CommitVote records received so far
     blockVoteType,      \* Function: Validator -> VoteTypes \cup {"NONE"} (the vote type this validator locked on)
+    blockProposalId,    \* Function: Validator -> AllProposalIds \cup {"NONE"} (the proposal id this validator locked on)
     finalized           \* Function: Validator -> BOOLEAN (has this validator finalized the block)
 
 vars == <<round, state, proposed, proposalReceived, timedOut,
-          ackVotes, precommitVotes, commitVotes, blockVoteType, finalized>>
+          ackVotes, precommitVotes, commitVotes, blockVoteType, blockProposalId, finalized>>
 
 TypeOK ==
     /\ round \in Rounds
     /\ state \in [Validators -> States]
     /\ proposed \in [Rounds -> BOOLEAN]
-    /\ proposalReceived \in [Validators -> BOOLEAN]
+    /\ proposalReceived \in [Validators -> AllProposalIds \cup {"NONE"}]
     /\ timedOut \in [Validators -> BOOLEAN]
     /\ ackVotes \subseteq AckVoteShape
     /\ precommitVotes \subseteq PrecommitVoteShape
     /\ commitVotes \subseteq CommitVoteShape
     /\ blockVoteType \in [Validators -> VoteTypes \cup {"NONE"}]
+    /\ blockProposalId \in [Validators -> AllProposalIds \cup {"NONE"}]
     /\ finalized \in [Validators -> BOOLEAN]
 
 --------------------------------------------------------------------------
@@ -94,27 +117,62 @@ DepositSum[S \in SUBSET Validators] ==
     ELSE LET v == CHOOSE v \in S : TRUE
          IN Deposits[v] + DepositSum[S \ {v}]
 
-(* Deposit weight of ack votes with a given vote type in a given round *)
-AckDepositForType(vt, r) ==
-    DepositSum[{vote.validator : vote \in {v \in ackVotes : v.voteType = vt /\ v.round = r}}]
+(* Deposit weight of ack votes with a given vote type AND proposal id in a given round *)
+AckDepositForTypeAndProposal(vt, pid, r) ==
+    DepositSum[{vote.validator : vote \in {v \in ackVotes : v.voteType = vt /\ v.proposalId = pid /\ v.round = r}}]
 
-(* Deposit weight of precommit votes in a given round *)
-PrecommitDeposit(r) ==
-    DepositSum[{vote.validator : vote \in {v \in precommitVotes : v.round = r}}]
+(* Deposit weight of precommit votes with a given vote type and proposal id in a given round *)
+PrecommitDepositForTypeAndProposal(vt, pid, r) ==
+    DepositSum[{vote.validator : vote \in {v \in precommitVotes : v.voteType = vt /\ v.proposalId = pid /\ v.round = r}}]
 
-(* Deposit weight of commit votes in a given round *)
-CommitDeposit(r) ==
-    DepositSum[{vote.validator : vote \in {v \in commitVotes : v.round = r}}]
+(* Deposit weight of commit votes with a given vote type and proposal id in a given round *)
+CommitDepositForTypeAndProposal(vt, pid, r) ==
+    DepositSum[{vote.validator : vote \in {v \in commitVotes : v.voteType = vt /\ v.proposalId = pid /\ v.round = r}}]
 
 (* Deposit weight of distinct validators that have sent any ack in a given round,
-   regardless of vote type. Each validator is counted once even if they equivocated. *)
+   regardless of vote type or proposal id. Each validator is counted once. *)
 AckDeposit(r) ==
     DepositSum[{vote.validator : vote \in {v \in ackVotes : v.round = r}}]
+
+(* Whether the ack threshold has been reached for ANY (voteType, proposalId) pair *)
+AckThresholdReached(r) ==
+    \E vt \in VoteTypes : \E pid \in AllProposalIds :
+        AckDepositForTypeAndProposal(vt, pid, r) >= Threshold
+
+(* The (voteType, proposalId) pair that reached ack threshold, if any.
+   Used by honest validators to determine their precommit value. *)
+AckThresholdVoteType(r) ==
+    CHOOSE vt \in VoteTypes : \E pid \in AllProposalIds :
+        AckDepositForTypeAndProposal(vt, pid, r) >= Threshold
+
+AckThresholdProposalId(r) ==
+    LET vt == AckThresholdVoteType(r)
+    IN CHOOSE pid \in AllProposalIds :
+        AckDepositForTypeAndProposal(vt, pid, r) >= Threshold
+
+(* Whether the precommit threshold has been reached for ANY (voteType, proposalId) pair *)
+PrecommitThresholdReached(r) ==
+    \E vt \in VoteTypes : \E pid \in AllProposalIds :
+        PrecommitDepositForTypeAndProposal(vt, pid, r) >= Threshold
+
+(* Whether the commit threshold has been reached for ANY (voteType, proposalId) pair *)
+CommitThresholdReached(r) ==
+    \E vt \in VoteTypes : \E pid \in AllProposalIds :
+        CommitDepositForTypeAndProposal(vt, pid, r) >= Threshold
 
 (* Deposit weight of validators that have sent any ack in a higher round *)
 HigherRoundAckDeposit(r) ==
     IF r >= MaxRound THEN 0
     ELSE DepositSum[{vote.validator : vote \in {v \in ackVotes : v.round > r}}]
+
+(* Whether the ack threshold has been reached for any single vote type
+   (across all proposal ids) -- used for escalation guards *)
+AckDepositForType(vt, r) ==
+    DepositSum[{vote.validator : vote \in {v \in ackVotes : v.voteType = vt /\ v.round = r}}]
+
+(* Total precommit deposit regardless of type/proposal -- used for escalation guard *)
+PrecommitDeposit(r) ==
+    DepositSum[{vote.validator : vote \in {v \in precommitVotes : v.round = r}}]
 
 
 --------------------------------------------------------------------------
@@ -123,135 +181,160 @@ Init ==
     /\ round = 1
     /\ state = [v \in Validators |-> "WAITING_FOR_PROPOSAL"]
     /\ proposed = [r \in Rounds |-> FALSE]
-    /\ proposalReceived = [v \in Validators |-> FALSE]
+    /\ proposalReceived = [v \in Validators |-> "NONE"]
     /\ timedOut = [v \in Validators |-> FALSE]
     /\ ackVotes = {}
     /\ precommitVotes = {}
     /\ commitVotes = {}
     /\ blockVoteType = [v \in Validators |-> "NONE"]
+    /\ blockProposalId = [v \in Validators |-> "NONE"]
     /\ finalized = [v \in Validators |-> FALSE]
 
 --------------------------------------------------------------------------
-(* STEP 6.1 + 7: Proposer broadcasts PROPOSAL and implicitly acks it *)
+(* STEP 6.1 + 7: Honest proposer broadcasts PROPOSAL and implicitly acks it.
+   An honest proposer sends the same proposal to all validators. *)
 ProposeBlock(v) ==
     /\ v = Proposer[round]
     /\ v \in Honest
     /\ state[v] = "WAITING_FOR_PROPOSAL"
     /\ proposed[round] = FALSE
-    /\ proposed' = [proposed EXCEPT ![round] = TRUE]
-    /\ proposalReceived' = [w \in Validators |-> IF w = v THEN TRUE ELSE proposalReceived[w]]
-    /\ LET vt == IF round >= MaxRound THEN "NIL" ELSE "OK"
-       IN /\ ackVotes' = ackVotes \cup {[validator |-> v, voteType |-> vt, round |-> round]}
-          /\ blockVoteType' = [blockVoteType EXCEPT ![v] = vt]
+    /\ \E pid \in ProposalIds :
+        /\ proposed' = [proposed EXCEPT ![round] = TRUE]
+        /\ proposalReceived' = [w \in Validators |-> IF w = v THEN pid ELSE proposalReceived[w]]
+        /\ LET vt == IF round >= MaxRound THEN "NIL" ELSE "OK"
+               ackPid == IF round >= MaxRound THEN NilProposal ELSE pid
+           IN /\ ackVotes' = ackVotes \cup {[validator |-> v, voteType |-> vt, proposalId |-> ackPid, round |-> round]}
+              /\ blockVoteType' = [blockVoteType EXCEPT ![v] = vt]
+              /\ blockProposalId' = [blockProposalId EXCEPT ![v] = ackPid]
     /\ state' = [state EXCEPT ![v] = "WAITING_FOR_ACK_PROPOSAL"]
     /\ UNCHANGED <<round, timedOut, precommitVotes, commitVotes, finalized>>
 
-(* Byzantine proposer: may selectively deliver proposals and equivocate votes *)
+(* Byzantine proposer: may send DIFFERENT proposals to different validators
+   (equivocating proposer) and may equivocate its own votes.
+   Each honest validator independently receives one of the proposal ids or
+   nothing; Byzantine validators always receive nothing (they vote via
+   ByzantineSendAck regardless). The proposer emits a single ack vote
+   here; additional equivocating acks are emitted via ByzantineSendAck. *)
 ByzantinePropose(v) ==
     /\ v = Proposer[round]
     /\ v \in Byzantine
     /\ state[v] = "WAITING_FOR_PROPOSAL"
     /\ proposed[round] = FALSE
     /\ proposed' = [proposed EXCEPT ![round] = TRUE]
-    /\ \E subset \in SUBSET Validators :
+    /\ \E deliveryFn \in [Honest -> ProposalIds \cup {"NONE"}] :
         proposalReceived' = [w \in Validators |->
-            IF w \in subset THEN TRUE ELSE proposalReceived[w]]
-    /\ \E S \in SUBSET VoteTypes :
-        /\ S /= {}
-        /\ ackVotes' = ackVotes \cup {[validator |-> v, voteType |-> vt, round |-> round] : vt \in S}
-        /\ blockVoteType' = [blockVoteType EXCEPT ![v] = "NIL"]
+            IF w \in Honest /\ deliveryFn[w] /= "NONE" THEN deliveryFn[w] ELSE proposalReceived[w]]
+    /\ ackVotes' = ackVotes \cup
+        {[validator |-> v, voteType |-> vt, proposalId |-> pid, round |-> round] : vt \in VoteTypes, pid \in AllProposalIds}
+    /\ blockVoteType' = [blockVoteType EXCEPT ![v] = "NIL"]
+    /\ blockProposalId' = [blockProposalId EXCEPT ![v] = NilProposal]
     /\ state' = [state EXCEPT ![v] = "WAITING_FOR_ACK_PROPOSAL"]
     /\ UNCHANGED <<round, timedOut, precommitVotes, commitVotes, finalized>>
 
-(* Non-proposer receives the proposal *)
+(* Non-proposer receives the proposal.
+   The proposal identity delivered to this validator was set by the proposer action. *)
 ReceiveProposal(v) ==
     /\ v /= Proposer[round]
     /\ state[v] = "WAITING_FOR_PROPOSAL"
     /\ proposed[round] = TRUE
-    /\ proposalReceived[v] = FALSE
-    /\ proposalReceived' = [proposalReceived EXCEPT ![v] = TRUE]
-    /\ UNCHANGED <<round, state, proposed, timedOut, ackVotes, precommitVotes, commitVotes, blockVoteType, finalized>>
+    /\ proposalReceived[v] /= "NONE"
+    /\ UNCHANGED <<round, state, proposed, proposalReceived, timedOut,
+                   ackVotes, precommitVotes, commitVotes, blockVoteType, blockProposalId, finalized>>
 
 (* STEP 7.2: Proposal timeout -- validator has not received proposal *)
 ProposalTimeout(v) ==
     /\ v \in Honest
     /\ state[v] = "WAITING_FOR_PROPOSAL"
     /\ v /= Proposer[round]
-    /\ proposalReceived[v] = FALSE
+    /\ proposalReceived[v] = "NONE"
     /\ timedOut' = [timedOut EXCEPT ![v] = TRUE]
-    /\ UNCHANGED <<round, state, proposed, proposalReceived, ackVotes, precommitVotes, commitVotes, blockVoteType, finalized>>
+    /\ UNCHANGED <<round, state, proposed, proposalReceived, ackVotes, precommitVotes, commitVotes, blockVoteType, blockProposalId, finalized>>
 
 --------------------------------------------------------------------------
-(* STEP 7: Send ACK_PROPOSAL vote *)
+(* STEP 7: Send ACK_PROPOSAL vote.
+   An honest validator binds its ack to the specific proposal it received.
+   A validator accepts at most one proposal per round (first valid proposal rule). *)
 
-(* Honest validator sends ACK_PROPOSAL after receiving proposal or timing out *)
 SendAckProposal(v) ==
     /\ v \in Honest
     /\ state[v] = "WAITING_FOR_PROPOSAL"
-    /\ \/ proposalReceived[v] = TRUE
+    /\ \/ proposalReceived[v] /= "NONE"
        \/ timedOut[v] = TRUE
     /\ LET vt == IF timedOut[v] THEN "NIL"
                  ELSE IF round >= MaxRound THEN "NIL"
                  ELSE "OK"
-       IN /\ ackVotes' = ackVotes \cup {[validator |-> v, voteType |-> vt, round |-> round]}
+           pid == IF vt = "NIL" THEN NilProposal ELSE proposalReceived[v]
+       IN /\ ackVotes' = ackVotes \cup {[validator |-> v, voteType |-> vt, proposalId |-> pid, round |-> round]}
           /\ blockVoteType' = [blockVoteType EXCEPT ![v] = vt]
+          /\ blockProposalId' = [blockProposalId EXCEPT ![v] = pid]
     /\ state' = [state EXCEPT ![v] = "WAITING_FOR_ACK_PROPOSAL"]
     /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, precommitVotes, commitVotes, finalized>>
 
-(* Byzantine validator sends arbitrary ACK_PROPOSAL votes, including equivocation:
-   may send OK to some peers and NIL to others, so both appear globally. *)
+(* Byzantine validator sends arbitrary ACK_PROPOSAL votes. Emits votes for
+   all (voteType, proposalId) combinations at once, modeling the worst case
+   where the Byzantine validator equivocates across both vote types and
+   both proposal identities simultaneously. *)
 ByzantineSendAck(v) ==
     /\ v \in Byzantine
     /\ state[v] = "WAITING_FOR_PROPOSAL"
-    /\ \E S \in SUBSET VoteTypes :
-        /\ S /= {}
-        /\ ackVotes' = ackVotes \cup {[validator |-> v, voteType |-> vt, round |-> round] : vt \in S}
+    /\ ackVotes' = ackVotes \cup
+        {[validator |-> v, voteType |-> vt, proposalId |-> pid, round |-> round] : vt \in VoteTypes, pid \in AllProposalIds}
     /\ state' = [state EXCEPT ![v] = "WAITING_FOR_ACK_PROPOSAL"]
     /\ blockVoteType' = [blockVoteType EXCEPT ![v] = "NIL"]
+    /\ blockProposalId' = [blockProposalId EXCEPT ![v] = NilProposal]
     /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, precommitVotes, commitVotes, finalized>>
 
 --------------------------------------------------------------------------
-(* STEP 9: Evaluate ACK_PROPOSAL threshold and send PRECOMMIT *)
+(* STEP 9: Evaluate ACK_PROPOSAL threshold and send PRECOMMIT.
+   An honest validator's precommit is bound to the (voteType, proposalId)
+   pair that reached the ack threshold. *)
 
 SendPrecommit(v) ==
     /\ v \in Honest
     /\ state[v] = "WAITING_FOR_ACK_PROPOSAL"
-    /\ \/ AckDepositForType("OK", round) >= Threshold
-       \/ AckDepositForType("NIL", round) >= Threshold
-    /\ LET vt == IF AckDepositForType("OK", round) >= Threshold
-                 THEN "OK"
-                 ELSE "NIL"
-       IN blockVoteType' = [blockVoteType EXCEPT ![v] = vt]
-    /\ precommitVotes' = precommitVotes \cup {[validator |-> v, round |-> round]}
+    /\ AckThresholdReached(round)
+    /\ LET vt == AckThresholdVoteType(round)
+           pid == AckThresholdProposalId(round)
+       IN /\ blockVoteType' = [blockVoteType EXCEPT ![v] = vt]
+          /\ blockProposalId' = [blockProposalId EXCEPT ![v] = pid]
+          /\ precommitVotes' = precommitVotes \cup {[validator |-> v, voteType |-> vt, proposalId |-> pid, round |-> round]}
     /\ state' = [state EXCEPT ![v] = "WAITING_FOR_PRECOMMIT"]
     /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, commitVotes, finalized>>
 
-(* Byzantine validator sends precommit arbitrarily *)
+(* Byzantine validator sends precommit votes for all (voteType, proposalId)
+   combinations. Sound over-approximation: worst-case equivocation. *)
 ByzantineSendPrecommit(v) ==
     /\ v \in Byzantine
     /\ state[v] = "WAITING_FOR_ACK_PROPOSAL"
-    /\ precommitVotes' = precommitVotes \cup {[validator |-> v, round |-> round]}
+    /\ precommitVotes' = precommitVotes \cup
+        {[validator |-> v, voteType |-> vt, proposalId |-> pid, round |-> round] : vt \in VoteTypes, pid \in AllProposalIds}
     /\ state' = [state EXCEPT ![v] = "WAITING_FOR_PRECOMMIT"]
-    /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, commitVotes, blockVoteType, finalized>>
+    /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, commitVotes, blockVoteType, blockProposalId, finalized>>
 
 --------------------------------------------------------------------------
-(* STEP 11: Evaluate PRECOMMIT threshold and send COMMIT *)
+(* STEP 11: Evaluate PRECOMMIT threshold and send COMMIT.
+   An honest validator's commit is bound to the (voteType, proposalId)
+   pair that reached the precommit threshold. *)
 
 SendCommit(v) ==
     /\ v \in Honest
     /\ state[v] = "WAITING_FOR_PRECOMMIT"
-    /\ PrecommitDeposit(round) >= Threshold
-    /\ commitVotes' = commitVotes \cup {[validator |-> v, round |-> round]}
+    /\ PrecommitThresholdReached(round)
+    /\ LET vt == blockVoteType[v]
+           pid == blockProposalId[v]
+       IN commitVotes' = commitVotes \cup {[validator |-> v, voteType |-> vt, proposalId |-> pid, round |-> round]}
     /\ state' = [state EXCEPT ![v] = "WAITING_FOR_COMMIT"]
-    /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, precommitVotes, blockVoteType, finalized>>
+    /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, precommitVotes, blockVoteType, blockProposalId, finalized>>
 
-(* Byzantine validator sends commit arbitrarily *)
+(* Byzantine validator sends commit votes for all (voteType, proposalId)
+   combinations. Sound over-approximation: worst-case equivocation. *)
 ByzantineSendCommit(v) ==
     /\ v \in Byzantine
     /\ state[v] = "WAITING_FOR_PRECOMMIT"
-    /\ commitVotes' = commitVotes \cup {[validator |-> v, round |-> round]}
+    /\ commitVotes' = commitVotes \cup
+        {[validator |-> v, voteType |-> vt, proposalId |-> pid, round |-> round] : vt \in VoteTypes, pid \in AllProposalIds}
     /\ state' = [state EXCEPT ![v] = "WAITING_FOR_COMMIT"]
-    /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, precommitVotes, blockVoteType, finalized>>
+    /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, precommitVotes, blockVoteType, blockProposalId, finalized>>
 
 --------------------------------------------------------------------------
 (* STEP 13: Evaluate COMMIT threshold -- finalize block *)
@@ -259,24 +342,19 @@ ByzantineSendCommit(v) ==
 FinalizeBlock(v) ==
     /\ v \in Honest
     /\ state[v] = "WAITING_FOR_COMMIT"
-    /\ CommitDeposit(round) >= Threshold
+    /\ CommitThresholdReached(round)
     /\ finalized' = [finalized EXCEPT ![v] = TRUE]
     /\ state' = [state EXCEPT ![v] = "RECEIVED_COMMITS"]
-    /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, precommitVotes, commitVotes, blockVoteType>>
+    /\ UNCHANGED <<round, proposed, proposalReceived, timedOut, ackVotes, precommitVotes, commitVotes, blockVoteType, blockProposalId>>
 
 --------------------------------------------------------------------------
 (* STEP 14: Round escalation -- only from Round 1 *)
 
-(* An honest validator stuck in ACK_PROPOSAL phase triggers escalation.
-   In the Go code, escalation from ACK can be triggered by timeout alone
-   or by evidence that higher-round participants make the current round
-   unreachable. AckDeposit counts each validator once even if they equivocated. *)
 EscalateFromAck(v) ==
     /\ v \in Honest
     /\ round = 1
     /\ state[v] = "WAITING_FOR_ACK_PROPOSAL"
-    /\ AckDepositForType("OK", round) < Threshold
-    /\ AckDepositForType("NIL", round) < Threshold
+    /\ ~AckThresholdReached(round)
     /\ \/ HigherRoundAckDeposit(round) + AckDeposit(round) >= Threshold
        \/ TRUE  \* nondeterministic timeout
     /\ round' = 2
@@ -285,18 +363,10 @@ EscalateFromAck(v) ==
         THEN "WAITING_FOR_PROPOSAL"
         ELSE state[w]]
     /\ proposed' = [proposed EXCEPT ![2] = FALSE]
-    /\ proposalReceived' = [w \in Validators |-> FALSE]
+    /\ proposalReceived' = [w \in Validators |-> "NONE"]
     /\ timedOut' = [w \in Validators |-> FALSE]
-    /\ UNCHANGED <<ackVotes, precommitVotes, commitVotes, blockVoteType, finalized>>
+    /\ UNCHANGED <<ackVotes, precommitVotes, commitVotes, blockVoteType, blockProposalId, finalized>>
 
-(* An honest validator stuck in PRECOMMIT phase triggers escalation.
-   In the Go code, escalation from PRECOMMIT requires timeout AND
-   higher-round deposit evidence. The TLA+ model uses a global round
-   and does not model out-of-order cross-round messages, so the
-   higher-round evidence condition cannot be expressed directly.
-   Instead, escalation is guarded only by the precommit deficit,
-   which is a sound over-approximation: if safety holds with more
-   liberal escalation, it holds with the stricter Go implementation. *)
 EscalateFromPrecommit(v) ==
     /\ v \in Honest
     /\ round = 1
@@ -308,9 +378,9 @@ EscalateFromPrecommit(v) ==
         THEN "WAITING_FOR_PROPOSAL"
         ELSE state[w]]
     /\ proposed' = [proposed EXCEPT ![2] = FALSE]
-    /\ proposalReceived' = [w \in Validators |-> FALSE]
+    /\ proposalReceived' = [w \in Validators |-> "NONE"]
     /\ timedOut' = [w \in Validators |-> FALSE]
-    /\ UNCHANGED <<ackVotes, precommitVotes, commitVotes, blockVoteType, finalized>>
+    /\ UNCHANGED <<ackVotes, precommitVotes, commitVotes, blockVoteType, blockProposalId, finalized>>
 
 --------------------------------------------------------------------------
 (* Next-state relation *)
@@ -348,13 +418,17 @@ Spec == Init /\ [][Next]_vars /\ Fairness
 --------------------------------------------------------------------------
 (* SAFETY PROPERTIES *)
 
-(* Agreement: No two honest validators finalize with different vote types *)
+(* Agreement: No two honest validators finalize with different blocks.
+   This covers both OK-vs-NIL conflicts and OK(blockA)-vs-OK(blockB) conflicts
+   from an equivocating proposer. Two validators agree iff they locked on the
+   same vote type AND the same proposal identity. *)
 Agreement ==
     \A v1, v2 \in Honest :
         (finalized[v1] /\ finalized[v2]) =>
-            blockVoteType[v1] = blockVoteType[v2]
+            /\ blockVoteType[v1] = blockVoteType[v2]
+            /\ blockProposalId[v1] = blockProposalId[v2]
 
-(* Validity: If all honest validators voted OK, the block is not NIL *)
+(* Validity: If all honest validators voted OK, no honest validator finalizes as NIL *)
 Validity ==
     (\A v \in Honest : finalized[v] /\ blockVoteType[v] = "OK") =>
         ~(\E w \in Honest : finalized[w] /\ blockVoteType[w] = "NIL")
@@ -364,10 +438,10 @@ Round2Consistency ==
     \A v \in Honest :
         (finalized[v] /\ round = 2) => blockVoteType[v] = "NIL"
 
-(* No honest validator finalizes without sufficient commit weight *)
+(* No honest validator finalizes without sufficient commit weight for its certified value *)
 CommitIntegrity ==
     \A v \in Honest :
-        finalized[v] => CommitDeposit(round) >= Threshold
+        finalized[v] => CommitDepositForTypeAndProposal(blockVoteType[v], blockProposalId[v], round) >= Threshold
 
 --------------------------------------------------------------------------
 (* LIVENESS PROPERTIES *)
@@ -379,8 +453,7 @@ Termination == <>(\A v \in Honest : finalized[v])
 RoundProgress ==
     (round = 1
      /\ \A v \in Honest : state[v] \in {"WAITING_FOR_ACK_PROPOSAL", "WAITING_FOR_PRECOMMIT"}
-     /\ AckDepositForType("OK", 1) < Threshold
-     /\ AckDepositForType("NIL", 1) < Threshold)
+     /\ ~AckThresholdReached(1))
     ~> (round = 2)
 
 =============================================================================
