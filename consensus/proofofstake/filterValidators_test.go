@@ -891,6 +891,419 @@ func TestFilterValidatorsDeterminism_1000Validators(t *testing.T) {
 	}
 }
 
+// Scenario A: 1,000 validators, widely distributed stake. Pass 1 hits the 42-slot cap.
+// Expected: Pass 1 validators (~42) get proposer rate ~42/128, Pass 2 (~42) get ~42/128,
+// Pass 3 (~44) get ~44/128 of total proposer selections.
+func TestFilterValidators_ProposerProbability_ScenarioA(t *testing.T) {
+	origBlockNumber := TestFilterValidatorsBlockNumber
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	defer func() { TestFilterValidatorsBlockNumber = origBlockNumber }()
+
+	const numValidators = 1000
+	const numBlocks = 10000
+	const round = byte(1)
+	baseBlockNumber := defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+
+	validatorList := hardcodedValidatorListFilter(numValidators)
+	proposerCount := make(map[common.Address]int)
+	committeeCount := make(map[common.Address]int)
+
+	for block := uint64(0); block < numBlocks; block++ {
+		blockNumber := baseBlockNumber + block
+		consensusContext := crypto.Keccak256Hash([]byte("scenarioA"), common.Uint64ToBytes(blockNumber))
+
+		validatorsDepositMap := make(map[common.Address]*big.Int)
+		validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+		for i := 0; i < numValidators; i++ {
+			addr := validatorList[i]
+			validatorsDepositMap[addr] = params.EtherToWei(big.NewInt(int64(5000000000 + i)))
+			validatorsDDetailsMap[addr] = &ValidatorDetailsV2{
+				Validator:     addr,
+				NilBlockCount: big.NewInt(0),
+				LastNiLBlock:  big.NewInt(0),
+			}
+		}
+
+		resultMap, _, _, err := filterValidators(consensusContext, &validatorsDepositMap, blockNumber, &validatorsDDetailsMap)
+		if err != nil {
+			t.Fatalf("block %d: filterValidators failed: %v", block, err)
+		}
+		if len(resultMap) != MAX_VALIDATORS {
+			t.Fatalf("block %d: expected %d validators, got %d", block, MAX_VALIDATORS, len(resultMap))
+		}
+
+		for addr := range resultMap {
+			committeeCount[addr]++
+		}
+
+		committeeDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+		for addr := range resultMap {
+			committeeDetailsMap[addr] = validatorsDDetailsMap[addr]
+		}
+		proposer, _, err := getBlockProposer(common.Hash{}, nil, round, &committeeDetailsMap, blockNumber, consensusContext)
+		if err != nil {
+			t.Fatalf("block %d: getBlockProposer failed: %v", block, err)
+		}
+		proposerCount[proposer]++
+	}
+
+	pass1Total := 0
+	pass2Total := 0
+	pass3Total := 0
+	for i := 0; i < numValidators; i++ {
+		rate := float64(committeeCount[validatorList[i]]) / float64(numBlocks)
+		cnt := proposerCount[validatorList[i]]
+		if rate > 0.95 {
+			pass1Total += cnt
+		} else if rate > 0.35 {
+			pass2Total += cnt
+		} else {
+			pass3Total += cnt
+		}
+	}
+
+	pass1Rate := float64(pass1Total) / float64(numBlocks)
+	pass2Rate := float64(pass2Total) / float64(numBlocks)
+	pass3Rate := float64(pass3Total) / float64(numBlocks)
+
+	expectedPass1 := float64(42) / float64(128)
+	expectedPass2 := float64(42) / float64(128)
+	expectedPass3 := float64(44) / float64(128)
+
+	fmt.Printf("Scenario A (1,000 validators, widely distributed stake):\n")
+	fmt.Printf("  Pass 1 proposer rate: %.4f (expected ~%.4f)\n", pass1Rate, expectedPass1)
+	fmt.Printf("  Pass 2 proposer rate: %.4f (expected ~%.4f)\n", pass2Rate, expectedPass2)
+	fmt.Printf("  Pass 3 proposer rate: %.4f (expected ~%.4f)\n", pass3Rate, expectedPass3)
+
+	tolerance := 0.08
+	if pass1Rate < expectedPass1-tolerance || pass1Rate > expectedPass1+tolerance {
+		t.Fatalf("Scenario A: Pass 1 proposer rate %.4f outside tolerance of expected %.4f", pass1Rate, expectedPass1)
+	}
+	if pass2Rate < expectedPass2-tolerance || pass2Rate > expectedPass2+tolerance {
+		t.Fatalf("Scenario A: Pass 2 proposer rate %.4f outside tolerance of expected %.4f", pass2Rate, expectedPass2)
+	}
+	if pass3Rate < expectedPass3-tolerance || pass3Rate > expectedPass3+tolerance {
+		t.Fatalf("Scenario A: Pass 3 proposer rate %.4f outside tolerance of expected %.4f", pass3Rate, expectedPass3)
+	}
+}
+
+// Scenario B: 1,000 validators, top 18 hold >85% of total deposit. Pass 1 stops at deposit threshold (18).
+// Pass 2 fills up to 66 slots (84-18), Pass 3 fills 44. Proposer rate per pass: 18/128, 66/128, 44/128.
+func TestFilterValidators_ProposerProbability_ScenarioB(t *testing.T) {
+	origBlockNumber := TestFilterValidatorsBlockNumber
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	defer func() { TestFilterValidatorsBlockNumber = origBlockNumber }()
+
+	const numValidators = 1000
+	const numBlocks = 10000
+	const round = byte(1)
+	const topCount = 18
+	baseBlockNumber := defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+
+	validatorList := hardcodedValidatorListFilter(numValidators)
+	proposerCount := make(map[common.Address]int)
+	committeeCount := make(map[common.Address]int)
+
+	for block := uint64(0); block < numBlocks; block++ {
+		blockNumber := baseBlockNumber + block
+		consensusContext := crypto.Keccak256Hash([]byte("scenarioB"), common.Uint64ToBytes(blockNumber))
+
+		validatorsDepositMap := make(map[common.Address]*big.Int)
+		validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+		for i := 0; i < numValidators; i++ {
+			addr := validatorList[i]
+			var deposit *big.Int
+			if i < topCount {
+				deposit = params.EtherToWei(big.NewInt(100000000000))
+			} else {
+				deposit = params.EtherToWei(big.NewInt(5000000 + int64(i)))
+			}
+			validatorsDepositMap[addr] = deposit
+			validatorsDDetailsMap[addr] = &ValidatorDetailsV2{
+				Validator:     addr,
+				NilBlockCount: big.NewInt(0),
+				LastNiLBlock:  big.NewInt(0),
+			}
+		}
+
+		resultMap, _, _, err := filterValidators(consensusContext, &validatorsDepositMap, blockNumber, &validatorsDDetailsMap)
+		if err != nil {
+			t.Fatalf("block %d: filterValidators failed: %v", block, err)
+		}
+		if len(resultMap) != MAX_VALIDATORS {
+			t.Fatalf("block %d: expected %d validators, got %d", block, MAX_VALIDATORS, len(resultMap))
+		}
+
+		for addr := range resultMap {
+			committeeCount[addr]++
+		}
+
+		committeeDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+		for addr := range resultMap {
+			committeeDetailsMap[addr] = validatorsDDetailsMap[addr]
+		}
+		proposer, _, err := getBlockProposer(common.Hash{}, nil, round, &committeeDetailsMap, blockNumber, consensusContext)
+		if err != nil {
+			t.Fatalf("block %d: getBlockProposer failed: %v", block, err)
+		}
+		proposerCount[proposer]++
+	}
+
+	pass1Total := 0
+	pass1CommitteeTotal := 0
+	for i := 0; i < topCount; i++ {
+		pass1Total += proposerCount[validatorList[i]]
+		pass1CommitteeTotal += committeeCount[validatorList[i]]
+	}
+
+	pass2Total := 0
+	pass3Total := 0
+	for i := topCount; i < numValidators; i++ {
+		rate := float64(committeeCount[validatorList[i]]) / float64(numBlocks)
+		cnt := proposerCount[validatorList[i]]
+		if rate > 0.35 {
+			pass2Total += cnt
+		} else {
+			pass3Total += cnt
+		}
+	}
+
+	pass1Rate := float64(pass1Total) / float64(numBlocks)
+	pass2Rate := float64(pass2Total) / float64(numBlocks)
+	pass3Rate := float64(pass3Total) / float64(numBlocks)
+	pass1CommitteeRate := float64(pass1CommitteeTotal) / float64(topCount) / float64(numBlocks)
+
+	pass2Slots := 84 - topCount
+	expectedPass1 := float64(topCount) / float64(128)
+	expectedPass2 := float64(pass2Slots) / float64(128)
+	expectedPass3 := float64(128-84) / float64(128)
+
+	fmt.Printf("Scenario B (1,000 validators, top %d hold >85%% deposit):\n", topCount)
+	fmt.Printf("  Pass 1: %d validators, committee rate: %.4f, proposer rate: %.4f (expected ~%.4f)\n",
+		topCount, pass1CommitteeRate, pass1Rate, expectedPass1)
+	fmt.Printf("  Pass 2: proposer rate: %.4f (expected ~%.4f)\n", pass2Rate, expectedPass2)
+	fmt.Printf("  Pass 3: proposer rate: %.4f (expected ~%.4f)\n", pass3Rate, expectedPass3)
+
+	if pass1CommitteeRate < 0.95 {
+		t.Fatalf("Scenario B: Pass 1 validators should be selected ~100%%, got %.4f", pass1CommitteeRate)
+	}
+	tolerance := 0.08
+	if pass1Rate < expectedPass1-tolerance || pass1Rate > expectedPass1+tolerance {
+		t.Fatalf("Scenario B: Pass 1 proposer rate %.4f outside tolerance of expected %.4f", pass1Rate, expectedPass1)
+	}
+	if pass2Rate < expectedPass2-tolerance || pass2Rate > expectedPass2+tolerance {
+		t.Fatalf("Scenario B: Pass 2 proposer rate %.4f outside tolerance of expected %.4f", pass2Rate, expectedPass2)
+	}
+	if pass3Rate < expectedPass3-tolerance || pass3Rate > expectedPass3+tolerance {
+		t.Fatalf("Scenario B: Pass 3 proposer rate %.4f outside tolerance of expected %.4f", pass3Rate, expectedPass3)
+	}
+}
+
+// Scenario C: 100,000 validators, widely distributed stake.
+// Pass 3 validators have very low individual selection probability (~44/99874 = ~0.04%).
+// Uses fewer blocks due to O(N log N) sorting cost per block with 100K validators.
+func TestFilterValidators_ProposerProbability_ScenarioC(t *testing.T) {
+	origBlockNumber := TestFilterValidatorsBlockNumber
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	defer func() { TestFilterValidatorsBlockNumber = origBlockNumber }()
+
+	const numValidators = 100000
+	const numBlocks = 50
+	const round = byte(1)
+	baseBlockNumber := defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+
+	validatorList := hardcodedValidatorListFilter(numValidators)
+
+	depositMap := make(map[common.Address]*big.Int, numValidators)
+	detailsMap := make(map[common.Address]*ValidatorDetailsV2, numValidators)
+	for i := 0; i < numValidators; i++ {
+		addr := validatorList[i]
+		depositMap[addr] = params.EtherToWei(big.NewInt(int64(5000000000 + i)))
+		detailsMap[addr] = &ValidatorDetailsV2{
+			Validator:     addr,
+			NilBlockCount: big.NewInt(0),
+			LastNiLBlock:  big.NewInt(0),
+		}
+	}
+
+	proposerCount := make(map[common.Address]int)
+	committeeCount := make(map[common.Address]int)
+
+	for block := uint64(0); block < numBlocks; block++ {
+		blockNumber := baseBlockNumber + block
+		consensusContext := crypto.Keccak256Hash([]byte("scenarioC"), common.Uint64ToBytes(blockNumber))
+
+		depositCopy := make(map[common.Address]*big.Int, numValidators)
+		for k, v := range depositMap {
+			depositCopy[k] = new(big.Int).Set(v)
+		}
+		detailsCopy := make(map[common.Address]*ValidatorDetailsV2, numValidators)
+		for k, v := range detailsMap {
+			detailsCopy[k] = v
+		}
+
+		resultMap, _, _, err := filterValidators(consensusContext, &depositCopy, blockNumber, &detailsCopy)
+		if err != nil {
+			t.Fatalf("block %d: filterValidators failed: %v", block, err)
+		}
+		if len(resultMap) != MAX_VALIDATORS {
+			t.Fatalf("block %d: expected %d validators, got %d", block, MAX_VALIDATORS, len(resultMap))
+		}
+
+		for addr := range resultMap {
+			committeeCount[addr]++
+		}
+
+		committeeDetailsMap := make(map[common.Address]*ValidatorDetailsV2, len(resultMap))
+		for addr := range resultMap {
+			committeeDetailsMap[addr] = detailsMap[addr]
+		}
+		proposer, _, err := getBlockProposer(common.Hash{}, nil, round, &committeeDetailsMap, blockNumber, consensusContext)
+		if err != nil {
+			t.Fatalf("block %d: getBlockProposer failed: %v", block, err)
+		}
+		proposerCount[proposer]++
+	}
+
+	pass1Proposers := 0
+	pass2Proposers := 0
+	pass3Proposers := 0
+	pass1Count := 0
+	pass2Count := 0
+	pass3Count := 0
+	uniqueCommitteeMembers := 0
+
+	for i := 0; i < numValidators; i++ {
+		cc := committeeCount[validatorList[i]]
+		pc := proposerCount[validatorList[i]]
+		if cc == 0 {
+			continue
+		}
+		uniqueCommitteeMembers++
+		rate := float64(cc) / float64(numBlocks)
+		// With 50 blocks: Pass 1 validators appear in all 50 (rate 1.0),
+		// Pass 2 validators appear ~50% of the time (rate ~0.5),
+		// Pass 3 validators appear rarely (rate < 0.10 for 100K pool).
+		if rate > 0.90 {
+			pass1Count++
+			pass1Proposers += pc
+		} else if rate > 0.10 {
+			pass2Count++
+			pass2Proposers += pc
+		} else {
+			pass3Count++
+			pass3Proposers += pc
+		}
+	}
+
+	pass1Rate := float64(pass1Proposers) / float64(numBlocks)
+	pass2Rate := float64(pass2Proposers) / float64(numBlocks)
+	pass3Rate := float64(pass3Proposers) / float64(numBlocks)
+
+	expectedPass1 := float64(42) / float64(128)
+	expectedPass2 := float64(42) / float64(128)
+	expectedPass3 := float64(44) / float64(128)
+
+	fmt.Printf("Scenario C (100,000 validators, widely distributed stake, %d blocks):\n", numBlocks)
+	fmt.Printf("  Pass 1: %d validators, proposer rate: %.4f (expected ~%.4f)\n", pass1Count, pass1Rate, expectedPass1)
+	fmt.Printf("  Pass 2: %d validators, proposer rate: %.4f (expected ~%.4f)\n", pass2Count, pass2Rate, expectedPass2)
+	fmt.Printf("  Pass 3: %d validators, proposer rate: %.4f (expected ~%.4f)\n", pass3Count, pass3Rate, expectedPass3)
+	fmt.Printf("  Unique validators seen in committee across %d blocks: %d / %d\n",
+		numBlocks, uniqueCommitteeMembers, numValidators)
+
+	// Wider tolerance due to low block count (50 blocks = each proposer event is 2% of total).
+	tolerance := 0.20
+	if pass1Rate < expectedPass1-tolerance || pass1Rate > expectedPass1+tolerance {
+		t.Fatalf("Scenario C: Pass 1 proposer rate %.4f outside tolerance of expected %.4f", pass1Rate, expectedPass1)
+	}
+	if pass2Rate < expectedPass2-tolerance || pass2Rate > expectedPass2+tolerance {
+		t.Fatalf("Scenario C: Pass 2 proposer rate %.4f outside tolerance of expected %.4f", pass2Rate, expectedPass2)
+	}
+	if pass3Rate < expectedPass3-tolerance || pass3Rate > expectedPass3+tolerance {
+		t.Fatalf("Scenario C: Pass 3 proposer rate %.4f outside tolerance of expected %.4f", pass3Rate, expectedPass3)
+	}
+	if pass1Count < 35 {
+		t.Fatalf("Scenario C: Expected ~42 Pass 1 validators, got %d", pass1Count)
+	}
+	if uniqueCommitteeMembers < 128 {
+		t.Fatalf("Scenario C: Too few unique committee members: %d", uniqueCommitteeMembers)
+	}
+}
+
+// Scenario D: 100 validators (<=128). All are selected every block. Equal proposer probability 1/N.
+func TestFilterValidators_ProposerProbability_ScenarioD(t *testing.T) {
+	origBlockNumber := TestFilterValidatorsBlockNumber
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+	defer func() { TestFilterValidatorsBlockNumber = origBlockNumber }()
+
+	const numValidators = 100
+	const numBlocks = 10000
+	const round = byte(1)
+	baseBlockNumber := defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock
+
+	validatorList := hardcodedValidatorListFilter(numValidators)
+	proposerCount := make(map[common.Address]int)
+	committeeCount := make(map[common.Address]int)
+
+	for block := uint64(0); block < numBlocks; block++ {
+		blockNumber := baseBlockNumber + block
+		consensusContext := crypto.Keccak256Hash([]byte("scenarioD"), common.Uint64ToBytes(blockNumber))
+
+		validatorsDepositMap := make(map[common.Address]*big.Int)
+		validatorsDDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+		for i := 0; i < numValidators; i++ {
+			addr := validatorList[i]
+			validatorsDepositMap[addr] = params.EtherToWei(big.NewInt(int64(10000000000 + i)))
+			validatorsDDetailsMap[addr] = &ValidatorDetailsV2{
+				Validator:     addr,
+				NilBlockCount: big.NewInt(0),
+				LastNiLBlock:  big.NewInt(0),
+			}
+		}
+
+		resultMap, _, _, err := filterValidators(consensusContext, &validatorsDepositMap, blockNumber, &validatorsDDetailsMap)
+		if err != nil {
+			t.Fatalf("block %d: filterValidators failed: %v", block, err)
+		}
+		if len(resultMap) != numValidators {
+			t.Fatalf("block %d: expected all %d validators, got %d", block, numValidators, len(resultMap))
+		}
+
+		for addr := range resultMap {
+			committeeCount[addr]++
+		}
+
+		committeeDetailsMap := make(map[common.Address]*ValidatorDetailsV2)
+		for addr := range resultMap {
+			committeeDetailsMap[addr] = validatorsDDetailsMap[addr]
+		}
+		proposer, _, err := getBlockProposer(common.Hash{}, nil, round, &committeeDetailsMap, blockNumber, consensusContext)
+		if err != nil {
+			t.Fatalf("block %d: getBlockProposer failed: %v", block, err)
+		}
+		proposerCount[proposer]++
+	}
+
+	for i := 0; i < numValidators; i++ {
+		if committeeCount[validatorList[i]] != numBlocks {
+			t.Fatalf("Scenario D: validator %d not selected every block (got %d/%d)", i, committeeCount[validatorList[i]], numBlocks)
+		}
+	}
+
+	expectedRate := 1.0 / float64(numValidators)
+	tolerance := 0.03
+	for i := 0; i < numValidators; i++ {
+		rate := float64(proposerCount[validatorList[i]]) / float64(numBlocks)
+		if rate < expectedRate-tolerance || rate > expectedRate+tolerance {
+			t.Fatalf("Scenario D: validator %d proposer rate %.4f outside tolerance of expected %.4f", i, rate, expectedRate)
+		}
+	}
+
+	fmt.Printf("Scenario D (%d validators, all selected every block):\n", numValidators)
+	fmt.Printf("  All validators in committee every block: true\n")
+	fmt.Printf("  Expected proposer rate: %.4f, tolerance: %.4f\n", expectedRate, tolerance)
+}
+
 // TestFilterValidators_filteredDepositValueBelowMin_afterNormalize hits the branch where
 // filteredDepositValue < MIN_BLOCK_DEPOSIT after normalizeDeposit (returns error).
 // Setup: 100001 validators — 100000 with 5M ether and NilBlockCount 0, 1 with 5M and NilBlockCount 50.
