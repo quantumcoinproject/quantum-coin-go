@@ -447,7 +447,12 @@ func JsonToWalletKeyPair(this js.Value, args []js.Value) interface{} {
 	if err != nil {
 		return nil
 	}
-	return base64.StdEncoding.EncodeToString(key.PrivateKey.PriData) + "," + base64.StdEncoding.EncodeToString(key.PrivateKey.PubData)
+	seedPart := ""
+	if len(key.PreExpansionSeed) > 0 {
+		seedPart = base64.StdEncoding.EncodeToString(key.PreExpansionSeed)
+	}
+	return base64.StdEncoding.EncodeToString(key.PrivateKey.PriData) + "," +
+		base64.StdEncoding.EncodeToString(key.PrivateKey.PubData) + "," + seedPart
 }
 
 func EncryptPreExpansionSeedWrapper(this js.Value, args []js.Value) interface{} {

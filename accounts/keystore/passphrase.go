@@ -233,8 +233,9 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 	}
 	// Depending on the version try to parse one way or another
 	var (
-		keyBytes, keyId []byte
-		err             error
+		keyBytes, keyId  []byte
+		preExpansionSeed []byte
+		err              error
 	)
 	ver, ok := m["version"]
 	if !ok {
@@ -251,7 +252,7 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		if err := json.Unmarshal(keyjson, k); err != nil {
 			return nil, err
 		}
-		keyBytes, keyId, err = decryptKeyV5(k, auth)
+		keyBytes, keyId, preExpansionSeed, err = decryptKeyV5(k, auth)
 	} else {
 		k := new(encryptedKeyJSONV3)
 		if err := json.Unmarshal(keyjson, k); err != nil {
@@ -284,48 +285,49 @@ func DecryptKey(keyjson []byte, auth string) (*Key, error) {
 		return nil, err
 	}
 	return &Key{
-		Id:         id,
-		Address:    pubKeyAddress,
-		PrivateKey: key,
+		Id:               id,
+		Address:          pubKeyAddress,
+		PrivateKey:       key,
+		PreExpansionSeed: preExpansionSeed,
 	}, nil
 }
 
-func decryptKeyV5(keyProtected *encryptedKeyJSONV4, auth string) ([]byte, []byte, error) {
+func decryptKeyV5(keyProtected *encryptedKeyJSONV4, auth string) (keyBytes []byte, keyId []byte, preExpansionSeed []byte, err error) {
 	if keyProtected.Version != 5 {
-		return nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
+		return nil, nil, nil, fmt.Errorf("version not supported: %v", keyProtected.Version)
 	}
 	keyUUID, err := uuid.Parse(keyProtected.Id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	preExpansionSeed, err := DecryptDataV4(keyProtected.Crypto, auth)
+	preExpansionSeed, err = DecryptDataV4(keyProtected.Crypto, auth)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	privKey, err := cryptobase.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(privKey.PriData)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	sigAlg := *sigAlgPtr
 
 	derivedAddress, err := sigAlg.PublicKeyToAddress(&privKey.PublicKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	storedAddress := common.HexToAddress(keyProtected.Address)
 	if derivedAddress != storedAddress {
-		return nil, nil, fmt.Errorf("v5 address mismatch: stored %s, derived %s", keyProtected.Address, hex.EncodeToString(derivedAddress[:]))
+		return nil, nil, nil, fmt.Errorf("v5 address mismatch: stored %s, derived %s", keyProtected.Address, hex.EncodeToString(derivedAddress[:]))
 	}
 
-	keyBytes, err := sigAlg.SerializePrivateKey(privKey)
+	keyBytes, err = sigAlg.SerializePrivateKey(privKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return keyBytes, keyUUID[:], nil
+	return keyBytes, keyUUID[:], preExpansionSeed, nil
 }
 
 func DecryptDataV4(cryptoJson CryptoJSON, auth string) ([]byte, error) {
