@@ -21,7 +21,6 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
-	"github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -165,7 +164,7 @@ func (tx *DynamicFeeTx) verifyFields() bool {
 		return false
 	}
 
-	if tx.maxGasTier() != GasTier(types.GAS_TIER_DEFAULT) {
+	if tx.maxGasTier() != GasTier(GAS_TIER_DEFAULT) {
 		log.Debug("verifyFields", "tx.maxGasTier()", tx.maxGasTier())
 		return false
 	}
@@ -185,6 +184,21 @@ func (tx *DynamicFeeTx) remarks() []byte {
 }
 
 func NewDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte, remarks []byte) *Transaction {
+	tx := NewTx(&DynamicFeeTx{
+		ChainID:        chainId,
+		Nonce:          nonce,
+		To:             to,
+		Value:          amount,
+		Data:           common.CopyBytes(data),
+		Remarks:        common.CopyBytes(remarks),
+		Gas:            gasLimit,
+		SigningContext: byte(signingContext),
+	})
+
+	return tx
+}
+
+func NewDynamicFeeTransactionExtended(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, data []byte, remarks []byte, signingContext crypto.SigningContext) *Transaction {
 	tx := NewTx(&DynamicFeeTx{
 		ChainID:        chainId,
 		Nonce:          nonce,

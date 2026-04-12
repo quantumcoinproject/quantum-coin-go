@@ -13,13 +13,13 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 )
 
 // mockJsValue is a mock implementation of js.Value for testing

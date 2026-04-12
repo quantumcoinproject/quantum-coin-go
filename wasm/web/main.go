@@ -16,16 +16,16 @@ import (
 
 	"github.com/google/uuid"
 	circlwasm "github.com/quantumcoinproject/circl/sign/wasm"
+	abi "github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	core "github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
-	wasm "github.com/quantumcoinproject/quantum-coin-go/wasm/core/types"
 	"golang.org/x/crypto/scrypt"
 )
 
@@ -166,11 +166,11 @@ func TxnSigningHash(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := core.NewDefaultFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+		ts.Transaction[0].GasLimit, core.GAS_TIER_DEFAULT, ts.Transaction[0].Data, nil)
 
-	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+	signer := core.NewLondonSigner(ts.Transaction[0].ChainId)
 
 	signerHash, err := signer.Hash(tx)
 	if err != nil {
@@ -191,11 +191,11 @@ func TxnSigningHash2(this js.Value, args []js.Value) interface{} {
 		return jsError(err)
 	}
 
-	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := core.NewDynamicFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, crypto.SigningContext(ts.Transaction[0].SigningContext))
 
-	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+	signer := core.NewLondonSigner(ts.Transaction[0].ChainId)
 
 	signerHash, err := signer.Hash(tx)
 	if err != nil {
@@ -216,11 +216,11 @@ func TxnHash(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := core.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+		ts.Transaction[0].GasLimit, core.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
 
-	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+	signer := core.NewLondonSigner(ts.Transaction[0].ChainId)
 
 	pubData := js.Global().Get("Uint8Array").New(args[7])
 	pubBytes := make([]byte, pubData.Get("length").Int())
@@ -244,11 +244,11 @@ func TxnHash2(this js.Value, args []js.Value) interface{} {
 		return jsError(err)
 	}
 
-	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := core.NewDynamicFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, crypto.SigningContext(ts.Transaction[0].SigningContext))
 
-	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+	signer := core.NewLondonSigner(ts.Transaction[0].ChainId)
 
 	pubData := js.Global().Get("Uint8Array").New(args[9])
 	pubBytes := make([]byte, pubData.Get("length").Int())
@@ -272,11 +272,11 @@ func TxnData(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 
-	tx := wasm.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := core.NewDefaultFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		&ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, wasm.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
+		ts.Transaction[0].GasLimit, core.GAS_TIER_DEFAULT, ts.Transaction[0].Data)
 
-	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+	signer := core.NewLondonSigner(ts.Transaction[0].ChainId)
 
 	pubData := js.Global().Get("Uint8Array").New(args[7])
 	pubBytes := make([]byte, pubData.Get("length").Int())
@@ -307,11 +307,11 @@ func TxnData2(this js.Value, args []js.Value) interface{} {
 		return jsError(err)
 	}
 
-	tx := wasm.NewDynamicFeeTransaction(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
+	tx := core.NewDynamicFeeTransactionExtended(ts.Transaction[0].ChainId, ts.Transaction[0].Nonce,
 		ts.Transaction[0].ToAddress, ts.Transaction[0].Value,
-		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, wasm.SigningContext(ts.Transaction[0].SigningContext))
+		ts.Transaction[0].GasLimit, ts.Transaction[0].Data, ts.Transaction[0].Remarks, crypto.SigningContext(ts.Transaction[0].SigningContext))
 
-	signer := wasm.NewLondonSigner(ts.Transaction[0].ChainId)
+	signer := core.NewLondonSigner(ts.Transaction[0].ChainId)
 
 	pubData := js.Global().Get("Uint8Array").New(args[9])
 	pubBytes := make([]byte, pubData.Get("length").Int())
@@ -647,7 +647,7 @@ func transactionData2(args []js.Value) (transaction Transaction2, err error) {
 	return t, nil
 }
 
-func signTxHash(tx *wasm.Transaction, signer wasm.Signer, pubBytes, sigBytes []byte) (*wasm.Transaction, error) {
+func signTxHash(tx *core.Transaction, signer core.Signer, pubBytes, sigBytes []byte) (*core.Transaction, error) {
 	sig := common.CombineTwoParts(sigBytes, pubBytes)
 	return tx.WithSignature(signer, sig)
 }
