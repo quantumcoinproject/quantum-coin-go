@@ -342,7 +342,7 @@ func send(from string, to string, quantity string, remarks string) (string, erro
 		remarkBytes = nil
 	}
 	if txType == "" || txType == "0" {
-		tx = types.NewDefaultFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data, remarkBytes)
+		tx = types.NewDefaultFeeTransactionExtended(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data, remarkBytes)
 	} else if txType == "1" {
 		tx = types.NewDynamicFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data, remarkBytes)
 	} else {
@@ -503,7 +503,6 @@ func convertCoins(ethAddress string, ethSignature string, key *signaturealgorith
 		txnOpts.TxType = types.DynamicFeeTxType
 		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
 	}
-
 
 	contract, err := conversion.NewConversion(contractAddress, client)
 	if err != nil {
