@@ -24,6 +24,20 @@ var (
 	ErrInvalidSeed          = errors.New("invalid seed length")
 )
 
+func GenerateKeyFromPreExpansionSeed(preExpansionSeed []byte) (publicKey []byte, secretKey []byte, err error) {
+	if len(preExpansionSeed) != hybridedmldsaslhdsa5.BaseSeedSize {
+		return nil, nil, ErrInvalidSeed
+	}
+	var baseSeed [hybridedmldsaslhdsa5.BaseSeedSize]byte
+	copy(baseSeed[:], preExpansionSeed)
+
+	expandedSeed, err := hybridedmldsaslhdsa5.ExpandSeed(baseSeed)
+	if err != nil {
+		return nil, nil, err
+	}
+	return GenerateKeyWithSeed(expandedSeed[:])
+}
+
 func GenerateKeyWithSeed(seed []byte) (publicKey []byte, secretKey []byte, err error) {
 	if len(seed) != hybridedmldsaslhdsa5.SeedSize {
 		return nil, nil, ErrInvalidSeed

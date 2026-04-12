@@ -23,6 +23,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 )
 
+const PreExpansionSeedSize = hybridedmldsaslhdsa5.BaseSeedSize
+
 type HybridEddsaMldsaSlhdsaSig5 struct {
 	sigName                      string
 	publicKeyLength              int
@@ -101,6 +103,26 @@ func (s HybridEddsaMldsaSlhdsaSig5) GenerateKeyWithReader(rand io.Reader) (*sign
 
 func (s HybridEddsaMldsaSlhdsaSig5) GetRequiredSeedLength() uint {
 	return hybridedmldsaslhdsa5.SeedSize
+}
+
+func (s HybridEddsaMldsaSlhdsaSig5) PreExpansionSeedSize() int {
+	return PreExpansionSeedSize
+}
+
+func (s HybridEddsaMldsaSlhdsaSig5) GenerateKeyFromPreExpansionSeed(preExpansionSeed []byte) (*signaturealgorithm.PrivateKey, error) {
+	pubKey, priKey, err := pqchelpereddsamldsaslhdsa5.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
+	if err != nil {
+		return nil, err
+	}
+
+	privy := new(signaturealgorithm.PrivateKey)
+	privy.PriData = make([]byte, len(priKey))
+	copy(privy.PriData, priKey)
+
+	privy.PublicKey.PubData = make([]byte, len(pubKey))
+	copy(privy.PublicKey.PubData, pubKey)
+
+	return privy, nil
 }
 
 func (s HybridEddsaMldsaSlhdsaSig5) GenerateKeyWithSeed(seed []byte) (*signaturealgorithm.PrivateKey, error) {

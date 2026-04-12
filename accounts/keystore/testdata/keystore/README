@@ -19,3 +19,14 @@ and should not be picked up by package accounts:
 - File: swapfile~ (should be skipped)
 - File: .hiddenfile (should be skipped)
 - File: foo/... (should be skipped because it is a directory)
+
+Version 5 (pre-expansion seed) test fixtures:
+Password for all V5 wallets: "testpassword" (light scrypt N=2, P=1)
+Deterministic seeds: byte(0), byte(1), ..., byte(N-1)
+
+- File: v5-seed64-wallet.json (64-byte pre-expansion seed, hybrideddsamldsaslhdsa)
+  Address: 0xa97C6Fc4AB5cfA4c51691E6Cce73b98b628cC27c612748d17909927e71139401
+- File: v5-seed96-wallet.json (96-byte pre-expansion seed, hybrideds)
+  Address: 0x277472936569545F48a36153bEde9A140Db7fFEe92B5F603E0a5ce3eE5B3Ffb8
+- File: v5-seed72-wallet.json (72-byte pre-expansion seed, hybrideddsamldsaslhdsa5)
+  Address: 0x1C8A52094a8a94f87Bdc60d435e0603C3046611bb9C544B4CD154c8d7b75C4a8

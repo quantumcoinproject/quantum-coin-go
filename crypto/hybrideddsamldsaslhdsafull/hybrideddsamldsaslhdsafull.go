@@ -549,6 +549,14 @@ func (s HybridEddsaMldsaSlhdsaFullSig) convertBytesToPublic(pub []byte) (*signat
 	return pubKey, nil
 }
 
+func (s HybridEddsaMldsaSlhdsaFullSig) PreExpansionSeedSize() int {
+	return 0
+}
+
+func (s HybridEddsaMldsaSlhdsaFullSig) GenerateKeyFromPreExpansionSeed(preExpansionSeed []byte) (*signaturealgorithm.PrivateKey, error) {
+	return nil, errors.New("GenerateKeyFromPreExpansionSeed not implemented")
+}
+
 // exportPrivateKey exports a private key into a binary dump.
 func (s HybridEddsaMldsaSlhdsaFullSig) exportPrivateKey(privy *signaturealgorithm.PrivateKey) ([]byte, error) {
 	if len(privy.PriData) != s.privateKeyLength {

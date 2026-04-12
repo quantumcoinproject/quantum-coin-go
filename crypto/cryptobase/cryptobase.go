@@ -45,6 +45,20 @@ var SigAlgHybridMlDsaEddsaSlhDsaFull = hybrideddsamldsaslhdsafull.CreateHybridEd
 var SigAlgHybridMlDsaEddsaSlhDsaCompact = hybrideddsamldsaslhdsa.CreateHybridEddsaMldsaSlhdsaSig()
 var SigAlgHybridMlDsaEddsaSlhDsa5 = hybrideddsamldsaslhdsa5.CreateHybridEddsaMldsaSlhdsaSig5()
 
+func GenerateKeyFromPreExpansionSeed(preExpansionSeed []byte) (*signaturealgorithm.PrivateKey, error) {
+	preExpansionSeedLen := len(preExpansionSeed)
+	switch preExpansionSeedLen {
+	case SigAlgHybridMlDsaEddsaSlhDsaCompact.PreExpansionSeedSize():
+		return SigAlgHybridMlDsaEddsaSlhDsaCompact.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
+	case SigAlgHybridEds.PreExpansionSeedSize():
+		return SigAlgHybridEds.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
+	case SigAlgHybridMlDsaEddsaSlhDsa5.PreExpansionSeedSize():
+		return SigAlgHybridMlDsaEddsaSlhDsa5.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
+	default:
+		return nil, fmt.Errorf("unsupported pre-expansion seed size: %d", preExpansionSeedLen)
+	}
+}
+
 type DynamicSigner struct {
 }
 

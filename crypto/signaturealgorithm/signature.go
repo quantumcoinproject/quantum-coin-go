@@ -34,6 +34,9 @@ type SignatureAlgorithm interface {
 	GetRequiredSeedLength() uint
 	GenerateKeyWithSeed([]byte) (*PrivateKey, error)
 
+	PreExpansionSeedSize() int
+	GenerateKeyFromPreExpansionSeed(preExpansionSeed []byte) (*PrivateKey, error)
+
 	SerializePrivateKey(*PrivateKey) ([]byte, error)
 	DeserializePrivateKey([]byte) (*PrivateKey, error)
 

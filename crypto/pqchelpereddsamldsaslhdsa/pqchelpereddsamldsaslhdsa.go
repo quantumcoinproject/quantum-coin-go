@@ -1,12 +1,13 @@
 // Package pqchelpereddsamldsaslhdsa provides helpers for NIST-standardized hybrid PQC signatures.
 // Wraps hybrid Ed25519 + ML-DSA (FIPS 204) + SLH-DSA (FIPS 205) for key gen, sign, verify.
-// QuantumCoin uses this NIST-standardized post-quantum cryptography in hybrid mode 
+// QuantumCoin uses this NIST-standardized post-quantum cryptography in hybrid mode
 // to ensure all operations are quantum-resistant according to FIPS 204/205.
 package pqchelpereddsamldsaslhdsa
 
 import (
 	"crypto/rand"
 	"errors"
+
 	"github.com/quantumcoinproject/circl/sign/hybridedmldsaslhdsa"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -24,6 +25,20 @@ var (
 	ErrVerifyFailed         = errors.New("verify failed")
 	ErrInvalidSeed          = errors.New("invalid seed length")
 )
+
+func GenerateKeyFromPreExpansionSeed(preExpansionSeed []byte) (publicKey []byte, secretKey []byte, err error) {
+	if len(preExpansionSeed) != hybridedmldsaslhdsa.BaseSeedSize {
+		return nil, nil, ErrInvalidSeed
+	}
+	var baseSeed [hybridedmldsaslhdsa.BaseSeedSize]byte
+	copy(baseSeed[:], preExpansionSeed)
+
+	expandedSeed, err := hybridedmldsaslhdsa.ExpandSeed(baseSeed)
+	if err != nil {
+		return nil, nil, err
+	}
+	return GenerateKeyWithSeed(expandedSeed[:])
+}
 
 func GenerateKeyWithSeed(seed []byte) (publicKey []byte, secretKey []byte, err error) {
 	if len(seed) != hybridedmldsaslhdsa.SeedSize {
