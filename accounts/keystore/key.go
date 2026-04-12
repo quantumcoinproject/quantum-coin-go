@@ -45,7 +45,8 @@ type Key struct {
 	Address common.Address
 	// we only store privkey as pubkey/address can be derived from it
 	// privkey in this struct is always in plaintext
-	PrivateKey *signaturealgorithm.PrivateKey
+	PrivateKey       *signaturealgorithm.PrivateKey
+	PreExpansionSeed []byte `json:"preExpansionSeed,omitempty"`
 }
 
 type keyStore interface {

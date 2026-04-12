@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -12,13 +13,13 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	ks "github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
-	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 )
 
 // mockJsValue is a mock implementation of js.Value for testing
@@ -3734,6 +3735,9 @@ func TestDecryptWalletVer3(t *testing.T) {
 	if key == nil {
 		t.Fatal("DecryptKey returned nil key")
 	}
+	if key.PreExpansionSeed != nil {
+		t.Fatal("expected PreExpansionSeed to be nil for V3 wallet")
+	}
 }
 
 func TestDecryptWalletVer4HybridEds(t *testing.T) {
@@ -3747,6 +3751,9 @@ func TestDecryptWalletVer4HybridEds(t *testing.T) {
 	if key == nil {
 		t.Fatal("DecryptKey returned nil key")
 	}
+	if key.PreExpansionSeed != nil {
+		t.Fatal("expected PreExpansionSeed to be nil for V4 HybridEds wallet")
+	}
 }
 
 func TestDecryptWalletVer4Hybrid(t *testing.T) {
@@ -3758,6 +3765,9 @@ func TestDecryptWalletVer4Hybrid(t *testing.T) {
 	}
 	if key == nil {
 		t.Fatal("DecryptKey returned nil key")
+	}
+	if key.PreExpansionSeed != nil {
+		t.Fatal("expected PreExpansionSeed to be nil for V4 Hybrid wallet")
 	}
 }
 
@@ -3795,6 +3805,9 @@ func testEncryptPreExpansionSeedRoundTrip(t *testing.T, seedSize int) {
 	if key.Address != address {
 		t.Fatalf("address mismatch: got %s, want %s", key.Address.Hex(), address.Hex())
 	}
+	if !bytes.Equal(key.PreExpansionSeed, preExpansionSeed) {
+		t.Fatal("PreExpansionSeed does not match the original seed")
+	}
 }
 
 func TestEncryptPreExpansionSeed_64(t *testing.T) {
@@ -3826,5 +3839,100 @@ func TestDecryptWalletVer4Hybrid5(t *testing.T) {
 	}
 	if key == nil {
 		t.Fatal("DecryptKey returned nil key")
+	}
+	if key.PreExpansionSeed != nil {
+		t.Fatal("expected PreExpansionSeed to be nil for V4 Hybrid5 wallet")
+	}
+}
+
+func TestJsonToWalletKeyPair_V5_IncludesPreExpansionSeed(t *testing.T) {
+	seedSize := cryptobase.SigAlgHybridMlDsaEddsaSlhDsaCompact.PreExpansionSeedSize()
+	preExpansionSeed := make([]byte, seedSize)
+	for i := 0; i < seedSize; i++ {
+		preExpansionSeed[i] = byte(i)
+	}
+
+	privKey, err := cryptobase.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(privKey.PriData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address, err := (*sigAlgPtr).PublicKeyToAddress(&privKey.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := uuid.NewRandom()
+	walletJson, err := ks.EncryptPreExpansionSeed(preExpansionSeed, address, id, "testpassword", 2, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	key, err := ks.DecryptKey(walletJson, "testpassword")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := base64.StdEncoding.EncodeToString(key.PrivateKey.PriData) + "," +
+		base64.StdEncoding.EncodeToString(key.PrivateKey.PubData) + "," +
+		base64.StdEncoding.EncodeToString(key.PreExpansionSeed)
+
+	parts := strings.Split(result, ",")
+	if len(parts) != 3 {
+		t.Fatalf("expected 3 comma-delimited parts, got %d", len(parts))
+	}
+	if parts[2] == "" {
+		t.Fatal("expected non-empty PreExpansionSeed segment for V5 wallet")
+	}
+	decoded, err := base64.StdEncoding.DecodeString(parts[2])
+	if err != nil {
+		t.Fatalf("failed to decode PreExpansionSeed segment: %v", err)
+	}
+	if !bytes.Equal(decoded, preExpansionSeed) {
+		t.Fatal("decoded PreExpansionSeed does not match original")
+	}
+}
+
+func TestJsonToWalletKeyPair_V4_EmptyPreExpansionSeed(t *testing.T) {
+	privKey, err := cryptobase.SigAlg.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(privKey.PriData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address, err := (*sigAlgPtr).PublicKeyToAddress(&privKey.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := uuid.NewRandom()
+	original := &ks.Key{Id: id, Address: address, PrivateKey: privKey}
+
+	walletJson, err := ks.EncryptKey(original, "testpassword", 2, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	key, err := ks.DecryptKey(walletJson, "testpassword")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seedPart := ""
+	if len(key.PreExpansionSeed) > 0 {
+		seedPart = base64.StdEncoding.EncodeToString(key.PreExpansionSeed)
+	}
+	result := base64.StdEncoding.EncodeToString(key.PrivateKey.PriData) + "," +
+		base64.StdEncoding.EncodeToString(key.PrivateKey.PubData) + "," + seedPart
+
+	parts := strings.Split(result, ",")
+	if len(parts) != 3 {
+		t.Fatalf("expected 3 comma-delimited parts, got %d", len(parts))
+	}
+	if parts[2] != "" {
+		t.Fatalf("expected empty PreExpansionSeed segment for V4 wallet, got %q", parts[2])
 	}
 }

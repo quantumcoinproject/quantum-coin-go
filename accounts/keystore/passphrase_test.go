@@ -17,6 +17,7 @@
 package keystore
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -108,6 +109,9 @@ func testEncryptDecryptPreExpansionSeed(t *testing.T, seedSize int) {
 	}
 	if len(key.PrivateKey.PubData) == 0 {
 		t.Fatal("public key is empty")
+	}
+	if !bytes.Equal(key.PreExpansionSeed, preExpansionSeed) {
+		t.Fatal("PreExpansionSeed does not match the original seed")
 	}
 }
 
@@ -240,6 +244,10 @@ func testDecryptV5Fixture(t *testing.T, filename string, seedSize int) {
 	if jsonAddress != keyAddressHex {
 		t.Fatalf("address mismatch in %s: json=%s, derived=%s", filename, jsonAddress, keyAddressHex)
 	}
+	expectedSeed := makePreExpansionSeed(seedSize)
+	if !bytes.Equal(key.PreExpansionSeed, expectedSeed) {
+		t.Fatalf("PreExpansionSeed mismatch in %s: got len %d, want len %d", filename, len(key.PreExpansionSeed), len(expectedSeed))
+	}
 }
 
 func TestGenerateV5Fixtures(t *testing.T) {
@@ -291,5 +299,35 @@ func TestDecryptV5Fixture_WrongPassword(t *testing.T) {
 	_, err = DecryptKey(walletJson, "wrongpassword")
 	if err != ErrDecrypt {
 		t.Fatalf("expected ErrDecrypt, got: %v", err)
+	}
+}
+
+func TestDecryptKeyV4_PreExpansionSeedNil(t *testing.T) {
+	privKey, err := cryptobase.SigAlg.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(privKey.PriData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address, err := (*sigAlgPtr).PublicKeyToAddress(&privKey.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := uuid.NewRandom()
+	original := &Key{Id: id, Address: address, PrivateKey: privKey}
+
+	walletJson, err := EncryptKey(original, "testpassword", veryLightScryptN, veryLightScryptP)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	key, err := DecryptKey(walletJson, "testpassword")
+	if err != nil {
+		t.Fatalf("V4 DecryptKey failed: %v", err)
+	}
+	if key.PreExpansionSeed != nil {
+		t.Fatal("expected PreExpansionSeed to be nil for V4 wallet")
 	}
 }
