@@ -90,6 +90,7 @@ func main() {
 	js.Global().Set("TxnSigningHash2", js.FuncOf(TxnSigningHash2))
 	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
 	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
+	js.Global().Set("EncryptPreExpansionSeed", js.FuncOf(EncryptPreExpansionSeedWrapper))
 	circlwasm.Register()
 	<-done
 }
@@ -447,6 +448,42 @@ func JsonToWalletKeyPair(this js.Value, args []js.Value) interface{} {
 		return nil
 	}
 	return base64.StdEncoding.EncodeToString(key.PrivateKey.PriData) + "," + base64.StdEncoding.EncodeToString(key.PrivateKey.PubData)
+}
+
+func EncryptPreExpansionSeedWrapper(this js.Value, args []js.Value) interface{} {
+	if len(args) != 2 {
+		return js.Global().Get("Error").New("EncryptPreExpansionSeed: expected 2 arguments (preExpansionSeed, passphrase)")
+	}
+
+	preExpansionSeedData := js.Global().Get("Uint8Array").New(args[0])
+	preExpansionSeed := make([]byte, preExpansionSeedData.Get("length").Int())
+	js.CopyBytesToGo(preExpansionSeed, preExpansionSeedData)
+
+	passphrase := args[1].String()
+
+	privKey, err := cryptobase.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
+	if err != nil {
+		return js.Global().Get("Error").New(err.Error())
+	}
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(privKey.PriData)
+	if err != nil {
+		return js.Global().Get("Error").New(err.Error())
+	}
+	sigAlg := *sigAlgPtr
+	address, err := sigAlg.PublicKeyToAddress(&privKey.PublicKey)
+	if err != nil {
+		return js.Global().Get("Error").New(err.Error())
+	}
+	id, err := uuid.NewRandom()
+	if err != nil {
+		return js.Global().Get("Error").New(err.Error())
+	}
+
+	walletJson, err := ks.EncryptPreExpansionSeed(preExpansionSeed, address, id, passphrase, ks.StandardScryptN, ks.StandardScryptP)
+	if err != nil {
+		return js.Global().Get("Error").New(err.Error())
+	}
+	return string(walletJson)
 }
 
 // ParseBigFloat parse string value to big.Float

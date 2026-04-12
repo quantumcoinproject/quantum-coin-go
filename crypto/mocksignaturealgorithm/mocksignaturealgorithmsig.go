@@ -478,6 +478,14 @@ func (s MockSig) convertBytesToPublic(pub []byte) (*signaturealgorithm.PublicKey
 	return pubKey, nil
 }
 
+func (s MockSig) PreExpansionSeedSize() int {
+	return 0
+}
+
+func (s MockSig) GenerateKeyFromPreExpansionSeed(preExpansionSeed []byte) (*signaturealgorithm.PrivateKey, error) {
+	return nil, errors.New("GenerateKeyFromPreExpansionSeed not implemented")
+}
+
 // exportPrivateKey exports a private key into a binary dump.
 func (s MockSig) exportPrivateKey(privy *signaturealgorithm.PrivateKey) ([]byte, error) {
 	if privy.PriData == nil {

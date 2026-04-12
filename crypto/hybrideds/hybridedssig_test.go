@@ -188,6 +188,46 @@ func testBase64(t *testing.T) {
 	fmt.Println("addressExpected", addressExpected, "addressActual", addressActual)
 }
 
+func TestGenerateKeyFromPreExpansionSeed(t *testing.T) {
+	var preExpansionSeed [hybrideds.BaseSeedSize]byte
+	for i := 0; i < hybrideds.BaseSeedSize; i++ {
+		preExpansionSeed[i] = byte(i)
+	}
+
+	sig := CreateHybridedsSig()
+	pKey, err := sig.GenerateKeyFromPreExpansionSeed(preExpansionSeed[:])
+	if err != nil {
+		t.Fatal("GenerateKeyFromPreExpansionSeed failed:", err)
+	}
+	if pKey == nil || len(pKey.PriData) == 0 || len(pKey.PubData) == 0 {
+		t.Fatal("GenerateKeyFromPreExpansionSeed returned empty key")
+	}
+
+	addr := crypto.PublicKeyBytesToAddress(pKey.PubData)
+	expected := common.HexToAddress("0x277472936569545F48a36153bEde9A140Db7fFEe92B5F603E0a5ce3eE5B3Ffb8")
+	if !addr.IsEqualTo(expected) {
+		t.Fatalf("address mismatch: got %s, want %s", addr.Hex(), expected.Hex())
+	}
+
+	pKey2, err := sig.GenerateKeyFromPreExpansionSeed(preExpansionSeed[:])
+	if err != nil {
+		t.Fatal("second call failed:", err)
+	}
+	addr2 := crypto.PublicKeyBytesToAddress(pKey2.PubData)
+	if !addr.IsEqualTo(addr2) {
+		t.Fatal("deterministic generation produced different addresses")
+	}
+}
+
+func TestGenerateKeyFromPreExpansionSeed_WrongSize(t *testing.T) {
+	wrongSeed := make([]byte, 32)
+	sig := CreateHybridedsSig()
+	_, err := sig.GenerateKeyFromPreExpansionSeed(wrongSeed)
+	if err == nil {
+		t.Fatal("expected error for wrong seed size")
+	}
+}
+
 func TestBase64(t *testing.T) {
 	testBase64(t)
 }

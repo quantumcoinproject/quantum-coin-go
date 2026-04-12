@@ -11,10 +11,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	ks "github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	abi "github.com/quantumcoinproject/quantum-coin-go/wasm/accounts/abi"
 )
@@ -3756,6 +3758,62 @@ func TestDecryptWalletVer4Hybrid(t *testing.T) {
 	}
 	if key == nil {
 		t.Fatal("DecryptKey returned nil key")
+	}
+}
+
+func testEncryptPreExpansionSeedRoundTrip(t *testing.T, seedSize int) {
+	t.Helper()
+	preExpansionSeed := make([]byte, seedSize)
+	for i := 0; i < seedSize; i++ {
+		preExpansionSeed[i] = byte(i)
+	}
+	passphrase := "testpassword"
+
+	privKey, err := cryptobase.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
+	if err != nil {
+		t.Fatal("GenerateKeyFromPreExpansionSeed failed:", err)
+	}
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(privKey.PriData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	address, err := (*sigAlgPtr).PublicKeyToAddress(&privKey.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, _ := uuid.NewRandom()
+	walletJson, err := ks.EncryptPreExpansionSeed(preExpansionSeed, address, id, passphrase, 2, 1)
+	if err != nil {
+		t.Fatal("EncryptPreExpansionSeed failed:", err)
+	}
+
+	key, err := ks.DecryptKey(walletJson, passphrase)
+	if err != nil {
+		t.Fatal("DecryptKey failed:", err)
+	}
+	if key.Address != address {
+		t.Fatalf("address mismatch: got %s, want %s", key.Address.Hex(), address.Hex())
+	}
+}
+
+func TestEncryptPreExpansionSeed_64(t *testing.T) {
+	testEncryptPreExpansionSeedRoundTrip(t, cryptobase.SigAlgHybridMlDsaEddsaSlhDsaCompact.PreExpansionSeedSize())
+}
+
+func TestEncryptPreExpansionSeed_96(t *testing.T) {
+	testEncryptPreExpansionSeedRoundTrip(t, cryptobase.SigAlgHybridEds.PreExpansionSeedSize())
+}
+
+func TestEncryptPreExpansionSeed_72(t *testing.T) {
+	testEncryptPreExpansionSeedRoundTrip(t, cryptobase.SigAlgHybridMlDsaEddsaSlhDsa5.PreExpansionSeedSize())
+}
+
+func TestEncryptPreExpansionSeed_InvalidSize(t *testing.T) {
+	invalidSeed := make([]byte, 16)
+	_, err := cryptobase.GenerateKeyFromPreExpansionSeed(invalidSeed)
+	if err == nil {
+		t.Fatal("expected error for invalid seed size")
 	}
 }
 

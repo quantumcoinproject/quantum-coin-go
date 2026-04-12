@@ -138,9 +138,9 @@ Has the 67% threshold been reached?
 >
 > **9.2) No:**
 >
-> > If round = 1: if the ack timeout is exceeded, or if validators already
+> > If round = 1: if the ack timeout is exceeded, **or** if validators already
 > > participating in Round 2 hold enough deposit that Round 1 can never
-> > reach the 67% threshold: goto step 14.
+> > reach the 67% threshold: goto step 14. (Either condition alone is sufficient.)
 > >
 > > If round = 2: remain waiting (no further rounds exist).
 
@@ -156,11 +156,15 @@ Has the 67% threshold been reached?
 >
 > **11.2) No:**
 >
-> > If round = 1: if the precommit timeout is exceeded, and validators already
+> > If round = 1: if the precommit timeout is exceeded **and** validators already
 > > participating in Round 2 hold enough deposit that Round 1 can never
 > > reach the 67% threshold: goto step 14.
 > >
 > > If round = 2: remain waiting (no further rounds exist).
+
+**Escalation asymmetry between Steps 9.2 and 11.2.** Step 9.2 uses OR (timeout alone triggers escalation); Step 11.2 uses AND (timeout plus Round 2 deposit evidence). This asymmetry is intentional. In the acknowledgment phase (Step 9.2), the validator has not yet formed a quorum certificate and can safely abandon Round 1 as soon as quorum becomes impossible or timeout fires. In the precommit phase (Step 11.2), the validator has already collected an acknowledgment quorum certificate and may be close to forming a precommit quorum — requiring both conditions prevents premature abandonment of a viable Round 1 quorum.
+
+**The AND condition in Step 11.2 cannot produce a deadlock.** The concern is whether all honest validators could become stuck in precommit with no one in Round 2 to provide the deposit evidence. This state is unreachable under the < 1/3 Byzantine bound. A validator enters precommit only after collecting a 67% acknowledgment quorum for a single (vote type, proposal hash). Under the < 1/3 Byzantine assumption, two conflicting ACK quorums (one OK, one NIL) cannot coexist — any two 67% quorums must intersect in an honest validator, who cannot have cast both OK and NIL for the same round. Therefore, if all honest validators reach precommit, they all hold the same quorum certificate and produce compatible precommit hashes. Since honest deposit exceeds 67%, their precommit votes accumulate to quorum and the validator advances directly to Step 11.1 (commit phase) without any escalation. If instead only some honest validators reach precommit while others remain in the acknowledgment phase, the latter group will timeout and escalate to Round 2 via Step 9.2's OR condition, generating the Round 2 deposit evidence that Step 11.2 requires.
 
 **12) Wait for `COMMIT` threshold.**
 Collect `COMMIT` votes from validators until the 67% weighted deposit threshold is reached.

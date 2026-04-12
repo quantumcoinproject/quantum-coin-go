@@ -223,6 +223,6 @@ The QuantumCoin consensus protocol, as modeled in `QuantumCoinConsensus.tla`, sa
 - **Safe** (25% Byzantine): 43,911 states explored, all properties pass.
 - **Boundary** (33% Byzantine): 43,911 states explored, all properties pass.
 
-The `Agreement` invariant now verifies safety at the **block-identity level**: it checks that finalized honest validators agree on both vote type and proposal identity, covering both OK-vs-NIL conflicts and the equivocating-proposer scenario (OK(blockA) vs. OK(blockB)). This corresponds to the block-identity-level safety claim in the whitepaper's Section 5.
+The `Agreement` invariant now verifies safety at the **block-identity level**: it checks that finalized honest validators agree on both vote type and proposal identity, covering both OK-vs-NIL conflicts and the equivocating-proposer scenario (OK(blockA) vs. OK(blockB)).
 
 When Byzantine deposit exceeds 33%, the **Agreement** invariant is violated via equivocation, as demonstrated by the Unsafe configuration (34% Byzantine, just 1% above the boundary). This confirms that the 33% bound is both necessary and sufficient for safety under the Byzantine fault model.

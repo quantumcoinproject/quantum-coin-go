@@ -50,6 +50,18 @@ var (
 			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "aaa")},
 		},
 		{
+			Address: common.HexToAddress("a97C6Fc4AB5cfA4c51691E6Cce73b98b628cC27c612748d17909927e71139401"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "v5-seed64-wallet.json")},
+		},
+		{
+			Address: common.HexToAddress("1C8A52094a8a94f87Bdc60d435e0603C3046611bb9C544B4CD154c8d7b75C4a8"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "v5-seed72-wallet.json")},
+		},
+		{
+			Address: common.HexToAddress("277472936569545F48a36153bEde9A140Db7fFEe92B5F603E0a5ce3eE5B3Ffb8"),
+			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "v5-seed96-wallet.json")},
+		},
+		{
 			Address: common.HexToAddress("31cDF7786B0B26b733B545988701C6eD0601F848"),
 			URL:     accounts.URL{Scheme: KeyStoreScheme, Path: filepath.Join(cachetestDir, "zzz")},
 		},

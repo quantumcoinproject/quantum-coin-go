@@ -27,6 +27,8 @@ import (
 // CRYPTO_SIGNATURE_BYTES is the size of the hybrid PQC compact signature (Ed25519 + NIST PQC Dilithium/SPHINCS+).
 const CRYPTO_SIGNATURE_BYTES = hybrideds.CompactSigLength
 
+const PreExpansionSeedSize = hybrideds.BaseSeedSize
+
 // HybridedsSig implements hybrid post-quantum signatures: classical Ed25519 + NIST PQC in hybrid mode.
 type HybridedsSig struct {
 	sigName                      string
@@ -109,6 +111,26 @@ func (s HybridedsSig) GenerateKeyWithReader(rand io.Reader) (*signaturealgorithm
 
 func (s HybridedsSig) GetRequiredSeedLength() uint {
 	return hybrideds.SeedSize
+}
+
+func (s HybridedsSig) PreExpansionSeedSize() int {
+	return PreExpansionSeedSize
+}
+
+func (s HybridedsSig) GenerateKeyFromPreExpansionSeed(preExpansionSeed []byte) (*signaturealgorithm.PrivateKey, error) {
+	pubKey, priKey, err := pqchelpereds.GenerateKeyFromPreExpansionSeed(preExpansionSeed)
+	if err != nil {
+		return nil, err
+	}
+
+	privy := new(signaturealgorithm.PrivateKey)
+	privy.PriData = make([]byte, len(priKey))
+	copy(privy.PriData, priKey)
+
+	privy.PublicKey.PubData = make([]byte, len(pubKey))
+	copy(privy.PublicKey.PubData, pubKey)
+
+	return privy, nil
 }
 
 func (s HybridedsSig) GenerateKeyWithSeed(seed []byte) (*signaturealgorithm.PrivateKey, error) {
