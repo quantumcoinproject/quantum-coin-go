@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"math/big"
 	"testing"
 
 	"github.com/quantumcoinproject/circl/sign/hybrideds"
@@ -230,4 +231,52 @@ func TestGenerateKeyFromPreExpansionSeed_WrongSize(t *testing.T) {
 
 func TestBase64(t *testing.T) {
 	testBase64(t)
+}
+
+// ValidateSignatureValues must reject over-length signatures, wrong scheme-ID bytes, and v != 1.
+func TestValidateSignatureValues_Negative(t *testing.T) {
+	sig := CreateHybridedsSig()
+	key, err := sig.GenerateKey()
+	if err != nil {
+		t.Fatal("GenerateKey failed")
+	}
+
+	digestHash := []byte(testmsg1)
+	combined, err := sig.Sign(digestHash, key)
+	if err != nil {
+		t.Fatal("Sign failed")
+	}
+
+	sigComponent, pubKey, err := sig.PublicKeyAndSignatureFromCombinedSignature(digestHash, combined)
+	if err != nil {
+		t.Fatal("PublicKeyAndSignatureFromCombinedSignature failed")
+	}
+
+	r := new(big.Int).SetBytes(pubKey)
+
+	// Positive control: a valid (v, r, s) tuple must pass.
+	if ok, _, _ := sig.ValidateSignatureValues(digestHash, 1, r, new(big.Int).SetBytes(sigComponent)); !ok {
+		t.Fatal("expected valid signature values to pass")
+	}
+
+	// v != 1 must fail.
+	if ok, _, _ := sig.ValidateSignatureValues(digestHash, 0, r, new(big.Int).SetBytes(sigComponent)); ok {
+		t.Fatal("expected v != 1 to fail")
+	}
+
+	// Over-length signature must fail the exact-length check.
+	overLong := make([]byte, len(sigComponent)+1)
+	copy(overLong, sigComponent)
+	overLong[len(sigComponent)] = 0x01
+	if ok, _, _ := sig.ValidateSignatureValues(digestHash, 1, r, new(big.Int).SetBytes(overLong)); ok {
+		t.Fatal("expected over-length signature to fail")
+	}
+
+	// Wrong scheme-ID first byte must fail.
+	wrongID := make([]byte, len(sigComponent))
+	copy(wrongID, sigComponent)
+	wrongID[0] = 0xFF
+	if ok, _, _ := sig.ValidateSignatureValues(digestHash, 1, r, new(big.Int).SetBytes(wrongID)); ok {
+		t.Fatal("expected wrong scheme-ID byte to fail")
+	}
 }

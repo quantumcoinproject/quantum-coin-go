@@ -287,3 +287,71 @@ func TestConversionStatic_Negative(t *testing.T) {
 		t.Fatalf("failed")
 	}
 }
+
+// malformed signature hex must return an error rather than panic.
+func TestCrossSign_MalformedHex_NoPanic(t *testing.T) {
+	badInputs := []string{
+		"{\r\n  \"address\": \"0x4667Fc33E26911Ba828cc9F1bB4A0F47B1e383B1\",\r\n  \"msg\": \"This is my wallet\",\r\n  \"sig\": \"0xzzzz\",\r\n  \"version\": \"2\"\r\n}",                    // non-hex chars
+		"{\r\n  \"address\": \"0x4667Fc33E26911Ba828cc9F1bB4A0F47B1e383B1\",\r\n  \"msg\": \"This is my wallet\",\r\n  \"sig\": \"6c679b0b1f47bfc6\",\r\n  \"version\": \"2\"\r\n}",          // missing 0x prefix
+		"{\r\n  \"address\": \"0x4667Fc33E26911Ba828cc9F1bB4A0F47B1e383B1\",\r\n  \"msg\": \"This is my wallet\",\r\n  \"sig\": \"0x6c679b0b1f47bfc\",\r\n  \"version\": \"2\"\r\n}", // odd-length hex
+	}
+
+	for i, in := range badInputs {
+		in := in
+		assert.NotPanicsf(t, func() {
+			_ = CrossSignVerification(in)
+		}, "CrossSignVerification panicked on malformed input %d", i)
+
+		err := CrossSignVerification(in)
+		assert.Errorf(t, err, "expected error for malformed input %d", i)
+	}
+}
+
+// VerifyGenesis must return an error (not panic) on a malformed QuantumSignature.
+func TestVerifyGenesis_MalformedQuantumSignature(t *testing.T) {
+	ethAddr := "0xbC22f18344B750Cc46F37375ed7fb607b9C649cc"
+	depAddr := "0xeD303665Bf738C649Be0449146C2a3a06BF16fcd291f27F7e6238F3b6eAa1eDB"
+	valAddr := "0xCA35916aE38F1457b3cf72D70dAFBda203AC3a6f441fD8cc875F1724D6a63933"
+	amount := "5000000"
+
+	message := strings.Replace(GenesisMessageTemplate, "[ETH_ADDRESS]", ethAddr, 1)
+	message = strings.Replace(message, "[DEPOSITOR_ADDRESS]", depAddr, 1)
+	message = strings.Replace(message, "[VALIDATOR_ADDRESS]", valAddr, 1)
+	message = strings.Replace(message, "[AMOUNT]", amount, 1)
+
+	// Valid 0x-prefixed Ethereum signature hex so we reach the QuantumSignature decode.
+	ethSig := "0x7db87742f8ba5d7ed978d4a290ed11e05f285e223b1a7ea4aada5dabe0c38c2005b4079d8f59d0cbc59137b069257e6b92cabdb57bca90e9a3e4e48e7479c4dc1b"
+
+	for i, badQuantumSig := range []string{"041FZZ", "041F0"} { // non-hex, odd-length
+		details := &GenesisCrossSignDetails{
+			EthAddress:        ethAddr,
+			DepositorAddress:  depAddr,
+			ValidatorAddress:  valAddr,
+			Amount:            amount,
+			Message:           message,
+			QuantumSignature:  badQuantumSig,
+			EthereumSignature: ethSig,
+		}
+
+		assert.NotPanicsf(t, func() {
+			_, _ = VerifyGenesis(details)
+		}, "VerifyGenesis panicked on malformed QuantumSignature %d", i)
+
+		_, err := VerifyGenesis(details)
+		assert.Errorf(t, err, "expected error for malformed QuantumSignature %d", i)
+	}
+}
+
+// VerifyEthereumAddressAndMessage must not mutate the caller's signature slice.
+func TestVerifyEthereumAddressAndMessage_NoCallerMutation(t *testing.T) {
+	sig := make([]byte, 65)
+	for i := range sig {
+		sig[i] = byte(i)
+	}
+	sig[64] = 27
+
+	// Result is irrelevant (address won't match); we only assert the input is untouched.
+	_ = VerifyEthereumAddressAndMessage("0xbC22f18344B750Cc46F37375ed7fb607b9C649cc", make([]byte, 32), sig)
+
+	assert.Equal(t, byte(27), sig[64], "caller signature slice was mutated in place")
+}

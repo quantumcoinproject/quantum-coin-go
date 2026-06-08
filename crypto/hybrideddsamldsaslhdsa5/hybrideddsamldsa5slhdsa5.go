@@ -410,7 +410,11 @@ func (osig HybridEddsaMldsaSlhdsaSig5) ValidateSignatureValues(digestHash []byte
 		pubKey = append(zeroBuff, pubKey...)
 	}
 
-	if len(signature) < osig.SignatureLength() {
+	if len(signature) != osig.SignatureLength() {
+		return false, nil, nil
+	}
+
+	if signature[0] != byte(osig.GetSigAlgType()) {
 		return false, nil, nil
 	}
 

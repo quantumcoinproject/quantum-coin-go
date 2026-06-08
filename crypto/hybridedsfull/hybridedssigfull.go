@@ -349,7 +349,7 @@ func (s HybridedsfullSig) PublicKeyAndSignatureFromCombinedSignatureWithContext(
 		return nil, nil, nil, err
 	}
 
-	if context[0] == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
+	if context != nil && len(context) > 0 && context[0] == byte(crypto.DILITHIUM_ED25519_SPHINCS_FULL_ID) {
 		newDigestHash := crypto.Keccak256(digestHash, context)
 		ok := s.Verify(pubKey, newDigestHash, sig)
 		if ok == false {
@@ -357,6 +357,9 @@ func (s HybridedsfullSig) PublicKeyAndSignatureFromCombinedSignatureWithContext(
 		}
 		return signature, pubKey, newDigestHash, nil
 	} else {
+		if context != nil && len(context) > 0 {
+			return nil, nil, nil, errors.New("unexpected context length")
+		}
 		ok := s.Verify(pubKey, digestHash, sig)
 		if ok == false {
 			return nil, nil, nil, errors.New("Verify failed")
