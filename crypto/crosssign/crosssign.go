@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -138,7 +139,10 @@ func VerifyGenesis(details *GenesisCrossSignDetails) ([]byte, error) {
 	}
 
 	messageDigest, _ := accounts.TextAndHash([]byte(message))
-	sigBytes := hexutils.HexToBytes(details.QuantumSignature)
+	sigBytes, err := hex.DecodeString(details.QuantumSignature)
+	if err != nil {
+		return nil, errors.New("invalid QuantumSignature hex")
+	}
 
 	depSig, valSig, err := common.ExtractTwoParts(sigBytes)
 	if err != nil {
@@ -267,7 +271,10 @@ func CrossSignVerification(signJsonData string) error {
 
 	msgData := []byte(signDetails.Msg)
 	msgHash, _ := accounts.TextAndHash(msgData)
-	sig := hexutil.MustDecode(signDetails.Sig)
+	sig, err := hexutil.MustDecodeWithError(signDetails.Sig)
+	if err != nil {
+		return errors.New("error 1-2 : invalid signature hex")
+	}
 	addressBytes := hexToAddress(signDetails.Address)
 
 	if len(sig) != 65 {
@@ -277,9 +284,9 @@ func CrossSignVerification(signJsonData string) error {
 		return errors.New("error 3 : Sign last byte mismatch")
 	}
 
-	sig[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 	sign := make([]byte, 65)
 	copy(sign, sig)
+	sign[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
 	recovered, err := sigToPub(msgHash, sign)
 	if err != nil {
@@ -314,9 +321,9 @@ func VerifyEthereumAddressAndMessage(ethAddress string, messageDigest []byte, si
 	if signature[64] != 27 && signature[64] != 28 {
 		return errors.New("error 3 : Sign last byte mismatch")
 	}
-	signature[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 	sign := make([]byte, 65)
 	copy(sign, signature)
+	sign[64] -= 27 // Transform yellow paper V from 27/28 to 0/1
 
 	recovered, err := sigToPub(messageDigest, sign)
 	if err != nil {

@@ -192,6 +192,36 @@ func TestKeyEncapsulationWrongCiphertext(t *testing.T) {
 	wgKEMWrongCiphertext.Wait()
 }
 
+// decapsulation on an uninitialized or wrong-length key must error, not panic.
+func TestDecapsulateSecret_Uninitialized(t *testing.T) {
+	scheme := GetScheme()
+	ciphertext := make([]byte, scheme.CiphertextSize())
+
+	// Uninitialized: NewKeyEncap leaves PriKey == nil.
+	kem, err := NewKeyEncap()
+	if err != nil {
+		t.Fatalf("NewKeyEncap failed")
+	}
+
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("DecapsulateSecret panicked on uninitialized key: %v", r)
+			}
+		}()
+		_, err := kem.DecapsulateSecret(ciphertext)
+		if err == nil {
+			t.Fatalf("expected error decapsulating with uninitialized key")
+		}
+	}()
+
+	// Wrong-length private key material.
+	kem.PriKey = &PrivateKey{D: []byte{1, 2, 3}}
+	if _, err := kem.DecapsulateSecret(ciphertext); err == nil {
+		t.Fatalf("expected error decapsulating with wrong-length key")
+	}
+}
+
 func csprngEntropy(n int) []byte {
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(rand.Reader, buf); err != nil {

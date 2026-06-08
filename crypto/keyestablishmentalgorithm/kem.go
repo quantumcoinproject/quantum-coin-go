@@ -1,6 +1,8 @@
 package keyestablishmentalgorithm
 
 import (
+	"errors"
+
 	"github.com/quantumcoinproject/circl/kem"
 	"github.com/quantumcoinproject/circl/kem/hybrid"
 )
@@ -80,6 +82,9 @@ func (kem *KeyEncap) EncapsulateSecret(publicKey []byte) (ciphertext, sharedSecr
 
 func (kem *KeyEncap) DecapsulateSecret(ciphertext []byte) ([]byte, error) {
 	scheme := GetScheme()
+	if kem == nil || kem.PriKey == nil || len(kem.PriKey.D) != scheme.PrivateKeySize() {
+		return nil, errors.New("kem private key not initialized")
+	}
 	pri, err := scheme.UnmarshalBinaryPrivateKey(kem.PriKey.D)
 	if err != nil {
 		return nil, err

@@ -1,14 +1,16 @@
 package hybrideddsamldsaslhdsafull
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
+	"testing"
+
 	"github.com/quantumcoinproject/circl/sign/hybridedmldsaslhdsa"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
-	"testing"
 )
 
 func testHybridEddsaMldsaSlhdsaFullSigBasic(t *testing.T) {
@@ -90,4 +92,45 @@ func testBase64(t *testing.T) {
 
 func TestBase64(t *testing.T) {
 	testBase64(t)
+}
+
+// context-aware recovery must fail closed on empty/mismatched context.
+func TestPublicKeyAndSignatureFromCombinedSignatureWithContext_Negative(t *testing.T) {
+	s := CreateHybridEddsaMldsaSlhdsaFullSig()
+	key, err := s.GenerateKey()
+	if err != nil {
+		t.Fatal("GenerateKey failed")
+	}
+
+	digestHash := make([]byte, 32)
+	for i := range digestHash {
+		digestHash[i] = byte(i)
+	}
+
+	context := []byte{byte(crypto.MLDSA_ED25519_SLHDSA_FULL_ID)}
+
+	// Positive control: a context-bound signature recovers correctly with the right context.
+	ctxSig, err := s.SignWithContext(digestHash, key, context)
+	if err != nil {
+		t.Fatal("SignWithContext failed")
+	}
+	_, pubKey, _, err := s.PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash, ctxSig, context)
+	if err != nil {
+		t.Fatal("expected positive recovery to succeed")
+	}
+	if bytes.Compare(pubKey, key.PubData) != 0 {
+		t.Fatal("recovered public key mismatch")
+	}
+
+	// A plain (non-context) signature that verifies against the unmodified digest.
+	plainSig, err := s.Sign(digestHash, key)
+	if err != nil {
+		t.Fatal("Sign failed")
+	}
+
+	// Mismatched context first byte must fail closed (no fall-back to non-context verify).
+	_, _, _, err = s.PublicKeyAndSignatureFromCombinedSignatureWithContext(digestHash, plainSig, []byte{0xFF})
+	if err == nil {
+		t.Fatal("expected error for mismatched context (fail-open regression)")
+	}
 }
