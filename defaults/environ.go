@@ -37,8 +37,18 @@ func SkipPropagateBlock() bool {
 	return skipPropagateBlock == "1"
 }
 
-func EnableProposerCheck() bool {
-	return enableProposerCheck == "1"
+func EnableProposerCheck(blockNumber uint64) bool {
+	if DefaultConfig.PosConfig.SkipProposerStartBlock == 0 && DefaultConfig.PosConfig.SkipProposerEndBlock == 0 {
+		return true
+	}
+	if blockNumber < DefaultConfig.PosConfig.SkipProposerStartBlock || blockNumber > DefaultConfig.PosConfig.SkipProposerEndBlock {
+		return true
+	}
+	if enableProposerCheck == "1" {
+		return true
+	}
+	log.Info("EnableProposerCheck false", "blockNumber", blockNumber)
+	return false
 }
 
 func EnableBlockExtendedSave() bool {
