@@ -454,6 +454,12 @@ func (osig HybridEddsaMldsaSlhdsaFullSig) ValidateSignatureValues(digestHash []b
 		pubKey = append(zeroBuff, pubKey...)
 	}
 
+	// This is a permissive pre-check only. The exact signature length and the
+	// algorithm-ID byte (signature[0]) are strictly enforced inside osig.Verify()
+	// -> hybridedmldsaslhdsa.Verify (len(signature) != SigLength and
+	// signature[0] != ED25519_MLDSA_SLHDSA_FULL_ID), so a too-long/trailing-junk
+	// or wrong-type signature cannot pass. Kept loose here; tighten to "!=" plus a
+	// GetSigAlgType() check only for parity with the compact variants.
 	if len(signature) < osig.SignatureLength() {
 		return false, nil, nil
 	}
