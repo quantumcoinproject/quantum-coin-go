@@ -126,6 +126,19 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 	return addr, nil
 }
 
+// SenderV2 behaves like Sender but additionally enforces that the signature
+// V value is exactly 1. recoverPlain ignores V (it hardcodes 1), while
+// consensus tx.Verify() rejects v != 1; without this check a V-malleated
+// transaction (distinct hash, same signed digest/sender) can enter the
+// mempool only to be rejected at block Finalize. Enforce V == 1 at admission.
+func SenderV2(signer Signer, tx *Transaction) (common.Address, error) {
+	v, _, _ := tx.RawSignatureValues()
+	if v == nil || v.Uint64() != 1 {
+		return common.Address{}, ErrInvalidSig
+	}
+	return Sender(signer, tx)
+}
+
 // Signer encapsulates transaction signature handling. The name of this type is slightly
 // misleading because Signers don't actually sign, they're just for validating and
 // processing of signatures.

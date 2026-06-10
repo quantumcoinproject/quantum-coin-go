@@ -233,6 +233,51 @@ func encCallOuter(abi *abi.ABI, method string, args ...interface{}) ([]byte, err
 	return encCall(abi, method, args...)
 }
 
+func TestIsConversionRequestTxn(t *testing.T) {
+	abiData, err := conversion.GetConversionContract_ABI()
+	if err != nil {
+		t.Fatalf("abi error: %v", err)
+	}
+
+	// Positive: real requestConversion(string,string) calldata.
+	reqData, err := abiData.Pack(conversion.GetContract_Method_requestConversion(),
+		"0x9D0bEEc8D63ef6484686d1F8470be62a210B7dBd", "0xdeadbeef")
+	if err != nil {
+		t.Fatalf("pack requestConversion: %v", err)
+	}
+	if isConversionRequestTxn(reqData) == false {
+		t.Fatalf("expected true for requestConversion calldata")
+	}
+
+	// Positive: selector-only (valid prefix, empty body) must still classify as a request,
+	// because deeper validation is Convert's job (and such a tx must be skipped, not abort).
+	if isConversionRequestTxn(reqData[:4]) == false {
+		t.Fatalf("expected true for bare requestConversion selector")
+	}
+
+	// Negative: a different conversion-contract method (getAmount).
+	getData, err := abiData.Pack(conversion.GetContract_Method_getAmount(), common.Address{1})
+	if err != nil {
+		t.Fatalf("pack getAmount: %v", err)
+	}
+	if isConversionRequestTxn(getData) {
+		t.Fatalf("expected false for getAmount calldata")
+	}
+
+	// Negative: nil, empty, and too-short (<4 bytes) calldata.
+	if isConversionRequestTxn(nil) || isConversionRequestTxn([]byte{}) || isConversionRequestTxn([]byte{0x19, 0x47, 0xf4}) {
+		t.Fatalf("expected false for nil/empty/short calldata")
+	}
+
+	// Negative: correct length but wrong selector (first 4 bytes differ).
+	wrong := make([]byte, len(reqData))
+	copy(wrong, reqData)
+	wrong[0] ^= 0xff
+	if isConversionRequestTxn(wrong) {
+		t.Fatalf("expected false for corrupted selector")
+	}
+}
+
 func TestPos_Pack(t *testing.T) {
 	method := staking.GetContract_Method_AddDepositorSlashing()
 	abiData, err := staking.GetStakingContract_ABI()

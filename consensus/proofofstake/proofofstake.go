@@ -593,6 +593,22 @@ func (c *ProofOfStake) VerifyBlock(chain consensus.ChainHeaderReader, block *typ
 	return err
 }
 
+// isConversionRequestTxn reports whether calldata invokes requestConversion(string,string).
+func isConversionRequestTxn(data []byte) bool {
+	if len(data) < 4 {
+		return false
+	}
+	abiData, err := conversion.GetConversionContract_ABI()
+	if err != nil {
+		return false
+	}
+	method, ok := abiData.Methods[conversion.GetContract_Method_requestConversion()]
+	if !ok {
+		return false
+	}
+	return bytes.Equal(data[:4], method.ID)
+}
+
 func (c *ProofOfStake) Convert(header *types.Header, state *state.StateDB, txn *types.Transaction) error {
 	msg, err := txn.AsMessage(c.signer)
 	if err != nil {
@@ -688,12 +704,24 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	//Conversions
 	if blockConsensusData.VoteType == VOTE_TYPE_OK && txs != nil {
 		for _, txn := range txs {
-			if txn.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) {
-				err = c.Convert(header, state, txn)
-				if err != nil {
-					log.Info("Convert error", "err", err)
-					return err
-				}
+			if txn.To().IsEqualTo(conversion.CONVERSION_CONTRACT_ADDRESS) == false {
+				continue
+			}
+			//Only calls carrying the requestConversion(string,string) selector are conversions.
+			//Read-method calls (getAmount, getConversionStatus, getQuantumAddress) and any other
+			//calldata are ignored here so they cannot reach the conversion-processing path.
+			if isConversionRequestTxn(txn.Data()) == false {
+				log.Trace("skipping non-conversion call to conversion contract", "txn", txn.Hash())
+				continue
+			}
+			err = c.Convert(header, state, txn)
+			if err != nil {
+				//Abort rather than skip: a Convert error can stem from a transient local
+				//issue (state/db), not just a malformed request, so silently skipping could
+				//diverge state. The selector gate above already filters out non-conversion
+				//calls (e.g. getAmount) that previously reached this path.
+				log.Info("Convert error", "err", err)
+				return err
 			}
 		}
 	}
