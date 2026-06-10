@@ -37,7 +37,7 @@ func SkipPropagateBlock() bool {
 	return skipPropagateBlock == "1"
 }
 
-func EnableProposerCheck(blockNumber uint64) bool {
+func EnableProposerCheck(blockNumber uint64) bool { //todo: known bug for certain blocks
 	if DefaultConfig.PosConfig.SkipProposerStartBlock == 0 && DefaultConfig.PosConfig.SkipProposerEndBlock == 0 {
 		return true
 	}
