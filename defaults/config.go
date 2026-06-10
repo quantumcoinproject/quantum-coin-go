@@ -102,6 +102,8 @@ type ProofOfStakeConfig struct {
 	MinOfflineProposerBlockDelay uint64
 
 	DynamicFeeTxStartBlock uint64
+	SkipProposerStartBlock uint64
+	SkipProposerEndBlock   uint64
 }
 
 type Config struct {
@@ -158,6 +160,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	MinOfflineProposerBlockDelay: 3600,
 
 	DynamicFeeTxStartBlock: 3426261 + 2 + 10,
+	SkipProposerStartBlock: 3426261 + 2 + 10,
+	SkipProposerEndBlock:   3790264,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -203,6 +207,8 @@ var devnetPosConfig = ProofOfStakeConfig{
 	MinOfflineProposerBlockDelay: 3600,
 
 	DynamicFeeTxStartBlock: 90 + 10 + 10 + 10 + 2 + 10,
+	SkipProposerStartBlock: 0,
+	SkipProposerEndBlock:   0,
 }
 
 var MainnetConfig = &Config{

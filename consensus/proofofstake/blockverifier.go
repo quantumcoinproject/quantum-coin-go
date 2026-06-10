@@ -38,7 +38,6 @@ type PacketParseResult struct {
 }
 
 var MAX_PACKETS_SAFETY_LIMIT = (MAX_VALIDATORS * 3 * int(MAX_ROUND+1)) + 2 //number 3 is the three phases of BFT, number 2 is proposals for each round and MAX_ROUND+1 is to account for any unknowns, instead of just using MAX_ROUND
-var ContinueOnProposerCheckError = !defaults.EnableProposerCheck()
 var validatorError = "validator not part of block"
 
 func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *eth.ConsensusPacket, filteredValidatorDepositMap map[common.Address]*big.Int,
@@ -154,7 +153,7 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 		}
 		if blockProposer.IsEqualTo(validator) == false {
 			log.Warn("invalid block proposer", "expected", blockProposer, "actual", validator)
-			if ContinueOnProposerCheckError == false {
+			if defaults.EnableProposerCheck(blockNumber) == true {
 				err = errors.New("invalid block proposer")
 				resultsChan <- &PacketParseResult{err: err}
 				return
@@ -772,8 +771,8 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 			if r < MAX_ROUND {
 				_, ok := nilVotedProposers[roundBlockProposers[r]]
 				if ok == false {
-					log.Warn("NilVotesProposer doesn't match", "blockNumber", blockNumber, "roundBlockProposers[r]", roundBlockProposers[r], "r", r, "parentHash", parentHash, "slashedBlockProposer", slashedBlockProposer, "ContinueOnProposerCheckError", ContinueOnProposerCheckError)
-					if ContinueOnProposerCheckError == false {
+					log.Warn("NilVotesProposer doesn't match", "blockNumber", blockNumber, "roundBlockProposers[r]", roundBlockProposers[r], "r", r, "parentHash", parentHash, "slashedBlockProposer", slashedBlockProposer)
+					if defaults.EnableProposerCheck(blockNumber) == true {
 						return &blockExtendedDetails, errors.New("nilVotedProposers 1")
 					}
 				}
@@ -809,9 +808,7 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 		if blockConsensusData.BlockProposer.IsEqualTo(roundBlockProposers[blockConsensusData.Round]) == false {
 			log.Warn("VerifyBlockConsensusData BlockProposer mismatch", "blockConsensusData.BlockProposer", blockConsensusData.BlockProposer,
 				"roundBlockProposers[blockConsensusData.Round]", roundBlockProposers[blockConsensusData.Round])
-			if ContinueOnProposerCheckError == false {
-				return &blockExtendedDetails, errors.New("VerifyBlockConsensusData BlockProposer true")
-			}
+			return &blockExtendedDetails, errors.New("VerifyBlockConsensusData BlockProposer true")
 		}
 
 		if blockConsensusData.ProposalHash.IsEqualTo(ZERO_HASH) {
