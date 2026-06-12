@@ -191,14 +191,20 @@ func (c *Conn) Handshake(prv *signaturealgorithm.PrivateKey) (*signaturealgorith
 }
 
 // Close zeroes session key material and closes the underlying network connection.
+//
+// The underlying connection is closed first so that any in-flight blocking
+// Read/Write returns promptly and releases the rlpx read/write locks. Cleanup
+// then acquires those locks to zero key material without racing concurrent
+// Read/WriteEncrypted calls (which would otherwise observe nil ciphers).
 func (c *Conn) Close() error {
+	err := c.conn.Close()
 	if c.client != nil {
 		c.client.Cleanup()
 	}
 	if c.server != nil {
 		c.server.Cleanup()
 	}
-	return c.conn.Close()
+	return err
 }
 
 func (c *Conn) InitWithSecrets(secret SessionSecret) {
