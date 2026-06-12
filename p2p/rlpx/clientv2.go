@@ -55,6 +55,7 @@ type ClientV2 struct {
 	server *ServerV2
 
 	handshakeDone atomic.Bool
+	closed        atomic.Bool
 	mutex         sync.Mutex
 	writeMutex    sync.Mutex
 	readMutex     sync.Mutex
@@ -67,7 +68,7 @@ func (c *ClientV2) SetServer(server *ServerV2) {
 }
 
 func NewClientV2(conn io.ReadWriter, clientSigningPrivateKey *signaturealgorithm.PrivateKey, serverSigningPublicKey *signaturealgorithm.PublicKey, context string) *ClientV2 {
-	log.Info("NewClientV2")
+	log.Debug("NewClientV2")
 	client := ClientV2{
 		conn:                    conn,
 		clientSigningPrivateKey: clientSigningPrivateKey,
@@ -368,6 +369,17 @@ func (c *ClientV2) handleServerHelloV2() error {
 }
 
 func (c *ClientV2) Cleanup() {
+	// Mark closed first so that any later WriteEncrypted/ReadAndDecrypt bail out
+	// once they observe the flag under the relevant lock.
+	c.closed.Store(true)
+	// Acquire both locks so we cannot zero the cipher/IV material while a
+	// concurrent WriteEncrypted or (application-phase) ReadAndDecrypt is using
+	// it. Conn.Close closes the underlying connection before calling Cleanup,
+	// so any blocked I/O returns promptly and releases these locks.
+	c.writeMutex.Lock()
+	defer c.writeMutex.Unlock()
+	c.readMutex.Lock()
+	defer c.readMutex.Unlock()
 	if c.kem != nil {
 		k := *c.kem
 		k.Clean()
@@ -398,6 +410,13 @@ func (c *ClientV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 	c.writeMutex.Lock()
 	defer c.writeMutex.Unlock()
 
+	// Cleanup() acquires writeMutex before zeroing the session secrets, so once
+	// we hold the lock the closed flag and cipher fields are stable. Reject
+	// writes that race connection teardown instead of dereferencing nil ciphers.
+	if c.closed.Load() {
+		return errors.New("connection closed")
+	}
+
 	var cipher cipher2.AEAD
 	var seqNum uint64
 	var clientIv []byte
@@ -409,6 +428,9 @@ func (c *ClientV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 		cipher = c.secret.ClientApplicationCipher
 		seqNum = c.clientSeqNumApplication
 		clientIv = c.secret.ClientApplicationIv
+	}
+	if cipher == nil {
+		return errors.New("cipher unavailable")
 	}
 
 	payload := &EncryptedPayload{
@@ -459,6 +481,9 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		}
 		c.readMutex.Lock()
 		defer c.readMutex.Unlock()
+		if c.closed.Load() {
+			return nil, errors.New("connection closed")
+		}
 	}
 
 	var cipher cipher2.AEAD
@@ -472,6 +497,9 @@ func (c *ClientV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 		cipher = c.secret.ServerApplicationCipher
 		seqNum = c.serverSeqNumApplication
 		serverIv = c.secret.ServerApplicationIv
+	}
+	if cipher == nil {
+		return nil, errors.New("cipher unavailable")
 	}
 
 	header := new(Header)
