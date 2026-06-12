@@ -13,6 +13,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/keyestablishmentalgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
+	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
@@ -63,6 +64,7 @@ func (s *ServerV2) SetClient(client *ClientV2) {
 }
 
 func NewServerV2(conn io.ReadWriter, serverSigningPrivateKey *signaturealgorithm.PrivateKey, context string) *ServerV2 {
+	log.Info("NewServerV2")
 	server := ServerV2{
 		conn:                    conn,
 		serverSigningPrivateKey: serverSigningPrivateKey,
@@ -304,30 +306,31 @@ func (s *ServerV2) handleClientHelloV2() error {
 //     to the caller via ClientSigningPublicKey().
 //
 // Identity binding (why no expected-key check here):
-//   The server intentionally does NOT check the recovered public key against
-//   any pre-known identity at this layer. Identity verification is performed
-//   by the caller in p2p/server.go setupConn (line ~1044–1075):
 //
-//   Step 1 (line ~1053): For inbound connections, setupConn calls
-//     nodeFromConn(remotePubkey) → enode.NewV4 → V4ID.NodeAddr, which computes
-//     c.node.ID() = Keccak256(SerializePublicKey(remotePubkey))
-//     where remotePubkey is the key authenticated by this function.
+//	The server intentionally does NOT check the recovered public key against
+//	any pre-known identity at this layer. Identity verification is performed
+//	by the caller in p2p/server.go setupConn (line ~1044–1075):
 //
-//   Step 2 (line ~1065): setupConn runs a protocol handshake (doProtoHandshake)
-//     over the now-encrypted channel. The client sends phs.ID = its serialized
-//     public key bytes (set in server.go line ~537 the same way for all peers).
+//	Step 1 (line ~1053): For inbound connections, setupConn calls
+//	  nodeFromConn(remotePubkey) → enode.NewV4 → V4ID.NodeAddr, which computes
+//	  c.node.ID() = Keccak256(SerializePublicKey(remotePubkey))
+//	  where remotePubkey is the key authenticated by this function.
 //
-//   Step 3 (line ~1072): setupConn verifies
-//     Keccak256(phs.ID) == c.node.ID()
-//     If this fails, the connection is rejected with DiscUnexpectedIdentity.
-//     This binds the protocol-level identity claim to the RLPx-authenticated
-//     key: an attacker who cannot produce a valid signature in Step 1 cannot
-//     forge a node ID, and an attacker who passes Step 1 but claims a different
-//     key in Step 2 will fail the hash comparison in Step 3.
+//	Step 2 (line ~1065): setupConn runs a protocol handshake (doProtoHandshake)
+//	  over the now-encrypted channel. The client sends phs.ID = its serialized
+//	  public key bytes (set in server.go line ~537 the same way for all peers).
 //
-//   This two-layer design allows the RLPx layer to remain identity-agnostic
-//   while the p2p layer enforces that only the holder of the corresponding
-//   private key can assume a given node ID.
+//	Step 3 (line ~1072): setupConn verifies
+//	  Keccak256(phs.ID) == c.node.ID()
+//	  If this fails, the connection is rejected with DiscUnexpectedIdentity.
+//	  This binds the protocol-level identity claim to the RLPx-authenticated
+//	  key: an attacker who cannot produce a valid signature in Step 1 cannot
+//	  forge a node ID, and an attacker who passes Step 1 but claims a different
+//	  key in Step 2 will fail the hash comparison in Step 3.
+//
+//	This two-layer design allows the RLPx layer to remain identity-agnostic
+//	while the p2p layer enforces that only the holder of the corresponding
+//	private key can assume a given node ID.
 func (s *ServerV2) handleClientVerifyV2() error {
 	clientVerifyMessage := new(ClientVerifyMessage)
 	err := s.ReadAndDecryptMessageV2(clientVerifyMessage, PacketTypeHandshake)

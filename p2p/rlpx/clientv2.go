@@ -67,6 +67,7 @@ func (c *ClientV2) SetServer(server *ServerV2) {
 }
 
 func NewClientV2(conn io.ReadWriter, clientSigningPrivateKey *signaturealgorithm.PrivateKey, serverSigningPublicKey *signaturealgorithm.PublicKey, context string) *ClientV2 {
+	log.Info("NewClientV2")
 	client := ClientV2{
 		conn:                    conn,
 		clientSigningPrivateKey: clientSigningPrivateKey,
