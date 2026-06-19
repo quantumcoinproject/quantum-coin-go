@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -191,6 +192,8 @@ func printHelp() {
 	fmt.Println("dputil peerlist")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil checkconnect IP_ADDRESS")
+	fmt.Println("      Try a TCP connection to IP_ADDRESS on port 30303 (30s timeout). Prints ok or error.")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -251,6 +254,8 @@ func main() {
 		balance()
 	} else if os.Args[1] == "peerlist" {
 		getPeerList()
+	} else if os.Args[1] == "checkconnect" {
+		checkConnect()
 	} else if os.Args[1] == "transfercoins" {
 		sendTxn()
 	} else if os.Args[1] == "txn" {
@@ -712,6 +717,22 @@ func getPeerList() {
 	} else {
 		fmt.Println("peers is nil")
 	}
+}
+
+func checkConnect() {
+	if len(os.Args) < 3 {
+		printHelp()
+		return
+	}
+	addr := net.JoinHostPort(os.Args[2], "30303")
+	fmt.Println("connecting to", addr)
+	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
+	if err != nil {
+		fmt.Println("error", err)
+		return
+	}
+	conn.Close()
+	fmt.Println("ok, was able to connect to", addr)
 }
 
 func getTxn() {
