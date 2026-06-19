@@ -70,10 +70,10 @@ func DecodeBlockExtraData(extraData []byte, blockNumber uint64) (*BlockExtraData
 
 func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, error) {
 	if blockNumber < defaults.DefaultConfig.DeepCheckStartBlock {
-		/*if bytes.Compare(extraData, DefaultExtraData) != 0 {
+		if bytes.Compare(extraData, DefaultExtraData) != 0 {
 			log.Error("VerifyExtraData a", "number", blockNumber, "actual", common.Bytes2Hex(extraData), "expected", common.Bytes2Hex(DefaultExtraData))
-			return nil, errors.New("invalid ExtraData a")
-		}*/
+			return nil, errors.New("invalid ExtraData c")
+		}
 		return nil, nil
 	} else {
 		blockExtraData, origExtraData, err := DecodeBlockExtraData(extraData, blockNumber)
