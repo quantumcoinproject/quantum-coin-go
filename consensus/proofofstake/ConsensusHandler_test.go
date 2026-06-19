@@ -789,6 +789,10 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 		defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock,
 		defaults.DefaultConfig.PosConfig.SlashV2StartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock,
 		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock,
+		defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock,
+		defaults.DefaultConfig.PosConfig.DynamicFeeTxStartBlock, defaults.DefaultConfig.PosConfig.SkipProposerStartBlock, defaults.DefaultConfig.PosConfig.SkipProposerEndBlock,
+		defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock, defaults.DefaultConfig.PosConfig.Normalizationv2StartBlock,
+		defaults.DefaultConfig.DeepCheckStartBlock, defaults.DefaultConfig.GasPriceStartBlock,
 	}
 
 	for _, b := range blockNumbers {
