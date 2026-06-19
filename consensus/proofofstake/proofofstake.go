@@ -524,11 +524,15 @@ func (c *ProofOfStake) Prepare(chain consensus.ChainHeaderReader, header *types.
 	number := header.Number.Uint64()
 	header.Difficulty = header.Number
 
-	if len(header.Extra) < extraVanity {
-		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
+	if number < defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
+		if len(header.Extra) < extraVanity {
+			header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
+		}
+		header.Extra = header.Extra[:extraVanity]
+		header.Extra = append(header.Extra, make([]byte, extraSeal)...)
+	} else {
+		header.Extra = make([]byte, 0)
 	}
-	header.Extra = header.Extra[:extraVanity]
-	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
 	header.MixDigest = common.Hash{}
 	parent := chain.GetHeader(header.ParentHash, number-1)
@@ -1239,6 +1243,11 @@ func SealHash(header *types.Header) (hash common.Hash) {
 }
 
 func encodeSigHeader(w io.Writer, header *types.Header) {
+	extra := header.Extra
+	if header.Number.Uint64() < defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
+		extra = header.Extra[:len(header.Extra)-cryptobase.SigAlg.SignatureWithPublicKeyLength()] // Yes, this will panic if extra is too short
+	}
+
 	enc := []interface{}{
 		header.ParentHash,
 		header.Coinbase,
@@ -1251,7 +1260,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra[:len(header.Extra)-cryptobase.SigAlg.SignatureWithPublicKeyLength()], // Yes, this will panic if extra is too short
+		extra,
 		header.MixDigest,
 		header.Nonce,
 	}
