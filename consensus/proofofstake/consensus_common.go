@@ -99,23 +99,6 @@ func PrepareConsensusData(
 	}
 	preFilterValidatorCount := len(validators)
 
-	var consensusContext common.Hash
-	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
-		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
-		if err != nil {
-			return nil, err
-		}
-		blockContext, err := getBlockConsensusContext(contextKey, parentHash)
-		if err != nil {
-			return nil, err
-		}
-		consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(preFilterValidatorCount)))
-		log.Debug("PrepareConsensusData", "blockContext", blockContext, "consensusContext", consensusContext,
-			"preFilterValidatorCount", preFilterValidatorCount, "blockNumber", blockNumber)
-	} else {
-		consensusContext = preContextConsensusContext
-	}
-
 	var validatorDetailsMap map[common.Address]*ValidatorDetailsV2
 	var origValidatorDetailsMap map[common.Address]*ValidatorDetailsV2
 	if blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK {
@@ -130,6 +113,38 @@ func PrepareConsensusData(
 		for addr, vd := range validatorDetailsMap {
 			origValidatorDetailsMap[addr] = copyValidatorDetailsV2(vd)
 		}
+	}
+
+	// consensusValidatorCount feeds only the consensusContext hash. Before ValidatorCountV2StartBlock it
+	// equals preFilterValidatorCount (paused validators excluded by getValidatorsFn). From
+	// ValidatorCountV2StartBlock onward, paused validators are added back so that pausing/unpausing cannot
+	// shift block-proposer selection.
+	consensusValidatorCount := preFilterValidatorCount
+	if blockNumber >= defaults.DefaultConfig.PosConfig.ValidatorCountV2StartBlock {
+		pausedValidatorCount := 0
+		for _, vd := range validatorDetailsMap {
+			if vd.IsValidationPaused {
+				pausedValidatorCount++
+			}
+		}
+		consensusValidatorCount = preFilterValidatorCount + pausedValidatorCount
+	}
+
+	var consensusContext common.Hash
+	if blockNumber >= defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK {
+		contextKey, err := GetBlockConsensusContextKeyForBlock(blockNumber)
+		if err != nil {
+			return nil, err
+		}
+		blockContext, err := getBlockConsensusContext(contextKey, parentHash)
+		if err != nil {
+			return nil, err
+		}
+		consensusContext = crypto.Keccak256Hash(blockContext[:], []byte(strconv.Itoa(consensusValidatorCount)))
+		log.Debug("PrepareConsensusData", "blockContext", blockContext, "consensusContext", consensusContext,
+			"preFilterValidatorCount", preFilterValidatorCount, "consensusValidatorCount", consensusValidatorCount, "blockNumber", blockNumber)
+	} else {
+		consensusContext = preContextConsensusContext
 	}
 
 	prepared, err := PrepareConsensusState(parentHash, consensusContext, validators, validatorDetailsMap, blockNumber)

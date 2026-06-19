@@ -101,11 +101,12 @@ type ProofOfStakeConfig struct {
 
 	MinOfflineProposerBlockDelay uint64
 
-	DynamicFeeTxStartBlock    uint64
-	SkipProposerStartBlock    uint64
-	SkipProposerEndBlock      uint64
-	ExtraDataV3StartBlock     uint64
-	Normalizationv2StartBlock uint64
+	DynamicFeeTxStartBlock     uint64
+	SkipProposerStartBlock     uint64
+	SkipProposerEndBlock       uint64
+	ExtraDataV3StartBlock      uint64
+	Normalizationv2StartBlock  uint64
+	ValidatorCountV2StartBlock uint64
 }
 
 type Config struct {
@@ -164,8 +165,9 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	DynamicFeeTxStartBlock:    3426261 + 2 + 10,
 	SkipProposerStartBlock:    3426261 + 2 + 10,
 	SkipProposerEndBlock:      3790264,
-	ExtraDataV3StartBlock:     5319208,
-	Normalizationv2StartBlock: 5319208 + 10,
+	ExtraDataV3StartBlock:      5319208,
+	Normalizationv2StartBlock:  5319208 + 10,
+	ValidatorCountV2StartBlock: 5319208 + 10 + 10,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -213,8 +215,9 @@ var devnetPosConfig = ProofOfStakeConfig{
 	DynamicFeeTxStartBlock:    90 + 10 + 10 + 10 + 2 + 10,
 	SkipProposerStartBlock:    0,
 	SkipProposerEndBlock:      0,
-	ExtraDataV3StartBlock:     90 + 10 + 10 + 10 + 2 + 10 + 10,
-	Normalizationv2StartBlock: 90 + 10 + 10 + 10 + 2 + 10 + 10 + 10,
+	ExtraDataV3StartBlock:      90 + 10 + 10 + 10 + 2 + 10 + 10,
+	Normalizationv2StartBlock:  90 + 10 + 10 + 10 + 2 + 10 + 10 + 10,
+	ValidatorCountV2StartBlock: 90 + 10 + 10 + 10 + 2 + 10 + 10 + 10 + 10,
 }
 
 var MainnetConfig = &Config{
