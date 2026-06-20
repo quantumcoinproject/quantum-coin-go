@@ -153,13 +153,13 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	CONSENSUS_CONTEXT_START_BLOCK:     uint64(421888),
 	CONSENSUS_CONTEXT_MAX_BLOCK_COUNT: uint64(512000),
 
-	VALIDATOR_NIL_BLOCK_START_BLOCK:      uint64(421888) + 1,
-	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK: uint64(421888) + 1 + 16,
+	VALIDATOR_NIL_BLOCK_START_BLOCK:      uint64(421889),
+	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK: uint64(421905),
 
 	CONTEXT_BASED_START_BLOCK:     uint64(536000),
 	CONTEXT_BASED_BLOCK_THRESHOLD: uint64(64000),
-	BLOCK_TIME_ORIG_START_BLOCK:   uint64(536000 + 1),
-	PACKET_PROTOCOL_START_BLOCK:   uint64(536000 + 1 + 32),
+	BLOCK_TIME_ORIG_START_BLOCK:   uint64(536001),
+	PACKET_PROTOCOL_START_BLOCK:   uint64(536033),
 
 	PROPOSAL_TIME_HASH_START_BLOCK:        uint64(1507600),
 	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK: uint64(1597600),
@@ -170,23 +170,23 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	SixtyVoteStartBlock: uint64(1386825),
 
 	SlashV2StartBlock:               uint64(2082171),
-	OfflineValidatorDeferStartBlock: 2082171 + 10,
+	OfflineValidatorDeferStartBlock: 2082181,
 
-	SixtySevenVoteStartBlock: uint64(2082171 + 10 + 10),
+	SixtySevenVoteStartBlock: uint64(2082191),
 
 	OfflineValidatorV4StartBlock: 3426261,
 
-	SigAlgSwitchBlock: 3426261 + 2,
+	SigAlgSwitchBlock: 3426263,
 
 	MinOfflineProposerBlockDelay: 3600,
 
-	DynamicFeeTxStartBlock:    3426261 + 2 + 10,
-	SkipProposerStartBlock:    3426261 + 2 + 10,
-	SkipProposerEndBlock:      3790264,
+	DynamicFeeTxStartBlock:     3426273,
+	SkipProposerStartBlock:     3426273,
+	SkipProposerEndBlock:       3790264,
 	ExtraDataV3StartBlock:      5319208,
-	Normalizationv2StartBlock:  5319208 + 10,
-	ValidatorCountV2StartBlock: 5319208 + 10 + 10,
-	GasV2StartBlock:            5319208 + 10 + 10 + 10,
+	Normalizationv2StartBlock:  5319218,
+	ValidatorCountV2StartBlock: 5319228,
+	GasV2StartBlock:            5319238,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -204,13 +204,13 @@ var devnetPosConfig = ProofOfStakeConfig{
 	CONSENSUS_CONTEXT_START_BLOCK:     uint64(8),
 	CONSENSUS_CONTEXT_MAX_BLOCK_COUNT: uint64(128),
 
-	VALIDATOR_NIL_BLOCK_START_BLOCK:      uint64(8) + 1,
-	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK: uint64(8+1) + 16,
+	VALIDATOR_NIL_BLOCK_START_BLOCK:      uint64(9),
+	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK: uint64(25),
 
 	CONTEXT_BASED_START_BLOCK:     uint64(32),
 	CONTEXT_BASED_BLOCK_THRESHOLD: uint64(4),
-	BLOCK_TIME_ORIG_START_BLOCK:   uint64(32 + 1),
-	PACKET_PROTOCOL_START_BLOCK:   uint64(32 + 1 + 32),
+	BLOCK_TIME_ORIG_START_BLOCK:   uint64(33),
+	PACKET_PROTOCOL_START_BLOCK:   uint64(65),
 
 	PROPOSAL_TIME_HASH_START_BLOCK:        uint64(64),
 	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK: uint64(64),
@@ -221,29 +221,29 @@ var devnetPosConfig = ProofOfStakeConfig{
 	SixtyVoteStartBlock: uint64(64),
 
 	SlashV2StartBlock:               uint64(90),
-	OfflineValidatorDeferStartBlock: 90 + 10,
+	OfflineValidatorDeferStartBlock: 100,
 
-	SixtySevenVoteStartBlock: uint64(90 + 10 + 10),
+	SixtySevenVoteStartBlock: uint64(110),
 
-	OfflineValidatorV4StartBlock: 90 + 10 + 10 + 10,
+	OfflineValidatorV4StartBlock: 120,
 
-	SigAlgSwitchBlock: 90 + 10 + 10 + 10 + 2,
+	SigAlgSwitchBlock: 122,
 
 	MinOfflineProposerBlockDelay: 3600,
 
-	DynamicFeeTxStartBlock:    90 + 10 + 10 + 10 + 2 + 10,
-	SkipProposerStartBlock:    0,
-	SkipProposerEndBlock:      0,
-	ExtraDataV3StartBlock:      90 + 10 + 10 + 10 + 2 + 10 + 10,
-	Normalizationv2StartBlock:  90 + 10 + 10 + 10 + 2 + 10 + 10 + 10,
-	ValidatorCountV2StartBlock: 90 + 10 + 10 + 10 + 2 + 10 + 10 + 10 + 10,
-	GasV2StartBlock:            90 + 10 + 10 + 10 + 2 + 10 + 10 + 10 + 10 + 10,
+	DynamicFeeTxStartBlock:     132,
+	SkipProposerStartBlock:     0,
+	SkipProposerEndBlock:       0,
+	ExtraDataV3StartBlock:      142,
+	Normalizationv2StartBlock:  152,
+	ValidatorCountV2StartBlock: 162,
+	GasV2StartBlock:            172,
 }
 
 var MainnetConfig = &Config{
 	PosConfig:               &mainnetPosConfig,
-	DeepCheckStartBlock:     uint64(3426261 + 3),
-	GasPriceStartBlock:      uint64(3426261 + 4),
+	DeepCheckStartBlock:     uint64(3426264),
+	GasPriceStartBlock:      uint64(3426265),
 	DefaultGasLimit:         300000000,
 	ValidateSigPubStartTime: int64(1769904000), //Feb 1, 2026 12:00:00 AM
 	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
