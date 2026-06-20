@@ -898,3 +898,127 @@ func TestStakingV3_LegacyDepositorReDepositStillBlocked(t *testing.T) {
 		t.Fatal("legacy depositor re-deposit should still revert after upgrade")
 	}
 }
+
+// InitiatePartialWithdrawalV3 mirrors the v2 helper but wires the v3 ABI (same selector, new min-remaining guard).
+func InitiatePartialWithdrawalV3(state *state.StateDB, depositor common.Address, amount *big.Int, currentBlockNumber uint64) error {
+	method := staking.GetContract_Method_InitiatePartialWithdrawal()
+	abiData, err := staking.GetStakingContractV3_ABI()
+	if err != nil {
+		log.Error("InitiatePartialWithdrawalV3 abi error", "err", err)
+		return err
+	}
+	data, err := encodeCall(&abiData, method, amount)
+	if err != nil {
+		log.Error("Unable to pack InitiatePartialWithdrawalV3", "error", err)
+		return err
+	}
+
+	header := tcc.GetHeader(ZERO_HASH, currentBlockNumber)
+
+	_, err = execute(tcc, data, depositor, state, header, new(big.Int))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// AddDepositorSlashingV3 is a VM-only call (msg.sender must be address(0)); it takes (depositor, amount).
+func AddDepositorSlashingV3(state *state.StateDB, from common.Address, depositor common.Address, amount *big.Int) error {
+	method := staking.GetContract_Method_AddDepositorSlashing()
+	abiData, err := staking.GetStakingContractV3_ABI()
+	if err != nil {
+		log.Error("AddDepositorSlashingV3 abi error", "err", err)
+		return err
+	}
+	data, err := encodeCall(&abiData, method, depositor, amount)
+	if err != nil {
+		log.Error("Unable to pack AddDepositorSlashingV3", "error", err)
+		return err
+	}
+
+	header := tcc.GetHeader(ZERO_HASH, uint64(1))
+
+	_, err = execute(tcc, data, from, state, header, new(big.Int))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// A partial withdrawal must always leave at least the minimum remaining balance; a full exit is not possible.
+func TestStakingV3_PartialWithdrawalMinimumRemaining(t *testing.T) {
+	depositor := common.RandomAddress()
+	validator := common.RandomAddress()
+	state := newStakingStateDbV3()
+	registerDepositorV3(t, state, depositor, validator)
+
+	// Net balance starts at the minimum deposit (5,000,000 coins); the retained floor is 1000 coins.
+	floor := params.EtherToWei(big.NewInt(1000))
+
+	// Withdrawing the entire balance (remaining 0) must revert: there is no full-exit path in v3.
+	if err := InitiatePartialWithdrawalV3(state, depositor, MIN_VALIDATOR_DEPOSIT, 10); err == nil {
+		t.Fatal("withdrawing the entire balance should revert (must retain minimum remaining)")
+	}
+
+	// Leaving less than the floor (500 coins remaining) must revert.
+	leaveBelowFloor := new(big.Int).Sub(MIN_VALIDATOR_DEPOSIT, params.EtherToWei(big.NewInt(500)))
+	if err := InitiatePartialWithdrawalV3(state, depositor, leaveBelowFloor, 10); err == nil {
+		t.Fatal("leaving less than the minimum remaining balance should revert")
+	}
+
+	// Leaving exactly the floor (1000 coins remaining) must succeed (require is >=).
+	leaveExactlyFloor := new(big.Int).Sub(MIN_VALIDATOR_DEPOSIT, floor)
+	if err := InitiatePartialWithdrawalV3(state, depositor, leaveExactlyFloor, 10); err != nil {
+		t.Fatal("leaving exactly the minimum remaining balance should succeed", err)
+	}
+
+	// The retained principal equals the floor.
+	bal, err := GetBalanceOfDepositorV3(state, depositor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bal.Cmp(floor) != 0 {
+		t.Fatal("remaining balance after withdrawal should equal the minimum floor")
+	}
+}
+
+// The VM(0) system-call paths must keep working with the added nonReentrant guard, and stay VM-only.
+func TestStakingV3_SystemCallsWorkWithReentrancyGuard(t *testing.T) {
+	depositor := common.RandomAddress()
+	validator := common.RandomAddress()
+	state := newStakingStateDbV3()
+	registerDepositorV3(t, state, depositor, validator)
+
+	if err := AddDepositorRewardV3(state, ZERO_ADDRESS, depositor, params.EtherToWei(big.NewInt(10))); err != nil {
+		t.Fatal("addDepositorReward (system call) should succeed with the reentrancy guard", err)
+	}
+	if err := AddDepositorSlashingV3(state, ZERO_ADDRESS, depositor, params.EtherToWei(big.NewInt(10))); err != nil {
+		t.Fatal("addDepositorSlashing (system call) should succeed with the reentrancy guard", err)
+	}
+
+	// A non-VM sender must still be rejected.
+	if err := AddDepositorSlashingV3(state, depositor, depositor, params.EtherToWei(big.NewInt(10))); err == nil {
+		t.Fatal("addDepositorSlashing from a non-VM sender should revert")
+	}
+}
+
+// The legacy completeWithdrawal entry point must be gone from v3, while partial withdrawal remains.
+func TestStakingV3_CompleteWithdrawalRemoved(t *testing.T) {
+	abiData, err := staking.GetStakingContractV3_ABI()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := abiData.Methods["completeWithdrawal"]; ok {
+		t.Fatal("completeWithdrawal must not exist in the v3 ABI")
+	}
+
+	if _, ok := abiData.Methods["initiatePartialWithdrawal"]; !ok {
+		t.Fatal("initiatePartialWithdrawal should still exist in the v3 ABI")
+	}
+	if _, ok := abiData.Methods["completePartialWithdrawal"]; !ok {
+		t.Fatal("completePartialWithdrawal should still exist in the v3 ABI")
+	}
+}

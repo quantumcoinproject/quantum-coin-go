@@ -45,9 +45,6 @@ interface IStakingContract {
     //Resume
     function resumeValidation() external;
 
-    //Withdraw
-    function completeWithdrawal() external returns (uint256);
-
     //Rewards and Slashing
     function addDepositorSlashing(address depositorAddress, uint256 slashAmount) external returns (uint256);
     function addDepositorReward(address depositorAddress, uint256 rewardAmount) external returns (uint256);
@@ -158,6 +155,7 @@ contract StakingContract is IStakingContract {
 
     uint256 constant MINIMUM_DEPOSIT = 5000000000000000000000000; //5000000
     uint256 constant WITHDRAWAL_BLOCK_DELAY = 32000;
+    uint256 constant MINIMUM_WITHDRAWAL_REMAINING_BALANCE = 1000000000000000000000; //1000
 
     address[] private _validatorList;
 
@@ -343,33 +341,11 @@ contract StakingContract is IStakingContract {
         emit OnResumeValidation(depositorAddress, validatorAddress);
     }
 
-    //Legacy function, will be removed in staking v3
-    function completeWithdrawal() override external nonReentrant returns (uint256) {
-        address depositorAddress = msg.sender;
-        require(_depositorWithdrawalRequests[depositorAddress] > 0, "Depositor withdrawal request does not exist");
-
-        uint256 balance = _depositorBalances[depositorAddress].add(_depositorRewards[depositorAddress]);
-        require(balance > _depositorSlashings[depositorAddress], "balance is negative");
-        uint256 netBalance = balance.sub(_depositorSlashings[depositorAddress]);
-
-        delete _depositorBalances[depositorAddress];
-        delete _depositorRewards[depositorAddress];
-        delete _depositorSlashings[depositorAddress];
-        delete _depositorWithdrawalRequests[depositorAddress];
-
-        _totalDepositedBalance = _totalDepositedBalance.sub(netBalance);
-	    _depositorExists[depositorAddress] = true;
-
-        (bool success, ) = depositorAddress.call{value:netBalance}("");
-        // success should be true
-        require(success,"Withdraw failed");
-
-        emit OnCompleteWithdrawal(depositorAddress, netBalance);
-
-        return netBalance;
-    }
-
-    function addDepositorSlashing(address depositorAddress, uint256 slashAmount) override external returns (uint256) {
+    // Slashing is a system call (msg.sender == address(0)) issued by validator nodes only against a
+    // block proposer that was already selected, which requires the 5,000,000 coin minimum stake. The
+    // current maximum slashing per block is 100 coins, far below both a proposer's stake and the
+    // contract balance, so a slash cannot make the contract insolvent.
+    function addDepositorSlashing(address depositorAddress, uint256 slashAmount) override external nonReentrant returns (uint256) {
         require(msg.sender == address(0), "Only VM calls are allowed");
         _depositorSlashings[depositorAddress] = _depositorSlashings[depositorAddress].add(slashAmount);
 
@@ -382,7 +358,7 @@ contract StakingContract is IStakingContract {
         return _depositorSlashings[depositorAddress];
     }
 
-    function addDepositorReward(address depositorAddress, uint256 rewardAmount) override external returns (uint256) {
+    function addDepositorReward(address depositorAddress, uint256 rewardAmount) override external nonReentrant returns (uint256) {
         require(msg.sender == address(0), "Only VM calls are allowed");
         _depositorRewards[depositorAddress] = _depositorRewards[depositorAddress].add(rewardAmount);
         emit OnReward(depositorAddress, rewardAmount);
@@ -470,6 +446,10 @@ contract StakingContract is IStakingContract {
         return _depositorEverExisted[depositorAddress];
     }
 
+    // A rotation is performed by the same depositor moving to a new validator address. The depositor
+    // address is unchanged, so all depositor-keyed state (balances, rewards, and any pending partial
+    // withdrawal) carries over and stays completable; only the validator address changes, with nil-block
+    // and paused state intentionally migrated to the new validator. No partial-withdrawal guard is needed.
     function changeValidator(address newValidatorAddress) override external nonReentrant {
         require(_validatorExists[newValidatorAddress] == false, "Validator already exists");
         require(_depositorExists[newValidatorAddress] == false, "Validator is a depositor");
@@ -544,6 +524,12 @@ contract StakingContract is IStakingContract {
         uint256 netBalance = this.getNetBalanceOfDepositor(depositorAddress);
         require(netBalance >= amount, "Depositor net balance is low");
 
+        // Only the block proposer can be penalized, and that exposure is bounded to the current block;
+        // the maximum slashing per block is 100 coins. Requiring a remaining slashable balance well above
+        // that ceiling guarantees any in-window penalty is covered, even though the amount being withdrawn
+        // is itself no longer slashable once moved into the withdrawal queue.
+        require(netBalance.sub(amount) >= MINIMUM_WITHDRAWAL_REMAINING_BALANCE, "Must retain minimum remaining balance");
+
         //First withdraw from rewards and then from balance
 
         uint256 rewardsAmount = _depositorRewards[depositorAddress];
@@ -562,7 +548,7 @@ contract StakingContract is IStakingContract {
         _depositorPartialWithdrawalBlockMapping[depositorAddress] = block.number;
         _depositorPartialWithdrawalAmountMapping[depositorAddress] = amount;
 
-        emit OnInitiatePartialWithdrawal(depositorAddress, block.number + WITHDRAWAL_BLOCK_DELAY, amount);
+        emit OnInitiatePartialWithdrawal(depositorAddress, block.number.add(WITHDRAWAL_BLOCK_DELAY), amount);
 
         return amount;
     }
@@ -587,13 +573,13 @@ contract StakingContract is IStakingContract {
         return amount;
     }
 
-    function setNilBlock(address validatorAddress) override external {
+    function setNilBlock(address validatorAddress) override external nonReentrant {
         require(msg.sender == address(0), "Only VM calls are allowed");
         _validatorLastNilBlock[validatorAddress] = block.number;
         _validatorNilBlockCount[validatorAddress] = _validatorNilBlockCount[validatorAddress].add(1);
     }
 
-    function resetNilBlock(address validatorAddress) override external {
+    function resetNilBlock(address validatorAddress) override external nonReentrant {
         require(msg.sender == address(0), "Only VM calls are allowed");
         _validatorLastNilBlock[validatorAddress] = 0;
         delete _validatorNilBlockCount[validatorAddress];
