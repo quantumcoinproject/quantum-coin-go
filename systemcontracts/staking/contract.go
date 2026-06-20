@@ -6,6 +6,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv1"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv3"
 	"strings"
 )
 
@@ -14,6 +15,12 @@ import (
 // 2) abigen --bin=c:\github\quantum-coin-go\systemcontracts\staking\stakingv2\StakingContract.bin --abi=c:\github\quantum-coin-go\systemcontracts\staking\stakingv2\StakingContract.abi --pkg=staking --out=c:\github\quantum-coin-go\systemcontracts\staking\stakingv2\staking.go
 // 3) in staking\stakingv2\staking.go, change the package name to just "stakingv2" (instead of "staking") to clear the error
 // 4) copy StakingContract-runtime.bin into stakingbin.go STAKING_RUNTIME_BIN field
+//
+// Staking V3 steps (same workflow, stakingv3 directory):
+// 1) c:\solc\solc.exe --bin --bin-runtime --abi c:\github\quantum-coin-go\systemcontracts\staking\stakingv3\StakingContract.sol -o c:\github\quantum-coin-go\systemcontracts\staking\stakingv3 --overwrite
+// 2) abigen --bin=c:\github\quantum-coin-go\systemcontracts\staking\stakingv3\StakingContract.bin --abi=c:\github\quantum-coin-go\systemcontracts\staking\stakingv3\StakingContract.abi --pkg=staking --out=c:\github\quantum-coin-go\systemcontracts\staking\stakingv3\staking.go
+// 3) in staking\stakingv3\staking.go, change the package name to "stakingv3" (instead of "staking") to clear the error
+// 4) copy StakingContract.bin-runtime into stakingv3\stakingbin.go STAKING_RUNTIME_BIN field
 const STAKING_CONTRACT = "0x0000000000000000000000000000000000000000000000000000000000001000"
 
 var STAKING_CONTRACT_ADDRESS = common.HexToAddress(STAKING_CONTRACT)
@@ -161,6 +168,12 @@ func GetStakingContractV2_ABI() (abi.ABI, error) {
 	return abi, err
 }
 
+func GetStakingContractV3_ABI() (abi.ABI, error) {
+	s := stakingv3.StakingMetaData.ABI
+	abi, err := abi.JSON(strings.NewReader(s))
+	return abi, err
+}
+
 func GetContract_Method_NewDeposit() string {
 	return SystemContractsData[stakingContract].Contracts.Methods.Deposits.NewDeposit
 }
@@ -287,4 +300,17 @@ func GetContract_Method_CompletePartialWithdrawal() string {
 
 func GetContract_Method_GetStakingDetails() string {
 	return "getStakingDetails"
+}
+
+// Staking V3 methods
+func GetContract_Method_BondDepositor() string {
+	return "bondDepositor"
+}
+
+func GetContract_Method_BondDepositorForRotation() string {
+	return "bondDepositorForRotation"
+}
+
+func GetContract_Method_IsDepositorBonded() string {
+	return "isDepositorBonded"
 }

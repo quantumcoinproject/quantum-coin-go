@@ -52,6 +52,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv3"
 )
 
 const (
@@ -875,6 +876,13 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		log.Info("Setting consensus context contract code", "blockNumber", defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK)
 		consensuscontextContractCode := common.FromHex(consensuscontext.CONSENSUS_CONTEXT_RUNTIME_BIN)
 		state.SetCode(consensuscontext.CONSENSUS_CONTEXT_CONTRACT_ADDRESS, consensuscontextContractCode)
+	}
+
+	//Staking V3
+	if blockNumber == defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock {
+		log.Info("Setting stakingv3 contract code", "blockNumber", defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock)
+		stakingContractCode := common.FromHex(stakingv3.STAKING_RUNTIME_BIN)
+		state.SetCode(staking.STAKING_CONTRACT_ADDRESS, stakingContractCode)
 	}
 
 	if blockNumber > defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK {

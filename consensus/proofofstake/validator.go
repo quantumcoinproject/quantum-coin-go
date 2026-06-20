@@ -674,8 +674,10 @@ func (p *ProofOfStake) GetStakingContractAbi() (abi.ABI, error) {
 
 	if blockNumber < defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK {
 		return staking.GetStakingContract_ABI()
-	} else {
+	} else if blockNumber < defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock {
 		return staking.GetStakingContractV2_ABI()
+	} else {
+		return staking.GetStakingContractV3_ABI()
 	}
 }
 

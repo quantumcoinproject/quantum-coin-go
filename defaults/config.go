@@ -97,6 +97,8 @@ type ProofOfStakeConfig struct {
 	CONSENSUS_CONTEXT_START_BLOCK     uint64
 	CONSENSUS_CONTEXT_MAX_BLOCK_COUNT uint64
 
+	SystemContractV3StartBlock uint64
+
 	VALIDATOR_NIL_BLOCK_START_BLOCK      uint64
 	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK uint64
 
@@ -200,6 +202,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	ValidatorCountV2StartBlock: 5319228,
 	GasV2StartBlock:            5319238,
 	GasTipStartBlock:           5319248,
+
+	SystemContractV3StartBlock: 5319258,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -252,6 +256,8 @@ var devnetPosConfig = ProofOfStakeConfig{
 	ValidatorCountV2StartBlock: 162,
 	GasV2StartBlock:            172,
 	GasTipStartBlock:           182,
+
+	SystemContractV3StartBlock: 192,
 }
 
 var MainnetConfig = &Config{
