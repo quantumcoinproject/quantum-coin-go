@@ -239,6 +239,28 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 
 	log.Debug("ProcessTransactions", "gp Gas", gp.Gas())
 
+	blockNumber := header.Number.Uint64()
+
+	//Block gas limit (dynamic from GasV2StartBlock). Recomputed from parent state so the
+	//proposer's header.GasLimit is deterministically enforced. Engine may be nil in some
+	//low-level test contexts; fall back to the legacy fixed value there.
+	var blockGasLimit uint64
+	if engine := bc.Engine(); engine != nil {
+		blockGasLimit, err = engine.GetGasLimit(header, statedb)
+		if err != nil {
+			log.Error("ProcessTransactions GetGasLimit error", "block", blockNumber, "error", err)
+			return nil, nil, nil, nil, err
+		}
+	} else {
+		blockGasLimit = defaults.GetGasLimit(blockNumber)
+	}
+
+	//From the fork, enforce the header gas limit exactly (covers empty/nil blocks too).
+	if blockNumber >= defaults.DefaultConfig.PosConfig.GasV2StartBlock && header.GasLimit != blockGasLimit {
+		log.Error("ProcessTransactions invalid gas limit", "block", blockNumber, "header.GasLimit", header.GasLimit, "blockGasLimit", blockGasLimit)
+		return nil, nil, nil, nil, errors.New("invalid gas limit")
+	}
+
 	if len(*txList) == 0 {
 		if header.GasUsed != 0 {
 			return nil, nil, nil, nil, errors.New("GasUsed is invalid")
@@ -334,7 +356,6 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 
 	}
 
-	blockGasLimit := defaults.GetGasLimit(header.Number.Uint64())
 	gasUsed := blockGasLimit - gp.Gas()
 	if header.GasUsed != gasUsed {
 		log.Error("ProcessTransactions() gas limit exceeded", "block", header.Number.Uint64(), "blockGasLimit", blockGasLimit,

@@ -11,6 +11,14 @@ import (
 
 const BASIC_TXN_GAS = uint64(21000)
 
+// MIN_DYNAMIC_GAS_LIMIT is the floor block gas limit (~100 basic txns) used by the
+// dynamic gas-limit scheme that activates at GasV2StartBlock.
+const MIN_DYNAMIC_GAS_LIMIT = uint64(2100000)
+
+// BreakglassDefaultGasLimit is the reduced maximum block gas limit enforced while
+// breakglass mode is active.
+const BreakglassDefaultGasLimit = uint64(30000000)
+
 var DEFAULT_PRICE = int64(47619047619047600)
 var SigningContextLevel1Multiplier = int64(20)
 var SigningContextLevel2Multiplier = int64(30)
@@ -28,6 +36,15 @@ func GetGasLimit(blockNumber uint64) uint64 {
 
 func GetMaxTransactionsForBlock(blockNumber uint64) int {
 	return int(DefaultConfig.DefaultGasLimit / BASIC_TXN_GAS)
+}
+
+// GetMaxGasLimit returns the maximum allowed block gas limit for the dynamic gas-limit
+// scheme: the normal default, or a reduced cap when breakglass mode is active.
+func GetMaxGasLimit(blockNumber uint64) uint64 {
+	if IsCryptoBreakglassMode(blockNumber) {
+		return BreakglassDefaultGasLimit
+	}
+	return DefaultConfig.DefaultGasLimit
 }
 
 func SetCryptoBreakGlassBlock(blockNumber uint64) error {
@@ -107,6 +124,7 @@ type ProofOfStakeConfig struct {
 	ExtraDataV3StartBlock      uint64
 	Normalizationv2StartBlock  uint64
 	ValidatorCountV2StartBlock uint64
+	GasV2StartBlock            uint64
 }
 
 type Config struct {
@@ -168,6 +186,7 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	ExtraDataV3StartBlock:      5319208,
 	Normalizationv2StartBlock:  5319208 + 10,
 	ValidatorCountV2StartBlock: 5319208 + 10 + 10,
+	GasV2StartBlock:            5319208 + 10 + 10 + 10,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -218,6 +237,7 @@ var devnetPosConfig = ProofOfStakeConfig{
 	ExtraDataV3StartBlock:      90 + 10 + 10 + 10 + 2 + 10 + 10,
 	Normalizationv2StartBlock:  90 + 10 + 10 + 10 + 2 + 10 + 10 + 10,
 	ValidatorCountV2StartBlock: 90 + 10 + 10 + 10 + 2 + 10 + 10 + 10 + 10,
+	GasV2StartBlock:            90 + 10 + 10 + 10 + 2 + 10 + 10 + 10 + 10 + 10,
 }
 
 var MainnetConfig = &Config{

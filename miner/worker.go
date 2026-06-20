@@ -666,7 +666,12 @@ func (w *worker) commitTransactions(coinbase common.Address, interrupt *int32) (
 		return true, nil
 	}
 
-	w.current.header.GasLimit = defaults.GetGasLimit(w.current.header.Number.Uint64())
+	gl, err := w.engine.GetGasLimit(w.current.header, w.current.state)
+	if err != nil {
+		log.Error("commitTransactions GetGasLimit", "error", err)
+		return false, err
+	}
+	w.current.header.GasLimit = gl
 	gasLimit := w.current.header.GasLimit
 
 	if w.current.gasPool == nil {

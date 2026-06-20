@@ -393,9 +393,17 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 			return errInvalidDifficulty
 		}
 	}
-	blockGasLimit := defaults.GetGasLimit(number)
-	if header.GasLimit != blockGasLimit {
-		return errInvalidGasLimit
+	//Gas limit: below GasV2StartBlock it is the fixed legacy value; from the fork it is
+	//dynamic, so only bounds are checked here (no state available). The exact value is
+	//enforced authoritatively against parent state in state_processor.ProcessTransactions.
+	if number < defaults.DefaultConfig.PosConfig.GasV2StartBlock {
+		if header.GasLimit != defaults.GetGasLimit(number) {
+			return errInvalidGasLimit
+		}
+	} else {
+		if header.GasLimit > defaults.GetMaxGasLimit(number) || header.GasLimit < defaults.MIN_DYNAMIC_GAS_LIMIT {
+			return errInvalidGasLimit
+		}
 	}
 
 	//GasUsed is checked in state_processor
@@ -875,6 +883,14 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 				log.Error("DeleteConsensusContext oldKey err", "err", err)
 				return err
 			}
+		}
+	}
+
+	//Dynamic gas limit: record this block's nil-block status into the round-robin array.
+	if blockNumber >= defaults.DefaultConfig.PosConfig.GasV2StartBlock {
+		if err := c.writeGasNilStatus(state, header, blockConsensusData); err != nil {
+			log.Error("writeGasNilStatus err", "err", err)
+			return err
 		}
 	}
 
