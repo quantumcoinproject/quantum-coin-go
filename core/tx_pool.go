@@ -583,7 +583,18 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 			log.Debug("dynamic fee tx start block not met", "tx", tx.Hash())
 			return errors.New("dynamic fee tx start block not met")
 		}
-		if (tx.GasFeeCap() != nil || tx.GasTipCap() != nil) && (tx.GasFeeCap().Uint64() != 0 || tx.GasTipCap().Uint64() != 0) { //todo: block till tips are implemented
+		// The tx could be included no earlier than the next block.
+		if defaults.IsGasTipActive(pool.chain.CurrentBlock().NumberU64() + 1) {
+			// Gas tip active. A zero gasFeeCap means the sender opted out of tips (the legacy
+			// behavior, where the caps are null); it stays valid and is charged the base fee
+			// only, but gasTipCap must then also be zero. A non-zero gasFeeCap must cover the
+			// base fee and gasTipCap must not exceed it. Negative values are rejected. This shares
+			// the exact rule consensus enforces in ApplyTransaction (core.ValidateGasFeeCaps).
+			if err := ValidateGasFeeCaps(tx, tx.BaseFee()); err != nil {
+				log.Debug("validateTx ValidateGasFeeCaps", "error", err, "GasFeeCap", tx.GasFeeCap(), "GasTipCap", tx.GasTipCap())
+				return err
+			}
+		} else if (tx.GasFeeCap() != nil || tx.GasTipCap() != nil) && (tx.GasFeeCap().Uint64() != 0 || tx.GasTipCap().Uint64() != 0) {
 			log.Debug("gasFeeCap or gasTipCap non nil", "GasFeeCap", tx.GasFeeCap(), "GasTipCap", tx.GasTipCap())
 			return errors.New("gasFeeCap or gasTipCap non nil")
 		}

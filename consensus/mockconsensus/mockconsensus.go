@@ -213,6 +213,15 @@ func (c *Mock) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types
 	results := make(chan error, len(headers))
 	go func() {
 		for i, header := range headers {
+			// Give the abort signal priority: results is fully buffered, so "results <- err"
+			// is always ready and a plain select would ignore a closed abort ~50% of the time,
+			// leaking an unbounded number of verifications past the abort.
+			select {
+			case <-abort:
+				return
+			default:
+			}
+
 			err := c.verifyHeader(chain, header, headers[:i])
 
 			select {

@@ -344,7 +344,11 @@ func send(from string, to string, quantity string, remarks string) (string, erro
 	if txType == "" || txType == "0" {
 		tx = types.NewDefaultFeeTransactionExtended(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data, remarkBytes)
 	} else if txType == "1" {
-		tx = types.NewDynamicFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data, remarkBytes)
+		tipCap, feeCap, err := getGasCaps()
+		if err != nil {
+			return "", err
+		}
+		tx = types.NewDynamicFeeTransactionWithCaps(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data, remarkBytes, tipCap, feeCap)
 	} else {
 		fmt.Println("Unknown txType", txType)
 		return "", errors.New("unknown txType")
@@ -769,6 +773,32 @@ func initiateWithdrawal(key *signaturealgorithm.PrivateKey) error {
 	time.Sleep(1000 * time.Millisecond)
 
 	return nil
+}
+
+const GAS_TIP_CAP_ENV = "GAS_TIP_CAP"
+const GAS_FEE_CAP_ENV = "GAS_FEE_CAP"
+
+// getGasCaps reads the optional GAS_TIP_CAP and GAS_FEE_CAP environment variables (values in wei) used
+// for dynamic-fee (TX_TYPE=1) transactions. A variable that is not set returns a nil cap, which is
+// treated as zero downstream (the opt-out default), so leaving them unset preserves existing behavior.
+func getGasCaps() (gasTipCap *big.Int, gasFeeCap *big.Int, err error) {
+	if v := os.Getenv(GAS_TIP_CAP_ENV); len(v) > 0 {
+		tip, ok := new(big.Int).SetString(v, 10)
+		if !ok {
+			return nil, nil, errors.New("invalid " + GAS_TIP_CAP_ENV + ", expected a wei integer: " + v)
+		}
+		gasTipCap = tip
+		fmt.Println("Using gasTipCap from environment variable", GAS_TIP_CAP_ENV, "(wei):", gasTipCap)
+	}
+	if v := os.Getenv(GAS_FEE_CAP_ENV); len(v) > 0 {
+		fee, ok := new(big.Int).SetString(v, 10)
+		if !ok {
+			return nil, nil, errors.New("invalid " + GAS_FEE_CAP_ENV + ", expected a wei integer: " + v)
+		}
+		gasFeeCap = fee
+		fmt.Println("Using gasFeeCap from environment variable", GAS_FEE_CAP_ENV, "(wei):", gasFeeCap)
+	}
+	return gasTipCap, gasFeeCap, nil
 }
 
 func getGasLimit(defaultLimit uint64) (uint64, error) {
@@ -1693,6 +1723,10 @@ func transferTokens(contractAddr string, toAddr string, tokenTransferAmount *big
 	if os.Getenv("TX_TYPE") == "1" {
 		txnOpts.TxType = types.DynamicFeeTxType
 		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+		txnOpts.GasTipCap, txnOpts.GasFeeCap, err = getGasCaps()
+		if err != nil {
+			return err
+		}
 	}
 
 	txnOpts.Value = big.NewInt(0)

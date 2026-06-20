@@ -59,6 +59,12 @@ func IsCryptoBreakglassMode(blockNumber uint64) bool {
 	return cryptoBreakglassBlock != 0 && blockNumber >= cryptoBreakglassBlock
 }
 
+// IsGasTipActive reports whether gas tip / priority fee support is active at the
+// given block number (from GasTipStartBlock onward).
+func IsGasTipActive(blockNumber uint64) bool {
+	return blockNumber >= DefaultConfig.PosConfig.GasTipStartBlock
+}
+
 func IsSigAlgSwitchMode(blockNumber uint64) bool {
 	if blockNumber >= DefaultConfig.PosConfig.SigAlgSwitchBlock {
 		if cryptoBreakglassBlock != 0 && blockNumber >= cryptoBreakglassBlock {
@@ -125,6 +131,12 @@ type ProofOfStakeConfig struct {
 	Normalizationv2StartBlock  uint64
 	ValidatorCountV2StartBlock uint64
 	GasV2StartBlock            uint64
+
+	// GasTipStartBlock activates gas tip / priority fee support. From this block,
+	// transactions are selected by effective tip subject to a 50/50 basic-vs-general
+	// gas split, the tip is paid to the block proposer, and ProcessTransactions
+	// enforces the split via two-pass execution. It is GasV2StartBlock + 10.
+	GasTipStartBlock uint64
 }
 
 type Config struct {
@@ -187,6 +199,7 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	Normalizationv2StartBlock:  5319218,
 	ValidatorCountV2StartBlock: 5319228,
 	GasV2StartBlock:            5319238,
+	GasTipStartBlock:           5319248,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -238,6 +251,7 @@ var devnetPosConfig = ProofOfStakeConfig{
 	Normalizationv2StartBlock:  152,
 	ValidatorCountV2StartBlock: 162,
 	GasV2StartBlock:            172,
+	GasTipStartBlock:           182,
 }
 
 var MainnetConfig = &Config{

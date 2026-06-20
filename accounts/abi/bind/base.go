@@ -58,6 +58,11 @@ type TransactOpts struct {
 	GasLimit       uint64   // Gas limit to set for the transaction execution (0 = estimate)
 	SigningContext byte     // crypto.SigningContext for dynamic-fee transactions
 
+	// GasTipCap and GasFeeCap are optional priority-fee caps for dynamic-fee transactions (TxType == 1).
+	// A nil cap is treated as zero (the opt-out default) and is ignored for default-fee transactions.
+	GasTipCap *big.Int
+	GasFeeCap *big.Int
+
 	// ChainID is the chain identifier used when constructing dynamic-fee transactions.
 	// It is optional for default-fee transactions, but required when TxType == 1.
 	ChainID *big.Int
@@ -303,7 +308,7 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 		if opts.ChainID == nil {
 			return nil, errors.New("TxType 1 (dynamic-fee) requires ChainID")
 		}
-		rawTx = types.NewDynamicFeeTransaction(
+		rawTx = types.NewDynamicFeeTransactionWithCaps(
 			opts.ChainID,
 			nonce,
 			toAddress,
@@ -312,6 +317,8 @@ func (c *BoundContract) transact(opts *TransactOpts, contract *common.Address, i
 			cryptobase.GetSigningContext(),
 			input,
 			nil,
+			opts.GasTipCap,
+			opts.GasFeeCap,
 		)
 	} else {
 		baseTx := types.NewDefaultFeeTransactionSimple(nonce, toAddress, value, gasLimit, input)

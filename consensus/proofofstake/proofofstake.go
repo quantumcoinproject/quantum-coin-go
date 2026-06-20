@@ -818,6 +818,27 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			burn(state, burnAmountTxnFee)
 
 			log.Trace("Reward amount", "BlockNumber", header.Number, "rewardsAmountTxnFee", rewardsAmountTxnFee, "burnAmountTxnFee", burnAmountTxnFee, "txnFeeTotal", txnFeeTotal)
+
+			//Gas tip / priority fee: from GasTipStartBlock, the effective tip portion of the
+			//transaction fee is paid in full to the block proposer (separate from the base
+			//fee rewards/burn split above). This conserves supply: senders are charged
+			//(baseFee + effectiveTip) * gasUsed in state_transition; the base portion is
+			//split here and the tip portion is minted to the proposer's reward.
+			if defaults.IsGasTipActive(blockNumber) {
+				tipTotal, err := calculateTxnTipTotal(txs, receipts)
+				if err != nil {
+					return err
+				}
+				if tipTotal.Sign() > 0 {
+					err = c.accumulateBalance(state, tipTotal, common.HexToAddress(staking.GetStakingContract_Address_String()))
+					if err != nil {
+						log.Error("accumulateBalance tipTotal staking contract err", "err", err)
+						return err
+					}
+					blockProposerRewardAmount = common.SafeAddBigInt(blockProposerRewardAmount, tipTotal)
+					log.Trace("Tip amount", "BlockNumber", header.Number, "tipTotal", tipTotal)
+				}
+			}
 		}
 
 		//Update staking contract with reward details
@@ -940,6 +961,40 @@ func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transactio
 	}
 
 	return txnFeeTotal, txnFeeRewardsAmount, burnAmount, nil
+}
+
+// calculateTxnTipTotal sums the effective priority-fee (tip) coins across the block's
+// transactions: for each tx, EffectiveGasTip(baseFee) * gasUsed. Default-fee txns and
+// dynamic-fee txns with no tip contribute zero. Used from GasTipStartBlock onward to pay
+// the tip to the block proposer.
+func calculateTxnTipTotal(txs []*types.Transaction, receipts []*types.Receipt) (*big.Int, error) {
+	if len(receipts) != len(txs) {
+		log.Error("Finalize tip receipts and txn invalid len", "receipts len", len(receipts), "txn len", len(txs))
+		return nil, errors.New("finalize tip receipts and txn invalid length")
+	}
+
+	txnMap := make(map[common.Hash]*types.Transaction)
+	for _, txn := range txs {
+		txnMap[txn.Hash()] = txn
+	}
+
+	tipTotal := big.NewInt(0)
+	for _, receipt := range receipts {
+		txn, ok := txnMap[receipt.TxHash]
+		if ok == false {
+			log.Error("Finalize tip txn not found in receipts", "hash", receipt.TxHash)
+			return nil, errors.New("finalize tip txn not found in receipts")
+		}
+		tip, err := txn.EffectiveGasTip(txn.BaseFee())
+		if err != nil {
+			log.Error("Finalize tip EffectiveGasTip", "hash", receipt.TxHash, "err", err)
+			return nil, err
+		}
+		tipCoins := common.SafeMulBigInt(tip, new(big.Int).SetUint64(receipt.GasUsed))
+		tipTotal = common.SafeAddBigInt(tipTotal, tipCoins)
+	}
+
+	return tipTotal, nil
 }
 
 func calculateTxnFeeSplitCoins(txnFeeTotal *big.Int) (burnAmount *big.Int, txnFeeRewardsAmount *big.Int) {

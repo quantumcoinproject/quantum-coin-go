@@ -198,6 +198,26 @@ func NewDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address
 	return tx
 }
 
+// NewDynamicFeeTransactionWithCaps builds a dynamic-fee transaction with explicit gasTipCap and gasFeeCap.
+// A nil cap is treated as zero (the opt-out default), so passing nil for both is identical to
+// NewDynamicFeeTransaction and keeps the legacy behavior unchanged.
+func NewDynamicFeeTransactionWithCaps(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte, remarks []byte, gasTipCap *big.Int, gasFeeCap *big.Int) *Transaction {
+	tx := NewTx(&DynamicFeeTx{
+		ChainID:        chainId,
+		Nonce:          nonce,
+		To:             to,
+		Value:          amount,
+		Data:           common.CopyBytes(data),
+		Remarks:        common.CopyBytes(remarks),
+		Gas:            gasLimit,
+		SigningContext: byte(signingContext),
+		GasTipCap:      gasTipCap,
+		GasFeeCap:      gasFeeCap,
+	})
+
+	return tx
+}
+
 func NewDynamicFeeTransactionExtended(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, data []byte, remarks []byte, signingContext crypto.SigningContext) *Transaction {
 	tx := NewTx(&DynamicFeeTx{
 		ChainID:        chainId,
