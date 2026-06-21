@@ -95,6 +95,11 @@ interface IStakingContract {
 
     function getStakingDetails(address validatorAddress) external view returns (StakingDetails calldata);
 
+    //Batched reads: total raw validator-list length and a paginated window of staking details.
+    //Used by system (node) read paths to fetch all validators in a few calls instead of per-validator calls.
+    function getValidatorListLength() external view returns (uint256);
+    function listValidatorStakingDetails(uint256 start, uint256 count) external view returns (StakingDetails[] memory);
+
     //Liveness
     function setNilBlock(address validatorAddress) external;
     function resetNilBlock(address validatorAddress) external;
@@ -392,6 +397,10 @@ contract StakingContract is IStakingContract {
     }
 
     function getNetBalanceOfDepositor(address depositorAddress) override external view returns (uint256) {
+        return _getNetBalanceOfDepositor(depositorAddress);
+    }
+
+    function _getNetBalanceOfDepositor(address depositorAddress) internal view returns (uint256) {
         if (_depositorExists[depositorAddress] == false) {
             return 0;
         }
@@ -588,20 +597,24 @@ contract StakingContract is IStakingContract {
     function getStakingDetails(address validatorAddress) override external view returns (StakingDetails memory) {
         require(_validatorExists[validatorAddress] == true, "Validator does not exist");
 
+        return _buildStakingDetails(validatorAddress);
+    }
+
+    function _buildStakingDetails(address validatorAddress) internal view returns (StakingDetails memory) {
         address depositorAddress = _validatorToDepositorMapping[validatorAddress];
 
         StakingDetails memory stakingDetails;
 
         uint256 withdrawalBlock = 0;
         uint256 withdrawalAmount = 0;
-        uint256 depositorNetBalance = this.getNetBalanceOfDepositor(depositorAddress);
+        uint256 depositorNetBalance = _getNetBalanceOfDepositor(depositorAddress);
 
         if(_depositorPartialWithdrawalBlockMapping[depositorAddress] > 0) {
             withdrawalBlock = _depositorPartialWithdrawalBlockMapping[depositorAddress].add(WITHDRAWAL_BLOCK_DELAY);
             withdrawalAmount = _depositorPartialWithdrawalAmountMapping[depositorAddress];
         } else if(_depositorWithdrawalRequests[depositorAddress] > 0) {
             withdrawalBlock = _depositorWithdrawalRequests[depositorAddress];
-            withdrawalAmount = this.getNetBalanceOfDepositor(depositorAddress);
+            withdrawalAmount = depositorNetBalance;
         }
 
         stakingDetails = StakingDetails(depositorAddress, validatorAddress, _depositorBalances[depositorAddress], depositorNetBalance, _depositorRewards[depositorAddress],
@@ -609,5 +622,40 @@ contract StakingContract is IStakingContract {
             _validatorLastNilBlock[validatorAddress], _validatorNilBlockCount[validatorAddress]);
 
         return stakingDetails;
+    }
+
+    function getValidatorListLength() override external view returns (uint256) {
+        return _validatorList.length;
+    }
+
+    // Returns the staking details for the live validators in the raw _validatorList window [start, start+count).
+    // Stale entries (rotated-away validators where _validatorExists is false) are skipped, so the returned
+    // array can be shorter than count. Callers page over getValidatorListLength() and concatenate.
+    function listValidatorStakingDetails(uint256 start, uint256 count) override external view returns (StakingDetails[] memory) {
+        uint256 total = _validatorList.length;
+        uint256 end = start.add(count);
+        if (end > total) {
+            end = total;
+        }
+
+        uint256 liveCount = 0;
+        for (uint256 i = start; i < end; i++) {
+            if (_validatorExists[_validatorList[i]]) {
+                liveCount++;
+            }
+        }
+
+        StakingDetails[] memory list = new StakingDetails[](liveCount);
+        uint256 idx = 0;
+        for (uint256 i = start; i < end; i++) {
+            address validatorAddress = _validatorList[i];
+            if (_validatorExists[validatorAddress] == false) {
+                continue;
+            }
+            list[idx] = _buildStakingDetails(validatorAddress);
+            idx++;
+        }
+
+        return list;
     }
 }

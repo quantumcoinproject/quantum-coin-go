@@ -782,18 +782,19 @@ func TestPacketHandler_offline_validator_block(t *testing.T) {
 
 func TestPacketHandler_basic_various_blocks(t *testing.T) {
 	fmt.Println("TestPacketHandler_basic_various_blocks starting")
-	var blockNumbers = []uint64{1, defaults.DefaultConfig.PosConfig.RewardStartBlockNumber, defaults.DefaultConfig.PosConfig.SlashStartBlockNumber, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
-		defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
-		defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
-		defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK, defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD, defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK,
-		defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock,
-		defaults.DefaultConfig.PosConfig.SlashV2StartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock,
-		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock,
-		defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock,
-		defaults.DefaultConfig.PosConfig.DynamicFeeTxStartBlock, defaults.DefaultConfig.PosConfig.SkipProposerStartBlock, defaults.DefaultConfig.PosConfig.SkipProposerEndBlock,
-		defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock, defaults.DefaultConfig.PosConfig.Normalizationv2StartBlock,
-		defaults.DefaultConfig.PosConfig.ValidatorCountV2StartBlock,
+	// Sorted ascending by their mainnet block values; covers every block-denominated field in defaults/config.go.
+	var blockNumbers = []uint64{1, defaults.DefaultConfig.PosConfig.MinOfflineProposerBlockDelay, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS,
+		defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD, defaults.DefaultConfig.PosConfig.RewardStartBlockNumber,
+		defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK, defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK,
+		defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
+		defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK,
+		defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock, defaults.DefaultConfig.PosConfig.SlashStartBlockNumber, defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK,
+		defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, defaults.DefaultConfig.PosConfig.SlashV2StartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock,
+		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock, defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock,
 		defaults.DefaultConfig.DeepCheckStartBlock, defaults.DefaultConfig.GasPriceStartBlock,
+		defaults.DefaultConfig.PosConfig.DynamicFeeTxStartBlock, defaults.DefaultConfig.PosConfig.SkipProposerStartBlock, defaults.DefaultConfig.PosConfig.SkipProposerEndBlock,
+		defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock, defaults.DefaultConfig.PosConfig.Normalizationv2StartBlock, defaults.DefaultConfig.PosConfig.ValidatorCountV2StartBlock,
+		defaults.DefaultConfig.PosConfig.GasV2StartBlock, defaults.DefaultConfig.PosConfig.GasTipStartBlock, defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock,
 	}
 
 	for _, b := range blockNumbers {

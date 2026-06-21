@@ -302,6 +302,14 @@ func GetContract_Method_GetStakingDetails() string {
 	return "getStakingDetails"
 }
 
+func GetContract_Method_GetValidatorListLength() string {
+	return "getValidatorListLength"
+}
+
+func GetContract_Method_ListValidatorStakingDetails() string {
+	return "listValidatorStakingDetails"
+}
+
 // Staking V3 methods
 func GetContract_Method_BondDepositor() string {
 	return "bondDepositor"

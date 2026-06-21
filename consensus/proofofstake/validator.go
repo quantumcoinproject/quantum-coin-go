@@ -50,9 +50,123 @@ type ValidatorDetailsV2 struct {
 	NilBlockCount      *big.Int       `json:"nilBlockCount" gencodec:"required"`
 }
 
+// validatorStakingDetailsBatchSize is the number of raw validator-list entries fetched per
+// listValidatorStakingDetails call. A window of this size keeps each system eth_call's gas well
+// under the 50M RPCGasCap while still amortizing the per-call EVM setup over many validators.
+const validatorStakingDetailsBatchSize = 250
+
+// listValidatorStakingDetailsV3 fetches the staking details for all live validators using the V3
+// contract's paginated listValidatorStakingDetails(start, count) method, avoiding the per-validator
+// eth_calls of the legacy path. It first reads getValidatorListLength() to learn how many raw list
+// entries exist, then pages over that index space in batches of validatorStakingDetailsBatchSize and
+// concatenates the results. Stale (rotated-away) entries are skipped inside the contract, so a page
+// can return fewer than the requested count.
+func (p *ProofOfStake) listValidatorStakingDetailsV3(blockHash common.Hash) ([]*ValidatorDetailsV2, error) {
+	err := staking.IsStakingContract()
+	if err != nil {
+		log.Warn("GETH_STAKING_CONTRACT_ADDRESS: Contract1 address is empty")
+		return nil, err
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // cancel when we are finished consuming integers
+
+	abiData, err := staking.GetStakingContractV3_ABI()
+	if err != nil {
+		log.Error("listValidatorStakingDetailsV3 abi error", "err", err)
+		return nil, err
+	}
+	contractAddress := common.HexToAddress(staking.GetStakingContract_Address_String())
+	blockNr := rpc.BlockNumberOrHashWithHash(blockHash, false)
+
+	// Read the raw validator-list length so we know how many pages to fetch.
+	lengthMethod := staking.GetContract_Method_GetValidatorListLength()
+	lengthData, err := abiData.Pack(lengthMethod)
+	if err != nil {
+		log.Error("Unable to pack getValidatorListLength", "error", err)
+		return nil, err
+	}
+	lengthMsgData := (hexutil.Bytes)(lengthData)
+	lengthResult, err := p.ethAPI.Call(ctx, ethapi.TransactionArgs{
+		To:   &contractAddress,
+		Data: &lengthMsgData,
+	}, blockNr, nil)
+	if err != nil {
+		return nil, err
+	}
+	if len(lengthResult) == 0 {
+		return nil, errors.New("getValidatorListLength result is 0")
+	}
+	var total *big.Int
+	if err := abiData.UnpackIntoInterface(&total, lengthMethod, lengthResult); err != nil {
+		log.Error("getValidatorListLength UnpackIntoInterface", "err", err)
+		return nil, err
+	}
+
+	listMethod := staking.GetContract_Method_ListValidatorStakingDetails()
+	totalCount := total.Uint64()
+	batchSize := uint64(validatorStakingDetailsBatchSize)
+	validatorList := make([]*ValidatorDetailsV2, 0, totalCount)
+
+	for start := uint64(0); start < totalCount; start += batchSize {
+		data, err := abiData.Pack(listMethod, new(big.Int).SetUint64(start), new(big.Int).SetUint64(batchSize))
+		if err != nil {
+			log.Error("Unable to pack listValidatorStakingDetails", "error", err)
+			return nil, err
+		}
+		msgData := (hexutil.Bytes)(data)
+		result, err := p.ethAPI.Call(ctx, ethapi.TransactionArgs{
+			To:   &contractAddress,
+			Data: &msgData,
+		}, blockNr, nil)
+		if err != nil {
+			return nil, err
+		}
+		if len(result) == 0 {
+			continue
+		}
+
+		var page []ValidatorDetailsV2
+		if err := abiData.UnpackIntoInterface(&page, listMethod, result); err != nil {
+			log.Error("listValidatorStakingDetails UnpackIntoInterface", "err", err)
+			return nil, err
+		}
+		for i := range page {
+			validatorList = append(validatorList, &page[i])
+		}
+	}
+
+	return validatorList, nil
+}
+
 func (p *ProofOfStake) GetValidators(blockHash common.Hash) (map[common.Address]*big.Int, error) {
 	header := p.blockchain.GetHeaderByHash(blockHash)
 	blockNumber := header.Number.Uint64()
+
+	if blockNumber >= defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock {
+		detailsList, err := p.listValidatorStakingDetailsV3(blockHash)
+		if err != nil {
+			log.Debug("GetValidators listValidatorStakingDetailsV3 failed", "err", err)
+			return nil, err
+		}
+
+		proposalsTxnsMap := make(map[common.Address]*big.Int)
+		for _, details := range detailsList {
+			if details.Validator.IsEqualTo(ZERO_ADDRESS) {
+				return nil, errors.New("invalid validator")
+			}
+			if details.IsValidationPaused {
+				log.Debug("Validator is paused, skipping", "val", details.Validator)
+				continue
+			}
+			if details.Depositor.IsEqualTo(ZERO_ADDRESS) {
+				log.Debug("GetValidators invalid depositor", "validator", details.Validator)
+				continue
+			}
+			proposalsTxnsMap[details.Validator] = details.NetBalance
+			log.Debug("GetValidators", "validator", details.Validator, "depositor", details.Depositor, "depositAmount", details.NetBalance)
+		}
+		return proposalsTxnsMap, nil
+	}
 
 	depositorCount, err := p.GetDepositorCount(blockHash)
 	if err != nil {
@@ -1294,6 +1408,28 @@ func (p *ProofOfStake) ResetNilBlock(
 }
 
 func (p *ProofOfStake) ListValidatorsAsMap(blockHash common.Hash) (map[common.Address]*ValidatorDetailsV2, error) {
+	header := p.blockchain.GetHeaderByHash(blockHash)
+	if header != nil && header.Number.Uint64() >= defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock {
+		detailsList, err := p.listValidatorStakingDetailsV3(blockHash)
+		if err != nil {
+			log.Debug("ListValidatorsAsMap listValidatorStakingDetailsV3 failed", "err", err)
+			return nil, err
+		}
+
+		validatorMap := make(map[common.Address]*ValidatorDetailsV2)
+		for _, details := range detailsList {
+			if details.Validator.IsEqualTo(ZERO_ADDRESS) {
+				return nil, errors.New("invalid validator")
+			}
+			if details.Depositor.IsEqualTo(ZERO_ADDRESS) {
+				log.Debug("ListValidatorsAsMap invalid depositor", "validator", details.Validator)
+				continue
+			}
+			validatorMap[details.Validator] = details
+		}
+		return validatorMap, nil
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // cancel when we are finished consuming integers
 
