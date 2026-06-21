@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"math/big"
+	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -62,6 +63,7 @@ const validatorStakingDetailsBatchSize = 250
 // concatenates the results. Stale (rotated-away) entries are skipped inside the contract, so a page
 // can return fewer than the requested count.
 func (p *ProofOfStake) listValidatorStakingDetailsV3(blockHash common.Hash) ([]*ValidatorDetailsV2, error) {
+	startTime := time.Now()
 	err := staking.IsStakingContract()
 	if err != nil {
 		log.Warn("GETH_STAKING_CONTRACT_ADDRESS: Contract1 address is empty")
@@ -86,6 +88,7 @@ func (p *ProofOfStake) listValidatorStakingDetailsV3(blockHash common.Hash) ([]*
 		return nil, err
 	}
 	lengthMsgData := (hexutil.Bytes)(lengthData)
+	lengthCallStart := time.Now()
 	lengthResult, err := p.ethAPI.Call(ctx, ethapi.TransactionArgs{
 		To:   &contractAddress,
 		Data: &lengthMsgData,
@@ -93,6 +96,7 @@ func (p *ProofOfStake) listValidatorStakingDetailsV3(blockHash common.Hash) ([]*
 	if err != nil {
 		return nil, err
 	}
+	log.Debug("listValidatorStakingDetailsV3 getValidatorListLength call done", "elapsed", time.Since(lengthCallStart))
 	if len(lengthResult) == 0 {
 		return nil, errors.New("getValidatorListLength result is 0")
 	}
@@ -106,6 +110,7 @@ func (p *ProofOfStake) listValidatorStakingDetailsV3(blockHash common.Hash) ([]*
 	totalCount := total.Uint64()
 	batchSize := uint64(validatorStakingDetailsBatchSize)
 	validatorList := make([]*ValidatorDetailsV2, 0, totalCount)
+	pageCount := 0
 
 	for start := uint64(0); start < totalCount; start += batchSize {
 		data, err := abiData.Pack(listMethod, new(big.Int).SetUint64(start), new(big.Int).SetUint64(batchSize))
@@ -114,6 +119,7 @@ func (p *ProofOfStake) listValidatorStakingDetailsV3(blockHash common.Hash) ([]*
 			return nil, err
 		}
 		msgData := (hexutil.Bytes)(data)
+		pageStart := time.Now()
 		result, err := p.ethAPI.Call(ctx, ethapi.TransactionArgs{
 			To:   &contractAddress,
 			Data: &msgData,
@@ -121,7 +127,9 @@ func (p *ProofOfStake) listValidatorStakingDetailsV3(blockHash common.Hash) ([]*
 		if err != nil {
 			return nil, err
 		}
+		pageCount++
 		if len(result) == 0 {
+			log.Debug("listValidatorStakingDetailsV3 page empty", "start", start, "count", batchSize, "elapsed", time.Since(pageStart))
 			continue
 		}
 
@@ -133,8 +141,10 @@ func (p *ProofOfStake) listValidatorStakingDetailsV3(blockHash common.Hash) ([]*
 		for i := range page {
 			validatorList = append(validatorList, &page[i])
 		}
+		log.Debug("listValidatorStakingDetailsV3 page done", "start", start, "count", batchSize, "rows", len(page), "elapsed", time.Since(pageStart))
 	}
 
+	log.Debug("listValidatorStakingDetailsV3 done", "listLength", totalCount, "pages", pageCount, "validators", len(validatorList), "elapsed", time.Since(startTime))
 	return validatorList, nil
 }
 
@@ -143,6 +153,7 @@ func (p *ProofOfStake) GetValidators(blockHash common.Hash) (map[common.Address]
 	blockNumber := header.Number.Uint64()
 
 	if blockNumber >= defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock {
+		startTime := time.Now()
 		detailsList, err := p.listValidatorStakingDetailsV3(blockHash)
 		if err != nil {
 			log.Debug("GetValidators listValidatorStakingDetailsV3 failed", "err", err)
@@ -165,6 +176,7 @@ func (p *ProofOfStake) GetValidators(blockHash common.Hash) (map[common.Address]
 			proposalsTxnsMap[details.Validator] = details.NetBalance
 			log.Debug("GetValidators", "validator", details.Validator, "depositor", details.Depositor, "depositAmount", details.NetBalance)
 		}
+		log.Debug("GetValidators V3 done", "blockNumber", blockNumber, "validators", len(proposalsTxnsMap), "elapsed", time.Since(startTime))
 		return proposalsTxnsMap, nil
 	}
 
@@ -1410,6 +1422,7 @@ func (p *ProofOfStake) ResetNilBlock(
 func (p *ProofOfStake) ListValidatorsAsMap(blockHash common.Hash) (map[common.Address]*ValidatorDetailsV2, error) {
 	header := p.blockchain.GetHeaderByHash(blockHash)
 	if header != nil && header.Number.Uint64() >= defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock {
+		startTime := time.Now()
 		detailsList, err := p.listValidatorStakingDetailsV3(blockHash)
 		if err != nil {
 			log.Debug("ListValidatorsAsMap listValidatorStakingDetailsV3 failed", "err", err)
@@ -1427,6 +1440,7 @@ func (p *ProofOfStake) ListValidatorsAsMap(blockHash common.Hash) (map[common.Ad
 			}
 			validatorMap[details.Validator] = details
 		}
+		log.Debug("ListValidatorsAsMap V3 done", "blockNumber", header.Number.Uint64(), "validators", len(validatorMap), "elapsed", time.Since(startTime))
 		return validatorMap, nil
 	}
 
