@@ -421,11 +421,16 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 	//dynamic, so only bounds are checked here (no state available). The exact value is
 	//enforced authoritatively against parent state in state_processor.ProcessTransactions.
 	if number < defaults.DefaultConfig.PosConfig.GasV2StartBlock {
+		gasLimit := defaults.GetGasLimit(number)
 		if header.GasLimit != defaults.GetGasLimit(number) {
+			log.Warn("GasLimit outside range", "header.GasLimit", header.GasLimit, "gasLimit", gasLimit)
+
 			return errInvalidGasLimit
 		}
 	} else {
-		if header.GasLimit > defaults.GetMaxGasLimit(number) || header.GasLimit < defaults.MIN_DYNAMIC_GAS_LIMIT {
+		maxGasLimit := defaults.GetMaxGasLimit(number)
+		if header.GasLimit > maxGasLimit || header.GasLimit < defaults.MIN_DYNAMIC_GAS_LIMIT {
+			log.Warn("GasLimit outside range", "header.GasLimit", header.GasLimit, "maxGasLimit", maxGasLimit, "MIN_DYNAMIC_GAS_LIMIT", defaults.MIN_DYNAMIC_GAS_LIMIT)
 			return errInvalidGasLimit
 		}
 	}

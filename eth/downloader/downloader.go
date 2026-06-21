@@ -2173,7 +2173,7 @@ func shouldDisconnectPeer(peerId string) bool {
 		PeerErrorMap[peerId] = 0
 		return true
 	}
-	log.Warn("shouldDisconnectPeer", "errorCount below threshold", count, "peerId", peerId, "threshold", PeerMaxErrors)
+	log.Debug("shouldDisconnectPeer", "errorCount below threshold", count, "peerId", peerId, "threshold", PeerMaxErrors)
 	PeerErrorMap[peerId] = count
 	return false
 }
