@@ -34,7 +34,7 @@ package proofofstake
 // stress (latency, partition, bandwidth saturation) rather than a single faulty node. A recent
 // round-2 nil is therefore treated as a high-severity signal and applies a hard, distance-banded
 // cap that collapses the gas limit toward the floor, relaxing it only gradually (F -> 2F -> 3F ->
-// 4F) as the event ages out of the observation window.
+// ... -> 8F) as the event ages out of the observation window.
 //
 // Signal -- round-1 nil blocks (proposer-availability indicator): a round-1 nil block occurs when
 // the selected proposer is offline or unresponsive. Isolated occurrences are benign; a high
@@ -72,9 +72,9 @@ const (
 	GAS_LIMIT_WINDOW = 32
 
 	// GAS_TIER_BAND_WIDTH is the width (in blocks) of each round-2 cap band. With a 32-block
-	// window this yields 4 bands; the nearest round-2 nil's band sets the upper cap:
-	// distance 1-8 -> 1*floor, 9-16 -> 2*floor, 17-24 -> 3*floor, 25-32 -> 4*floor.
-	GAS_TIER_BAND_WIDTH = 8
+	// window this yields 8 bands; the nearest round-2 nil's band sets the upper cap:
+	// distance 1-4 -> 1*floor, 5-8 -> 2*floor, 9-12 -> 3*floor, ... 29-32 -> 8*floor.
+	GAS_TIER_BAND_WIDTH = 4
 
 	// GAS_RAMP_R2_WEIGHT is how much a round-2 nil counts relative to a round-1 nil in the
 	// superlinear ramp's weighted nil score.
@@ -113,8 +113,8 @@ const GAS_NIL_STATUS_KEY = "gas-nil-status"
 // Two effects combine, and the smaller one wins (round-1 nils can only push gas lower than
 // the round-2 cap):
 //   - Round-2 cap: the nearest round-2 nil sets an upper cap by its distance band of width
-//     GAS_TIER_BAND_WIDTH -- distance 1-8 -> 1*minGas, 9-16 -> 2*minGas, 17-24 -> 3*minGas,
-//     25-32 -> 4*minGas. No round-2 nil in the window -> cap = maxGas.
+//     GAS_TIER_BAND_WIDTH -- distance 1-4 -> 1*minGas, 5-8 -> 2*minGas, 9-12 -> 3*minGas,
+//     ... 29-32 -> 8*minGas. No round-2 nil in the window -> cap = maxGas.
 //   - Superlinear ramp: nilScore = r1Count + GAS_RAMP_R2_WEIGHT*r2Count over the window,
 //     dropPermille = min(GAS_DROP_SCALE, nilScore^2 * GAS_DROP_SCALE / GAS_RAMP_FULL_DROP_SCORE^2),
 //     rampGas = maxGas - (maxGas-minGas)*dropPermille/GAS_DROP_SCALE.
@@ -129,8 +129,8 @@ func ComputeBlockGasLimit(status [GAS_LIMIT_WINDOW]byte, blockNumber, maxGas, mi
 	cap := maxGas
 	for i := uint64(1); i <= GAS_LIMIT_WINDOW && i <= blockNumber; i++ {
 		if status[(blockNumber-i)%GAS_LIMIT_WINDOW] == GasStatusNilRound2 {
-			band := (i-1)/GAS_TIER_BAND_WIDTH + 1 // 1..4
-			cap = band * minGas                   // 1*F, 2*F, 3*F, 4*F
+			band := (i-1)/GAS_TIER_BAND_WIDTH + 1 // 1..8
+			cap = band * minGas                   // 1*F .. 8*F
 			break                                 // nearest is the most aggressive band
 		}
 	}

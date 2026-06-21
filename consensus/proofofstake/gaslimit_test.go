@@ -50,28 +50,34 @@ func TestComputeBlockGasLimit(t *testing.T) {
 			want:      testFloorGas,
 		},
 		{
-			name:      "round2 band1 (distance 6) also hits floor",
+			name:      "round2 band2 (distance 6) caps at 2F",
 			distances: map[uint64]byte{6: GasStatusNilRound2},
-			maxGas:    testMaxGas,
-			want:      testFloorGas,
-		},
-		{
-			name:      "round2 band2 (distance 9) caps at 2F",
-			distances: map[uint64]byte{9: GasStatusNilRound2},
 			maxGas:    testMaxGas,
 			want:      2 * testFloorGas,
 		},
 		{
-			name:      "round2 band3 (distance 17) caps at 3F",
-			distances: map[uint64]byte{17: GasStatusNilRound2},
+			name:      "round2 band3 (distance 10) caps at 3F",
+			distances: map[uint64]byte{10: GasStatusNilRound2},
 			maxGas:    testMaxGas,
 			want:      3 * testFloorGas,
 		},
 		{
-			name:      "round2 band4 (distance 25) caps at 4F",
+			name:      "round2 band5 (distance 17) caps at 5F",
+			distances: map[uint64]byte{17: GasStatusNilRound2},
+			maxGas:    testMaxGas,
+			want:      5 * testFloorGas,
+		},
+		{
+			name:      "round2 band7 (distance 25) caps at 7F",
 			distances: map[uint64]byte{25: GasStatusNilRound2},
 			maxGas:    testMaxGas,
-			want:      4 * testFloorGas,
+			want:      7 * testFloorGas,
+		},
+		{
+			name:      "round2 band8 (distance 30) caps at 8F",
+			distances: map[uint64]byte{30: GasStatusNilRound2},
+			maxGas:    testMaxGas,
+			want:      8 * testFloorGas,
 		},
 		{
 			name: "8 round1 nils superlinear ramp",
@@ -116,22 +122,22 @@ func TestComputeBlockGasLimit(t *testing.T) {
 			want:   testFloorGas,
 		},
 		{
-			name: "round2 band3 cap but heavy round1 ramp craters to floor",
+			name: "round2 band5 cap but heavy round1 ramp craters to floor",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 16, GasStatusNilRound1)
-				m[20] = GasStatusNilRound2 // nearest round2 at distance 20 -> band3 cap 3F
+				m[20] = GasStatusNilRound2 // nearest round2 at distance 20 -> band5 cap 5F
 				return m
 			}(),
 			maxGas: testMaxGas,
-			// nilScore = 16 + 2 = 18 -> ramp floor; min(floor, 3F) = floor
+			// nilScore = 16 + 2 = 18 -> ramp floor; min(floor, 5F) = floor
 			want: testFloorGas,
 		},
 		{
 			name: "16 round2 nils outside band1 still floor (ramp dominates cap)",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
-				fillRange(m, 9, 24, GasStatusNilRound2) // nearest at distance 9 -> band2 cap 2F
+				fillRange(m, 9, 24, GasStatusNilRound2) // nearest at distance 9 -> band3 cap 3F
 				return m
 			}(),
 			maxGas: testMaxGas,
@@ -152,22 +158,22 @@ func TestComputeBlockGasLimit(t *testing.T) {
 			want:      testFloorGas,
 		},
 		{
-			name:      "breakglass round2 band2 (distance 9) caps at 2F",
+			name:      "breakglass round2 band3 (distance 9) caps at 3F",
 			distances: map[uint64]byte{9: GasStatusNilRound2},
-			maxGas:    testBreakglassGas,
-			want:      2 * testFloorGas,
-		},
-		{
-			name:      "breakglass round2 band3 (distance 17) caps at 3F",
-			distances: map[uint64]byte{17: GasStatusNilRound2},
 			maxGas:    testBreakglassGas,
 			want:      3 * testFloorGas,
 		},
 		{
-			name:      "breakglass round2 band4 (distance 25) caps at 4F",
+			name:      "breakglass round2 band5 (distance 17) caps at 5F",
+			distances: map[uint64]byte{17: GasStatusNilRound2},
+			maxGas:    testBreakglassGas,
+			want:      5 * testFloorGas,
+		},
+		{
+			name:      "breakglass round2 band7 (distance 25) caps at 7F",
 			distances: map[uint64]byte{25: GasStatusNilRound2},
 			maxGas:    testBreakglassGas,
-			want:      4 * testFloorGas,
+			want:      7 * testFloorGas,
 		},
 		{
 			name: "breakglass 4 round1 nils ramp",
@@ -239,8 +245,8 @@ func TestComputeBlockGasLimitRoundRobin(t *testing.T) {
 			t.Fatalf("block %d: expected floor for band1 round2, got %d", blockNumber, got)
 		}
 
-		// A round-2 nil ten blocks back (band2) must cap at 2F regardless of wrap.
-		capStatus := buildStatus(blockNumber, map[uint64]byte{10: GasStatusNilRound2})
+		// A round-2 nil six blocks back (band2) must cap at 2F regardless of wrap.
+		capStatus := buildStatus(blockNumber, map[uint64]byte{6: GasStatusNilRound2})
 		got := ComputeBlockGasLimit(capStatus, blockNumber, testMaxGas, testFloorGas)
 		if got != 2*testFloorGas {
 			t.Fatalf("block %d: expected 2F cap for band2 round2, got %d", blockNumber, got)
