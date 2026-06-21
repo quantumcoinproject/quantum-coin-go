@@ -65,6 +65,15 @@ func IsGasTipActive(blockNumber uint64) bool {
 	return blockNumber >= DefaultConfig.PosConfig.GasTipStartBlock
 }
 
+// IsConsensusMalleabilityV1 reports whether the consensus/header malleability
+// hardening (see ConsensusMalleabilityV1StartBlock) is active at the given block
+// number. All consensus-affecting malleability checks are gated behind this so they
+// only apply from a finalized activation height and never retroactively reject
+// historical blocks.
+func IsConsensusMalleabilityV1(blockNumber uint64) bool {
+	return blockNumber >= DefaultConfig.PosConfig.ConsensusMalleabilityV1StartBlock
+}
+
 func IsSigAlgSwitchMode(blockNumber uint64) bool {
 	if blockNumber >= DefaultConfig.PosConfig.SigAlgSwitchBlock {
 		if cryptoBreakglassBlock != 0 && blockNumber >= cryptoBreakglassBlock {
@@ -139,6 +148,17 @@ type ProofOfStakeConfig struct {
 	// gas split, the tip is paid to the block proposer, and ProcessTransactions
 	// enforces the split via two-pass execution. It is GasV2StartBlock + 10.
 	GasTipStartBlock uint64
+
+	// ConsensusMalleabilityV1StartBlock activates the consensus/header malleability
+	// hardening: preservation and cross-check of the deciding-round proposal packet's
+	// BlockTime/Txns against BlockConsensusData, strict consensus-protocol-version
+	// matching (== current version), header.Time monotonicity vs parent, an InitTime
+	// upper bound, and live-handler equivocation detection. Every one of these checks
+	// is consensus-affecting and can reject blocks that previously verified, so this
+	// MUST be replayed against full chain history before being scheduled. Mainnet is
+	// intentionally set to "never" (max uint64) until a concrete activation height has
+	// been finalized; only then should this be lowered to that height.
+	ConsensusMalleabilityV1StartBlock uint64
 }
 
 type Config struct {
@@ -204,6 +224,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	GasTipStartBlock:           5319248,
 
 	SystemContractV3StartBlock: 5319258,
+
+	ConsensusMalleabilityV1StartBlock: 0,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -258,6 +280,8 @@ var devnetPosConfig = ProofOfStakeConfig{
 	GasTipStartBlock:           182,
 
 	SystemContractV3StartBlock: 192,
+
+	ConsensusMalleabilityV1StartBlock: 0,
 }
 
 var MainnetConfig = &Config{

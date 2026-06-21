@@ -820,6 +820,7 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 		{"GasV2StartBlock", defaults.DefaultConfig.PosConfig.GasV2StartBlock},
 		{"GasTipStartBlock", defaults.DefaultConfig.PosConfig.GasTipStartBlock},
 		{"SystemContractV3StartBlock", defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock},
+		{"ConsensusMalleabilityV1StartBlock", defaults.DefaultConfig.PosConfig.ConsensusMalleabilityV1StartBlock},
 	}
 
 	for _, tc := range testCases {

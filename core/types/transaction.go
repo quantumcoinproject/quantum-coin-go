@@ -229,6 +229,12 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 // GasPrice returns the gas price of the transaction.
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
+// MaxGasTier intentionally returns gasPrice(): for DefaultFeeTx the signing hash slot
+// (see londonSigner.Hash) carries gasPrice, not a distinct tier value. The tier itself
+// is therefore NOT bound by the signature; it is enforced separately by verifyFields,
+// which requires maxGasTier() == GAS_TIER_DEFAULT (see default_fee_tx.go). Properly
+// signing a tier field would be a transaction-format hard fork, so the binding is left
+// to verifyFields by design.
 func (tx *Transaction) MaxGasTier() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
 // GasTipCap returns the gasTipCap per gas of the transaction.

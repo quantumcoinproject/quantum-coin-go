@@ -90,6 +90,15 @@ var (
 	errInvalidNonce = errors.New("invalid nonce")
 
 	errInvalidGasLimit = errors.New("invalid gas limit")
+
+	// errInvalidAuthor is returned if a block's Author header field is non-zero.
+	// The Author field is part of the block hash but is never populated by honest
+	// block production, so any non-zero value can only be a malleability attempt.
+	errInvalidAuthor = errors.New("invalid author")
+
+	// errNonMonotonicBlockTime is returned (from ConsensusMalleabilityV1StartBlock)
+	// when a block's timestamp does not strictly exceed its parent's.
+	errNonMonotonicBlockTime = errors.New("non-monotonic block time")
 )
 
 // SignerFn hashes and signs the data to be signed by a backing account.
@@ -191,7 +200,7 @@ func (c *ProofOfStake) DoesFinalizedTransactionExist(txnHash common.Hash) (bool,
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *ProofOfStake) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	return c.verifyHeader(chain, header, nil)
+	return c.verifyHeader(chain, header, nil, seal)
 }
 
 func flattenTxnMap(txnMap map[common.Address]types.Transactions) ([]common.Hash, map[common.Hash]common.Address) {
@@ -347,7 +356,13 @@ func (c *ProofOfStake) VerifyHeaders(chain consensus.ChainHeaderReader, headers 
 
 	go func() {
 		for i, header := range headers {
-			err := c.verifyHeader(chain, header, headers[:i])
+			// seals is parallel to headers; default to full verification if a
+			// caller passes a shorter (or nil) slice.
+			seal := true
+			if i < len(seals) {
+				seal = seals[i]
+			}
+			err := c.verifyHeader(chain, header, headers[:i], seal)
 
 			select {
 			case <-abort:
@@ -363,7 +378,7 @@ func (c *ProofOfStake) VerifyHeaders(chain consensus.ChainHeaderReader, headers 
 // caller may optionally pass in a batch of parents (ascending order) to avoid
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
-func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header, seal bool) error {
 	if header.Number == nil {
 		return errUnknownBlock
 	}
@@ -381,6 +396,14 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 
 	if header.Nonce.Uint64() != 0 {
 		return errInvalidNonce
+	}
+
+	// The Author header field is part of the block hash but is never set by honest
+	// block production (Author() always returns the zero address). Enforcing a zero
+	// value unconditionally removes a malleability vector where an arbitrary 32-byte
+	// value would yield a different, still otherwise-valid block hash.
+	if header.Author.IsEqualTo(ZERO_HASH) == false {
+		return errInvalidAuthor
 	}
 
 	// Ensure that the mix digest is zero as we don't have fork protection currently
@@ -409,23 +432,51 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 
 	//GasUsed is checked in state_processor
 
-	_, err := VerifyExtraData(number, header.Extra)
+	blockExtraData, err := VerifyExtraData(number, header.Extra)
 	if err != nil {
 		return err
 	}
 
-	/*//Extra data
-	if header.Number.Uint64() >= core.DeepCheckStartBlock {
-		blockExtraData, err := DecodeBlockExtraData(header.Extra)
-		if err != nil {
+	// When seal verification is requested, validate the transactions embedded in the
+	// extra-data (ErrorTransactions). These are part of the block hash via Extra but
+	// the consensus packet signatures only cover SelectedTransactions hashes, so
+	// validate their fields and signatures here. This is the relatively expensive
+	// part, hence it is gated behind the seal flag (it is also re-checked during
+	// execution in verifyTransactions). blockExtraData is non-nil only at/after
+	// DeepCheckStartBlock.
+	if seal && blockExtraData != nil {
+		if err := c.verifyErrorTransactions(blockExtraData.ErrorTransactions); err != nil {
 			return err
 		}
-		//todo: verify blockExtraData
-		log.Debug("blockExtraData", "decoded", len(blockExtraData.ExtraData))
-	}*/
+	}
 
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
+}
+
+// verifyErrorTransactions validates the transactions carried in a header's
+// extra-data (the ErrorTransactions list). Each transaction must have valid
+// fields and a valid signature over its signing hash. This mirrors the per-tx
+// checks performed during execution in verifyTransactions, but applied at header
+// verification time so a header carrying bogus error transactions is rejected
+// early rather than only when the block body is executed.
+func (c *ProofOfStake) verifyErrorTransactions(errorTransactions types.Transactions) error {
+	for _, tx := range errorTransactions {
+		if tx.VerifyFields() == false {
+			log.Trace("verifyErrorTransactions VerifyFields failed", "Hash", tx.Hash())
+			return errors.New("error transaction VerifyFields failed")
+		}
+		signerHash, err := c.signer.Hash(tx)
+		if err != nil {
+			log.Trace("verifyErrorTransactions signerHash failed", "Hash", tx.Hash(), "error", err)
+			return err
+		}
+		if tx.Verify(signerHash.Bytes()) == false {
+			log.Trace("verifyErrorTransactions Verify failed", "Hash", tx.Hash())
+			return errors.New("error transaction verify failed")
+		}
+	}
+	return nil
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
@@ -447,6 +498,15 @@ func (c *ProofOfStake) verifyCascadingFields(chain consensus.ChainHeaderReader, 
 	}
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
+	}
+	// header.Time is part of the block hash but was previously only checked as
+	// not-in-future. Require strict monotonic growth vs the parent. Gated so historical
+	// blocks are unaffected: honest production sets header.Time = max(BlockTime,
+	// parent.Time + Period) (see Finalize), which is always > parent.Time.
+	if defaults.IsConsensusMalleabilityV1(number) {
+		if header.Time <= parent.Time {
+			return errNonMonotonicBlockTime
+		}
 	}
 	// Verify that the gasUsed is <= gasLimit
 	if header.GasUsed > header.GasLimit {
@@ -472,6 +532,11 @@ func (c *ProofOfStake) verifySeal(chain consensus.ChainHeaderReader, header *typ
 		return errors.New("nil consensusdata")
 	}
 
+	// rlp.DecodeBytes enforces canonical encoding (it rejects non-canonical
+	// integers/sizes, trailing bytes, and wrong element counts - see rlp/decode.go),
+	// so a successful decode already pins ConsensusData/UnhashedConsensusData to their
+	// unique canonical bytes. No separate re-encode check is required to prevent
+	// encoding-level malleability of these fully-typed structs.
 	blockConsensusData := &BlockConsensusData{}
 	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
@@ -1324,7 +1389,13 @@ func SealHash(header *types.Header) (hash common.Hash) {
 func encodeSigHeader(w io.Writer, header *types.Header) {
 	extra := header.Extra
 	if header.Number.Uint64() < defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
-		extra = header.Extra[:len(header.Extra)-cryptobase.SigAlg.SignatureWithPublicKeyLength()] // Yes, this will panic if extra is too short
+		sigLen := cryptobase.SigAlg.SignatureWithPublicKeyLength()
+		if len(extra) >= sigLen {
+			extra = extra[:len(extra)-sigLen]
+		} else {
+			// Defensive: a malformed short Extra must not panic; fall back to empty.
+			extra = []byte{}
+		}
 	}
 
 	enc := []interface{}{

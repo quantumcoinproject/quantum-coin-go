@@ -276,6 +276,9 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 				tx.Nonce(),
 				tx.To(),
 				tx.Gas(),
+				// This slot intentionally signs gasPrice (MaxGasTier() returns gasPrice());
+				// the gas tier is not part of the signing payload and is enforced instead by
+				// verifyFields (maxGasTier() == GAS_TIER_DEFAULT). See transaction.go MaxGasTier.
 				tx.MaxGasTier(),
 				tx.Value(),
 				tx.Data(),

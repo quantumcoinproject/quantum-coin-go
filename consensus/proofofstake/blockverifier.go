@@ -66,6 +66,14 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 
 	var startIndex int
 	if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
+		// Gated: treat only the exact current protocol version as the 2-byte-header form,
+		// instead of accepting any byte >= the minimum as if it were the current version.
+		// This keeps room to introduce genuinely-new versions later behind their own gate.
+		if defaults.IsConsensusMalleabilityV1(blockNumber) && packet.ConsensusData[0] != ConsensusNetworkProtocolVersion {
+			err = errors.New("unsupported consensus protocol version")
+			resultsChan <- &PacketParseResult{err: err}
+			return
+		}
 		startIndex = 2
 	} else {
 		startIndex = 1
@@ -315,6 +323,13 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 			proposalDetails := &ProposalDetails{
 				Round: details.Round,
 				Txns:  make([]common.Hash, len(details.Txns)),
+			}
+			// Historically BlockTime was dropped here, so the previous-round proposal-hash
+			// reconstruction in VerifyPacketsPreviousRound (which reads proposalDetails.BlockTime)
+			// always saw 0. Preserving it changes that reconstruction, so it is gated: below the
+			// activation height the field stays 0 to preserve the exact historical behavior.
+			if defaults.IsConsensusMalleabilityV1(blockNumber) {
+				proposalDetails.BlockTime = details.BlockTime
 			}
 			for i, txn := range details.Txns {
 				proposalDetails.Txns[i].CopyFrom(txn)
@@ -833,6 +848,32 @@ func VerifyBlockConsensusDataInner(txns []common.Hash, parentHash common.Hash, b
 			return nil, errors.New("VerifyBlockConsensusData PrecommitHash mismatch")
 		}
 
+		// The deciding-round proposal packet embedded in UnhashedConsensusData is signed but
+		// was otherwise not cross-checked against the agreed BlockConsensusData. Require the
+		// proposer's own packet to re-derive the same proposal hash (same txn multiset + block
+		// time). GetCombinedTxnHash* sorts txns, so the packet's Txns ordering stays non-binding.
+		// Gated: depends on the BlockTime preserved by the gated change in ParseConsensusPackets.
+		if defaults.IsConsensusMalleabilityV1(blockNumber) {
+			proposerMap, ok := packetRoundMap[blockConsensusData.Round]
+			if ok == false {
+				return nil, errors.New("missing packet map for deciding round")
+			}
+			proposerProposal, ok := proposerMap.proposalDetailsMap[blockConsensusData.BlockProposer]
+			if ok == false {
+				return nil, errors.New("missing proposer proposal packet for deciding round")
+			}
+			var proposalPacketHash common.Hash
+			if blockNumber >= defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK {
+				proposalPacketHash = GetCombinedTxnHashWithTime(parentHash, blockConsensusData.Round, proposerProposal.Txns, proposerProposal.BlockTime)
+			} else {
+				proposalPacketHash = GetCombinedTxnHash(parentHash, blockConsensusData.Round, proposerProposal.Txns)
+			}
+			if proposalPacketHash.IsEqualTo(expectedProposalHash) == false {
+				log.Debug("proposal packet disagrees with BlockConsensusData", "expected", expectedProposalHash, "packet", proposalPacketHash)
+				return nil, errors.New("proposal packet disagrees with BlockConsensusData")
+			}
+		}
+
 		if blockConsensusData.SelectedTransactions == nil {
 			if len(txns) > 0 {
 				return nil, errors.New("VerifyBlockConsensusData txns is non-empty but SelectedTransactions is nil")
@@ -960,6 +1001,25 @@ func VerifyBlockConsensusData(block *types.Block, validatorDepositMap *map[commo
 	}
 
 	blockNumber := header.Number.Uint64()
+
+	// InitTime (records when consensus for this block began) is in MILLISECONDS since
+	// epoch (ConsensusHandler sets it from initTime.UnixNano()/Millisecond), whereas
+	// header.Time is in SECONDS. It was previously never validated. Apply a conservative
+	// upper bound: a non-zero InitTime must not be more than one day after the block
+	// timestamp, which rejects garbage/far-future values without affecting honest blocks
+	// (consensus init precedes sealing). Tightening the exact relationship awaits product
+	// confirmation; gated meanwhile so historical blocks are unaffected.
+	if defaults.IsConsensusMalleabilityV1(blockNumber) {
+		const initTimeMaxSkewSeconds = uint64(86400)
+		if blockAdditionalConsensusData.InitTime != 0 {
+			maxInitTimeMs := (header.Time + initTimeMaxSkewSeconds) * 1000
+			if blockAdditionalConsensusData.InitTime > maxInitTimeMs {
+				log.Warn("InitTime after block time", "InitTime", blockAdditionalConsensusData.InitTime, "headerTime", header.Time)
+				return errors.New("InitTime after block time")
+			}
+		}
+	}
+
 	preparedData, err := PrepareConsensusData(header.ParentHash, blockNumber, getValidatorsFn, getBlockConsensusContext, listValidatorsFn, common.Hash{})
 	if err != nil {
 		return err

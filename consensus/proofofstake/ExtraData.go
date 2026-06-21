@@ -84,12 +84,15 @@ func DecodeBlockExtraData(extraData []byte, blockNumber uint64) (*BlockExtraData
 
 func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, error) {
 	if blockNumber >= defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
+		// DecodeBlockExtraData uses rlp.DecodeBytes, which enforces canonical
+		// encoding (rejecting non-canonical integers/sizes and any trailing bytes),
+		// so a successful decode already pins the V3 Extra to its unique canonical
+		// form. Embedded ErrorTransactions are field/signature-validated separately
+		// at header time (verifyErrorTransactions) and during execution.
 		blockExtraData, _, err := DecodeBlockExtraData(extraData, blockNumber)
 		if err != nil {
 			return nil, err
 		}
-
-		//todo: further verification
 
 		return blockExtraData, nil
 	}
@@ -109,8 +112,10 @@ func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, err
 			return nil, errors.New("invalid ExtraData a")
 		}
 
-		//todo: further verification
-
+		// The fixed DefaultExtraData prefix is verified above; the suffix is decoded
+		// via rlp.DecodeBytes in DecodeBlockExtraData, which rejects non-canonical
+		// encodings and trailing bytes, so the Extra bytes are uniquely determined.
+		// Embedded ErrorTransactions are field/signature-validated separately.
 		return blockExtraData, nil
 	}
 }
