@@ -331,10 +331,12 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 
 func (tx *Transaction) Verify(digestHash []byte) bool {
 	v, r, s := tx.RawSignatureValues()
-	if v.Uint64() != 1 {
+	// Exact big.Int comparison: v.Uint64() would only read the low 64 bits, so a
+	// V congruent to 1 mod 2^64 (e.g. 2^64+1) must not be treated as 1.
+	if v == nil || v.Cmp(big.NewInt(1)) != 0 {
 		return false
 	}
-	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, byte(v.Uint64()), r, s)
+	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, byte(1), r, s)
 	return isOk
 }
 
