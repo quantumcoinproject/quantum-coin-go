@@ -215,7 +215,13 @@ func (c *ProofOfStake) getGasNilStatusArray(state *state.StateDB, header *types.
 		return arr, err
 	}
 
-	result, err := c.blockchain.ExecuteNoGas(msg, state, header)
+	// ExecuteNoGas runs a full EVM state transition (ApplyMessage), which mutates the
+	// passed state (e.g. it bumps the ZERO_ADDRESS sender nonce). This is a pure read of
+	// the status array, and GetGasLimit is called a different number of times on the miner
+	// path (worker + ProcessTransactions + Finalize) than on the import/verify path. Running
+	// it against the live block state would therefore produce a non-deterministic state root
+	// across nodes. Execute against a copy so the read has no effect on the canonical state.
+	result, err := c.blockchain.ExecuteNoGas(msg, state.Copy(), header)
 	if err != nil {
 		return arr, err
 	}
