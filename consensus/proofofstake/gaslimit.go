@@ -34,13 +34,23 @@ package proofofstake
 // stress (latency, partition, bandwidth saturation) rather than a single faulty node. A recent
 // round-2 nil is therefore treated as a high-severity signal and applies a hard, distance-banded
 // cap that collapses the gas limit toward the floor, relaxing it only gradually (F -> 2F -> 3F ->
-// ... -> 8F) as the event ages out of the observation window.
+// ... -> 8F) as the event ages out of the observation window (Pass1). Additional round-2 nils
+// beyond the nearest one each apply a flat absolute gas penalty (GAS_PENALTY_R2_UNITS *
+// GAS_PENALTY_UNIT per block) on top of the cap (Pass2). The single nearest round-2 is deliberately
+// excluded from the Pass2 penalty because it is already fully accounted for by the Pass1 cap;
+// charging it in both passes would double-penalize the same event.
 //
 // Signal -- round-1 nil blocks (proposer-availability indicator): a round-1 nil block occurs when
-// the selected proposer is offline or unresponsive. Isolated occurrences are benign; a high
-// density within the window suggests systemic overload or network degradation, so the scheme
-// applies a superlinear penalty (drop proportional to nilScore^2) -- sparse failures barely
-// register while correlated clusters reduce throughput rapidly.
+// the selected proposer is offline or unresponsive. Isolated occurrences are benign, so round-1
+// nils are ignored entirely until at least GAS_PENALTY_MIN_R1_COUNT of them accumulate within the
+// window. This threshold (rather than penalizing from the very first nil) serves two purposes: a
+// single offline validator -- which can produce at most a few nils as it cycles through proposer
+// selection -- must not be able to move the gas limit on its own; and crossing the threshold of
+// 5+ round-1 nils within the 32-block window is itself a meaningful signal of a broader problem
+// (e.g. validators unable to keep up with transaction speed, or sustained proposer unavailability),
+// which is precisely the condition under which throttling throughput to protect liveness is
+// warranted. Once the threshold is met, each round-1 nil applies a flat absolute gas penalty
+// (GAS_PENALTY_R1_UNITS * GAS_PENALTY_UNIT per block).
 //
 // Deliberate exclusion of stake weight: the function does not use validator staking percentage.
 // Block-proposer selection is already weighted by staked coins (voting weight), so a validator's
@@ -76,18 +86,24 @@ const (
 	// distance 1-4 -> 1*floor, 5-8 -> 2*floor, 9-12 -> 3*floor, ... 29-32 -> 8*floor.
 	GAS_TIER_BAND_WIDTH = 4
 
-	// GAS_RAMP_R2_WEIGHT is how much a round-2 nil counts relative to a round-1 nil in the
-	// superlinear ramp's weighted nil score.
-	GAS_RAMP_R2_WEIGHT = 2
+	// GAS_PENALTY_UNIT is the base gas unit for nil-block penalties (the standard 21000 basic
+	// transaction gas). Penalties are expressed as integer multiples of this unit so the math
+	// stays integer-only and deterministic.
+	GAS_PENALTY_UNIT = 21000
 
-	// GAS_RAMP_FULL_DROP_SCORE is the weighted nil score at which the ramp reaches the floor
-	// (full drop). Reaching the floor at this many round-1 nils makes the ramp aggressive.
-	GAS_RAMP_FULL_DROP_SCORE = 16
+	// GAS_PENALTY_R1_UNITS / GAS_PENALTY_R2_UNITS are the flat penalty units charged per
+	// round-1 / round-2 nil block in the window (multiplied by GAS_PENALTY_UNIT). Round-2 is
+	// weighted heavier because it signals network-level stress rather than a single offline
+	// proposer.
+	GAS_PENALTY_R1_UNITS = 10
+	GAS_PENALTY_R2_UNITS = 20
 
-	// GAS_DROP_SCALE is the fixed-point resolution of the drop fraction. The drop is a value
-	// in [0, 1], but consensus math must be integer-only and deterministic (no floats), so it
-	// is represented in permille (parts per thousand); GAS_DROP_SCALE == full drop.
-	GAS_DROP_SCALE = 1000
+	// GAS_PENALTY_MIN_R1_COUNT is the minimum number of round-1 nils in the window before any
+	// round-1 penalty applies. Below this threshold round-1 nils are ignored so that an
+	// isolated or occasional offline proposer cannot move the gas limit; reaching this many
+	// round-1 nils instead indicates a broader network problem worth throttling for. See the
+	// rationale at the top of this file.
+	GAS_PENALTY_MIN_R1_COUNT = 5
 )
 
 // Round-robin status byte values stored per block in the on-chain status array.
@@ -110,32 +126,34 @@ const GAS_NIL_STATUS_KEY = "gas-nil-status"
 // whose number % GAS_LIMIT_WINDOW == k. It is the sole calculation entry point; it is
 // integer-only and deterministic. See the Dynamic TPS rationale at the top of this file.
 //
-// Two effects combine, and the smaller one wins (round-1 nils can only push gas lower than
+// Two effects combine, and the smaller one wins (the flat penalty can only push gas lower than
 // the round-2 cap):
-//   - Round-2 cap: the nearest round-2 nil sets an upper cap by its distance band of width
-//     GAS_TIER_BAND_WIDTH -- distance 1-4 -> 1*minGas, 5-8 -> 2*minGas, 9-12 -> 3*minGas,
+//   - Pass1 -- Round-2 cap: the nearest round-2 nil sets an upper cap by its distance band of
+//     width GAS_TIER_BAND_WIDTH -- distance 1-4 -> 1*minGas, 5-8 -> 2*minGas, 9-12 -> 3*minGas,
 //     ... 29-32 -> 8*minGas. No round-2 nil in the window -> cap = maxGas.
-//   - Superlinear ramp: nilScore = r1Count + GAS_RAMP_R2_WEIGHT*r2Count over the window,
-//     dropPermille = min(GAS_DROP_SCALE, nilScore^2 * GAS_DROP_SCALE / GAS_RAMP_FULL_DROP_SCORE^2),
-//     rampGas = maxGas - (maxGas-minGas)*dropPermille/GAS_DROP_SCALE.
+//   - Pass2 -- Flat count-based penalty: over the window, penalty = r1Pen + r2Pen, where
+//     r2Pen = (r2Count-1)*GAS_PENALTY_R2_UNITS*GAS_PENALTY_UNIT when r2Count > 0 (the single
+//     nearest round-2 is dropped because Pass1 already accounts for it), and
+//     r1Pen = r1Count*GAS_PENALTY_R1_UNITS*GAS_PENALTY_UNIT only when r1Count >=
+//     GAS_PENALTY_MIN_R1_COUNT (otherwise 0). penaltyGas = saturating(maxGas - penalty).
 //
-// Result = clamp(min(rampGas, cap), minGas, maxGas).
+// Result = clamp(min(penaltyGas, cap), minGas, maxGas).
 func ComputeBlockGasLimit(status [GAS_LIMIT_WINDOW]byte, blockNumber, maxGas, minGas uint64) uint64 {
 	if maxGas <= minGas {
 		return maxGas
 	}
 
-	// Round-2 tiered cap: the nearest round-2 nil wins (smallest distance -> lowest cap).
-	cap := maxGas
+	// Pass1: Round-2 tiered cap: the nearest round-2 nil wins (smallest distance -> lowest cap).
+	gasCap := maxGas
 	for i := uint64(1); i <= GAS_LIMIT_WINDOW && i <= blockNumber; i++ {
 		if status[(blockNumber-i)%GAS_LIMIT_WINDOW] == GasStatusNilRound2 {
 			band := (i-1)/GAS_TIER_BAND_WIDTH + 1 // 1..8
-			cap = band * minGas                   // 1*F .. 8*F
+			gasCap = band * minGas                // 1*F .. 8*F
 			break                                 // nearest is the most aggressive band
 		}
 	}
 
-	// Superlinear ramp over the full window (round-1 + weighted round-2).
+	// Pass2: flat count-based penalty over the full window (round-1 + round-2).
 	var r1Count, r2Count uint64
 	for i := uint64(1); i <= GAS_LIMIT_WINDOW && i <= blockNumber; i++ {
 		switch status[(blockNumber-i)%GAS_LIMIT_WINDOW] {
@@ -146,16 +164,31 @@ func ComputeBlockGasLimit(status [GAS_LIMIT_WINDOW]byte, blockNumber, maxGas, mi
 		}
 	}
 
-	nilScore := r1Count + GAS_RAMP_R2_WEIGHT*r2Count
-	dropPermille := nilScore * nilScore * GAS_DROP_SCALE / (GAS_RAMP_FULL_DROP_SCORE * GAS_RAMP_FULL_DROP_SCORE)
-	if dropPermille > GAS_DROP_SCALE {
-		dropPermille = GAS_DROP_SCALE
+	var penalty uint64
+	if r2Count > 0 {
+		// Skip one round-2 nil: the nearest round-2 is already fully accounted for by the
+		// Pass1 distance-banded hard cap (the result is min()-ed against gasCap), so counting
+		// it here too would double-penalize the same event. The guard prevents uint64
+		// underflow when there are no round-2 nils.
+		penalty += (r2Count - 1) * GAS_PENALTY_R2_UNITS * GAS_PENALTY_UNIT
 	}
-	gas := maxGas - (maxGas-minGas)*dropPermille/GAS_DROP_SCALE
+	if r1Count >= GAS_PENALTY_MIN_R1_COUNT {
+		// Below the threshold an isolated/occasional offline proposer is ignored so a single
+		// validator cannot move the gas limit; at/above it the cluster signals a broader
+		// network issue worth throttling for.
+		penalty += r1Count * GAS_PENALTY_R1_UNITS * GAS_PENALTY_UNIT
+	}
 
-	// The round-1/round-2 ramp can only push below the round-2 cap.
-	if cap < gas {
-		gas = cap
+	gas := maxGas
+	if penalty >= maxGas {
+		gas = minGas // penalty would underflow maxGas; floor directly
+	} else {
+		gas = maxGas - penalty
+	}
+
+	// The flat penalty can only push below the round-2 cap.
+	if gasCap < gas {
+		gas = gasCap
 	}
 	if gas < minGas {
 		gas = minGas

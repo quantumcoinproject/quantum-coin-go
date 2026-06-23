@@ -80,49 +80,73 @@ func TestComputeBlockGasLimit(t *testing.T) {
 			want:      8 * testFloorGas,
 		},
 		{
-			name: "8 round1 nils superlinear ramp",
+			name: "5 round1 nils flat penalty (threshold met)",
+			distances: func() map[uint64]byte {
+				m := map[uint64]byte{}
+				fillRange(m, 1, 5, GasStatusNilRound1)
+				return m
+			}(),
+			maxGas: testMaxGas,
+			// r1Count 5 >= 5 -> penalty = 5*10*21000 = 1,050,000; gas = 300M - 1.05M
+			want: 298950000,
+		},
+		{
+			name: "4 round1 nils below threshold yields max",
+			distances: func() map[uint64]byte {
+				m := map[uint64]byte{}
+				fillRange(m, 1, 4, GasStatusNilRound1)
+				return m
+			}(),
+			maxGas: testMaxGas,
+			// r1Count 4 < 5 -> no round1 penalty
+			want: testMaxGas,
+		},
+		{
+			name: "8 round1 nils flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 8, GasStatusNilRound1)
 				return m
 			}(),
 			maxGas: testMaxGas,
-			// nilScore 8, drop = 64*1000/256 = 250, gas = 300M - 297.9M*250/1000
-			want: 225525000,
+			// penalty = 8*10*21000 = 1,680,000; gas = 300M - 1.68M
+			want: 298320000,
 		},
 		{
-			name: "12 round1 nils superlinear ramp",
+			name: "12 round1 nils flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 12, GasStatusNilRound1)
 				return m
 			}(),
 			maxGas: testMaxGas,
-			// nilScore 12, drop = 144*1000/256 = 562, gas = 300M - 297.9M*562/1000
-			want: 132580200,
+			// penalty = 12*10*21000 = 2,520,000; gas = 300M - 2.52M
+			want: 297480000,
 		},
 		{
-			name: "16 round1 nils reach floor",
+			name: "16 round1 nils flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 16, GasStatusNilRound1)
 				return m
 			}(),
 			maxGas: testMaxGas,
-			want:   testFloorGas,
+			// penalty = 16*10*21000 = 3,360,000; gas = 300M - 3.36M
+			want: 296640000,
 		},
 		{
-			name: "32 round1 nils reach floor",
+			name: "32 round1 nils flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 32, GasStatusNilRound1)
 				return m
 			}(),
 			maxGas: testMaxGas,
-			want:   testFloorGas,
+			// penalty = 32*10*21000 = 6,720,000; gas = 300M - 6.72M
+			want: 293280000,
 		},
 		{
-			name: "round2 band5 cap but heavy round1 ramp craters to floor",
+			name: "round2 band5 cap dominates round1 flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 16, GasStatusNilRound1)
@@ -130,18 +154,19 @@ func TestComputeBlockGasLimit(t *testing.T) {
 				return m
 			}(),
 			maxGas: testMaxGas,
-			// nilScore = 16 + 2 = 18 -> ramp floor; min(floor, 5F) = floor
-			want: testFloorGas,
+			// r1 penalty 3.36M -> 296.64M; single round2 dropped (Pass1); min(296.64M, 5F) = 5F
+			want: 5 * testFloorGas,
 		},
 		{
-			name: "16 round2 nils outside band1 still floor (ramp dominates cap)",
+			name: "16 round2 nils: band3 cap dominates flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 9, 24, GasStatusNilRound2) // nearest at distance 9 -> band3 cap 3F
 				return m
 			}(),
 			maxGas: testMaxGas,
-			want:   testFloorGas,
+			// penalty = (16-1)*20*21000 = 6,300,000 -> 293.7M; min(293.7M, 3F) = 3F
+			want: 3 * testFloorGas,
 		},
 
 		// ----- breakglass max (30M): same case set -----
@@ -176,47 +201,48 @@ func TestComputeBlockGasLimit(t *testing.T) {
 			want:      7 * testFloorGas,
 		},
 		{
-			name: "breakglass 4 round1 nils ramp",
+			name: "breakglass 4 round1 nils below threshold yields max",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 4, GasStatusNilRound1)
 				return m
 			}(),
 			maxGas: testBreakglassGas,
-			// drop = 16*1000/256 = 62, gas = 30M - 27.9M*62/1000 = 28,270,200
-			want: 28270200,
+			// r1Count 4 < 5 -> no round1 penalty
+			want: testBreakglassGas,
 		},
 		{
-			name: "breakglass 8 round1 nils ramp",
+			name: "breakglass 8 round1 nils flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 8, GasStatusNilRound1)
 				return m
 			}(),
 			maxGas: testBreakglassGas,
-			// drop = 250, gas = 30M - 27.9M*250/1000 = 23,025,000
-			want: 23025000,
+			// penalty = 8*10*21000 = 1,680,000; gas = 30M - 1.68M
+			want: 28320000,
 		},
 		{
-			name: "breakglass 12 round1 nils ramp",
+			name: "breakglass 12 round1 nils flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 12, GasStatusNilRound1)
 				return m
 			}(),
 			maxGas: testBreakglassGas,
-			// drop = 562, gas = 30M - 27.9M*562/1000 = 14,320,200
-			want: 14320200,
+			// penalty = 12*10*21000 = 2,520,000; gas = 30M - 2.52M
+			want: 27480000,
 		},
 		{
-			name: "breakglass 16 round1 nils reach floor",
+			name: "breakglass 16 round1 nils flat penalty",
 			distances: func() map[uint64]byte {
 				m := map[uint64]byte{}
 				fillRange(m, 1, 16, GasStatusNilRound1)
 				return m
 			}(),
 			maxGas: testBreakglassGas,
-			want:   testFloorGas,
+			// penalty = 16*10*21000 = 3,360,000; gas = 30M - 3.36M
+			want: 26640000,
 		},
 	}
 

@@ -15,10 +15,6 @@ const BASIC_TXN_GAS = uint64(21000)
 // dynamic gas-limit scheme that activates at GasV2StartBlock.
 const MIN_DYNAMIC_GAS_LIMIT = uint64(2100000)
 
-// BreakglassDefaultGasLimit is the reduced maximum block gas limit enforced while
-// breakglass mode is active.
-const BreakglassDefaultGasLimit = uint64(30000000)
-
 var DEFAULT_PRICE = int64(47619047619047600)
 var SigningContextLevel1Multiplier = int64(20)
 var SigningContextLevel2Multiplier = int64(30)
@@ -42,7 +38,7 @@ func GetMaxTransactionsForBlock(blockNumber uint64) int {
 // scheme: the normal default, or a reduced cap when breakglass mode is active.
 func GetMaxGasLimit(blockNumber uint64) uint64 {
 	if IsCryptoBreakglassMode(blockNumber) {
-		return BreakglassDefaultGasLimit
+		return DefaultConfig.BreakglassDefaultGasLimit
 	}
 	return DefaultConfig.DefaultGasLimit
 }
@@ -166,10 +162,13 @@ type Config struct {
 	DeepCheckStartBlock     uint64
 	GasPriceStartBlock      uint64
 	DefaultGasLimit         uint64
-	ValidateSigPubStartTime int64
-	TxnStartAllowedTime     int64
-	ConversionTxnLastTime   int64
-	KemSwitchTime           int64
+	// BreakglassDefaultGasLimit is the reduced maximum block gas limit enforced while
+	// breakglass mode is active.
+	BreakglassDefaultGasLimit uint64
+	ValidateSigPubStartTime   int64
+	TxnStartAllowedTime       int64
+	ConversionTxnLastTime     int64
+	KemSwitchTime             int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -285,25 +284,27 @@ var devnetPosConfig = ProofOfStakeConfig{
 }
 
 var MainnetConfig = &Config{
-	PosConfig:               &mainnetPosConfig,
-	DeepCheckStartBlock:     uint64(3426264),
-	GasPriceStartBlock:      uint64(3426265),
-	DefaultGasLimit:         300000000,
-	ValidateSigPubStartTime: int64(1769904000), //Feb 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:           int64(1799229600), //Jan 06, 2027 10:00:00 AM UTC
+	PosConfig:                 &mainnetPosConfig,
+	DeepCheckStartBlock:       uint64(3426264),
+	GasPriceStartBlock:        uint64(3426265),
+	DefaultGasLimit:           300000000,
+	BreakglassDefaultGasLimit: 30000000,
+	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:       int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:     int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:             int64(1799229600), //Jan 06, 2027 10:00:00 AM UTC
 }
 
 var DevnetConfig = &Config{
-	PosConfig:               &devnetPosConfig,
-	DeepCheckStartBlock:     uint64(130),
-	GasPriceStartBlock:      uint64(131),
-	DefaultGasLimit:         300000000,
-	ValidateSigPubStartTime: int64(1769904000), //Feb 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:           int64(1713052800), //April 14th, 2025, 11:59:59 PM UTC
+	PosConfig:                 &devnetPosConfig,
+	DeepCheckStartBlock:       uint64(130),
+	GasPriceStartBlock:        uint64(131),
+	DefaultGasLimit:           300000000,
+	BreakglassDefaultGasLimit: 30000000,
+	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:       int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:     int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:             int64(1713052800), //April 14th, 2025, 11:59:59 PM UTC
 }
 
 var DefaultConfig = MainnetConfig
