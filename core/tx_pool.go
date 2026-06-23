@@ -265,6 +265,8 @@ type TxPool struct {
 	reorgDoneCh     chan chan struct{}
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
+
+	txnHook *txnTestHook // optional devnet TPS test hook, enabled via TXN_HOOK_FILE
 }
 
 type txpoolResetRequest struct {
@@ -323,6 +325,9 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 	pool.chainHeadSub = pool.chain.SubscribeChainHeadEvent(pool.chainHeadCh)
 	pool.wg.Add(1)
 	go pool.loop()
+
+	// Start the devnet TPS test hook if enabled via the TXN_HOOK_FILE env var.
+	maybeStartTxnTestHook(pool)
 
 	return pool
 }
@@ -406,6 +411,11 @@ func (pool *TxPool) loop() {
 
 // Stop terminates the transaction pool.
 func (pool *TxPool) Stop() {
+	// Stop the TPS test hook goroutine if it is running.
+	if pool.txnHook != nil {
+		pool.txnHook.stop()
+	}
+
 	// Unsubscribe all subscriptions registered from txpool
 	pool.scope.Close()
 
