@@ -129,6 +129,20 @@ func (tx *DynamicFeeTx) to() *common.Address { return tx.To }
 func (tx *DynamicFeeTx) verifyFields() bool {
 	if tx.S != nil {
 		signature := tx.S.Bytes()
+		// This is only an advisory early check on the signature's leading
+		// scheme-ID byte; it is NOT the authoritative signature validation.
+		// The "len > 1" guard is deliberate and must not be tightened (e.g. to
+		// "len > 0" or to require the full signature length): verifyFields also
+		// runs on the signing-hash path, where an unsigned tx carries a zero or
+		// placeholder S that is not yet a real signature.
+		//
+		// A malformed/short S (e.g. a 1-byte value) skipping this check does NOT
+		// cause transaction malleability: every path that accepts a tx routes
+		// through cryptobase.DynamicSigVerifier.ValidateSignatureValues (via
+		// recoverPlain/Sender and Transaction.Verify), which enforces the exact
+		// signature length, the scheme-ID byte, and the cryptographic check. A
+		// signature that fails those is rejected outright, so it can never be an
+		// accepted "twin" of a valid transaction.
 		if len(signature) > 1 {
 			algType := crypto.SignatureAlgorithmType(signature[0])
 			if tx.SigningContext == byte(crypto.SigningContextDefault) {
@@ -193,6 +207,26 @@ func NewDynamicFeeTransaction(chainId *big.Int, nonce uint64, to *common.Address
 		Remarks:        common.CopyBytes(remarks),
 		Gas:            gasLimit,
 		SigningContext: byte(signingContext),
+	})
+
+	return tx
+}
+
+// NewDynamicFeeTransactionWithCaps builds a dynamic-fee transaction with explicit gasTipCap and gasFeeCap.
+// A nil cap is treated as zero (the opt-out default), so passing nil for both is identical to
+// NewDynamicFeeTransaction and keeps the legacy behavior unchanged.
+func NewDynamicFeeTransactionWithCaps(chainId *big.Int, nonce uint64, to *common.Address, amount *big.Int, gasLimit uint64, signingContext crypto.SigningContext, data []byte, remarks []byte, gasTipCap *big.Int, gasFeeCap *big.Int) *Transaction {
+	tx := NewTx(&DynamicFeeTx{
+		ChainID:        chainId,
+		Nonce:          nonce,
+		To:             to,
+		Value:          amount,
+		Data:           common.CopyBytes(data),
+		Remarks:        common.CopyBytes(remarks),
+		Gas:            gasLimit,
+		SigningContext: byte(signingContext),
+		GasTipCap:      gasTipCap,
+		GasFeeCap:      gasFeeCap,
 	})
 
 	return tx

@@ -79,7 +79,18 @@ func filterValidators(consensusContext common.Hash, valDepMap *map[common.Addres
 	}
 
 	//Normalize deposit
-	normalizeDeposit(blockNumber, &validatorsDepositMap, validatorDetailsMap)
+	if blockNumber >= defaults.DefaultConfig.PosConfig.Normalizationv2StartBlock {
+		filteredDepositMap := make(map[common.Address]*big.Int)
+		for val := range filteredValidators {
+			filteredDepositMap[val] = validatorsDepositMap[val]
+		}
+		normalizeDeposit(blockNumber, &filteredDepositMap, validatorDetailsMap)
+		for val := range filteredValidators {
+			validatorsDepositMap[val] = filteredDepositMap[val]
+		}
+	} else {
+		normalizeDeposit(blockNumber, &validatorsDepositMap, validatorDetailsMap)
+	}
 
 	filteredDepositValue = big.NewInt(0)
 	for val, _ := range filteredValidators {

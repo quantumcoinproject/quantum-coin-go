@@ -1234,15 +1234,8 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 		return errors.New("invalid round")
 	}
 
-	_, ok = blockRoundDetails.validatorProposalAcks[validator]
-	if ok == true {
-
-		//todo: compare
-	} else {
-		if blockRoundDetails.state == BLOCK_STATE_WAITING_FOR_PROPOSAL_ACKS {
-
-		}
-	}
+	// Equivocation/duplicate handling for an existing ack from this validator is done
+	// (gated) after the packet is decoded, just before it is stored below.
 
 	var startIndex int
 	if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
@@ -1288,6 +1281,18 @@ func (cph *ConsensusHandler) handleAckBlockProposalPacket(validator common.Addre
 	} else {
 		log.Debug("handleAckBlockProposalPacket blockRoundDetails", "unexpected state", blockRoundDetails.state)
 		return errors.New("invalid state")
+	}
+
+	// Gated: detect on-wire equivocation instead of silently overwriting a prior ack
+	// from the same validator in this round. An identical re-broadcast is ignored.
+	if defaults.IsConsensusMalleabilityV1(blockStateDetails.blockNumber) {
+		if existing, ok := blockRoundDetails.validatorProposalAcks[validator]; ok {
+			if existing.ProposalAckVoteType != proposalAckDetails.ProposalAckVoteType ||
+				existing.ProposalHash.IsEqualTo(proposalAckDetails.ProposalHash) == false {
+				return errors.New("validator equivocation: conflicting ack in same round")
+			}
+			return nil
+		}
 	}
 
 	blockRoundDetails.validatorProposalAcks[validator] = proposalAckDetails
@@ -1642,12 +1647,8 @@ func (cph *ConsensusHandler) handlePrecommitPacket(validator common.Address, pac
 		return errors.New("self packet from elsewhere")
 	}
 
-	_, ok = blockRoundDetails.validatorPrecommits[validator]
-	if ok == true {
-		//todo: check
-	} else {
-
-	}
+	// Duplicate/equivocation handling for an existing precommit from this validator is
+	// done (gated) after the packet is decoded, just before it is stored below.
 
 	_, ok = blockRoundDetails.validatorProposalAcks[validator]
 	if ok == false {
@@ -1677,6 +1678,17 @@ func (cph *ConsensusHandler) handlePrecommitPacket(validator common.Address, pac
 	if precommitDetails.PrecommitHash.IsEqualTo(blockRoundDetails.precommitHash) == false {
 		log.Debug("precommit error", "incoming", precommitDetails.PrecommitHash, "expected", blockRoundDetails.precommitHash, "me", cph.account.Address, "validator", validator)
 		return errors.New("invalid Precommit Hash")
+	}
+
+	// Gated: detect on-wire equivocation instead of silently overwriting a prior precommit
+	// from the same validator in this round. An identical re-broadcast is ignored.
+	if defaults.IsConsensusMalleabilityV1(blockStateDetails.blockNumber) {
+		if existing, ok := blockRoundDetails.validatorPrecommits[validator]; ok {
+			if existing.PrecommitHash.IsEqualTo(precommitDetails.PrecommitHash) == false {
+				return errors.New("validator equivocation: conflicting precommit in same round")
+			}
+			return nil
+		}
 	}
 
 	blockRoundDetails.validatorPrecommits[validator] = precommitDetails
@@ -1743,11 +1755,8 @@ func (cph *ConsensusHandler) handleCommitPacket(validator common.Address, packet
 		return errors.New("self packet from elsewhere")
 	}
 
-	_, ok = blockRoundDetails.validatorCommits[validator]
-	if ok == true {
-		//todo: check
-	} else {
-	}
+	// Duplicate/equivocation handling for an existing commit from this validator is done
+	// (gated) after the packet is decoded, just before it is stored below.
 
 	_, ok = blockRoundDetails.validatorProposalAcks[validator]
 	if ok == false {
@@ -1777,6 +1786,17 @@ func (cph *ConsensusHandler) handleCommitPacket(validator common.Address, packet
 	commitHash.CopyFrom(crypto.Keccak256Hash(blockRoundDetails.precommitHash.Bytes()))
 	if commitDetails.CommitHash.IsEqualTo(commitHash) == false { //PrecommitHash and commitHash should be the same
 		return errors.New("invalid commit Hash")
+	}
+
+	// Gated: detect on-wire equivocation instead of silently overwriting a prior commit
+	// from the same validator in this round. An identical re-broadcast is ignored.
+	if defaults.IsConsensusMalleabilityV1(blockStateDetails.blockNumber) {
+		if existing, ok := blockRoundDetails.validatorCommits[validator]; ok {
+			if existing.CommitHash.IsEqualTo(commitDetails.CommitHash) == false {
+				return errors.New("validator equivocation: conflicting commit in same round")
+			}
+			return nil
+		}
 	}
 
 	blockRoundDetails.validatorCommits[validator] = commitDetails

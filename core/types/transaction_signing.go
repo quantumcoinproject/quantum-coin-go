@@ -127,13 +127,15 @@ func Sender(signer Signer, tx *Transaction) (common.Address, error) {
 }
 
 // SenderV2 behaves like Sender but additionally enforces that the signature
-// V value is exactly 1. recoverPlain ignores V (it hardcodes 1), while
-// consensus tx.Verify() rejects v != 1; without this check a V-malleated
-// transaction (distinct hash, same signed digest/sender) can enter the
-// mempool only to be rejected at block Finalize. Enforce V == 1 at admission.
+// V value is exactly 1 as a cheap early-exit before signature recovery.
+// recoverPlain (under base Sender) now also rejects V != 1, and consensus
+// tx.Verify() rejects v != 1; this check guards a V-malleated transaction
+// (distinct hash, same signed digest/sender) from entering the mempool.
+// The comparison uses big.Int.Cmp rather than v.Uint64() so a V congruent to
+// 1 mod 2^64 (e.g. 2^64+1) cannot slip through via low-64-bit truncation.
 func SenderV2(signer Signer, tx *Transaction) (common.Address, error) {
 	v, _, _ := tx.RawSignatureValues()
-	if v == nil || v.Uint64() != 1 {
+	if v == nil || v.Cmp(big.NewInt(1)) != 0 {
 		return common.Address{}, ErrInvalidSig
 	}
 	return Sender(signer, tx)
@@ -274,6 +276,9 @@ func (s londonSigner) Hash(tx *Transaction) (common.Hash, error) {
 				tx.Nonce(),
 				tx.To(),
 				tx.Gas(),
+				// This slot intentionally signs gasPrice (MaxGasTier() returns gasPrice());
+				// the gas tier is not part of the signing payload and is enforced instead by
+				// verifyFields (maxGasTier() == GAS_TIER_DEFAULT). See transaction.go MaxGasTier.
 				tx.MaxGasTier(),
 				tx.Value(),
 				tx.Data(),
@@ -315,7 +320,7 @@ func decodeSignature(digestHash []byte, sig []byte) (r, s, v *big.Int, err error
 }
 
 func recoverPlain(sighash common.Hash, R, S, Vb *big.Int) (common.Address, error) {
-	if Vb.BitLen() > 8 {
+	if Vb == nil || Vb.Cmp(big.NewInt(1)) != 0 {
 		return common.Address{}, ErrInvalidSig
 	}
 	V := byte(1)

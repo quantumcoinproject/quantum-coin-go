@@ -35,6 +35,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv1"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv3"
 	"github.com/quantumcoinproject/quantum-coin-go/token/tokenconversion"
 	"github.com/quantumcoinproject/quantum-coin-go/tokenv2"
 )
@@ -344,7 +345,11 @@ func send(from string, to string, quantity string, remarks string) (string, erro
 	if txType == "" || txType == "0" {
 		tx = types.NewDefaultFeeTransactionExtended(chainID, nonce, &toAddress, value, gasLimit, types.GAS_TIER_DEFAULT, data, remarkBytes)
 	} else if txType == "1" {
-		tx = types.NewDynamicFeeTransaction(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data, remarkBytes)
+		tipCap, feeCap, err := getGasCaps()
+		if err != nil {
+			return "", err
+		}
+		tx = types.NewDynamicFeeTransactionWithCaps(chainID, nonce, &toAddress, value, gasLimit, cryptobase.GetSigningContext(), data, remarkBytes, tipCap, feeCap)
 	} else {
 		fmt.Println("Unknown txType", txType)
 		return "", errors.New("unknown txType")
@@ -683,8 +688,18 @@ func newDeposit(validatorAddress string, depositAmount string, key *signaturealg
 		if err != nil {
 			return err
 		}
-	} else {
+	} else if blockNumber < defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock {
 		contract, err := stakingv2.NewStaking(contractAddress, client)
+		if err != nil {
+			return err
+		}
+
+		tx, err = contract.NewDeposit(txnOpts, common.HexToAddress(validatorAddress))
+		if err != nil {
+			return err
+		}
+	} else {
+		contract, err := stakingv3.NewStaking(contractAddress, client)
 		if err != nil {
 			return err
 		}
@@ -769,6 +784,32 @@ func initiateWithdrawal(key *signaturealgorithm.PrivateKey) error {
 	time.Sleep(1000 * time.Millisecond)
 
 	return nil
+}
+
+const GAS_TIP_CAP_ENV = "GAS_TIP_CAP"
+const GAS_FEE_CAP_ENV = "GAS_FEE_CAP"
+
+// getGasCaps reads the optional GAS_TIP_CAP and GAS_FEE_CAP environment variables (values in wei) used
+// for dynamic-fee (TX_TYPE=1) transactions. A variable that is not set returns a nil cap, which is
+// treated as zero downstream (the opt-out default), so leaving them unset preserves existing behavior.
+func getGasCaps() (gasTipCap *big.Int, gasFeeCap *big.Int, err error) {
+	if v := os.Getenv(GAS_TIP_CAP_ENV); len(v) > 0 {
+		tip, ok := new(big.Int).SetString(v, 10)
+		if !ok {
+			return nil, nil, errors.New("invalid " + GAS_TIP_CAP_ENV + ", expected a wei integer: " + v)
+		}
+		gasTipCap = tip
+		fmt.Println("Using gasTipCap from environment variable", GAS_TIP_CAP_ENV, "(wei):", gasTipCap)
+	}
+	if v := os.Getenv(GAS_FEE_CAP_ENV); len(v) > 0 {
+		fee, ok := new(big.Int).SetString(v, 10)
+		if !ok {
+			return nil, nil, errors.New("invalid " + GAS_FEE_CAP_ENV + ", expected a wei integer: " + v)
+		}
+		gasFeeCap = fee
+		fmt.Println("Using gasFeeCap from environment variable", GAS_FEE_CAP_ENV, "(wei):", gasFeeCap)
+	}
+	return gasTipCap, gasFeeCap, nil
 }
 
 func getGasLimit(defaultLimit uint64) (uint64, error) {
@@ -1452,6 +1493,80 @@ func changeValidator(key *signaturealgorithm.PrivateKey, newValidatorAddress com
 	return nil
 }
 
+func bondDepositor(key *signaturealgorithm.PrivateKey, depositorAddress common.Address) error {
+	return sendBondTransaction(key, depositorAddress, false)
+}
+
+func bondDepositorForRotation(key *signaturealgorithm.PrivateKey, depositorAddress common.Address) error {
+	return sendBondTransaction(key, depositorAddress, true)
+}
+
+// sendBondTransaction signs a bond (or rotation bond) transaction with the validator key (msg.sender).
+func sendBondTransaction(key *signaturealgorithm.PrivateKey, depositorAddress common.Address, forRotation bool) error {
+	client, err := ethclient.Dial(rawURL)
+	if err != nil {
+		return err
+	}
+
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(key.PriData)
+	if err != nil {
+		return err
+	}
+	sigAlg := *sigAlgPtr
+
+	fromAddress, err := sigAlg.PublicKeyToAddress(&key.PublicKey)
+	if err != nil {
+		return err
+	}
+
+	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
+	if err != nil {
+		return err
+	}
+
+	contractAddress := common.HexToAddress(staking.STAKING_CONTRACT)
+	txnOpts, err := bind.NewKeyedTransactorWithChainID(key, big.NewInt(123123))
+
+	if err != nil {
+		return err
+	}
+
+	txnOpts.From = fromAddress
+	txnOpts.Nonce = big.NewInt(int64(nonce))
+	txnOpts.GasLimit = uint64(175000)
+
+	if os.Getenv("TX_TYPE") == "1" {
+		txnOpts.TxType = types.DynamicFeeTxType
+		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+	}
+
+	val, _ := ParseBigFloat("0")
+	txnOpts.Value = etherToWeiFloat(val)
+
+	contract, err := stakingv3.NewStaking(contractAddress, client)
+	if err != nil {
+		return err
+	}
+
+	var tx *types.Transaction
+	if forRotation {
+		tx, err = contract.BondDepositorForRotation(txnOpts, depositorAddress)
+	} else {
+		tx, err = contract.BondDepositor(txnOpts, depositorAddress)
+	}
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Your request to bond the depositor has been added to the queue for processing.")
+	fmt.Println("The transaction hash for tracking this request is: ", tx.Hash())
+	fmt.Println()
+
+	time.Sleep(1000 * time.Millisecond)
+
+	return nil
+}
+
 func getStakingDetails(validatorAddress common.Address) error {
 	if len(rawURL) == 0 {
 		return errors.New("DP_RAW_URL environment variable not specified")
@@ -1693,6 +1808,10 @@ func transferTokens(contractAddr string, toAddr string, tokenTransferAmount *big
 	if os.Getenv("TX_TYPE") == "1" {
 		txnOpts.TxType = types.DynamicFeeTxType
 		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
+		txnOpts.GasTipCap, txnOpts.GasFeeCap, err = getGasCaps()
+		if err != nil {
+			return err
+		}
 	}
 
 	txnOpts.Value = big.NewInt(0)

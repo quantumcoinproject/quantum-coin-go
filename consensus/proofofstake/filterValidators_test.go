@@ -1,6 +1,7 @@
 package proofofstake
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
@@ -1346,5 +1347,278 @@ func TestFilterValidators_filteredDepositValueBelowMin_afterNormalize(t *testing
 	}
 	if err.Error() != "min block deposit not met for filteredDepositValue" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestFilterValidators_normalizationv2 verifies the Normalizationv2StartBlock gate:
+// after the cutoff, normalizeDeposit runs only over the selected committee instead of all validators,
+// which changes filteredDepositValue when there are more than MAX_VALIDATORS validators and a whale
+// exceeds the MAX_DEPOSIT_PERCENTAGE cap. Below MAX_VALIDATORS (committee == full set) the result is
+// unchanged across the boundary.
+//
+// The non-whale validators all hold an identical deposit, so the committee's pre-normalize total is the
+// same regardless of which equal validators selection picks for each block. That isolates the difference
+// to the normalization scope rather than committee membership.
+func TestFilterValidators_normalizationv2(t *testing.T) {
+	origBlockNumber := TestFilterValidatorsBlockNumber
+	TestFilterValidatorsBlockNumber = defaults.DefaultConfig.PosConfig.Normalizationv2StartBlock
+	defer func() { TestFilterValidatorsBlockNumber = origBlockNumber }()
+
+	consensusContext := common.BytesToHash([]byte("normalizationv2GateTest"))
+	nb := defaults.DefaultConfig.PosConfig.Normalizationv2StartBlock
+
+	buildInput := func(n int, whaleCoins, equalCoins int64) (map[common.Address]*big.Int, map[common.Address]*ValidatorDetailsV2) {
+		list := hardcodedValidatorListFilter(n)
+		dep := make(map[common.Address]*big.Int)
+		det := make(map[common.Address]*ValidatorDetailsV2)
+		for i := 0; i < n; i++ {
+			addr := list[i]
+			coins := equalCoins
+			if i == 0 {
+				coins = whaleCoins
+			}
+			dep[addr] = params.EtherToWei(big.NewInt(coins))
+			det[addr] = &ValidatorDetailsV2{
+				Validator:     addr,
+				NilBlockCount: big.NewInt(0),
+				LastNiLBlock:  big.NewInt(0),
+			}
+		}
+		return dep, det
+	}
+
+	// Whale and equal-deposit amounts are sized so the total and committee deposits clear MIN_BLOCK_DEPOSIT
+	// while the whale stays above the MAX_DEPOSIT_PERCENTAGE (10%) cap.
+	const whaleCoins = int64(250000000000)
+	const equalCoins = int64(5000000000)
+
+	// Case 1: 300 validators (> MAX_VALIDATORS) with a whale above the 10% cap. The result must differ
+	// across the Normalizationv2StartBlock boundary (normalize-all vs normalize-committee).
+	depA, detA := buildInput(300, whaleCoins, equalCoins)
+	_, fdvBefore, _, err := filterValidators(consensusContext, &depA, nb-1, &detA)
+	if err != nil {
+		t.Fatalf("case1 before boundary: %v", err)
+	}
+	depB, detB := buildInput(300, whaleCoins, equalCoins)
+	_, fdvAfter, _, err := filterValidators(consensusContext, &depB, nb, &detB)
+	if err != nil {
+		t.Fatalf("case1 after boundary: %v", err)
+	}
+	if fdvBefore.Cmp(fdvAfter) == 0 {
+		t.Fatalf("case1: expected filteredDepositValue to differ across Normalizationv2StartBlock boundary; both = %s", fdvBefore)
+	}
+
+	// Case 2: 100 validators (<= MAX_VALIDATORS) => committee == full set => normalization scope is the
+	// same on both sides of the boundary => filteredDepositValue unchanged.
+	depC, detC := buildInput(100, whaleCoins, equalCoins)
+	_, fdvSmallBefore, _, err := filterValidators(consensusContext, &depC, nb-1, &detC)
+	if err != nil {
+		t.Fatalf("case2 before boundary: %v", err)
+	}
+	depD, detD := buildInput(100, whaleCoins, equalCoins)
+	_, fdvSmallAfter, _, err := filterValidators(consensusContext, &depD, nb, &detD)
+	if err != nil {
+		t.Fatalf("case2 after boundary: %v", err)
+	}
+	if fdvSmallBefore.Cmp(fdvSmallAfter) != 0 {
+		t.Fatalf("case2: expected filteredDepositValue to be unchanged across boundary for <= MAX_VALIDATORS; before=%s after=%s", fdvSmallBefore, fdvSmallAfter)
+	}
+}
+
+// block4203208PageDepositsWholeCoins holds the "Staking Net Balance after Decay" (whole-coin amounts) of
+// the 299 active validators from the quantumscan validator-page snapshot taken around block 4,203,208.
+// Sub-coin decimals are dropped (this is a printonly demonstration). Real validator addresses are NOT
+// used; fresh deterministic test addresses are generated instead.
+var block4203208PageDepositsWholeCoins = []int64{
+	278821098145, 272407360869, 267626587075, 266013974808, 215918264280, 215624454907, 214970404460, 214741281562,
+	65203750710, 64286830136, 62093450149, 61699747029, 61507121339, 60195890476, 57525489153, 49580848107,
+	28991998369, 27901915195, 23333864289, 22301708060, 19153530983, 16114134277, 12886083630, 12002984042,
+	11851380808, 11445897772, 10390239040, 10005783657, 9204865494, 9117603545, 9117114617, 9090556864,
+	8937990692, 8908924119, 8805745928, 8673650910, 8568436552, 8210355292, 8078005988, 7529214040,
+	7448764847, 6765047427, 6684483212, 6430318553, 6210746733, 6174100294, 6066849239, 5974339715,
+	5953676299, 5927842642, 5758358254, 5703075826, 5563568541, 5541019098, 5485342613, 5468480905,
+	5460551458, 5426513743, 5420046271, 5398027379, 5365943246, 5355714081, 5341302443, 5338926064,
+	5210739088, 5189148079, 5126421831, 5096121750, 5085937306, 5070395438, 4990459656, 4950573399,
+	4947307918, 4908700623, 4880838204, 4849131705, 4824174254, 4797381505, 4693460208, 4691546018,
+	4678618453, 4669644068, 4639146367, 4626129484, 4512015436, 4500929528, 4458575430, 4433506109,
+	4412843044, 4376924546, 4365421210, 4348633832, 4340612506, 4338235814, 4337399311, 4321884768,
+	4307996921, 4297435221, 4289183861, 4286306618, 4270718927, 4261544720, 4248946336, 4217229372,
+	4202400375, 4199630428, 4190277589, 4184376443, 4179166021, 4176782182, 4167977157, 4160483908,
+	4129729426, 4088207130, 4077871320, 4076310897, 4051684733, 4046270836, 4040693483, 4017947041,
+	4008804675, 3994048173, 3977331625, 3973379092, 3965646258, 3940178907, 3926341991, 3888596708,
+	3829343760, 3806625010, 3774405691, 3708915520, 3663568463, 3615207069, 3535944682, 3491846591,
+	3468912108, 3444877045, 3408655588, 3108035647, 3045159254, 2957450704, 2953498059, 2927910384,
+	2861080678, 2838277761, 2721809082, 2694754790, 2671419373, 2642180170, 2602681981, 2579535561,
+	2540059150, 2512396942, 2459256846, 2433357536, 2242234344, 2191744858, 2131438893, 2098447095,
+	1975509830, 1858601403, 1850689761, 1743175760, 1694773131, 1622571489, 1539405665, 1537308993,
+	1445875524, 1376244841, 1251840032, 1229065020, 1193143598, 1190504688, 1178645072, 1158286587,
+	1158245642, 1156812819, 1099166849, 1098698727, 1096134160, 1043361943, 1001850399, 962208184,
+	932226397, 925104533, 893309967, 887996341, 876772962, 875058307, 871822223, 867933498,
+	857792560, 854421752, 852584608, 849060468, 841802113, 832648158, 825961908, 802296810,
+	799335043, 795712411, 791406881, 768485865, 765777052, 750999586, 717704219, 702229408,
+	699743089, 696790270, 688205607, 684670890, 681589950, 677470525, 674402594, 674144258,
+	668239475, 656929272, 656819150, 653967568, 633042085, 631128620, 608634811, 604219544,
+	596891502, 587853531, 583570603, 566202686, 550281302, 544566173, 533144462, 521383623,
+	515077180, 513167493, 467516099, 432320599, 420880635, 411485305, 364691585, 361600268,
+	354462395, 352901534, 328517729, 327258479, 323320265, 320188582, 318185526, 317152025,
+	299665565, 286479021, 286298692, 284136422, 273498870, 257285677, 256335795, 233883463,
+	226717091, 210639227, 201685931, 200592699, 200425110, 198305084, 197887899, 197027720,
+	192759230, 190974965, 177709249, 176475219, 170268960, 170145428, 166359326, 163270907,
+	149436126, 144498636, 142755220, 139470593, 122313691, 121823062, 110453546, 108815682,
+	101866994, 85716100, 80200223, 78987795, 75545725, 72985687, 66360188, 62562630,
+	60288594, 60022524, 57551024, 55407486, 54316966, 42343588, 39468908, 38932360,
+	25118634, 8782332, 5255709,
+}
+
+// TestNormalizeDeposit_Block4203208_CurrentVsNew demonstrates the Normalizationv2 behavior change on a
+// realistic 304-validator universe modeled on block 4,203,208: the 299 active validators from the
+// validator page, 4 small filler validators (to reach the page's reported 303 total), plus 1 synthetic
+// "whale" validator holding 20% of the universe deposit.
+//
+// The 128-member committee is the whale plus the 127 largest validators. It prints, per committee
+// validator, the deposit share under the current behavior (normalize over all 304) versus the new
+// behavior (normalize over the committee only). All validators are treated as online (NilBlockCount 0).
+func TestNormalizeDeposit_Block4203208_CurrentVsNew(t *testing.T) {
+	blockNumber := defaults.DefaultConfig.PosConfig.Normalizationv2StartBlock
+
+	// 299 real page deposits + 4 small fillers => 303 page-side validators.
+	deposits := append([]int64{}, block4203208PageDepositsWholeCoins...)
+	deposits = append(deposits, 5000000, 4000000, 3000000, 2000000)
+
+	universe := make(map[common.Address]*big.Int, len(deposits)+1)
+	details := make(map[common.Address]*ValidatorDetailsV2, len(deposits)+1)
+	addrs := make([]common.Address, 0, len(deposits)+1)
+	seed := []byte("normalizationv2Block4203208Test")
+	sumNonWhale := big.NewInt(0)
+	for i, coins := range deposits {
+		h := crypto.Keccak256Hash(seed, common.Uint64ToBytes(uint64(i)))
+		addr := common.BytesToAddress(h.Bytes()[12:32])
+		dep := params.EtherToWei(big.NewInt(coins))
+		universe[addr] = dep
+		details[addr] = &ValidatorDetailsV2{Validator: addr, NilBlockCount: big.NewInt(0), LastNiLBlock: big.NewInt(0)}
+		addrs = append(addrs, addr)
+		sumNonWhale = common.SafeAddBigInt(sumNonWhale, dep)
+	}
+
+	// Whale holds 20% of the universe total: whale = sumNonWhale / 4 (since (S/4)/(S + S/4) = 20%).
+	whaleHash := crypto.Keccak256Hash(seed, []byte("whale"))
+	whaleAddr := common.BytesToAddress(whaleHash.Bytes()[12:32])
+	whaleDep := common.SafeDivBigInt(sumNonWhale, big.NewInt(4))
+	universe[whaleAddr] = whaleDep
+	details[whaleAddr] = &ValidatorDetailsV2{Validator: whaleAddr, NilBlockCount: big.NewInt(0), LastNiLBlock: big.NewInt(0)}
+	addrs = append(addrs, whaleAddr)
+
+	// committee = top MAX_VALIDATORS by deposit (whale + 127 largest), tie-broken by address.
+	sortByDepositDesc := func(list []common.Address, depMap map[common.Address]*big.Int) {
+		sort.Slice(list, func(i, j int) bool {
+			c := depMap[list[i]].Cmp(depMap[list[j]])
+			if c == 0 {
+				return bytes.Compare(list[i].Bytes(), list[j].Bytes()) < 0
+			}
+			return c > 0
+		})
+	}
+	sortByDepositDesc(addrs, universe)
+	committee := make(map[common.Address]bool, MAX_VALIDATORS)
+	for i := 0; i < MAX_VALIDATORS && i < len(addrs); i++ {
+		committee[addrs[i]] = true
+	}
+	if !committee[whaleAddr] {
+		t.Fatalf("whale expected to be in committee")
+	}
+
+	preFilter := make(map[common.Address]*big.Int, len(committee))
+	for a := range committee {
+		preFilter[a] = new(big.Int).Set(universe[a])
+	}
+
+	// current behavior: normalize over the whole 304-validator universe.
+	currentMap := make(map[common.Address]*big.Int, len(universe))
+	for a, d := range universe {
+		currentMap[a] = new(big.Int).Set(d)
+	}
+	currentSumBefore := big.NewInt(0)
+	for _, d := range currentMap {
+		currentSumBefore = common.SafeAddBigInt(currentSumBefore, d)
+	}
+	normalizeDeposit(blockNumber, &currentMap, &details)
+
+	// new behavior: normalize over the committee only.
+	newMap := make(map[common.Address]*big.Int, len(committee))
+	for a := range committee {
+		newMap[a] = new(big.Int).Set(universe[a])
+	}
+	newSumBefore := big.NewInt(0)
+	for _, d := range newMap {
+		newSumBefore = common.SafeAddBigInt(newSumBefore, d)
+	}
+	normalizeDeposit(blockNumber, &newMap, &details)
+
+	// committee totals (denominators for the deposit-share percentages).
+	rawCommitteeTotal := big.NewInt(0)
+	curCommitteeTotal := big.NewInt(0)
+	newCommitteeTotal := big.NewInt(0)
+	for a := range committee {
+		rawCommitteeTotal = common.SafeAddBigInt(rawCommitteeTotal, preFilter[a])
+		curCommitteeTotal = common.SafeAddBigInt(curCommitteeTotal, currentMap[a])
+		newCommitteeTotal = common.SafeAddBigInt(newCommitteeTotal, newMap[a])
+	}
+
+	pct := func(v, total *big.Int) float64 {
+		if total.Sign() == 0 {
+			return 0
+		}
+		f := new(big.Float).Quo(new(big.Float).SetInt(v), new(big.Float).SetInt(total))
+		r, _ := f.Float64()
+		return r * 100
+	}
+
+	committeeAddrs := make([]common.Address, 0, len(committee))
+	for a := range committee {
+		committeeAddrs = append(committeeAddrs, a)
+	}
+	sortByDepositDesc(committeeAddrs, preFilter)
+
+	fmt.Printf("Normalizationv2 deposit-share: raw (no-normalize) vs current (normalize-all) vs new (normalize-committee)\n")
+	fmt.Printf("block=%d committee=%d universe=%d whale holds 20%% of universe deposit\n", blockNumber, len(committee), len(universe))
+	fmt.Printf("%-44s %12s %12s %12s\n", "Validator", "Raw %", "Before %", "After %")
+	for _, a := range committeeAddrs {
+		label := a.Hex()
+		if a == whaleAddr {
+			label = a.Hex() + " (whale)"
+		}
+		fmt.Printf("%-44s %11.4f%% %11.4f%% %11.4f%%\n", label, pct(preFilter[a], rawCommitteeTotal), pct(currentMap[a], curCommitteeTotal), pct(newMap[a], newCommitteeTotal))
+	}
+	fmt.Printf("%-44s %11.4f%% %11.4f%% %11.4f%%\n", "TOTAL", pct(rawCommitteeTotal, rawCommitteeTotal), pct(curCommitteeTotal, curCommitteeTotal), pct(newCommitteeTotal, newCommitteeTotal))
+
+	// Invariants (printonly demonstration; no equality to the live page numbers).
+	// 1) Total deposit conserved in each mode (within integer-division rounding of the redistribution).
+	curSumAfter := big.NewInt(0)
+	for _, d := range currentMap {
+		curSumAfter = common.SafeAddBigInt(curSumAfter, d)
+	}
+	newSumAfter := big.NewInt(0)
+	for _, d := range newMap {
+		newSumAfter = common.SafeAddBigInt(newSumAfter, d)
+	}
+	roundingTolerance := big.NewInt(int64(len(universe)) + 10)
+	if diff := common.SafeSubBigInt(currentSumBefore, curSumAfter); diff.Sign() < 0 || diff.Cmp(roundingTolerance) > 0 {
+		t.Fatalf("current mode total not conserved: before=%s after=%s diff=%s", currentSumBefore, curSumAfter, diff)
+	}
+	if diff := common.SafeSubBigInt(newSumBefore, newSumAfter); diff.Sign() < 0 || diff.Cmp(roundingTolerance) > 0 {
+		t.Fatalf("new mode total not conserved: before=%s after=%s diff=%s", newSumBefore, newSumAfter, diff)
+	}
+
+	// 2) The whale is capped below its pre-filter deposit in both modes.
+	if currentMap[whaleAddr].Cmp(preFilter[whaleAddr]) >= 0 {
+		t.Fatalf("whale not capped in current mode: pre=%s post=%s", preFilter[whaleAddr], currentMap[whaleAddr])
+	}
+	if newMap[whaleAddr].Cmp(preFilter[whaleAddr]) >= 0 {
+		t.Fatalf("whale not capped in new mode: pre=%s post=%s", preFilter[whaleAddr], newMap[whaleAddr])
+	}
+
+	// 3) The whale's normalized deposit differs between the two modes (the scope change has an effect).
+	if currentMap[whaleAddr].Cmp(newMap[whaleAddr]) == 0 {
+		t.Fatalf("expected whale current vs new normalized deposit to differ; both = %s", currentMap[whaleAddr])
 	}
 }

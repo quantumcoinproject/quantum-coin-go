@@ -223,6 +223,26 @@ func ApplyTransaction(config *params.ChainConfig, bc ChainContext, gp *GasPool, 
 		vmConfig.OverrideGasFailure = true
 		msg.OverrideGasPrice(big.NewInt(0))
 		log.Trace("ApplyTransaction OverrideGasPrice", "txn", tx.Hash(), "price", msg.GasPrice())
+	} else if defaults.IsGasTipActive(blockNumber) {
+		// Gas tip active: charge baseFee + effectiveTip per gas. The base portion keeps
+		// the existing rewards/burn split (Finalize uses tx.GasPrice()); the tip portion
+		// is paid to the block proposer (Finalize sums EffectiveGasTip). A fee cap that
+		// cannot cover the base fee is a consensus error and rejects the transaction.
+		baseFee := tx.BaseFee()
+		// Re-validate the tip/feecap fields against the same rules the pool enforces, so a
+		// proposer cannot include a transaction the pool would reject (e.g. tipCap without
+		// feeCap, tipCap > feeCap, or negative caps that would undercharge below the base fee).
+		if err := ValidateGasFeeCaps(tx, baseFee); err != nil {
+			log.Debug("ApplyTransaction ValidateGasFeeCaps", "error", err, "tx", tx.Hash().Hex(), "block", blockNumber)
+			return nil, err
+		}
+		tip, err := tx.EffectiveGasTip(baseFee)
+		if err != nil {
+			log.Debug("ApplyTransaction EffectiveGasTip", "error", err, "tx", tx.Hash().Hex(), "block", blockNumber)
+			return nil, err
+		}
+		msg.OverrideGasPrice(new(big.Int).Add(baseFee, tip))
+		log.Trace("ApplyTransaction tip", "txn", tx.Hash(), "baseFee", baseFee, "tip", tip, "price", msg.GasPrice())
 	}
 
 	// Create a new context to be used in the EVM environment
@@ -238,6 +258,28 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 	logs = make([]*types.Log, 0)
 
 	log.Debug("ProcessTransactions", "gp Gas", gp.Gas())
+
+	blockNumber := header.Number.Uint64()
+
+	//Block gas limit (dynamic from GasV2StartBlock). Recomputed from parent state so the
+	//proposer's header.GasLimit is deterministically enforced. Engine may be nil in some
+	//low-level test contexts; fall back to the legacy fixed value there.
+	var blockGasLimit uint64
+	if engine := bc.Engine(); engine != nil {
+		blockGasLimit, err = engine.GetGasLimit(header, statedb)
+		if err != nil {
+			log.Error("ProcessTransactions GetGasLimit error", "block", blockNumber, "error", err)
+			return nil, nil, nil, nil, err
+		}
+	} else {
+		blockGasLimit = defaults.GetGasLimit(blockNumber)
+	}
+
+	//From the fork, enforce the header gas limit exactly (covers empty/nil blocks too).
+	if blockNumber >= defaults.DefaultConfig.PosConfig.GasV2StartBlock && header.GasLimit != blockGasLimit {
+		log.Error("ProcessTransactions invalid gas limit", "block", blockNumber, "header.GasLimit", header.GasLimit, "blockGasLimit", blockGasLimit)
+		return nil, nil, nil, nil, errors.New("invalid gas limit")
+	}
 
 	if len(*txList) == 0 {
 		if header.GasUsed != 0 {
@@ -256,34 +298,32 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 
 	count := 0
 
-	for {
-		hasRecords := txs.NextCursor()
-		if hasRecords == false {
-			log.Debug("ProcessTransactions loop done")
-			break
-		}
-		tx := txs.PeekCursor()
-
+	// commitTx applies a single transaction against the given gas pool, recording the outcome
+	// using the canonical error handling. It returns a non-nil error only for fatal failures
+	// (ProcessModeInsertChainReturnOnError or an unrecoverable sender error); otherwise it
+	// appends the tx to either passedTransactions or errorTransactions. Used by the legacy
+	// single-pass path and by pass 2 of the gas-tip two-pass path.
+	commitTx := func(tx *types.Transaction, gp *GasPool) error {
 		if gp.Gas() < params.TxGas {
 			log.Debug("Not enough gas for further transactions", "have", gp, "want", params.TxGas)
 			if processMode == ProcessModeInsertChainReturnOnError {
-				return nil, nil, nil, nil, errors.New("unexpected txn failure Gas")
+				return errors.New("unexpected txn failure Gas")
 			}
 			errorTransactions = append(errorTransactions, tx)
-			continue
+			return nil
 		}
 
 		if tx.Protected() && !config.IsEIP155(header.Number) {
 			if processMode == ProcessModeInsertChainReturnOnError {
-				return nil, nil, nil, nil, errors.New("unexpected txn failure Protected")
+				return errors.New("unexpected txn failure Protected")
 			}
 			errorTransactions = append(errorTransactions, tx)
 			log.Trace("Ignoring reply protected transaction", "hash", tx.Hash(), "eip155", config.EIP155Block)
-			continue
+			return nil
 		}
 		from, err := types.Sender(*signer, tx)
 		if err != nil {
-			return nil, nil, nil, nil, err
+			return err
 		}
 
 		statedb.Prepare(tx.Hash(), count)
@@ -294,57 +334,142 @@ func ProcessTransactions(config *params.ChainConfig, bc ChainContext, gp *GasPoo
 
 		if err != nil {
 			if processMode == ProcessModeInsertChainReturnOnError {
-				errOut := fmt.Errorf("could not apply tx [%v]: %w", tx.Hash().Hex(), err)
-				return nil, nil, nil, nil, errOut
-			} else {
-				if processMode == ProcessModeWorker {
-					statedb.RevertToSnapshot(snap)
-				}
-				errorTransactions = append(errorTransactions, tx)
-				switch {
-				case errors.Is(err, ErrGasLimitReached):
-					// Pop the current out-of-gas transaction without shifting in the next from the account
-					log.Debug("Gas limit exceeded for current block", "sender", from, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
-
-				case errors.Is(err, ErrNonceTooLow):
-					// New head notification data race between the transaction pool and miner, shift
-					log.Debug("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
-
-				case errors.Is(err, ErrNonceTooHigh):
-					// Reorg notification data race between the transaction pool and miner, skip account =
-					log.Debug("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
-
-				case errors.Is(err, ErrTxTypeNotSupported):
-					// Pop the unsupported transaction without shifting in the next from the account
-					log.Debug("Skipping unsupported transaction type", "sender", from, "type", tx.Type(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
-
-				default:
-					// Strange error, discard the transaction and get the next in line (note, the
-					// nonce-too-high clause will prevent us from executing in vain).
-					log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
-				}
+				return fmt.Errorf("could not apply tx [%v]: %w", tx.Hash().Hex(), err)
 			}
-			continue
+			if processMode == ProcessModeWorker {
+				statedb.RevertToSnapshot(snap)
+			}
+			errorTransactions = append(errorTransactions, tx)
+			switch {
+			case errors.Is(err, ErrGasLimitReached):
+				// Pop the current out-of-gas transaction without shifting in the next from the account
+				log.Debug("Gas limit exceeded for current block", "sender", from, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
+
+			case errors.Is(err, ErrNonceTooLow):
+				// New head notification data race between the transaction pool and miner, shift
+				log.Debug("Skipping transaction with low nonce", "sender", from, "nonce", tx.Nonce(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
+
+			case errors.Is(err, ErrNonceTooHigh):
+				// Reorg notification data race between the transaction pool and miner, skip account =
+				log.Debug("Skipping account with high nonce", "sender", from, "nonce", tx.Nonce(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
+
+			case errors.Is(err, ErrTxTypeNotSupported):
+				// Pop the unsupported transaction without shifting in the next from the account
+				log.Debug("Skipping unsupported transaction type", "sender", from, "type", tx.Type(), "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
+
+			default:
+				// Strange error, discard the transaction and get the next in line (note, the
+				// nonce-too-high clause will prevent us from executing in vain).
+				log.Debug("Transaction failed, account skipped", "hash", tx.Hash(), "err", err, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas())
+			}
+			return nil
 		}
 		log.Debug("ProcessTransactions after ApplyTransaction", "tx", tx.Hash().Hex(), "gp Gas", gp.Gas(), "receipt.GasUsed", receipt.GasUsed, "header.GasUsed", header.GasUsed)
 		count = count + 1
 		receipts = append(receipts, receipt)
 		logs = append(logs, receipt.Logs...)
 		passedTransactions = append(passedTransactions, tx)
-
+		return nil
 	}
 
-	blockGasLimit := defaults.GetGasLimit(header.Number.Uint64())
-	gasUsed := blockGasLimit - gp.Gas()
+	var gasUsed uint64
+
+	if blockNumber < defaults.DefaultConfig.PosConfig.GasTipStartBlock {
+		// Legacy single-pass execution against the full block gas pool.
+		for {
+			if txs.NextCursor() == false {
+				log.Debug("ProcessTransactions loop done")
+				break
+			}
+			tx := txs.PeekCursor()
+			if err := commitTx(tx, gp); err != nil {
+				return nil, nil, nil, nil, err
+			}
+		}
+		gasUsed = blockGasLimit - gp.Gas()
+	} else {
+		// Gas-tip two-pass execution. The block gas limit is split 50/50 into a basic pool
+		// (basic coin transfers only) and a general pool (everything else, plus basic
+		// transfers that overflow the basic pool). The general pool is always exactly 50%.
+		// Execution order within each pass is the existing cursor (per-account nonce) order;
+		// per-account nonce order is preserved across passes by blocking an account in pass 1
+		// once any of its transactions is deferred.
+		basicBudget, generalBudget := SplitGasPools(blockGasLimit)
+		gpBasic := new(GasPool).AddGas(basicBudget)
+		gpGeneral := new(GasPool).AddGas(generalBudget)
+
+		ordered := make([]*types.Transaction, 0)
+		for txs.NextCursor() {
+			ordered = append(ordered, txs.PeekCursor())
+		}
+
+		codeSizeFn := func(a common.Address) int { return statedb.GetCodeSize(a) }
+		blocked := make(map[common.Address]bool)
+		deferredList := make([]*types.Transaction, 0)
+
+		// Pass 1: basic coin transfers into the basic pool.
+		for _, tx := range ordered {
+			from, err := types.Sender(*signer, tx)
+			if err != nil {
+				return nil, nil, nil, nil, err
+			}
+			if blocked[from] {
+				deferredList = append(deferredList, tx)
+				continue
+			}
+			if IsBasicTransfer(tx, codeSizeFn) == false {
+				// Non-basic txns are processed in the general pool; block the account so its
+				// higher-nonce txns stay in nonce order behind this one.
+				blocked[from] = true
+				deferredList = append(deferredList, tx)
+				continue
+			}
+
+			statedb.Prepare(tx.Hash(), count)
+			snap := statedb.Snapshot()
+			receipt, err := ApplyTransaction(config, bc, gpBasic, statedb, header, tx, usedGas, cfg, signer)
+			if err != nil {
+				// Did not fit the basic pool (or otherwise failed): revert and defer to the
+				// general pool, blocking the account to preserve nonce order.
+				statedb.RevertToSnapshot(snap)
+				blocked[from] = true
+				deferredList = append(deferredList, tx)
+				continue
+			}
+			count = count + 1
+			receipts = append(receipts, receipt)
+			logs = append(logs, receipt.Logs...)
+			passedTransactions = append(passedTransactions, tx)
+		}
+
+		// Pass 2: everything else (non-basic + overflow basic) into the general pool.
+		for _, tx := range deferredList {
+			if err := commitTx(tx, gpGeneral); err != nil {
+				return nil, nil, nil, nil, err
+			}
+		}
+
+		basicUsed := basicBudget - gpBasic.Gas()
+		generalUsed := generalBudget - gpGeneral.Gas()
+		if basicUsed > basicBudget || generalUsed > generalBudget {
+			log.Error("ProcessTransactions() pool limit exceeded", "block", blockNumber, "basicUsed", basicUsed,
+				"basicBudget", basicBudget, "generalUsed", generalUsed, "generalBudget", generalBudget)
+			return nil, nil, nil, nil, errors.New("gas pool limit exceeded")
+		}
+		gasUsed = basicUsed + generalUsed
+		log.Debug("ProcessTransactions() two-pass", "block", blockNumber, "basicUsed", basicUsed, "basicBudget", basicBudget,
+			"generalUsed", generalUsed, "generalBudget", generalBudget, "gasUsed", gasUsed)
+	}
+
 	if header.GasUsed != gasUsed {
 		log.Error("ProcessTransactions() gas limit exceeded", "block", header.Number.Uint64(), "blockGasLimit", blockGasLimit,
-			"gasUsed", gasUsed, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas(), "block txn count", len(*txList),
+			"gasUsed", gasUsed, "header.GasUsed", header.GasUsed, "block txn count", len(*txList),
 			"passed txn count", len(passedTransactions), "error txn count", len(errorTransactions), "processMode", processMode)
 		return nil, nil, nil, nil, errors.New("gas limit exceeded")
 	}
 
 	log.Debug("ProcessTransactions()", "block", header.Number.Uint64(), "blockGasLimit", blockGasLimit,
-		"gasUsed", gasUsed, "header.GasUsed", header.GasUsed, "gp.Gas()", gp.Gas(), "block txn count", len(*txList),
+		"gasUsed", gasUsed, "header.GasUsed", header.GasUsed, "block txn count", len(*txList),
 		"passed txn count", len(passedTransactions), "error txn count", len(errorTransactions), "processMode", processMode)
 
 	return receipts, logs, passedTransactions, errorTransactions, nil

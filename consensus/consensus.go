@@ -127,6 +127,10 @@ type Engine interface {
 	// that a new block should have.
 	CalcDifficulty(chain ChainHeaderReader, time uint64, parent *types.Header) *big.Int
 
+	// GetGasLimit returns the block gas limit for the header, computed from recent
+	// nil-block history. statedb is the parent state at the start of the block.
+	GetGasLimit(header *types.Header, statedb *state.StateDB) (uint64, error)
+
 	// APIs returns the RPC APIs this consensus engine provides.
 	APIs(chain ChainHeaderReader) []rpc.API
 

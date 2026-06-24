@@ -666,7 +666,12 @@ func (w *worker) commitTransactions(coinbase common.Address, interrupt *int32) (
 		return true, nil
 	}
 
-	w.current.header.GasLimit = defaults.GetGasLimit(w.current.header.Number.Uint64())
+	gl, err := w.engine.GetGasLimit(w.current.header, w.current.state)
+	if err != nil {
+		log.Error("commitTransactions GetGasLimit", "error", err)
+		return false, err
+	}
+	w.current.header.GasLimit = gl
 	gasLimit := w.current.header.GasLimit
 
 	if w.current.gasPool == nil {
@@ -814,6 +819,23 @@ func (w *worker) proposePhase(interrupt *int32, timestamp int64) error {
 		}
 
 		log.Debug("worker transactions", "pendingCount", len(pendingTxns), "postFilterCount", txsByNoncePreCheck.GetTotalCount())
+
+		// Gas-tip selection: from GasTipStartBlock, prefer higher-effective-tip transactions and
+		// pack them into the 50/50 basic/general gas pools before handing the candidate set to
+		// consensus. This only influences which transactions are proposed; execution order stays
+		// hash-sorted and ProcessTransactions re-enforces the pools authoritatively.
+		if defaults.IsGasTipActive(w.current.header.Number.Uint64()) {
+			gl, errGl := w.engine.GetGasLimit(w.current.header, w.current.state)
+			if errGl != nil {
+				log.Error("proposePhase GetGasLimit", "err", errGl)
+				return errGl
+			}
+			basicBudget, generalBudget := core.SplitGasPools(gl)
+			maxCount := defaults.GetMaxTransactionsForBlock(w.current.header.Number.Uint64())
+			codeSizeFn := func(a common.Address) int { return w.current.state.GetCodeSize(a) }
+			txnFilteredMap = core.SelectByEffectiveTip(txnFilteredMap, basicBudget, generalBudget, codeSizeFn, maxCount)
+			log.Debug("gas-tip selection", "selectedAccounts", len(txnFilteredMap), "basicBudget", basicBudget, "generalBudget", generalBudget)
+		}
 
 		s := w.current.state.Copy()
 		selectedTxns, err := w.engine.HandleTransactions(w.chain, w.current.header, s, txnFilteredMap)

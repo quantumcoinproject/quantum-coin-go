@@ -146,9 +146,10 @@ func TestTxPoolAddRemoteAcceptsValidV(t *testing.T) {
 
 // TestTxPoolAddRemoteRejectsMalleatedV is the negative case: a transaction that
 // is identical to a valid one except its signature V value has been malleated
-// to 2 must be rejected at admission (Finding 2 fix via types.SenderV2). This
-// guards against a V-malleated variant entering the mempool only to fail later
-// at block Finalize (which enforces v == 1).
+// to 2 must be rejected at admission. Enforcement now happens both in base
+// Sender (recoverPlain rejects V != 1) and in SenderV2. This guards against a
+// V-malleated variant entering the mempool only to fail later at block Finalize
+// (which enforces v == 1).
 func TestTxPoolAddRemoteRejectsMalleatedV(t *testing.T) {
 	pool, key := setupVTxPool(t)
 	defer pool.Stop()
@@ -170,11 +171,12 @@ func TestTxPoolAddRemoteRejectsMalleatedV(t *testing.T) {
 		S:          s,
 	})
 
-	// Precondition: plain Sender ignores V (recoverPlain hardcodes 1), so it
-	// must still recover the sender. This proves the rejection below is due to
-	// the V check in SenderV2, not a broken signature.
-	if _, err := types.Sender(pool.signer, bad); err != nil {
-		t.Fatalf("precondition failed: plain Sender should recover a sender for the malleated-V tx, got: %v", err)
+	// recoverPlain now enforces V == 1, so base Sender itself rejects the
+	// malleated-V tx (it no longer relies solely on SenderV2). The R (public
+	// key) and S (signature) are otherwise valid, so the only reason for
+	// rejection is the strict V check.
+	if _, err := types.Sender(pool.signer, bad); err != types.ErrInvalidSig {
+		t.Fatalf("expected base Sender to reject malleated-V tx with ErrInvalidSig, got: %v", err)
 	}
 
 	if err := pool.addRemoteSync(bad); err != ErrInvalidSender {
@@ -182,5 +184,45 @@ func TestTxPoolAddRemoteRejectsMalleatedV(t *testing.T) {
 	}
 	if pool.Get(bad.Hash()) != nil {
 		t.Fatalf("malleated-V tx must not be present in the pool")
+	}
+}
+
+// TestTxPoolAddRemoteRejectsTruncatedV guards the big.Int truncation gap: a V of
+// 2^64+1 has low 64 bits equal to 1, so a v.Uint64()==1 check would wrongly accept
+// it. Both base Sender and SenderV2 now use exact big.Int comparison and must
+// reject it, and the pool must not admit it.
+func TestTxPoolAddRemoteRejectsTruncatedV(t *testing.T) {
+	pool, key := setupVTxPool(t)
+	defer pool.Stop()
+
+	valid := signedDefaultFeeTx(t, pool, key)
+	_, r, s := valid.RawSignatureValues()
+
+	// V = 2^64 + 1: congruent to 1 mod 2^64, so v.Uint64() == 1.
+	truncatedV := new(big.Int).Add(new(big.Int).Lsh(big.NewInt(1), 64), big.NewInt(1))
+
+	bad := types.NewTx(&types.DefaultFeeTx{
+		ChainID:    big.NewInt(types.DEFAULT_CHAIN_ID),
+		Nonce:      valid.Nonce(),
+		To:         valid.To(),
+		Value:      valid.Value(),
+		Gas:        valid.Gas(),
+		MaxGasTier: types.GAS_TIER_DEFAULT,
+		V:          truncatedV,
+		R:          r,
+		S:          s,
+	})
+
+	if _, err := types.Sender(pool.signer, bad); err != types.ErrInvalidSig {
+		t.Fatalf("expected base Sender to reject V=2^64+1 with ErrInvalidSig, got: %v", err)
+	}
+	if _, err := types.SenderV2(pool.signer, bad); err != types.ErrInvalidSig {
+		t.Fatalf("expected SenderV2 to reject V=2^64+1 with ErrInvalidSig, got: %v", err)
+	}
+	if err := pool.addRemoteSync(bad); err != ErrInvalidSender {
+		t.Fatalf("expected ErrInvalidSender for V=2^64+1 tx, got: %v", err)
+	}
+	if pool.Get(bad.Hash()) != nil {
+		t.Fatalf("V=2^64+1 tx must not be present in the pool")
 	}
 }

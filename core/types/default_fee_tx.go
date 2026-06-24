@@ -119,6 +119,20 @@ func (tx *DefaultFeeTx) to() *common.Address { return tx.To }
 func (tx *DefaultFeeTx) verifyFields() bool {
 	if tx.S != nil {
 		signature := tx.S.Bytes()
+		// This is only an advisory early check on the signature's leading
+		// scheme-ID byte; it is NOT the authoritative signature validation.
+		// The "len > 1" guard is deliberate and must not be tightened (e.g. to
+		// "len > 0" or to require the full signature length): verifyFields also
+		// runs on the signing-hash path, where an unsigned tx carries a zero or
+		// placeholder S that is not yet a real signature.
+		//
+		// A malformed/short S (e.g. a 1-byte value) skipping this check does NOT
+		// cause transaction malleability: every path that accepts a tx routes
+		// through cryptobase.DynamicSigVerifier.ValidateSignatureValues (via
+		// recoverPlain/Sender and Transaction.Verify), which enforces the exact
+		// signature length, the scheme-ID byte, and the cryptographic check. A
+		// signature that fails those is rejected outright, so it can never be an
+		// accepted "twin" of a valid transaction.
 		if len(signature) > 1 {
 			algType := crypto.SignatureAlgorithmType(signature[0])
 			if algType != crypto.DILITHIUM_ED25519_SPHINCS_COMPACT_ID && algType != crypto.MLDSA_ED25519_SLHDSA_COMPACT_ID {

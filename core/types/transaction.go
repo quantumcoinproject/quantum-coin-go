@@ -229,6 +229,12 @@ func (tx *Transaction) Gas() uint64 { return tx.inner.gas() }
 // GasPrice returns the gas price of the transaction.
 func (tx *Transaction) GasPrice() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
+// MaxGasTier intentionally returns gasPrice(): for DefaultFeeTx the signing hash slot
+// (see londonSigner.Hash) carries gasPrice, not a distinct tier value. The tier itself
+// is therefore NOT bound by the signature; it is enforced separately by verifyFields,
+// which requires maxGasTier() == GAS_TIER_DEFAULT (see default_fee_tx.go). Properly
+// signing a tier field would be a transaction-format hard fork, so the binding is left
+// to verifyFields by design.
 func (tx *Transaction) MaxGasTier() *big.Int { return new(big.Int).Set(tx.inner.gasPrice()) }
 
 // GasTipCap returns the gasTipCap per gas of the transaction.
@@ -261,9 +267,20 @@ func (tx *Transaction) To() *common.Address {
 	return &cpy
 }
 
-// Cost returns gas * gasPrice + value.
+// Cost returns the maximum coins a transaction can spend: gas * maxFeePerGas + value, where
+// maxFeePerGas is max(baseFee, gasFeeCap). The base fee is the floor that is always charged; once
+// gas tip support is active the sender can additionally be charged up to (gasFeeCap - baseFee) of
+// tip per gas, so the cap-based bound reserves enough balance to cover baseFee + effectiveTip.
+//
+// This is backward compatible before GasTipStartBlock: pre-fork dynamic-fee transactions are
+// required to have gasFeeCap == 0 (so max(baseFee, 0) == baseFee) and default-fee transactions have
+// gasFeeCap == baseFee, leaving Cost() identical to the legacy gasPrice * gas + value.
 func (tx *Transaction) Cost() *big.Int {
-	total := new(big.Int).Mul(tx.GasPrice(), new(big.Int).SetUint64(tx.Gas()))
+	feePerGas := tx.BaseFee()
+	if feeCap := tx.GasFeeCap(); feeCap.Cmp(feePerGas) > 0 {
+		feePerGas = feeCap
+	}
+	total := new(big.Int).Mul(feePerGas, new(big.Int).SetUint64(tx.Gas()))
 	total.Add(total, tx.Value())
 	return total
 }
@@ -320,10 +337,12 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 
 func (tx *Transaction) Verify(digestHash []byte) bool {
 	v, r, s := tx.RawSignatureValues()
-	if v.Uint64() != 1 {
+	// Exact big.Int comparison: v.Uint64() would only read the low 64 bits, so a
+	// V congruent to 1 mod 2^64 (e.g. 2^64+1) must not be treated as 1.
+	if v == nil || v.Cmp(big.NewInt(1)) != 0 {
 		return false
 	}
-	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, byte(v.Uint64()), r, s)
+	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, byte(1), r, s)
 	return isOk
 }
 
@@ -737,7 +756,49 @@ func (m Message) SigningContext() byte { return m.signingContext }
 func (tx *Transaction) Tip() *big.Int { return new(big.Int).Set(tx.inner.gasTipCap()) }
 
 // FeeCap returns the fee cap per gas of the transaction.
-func (tx *Transaction) FeeCap() *big.Int          { return new(big.Int).Set(tx.inner.gasFeeCap()) }
+func (tx *Transaction) FeeCap() *big.Int { return new(big.Int).Set(tx.inner.gasFeeCap()) }
+
+// BaseFee returns the fixed base fee per gas for the transaction, derived from its
+// signing context (DynamicFeeTx) or the fixed default price (DefaultFeeTx). It is the
+// same value returned by GasPrice and is the floor that GasFeeCap must cover once gas
+// tip support is active.
+func (tx *Transaction) BaseFee() *big.Int { return tx.GasPrice() }
+
+// EffectiveGasTip returns the effective miner tip per gas given a base fee:
+// min(gasTipCap, gasFeeCap - baseFee). It returns ErrGasFeeCapTooLow when a non-zero fee
+// cap cannot cover the base fee. When baseFee is nil it falls back to the raw tip cap.
+//
+// A zero gasFeeCap means the sender opted out of tips: this is the legacy/default
+// DynamicFeeTx case where GasFeeCap/GasTipCap are unset (null) and normalized to zero. Such
+// a transaction contributes no tip and is charged only the base fee, preserving backward
+// compatibility for existing senders after the fork. Nil inner cap fields are treated as
+// zero so pre-tip transactions never panic.
+func (tx *Transaction) EffectiveGasTip(baseFee *big.Int) (*big.Int, error) {
+	tip := new(big.Int)
+	if t := tx.inner.gasTipCap(); t != nil {
+		tip.Set(t)
+	}
+	if baseFee == nil {
+		return tip, nil
+	}
+	feeCap := new(big.Int)
+	if f := tx.inner.gasFeeCap(); f != nil {
+		feeCap.Set(f)
+	}
+	if feeCap.Sign() == 0 {
+		// Opted out of tips: no tip, base fee only.
+		return new(big.Int), nil
+	}
+	if feeCap.Cmp(baseFee) < 0 {
+		return nil, ErrGasFeeCapTooLow
+	}
+	gap := new(big.Int).Sub(feeCap, baseFee)
+	if tip.Cmp(gap) > 0 {
+		tip = gap
+	}
+	return tip, nil
+}
+
 func (m Message) Nonce() uint64                   { return m.nonce }
 func (m Message) Data() []byte                    { return m.data }
 func (m Message) AccessList() AccessList          { return m.accessList }

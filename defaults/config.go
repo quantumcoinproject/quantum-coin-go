@@ -11,6 +11,10 @@ import (
 
 const BASIC_TXN_GAS = uint64(21000)
 
+// MIN_DYNAMIC_GAS_LIMIT is the floor block gas limit (~100 basic txns) used by the
+// dynamic gas-limit scheme that activates at GasV2StartBlock.
+const MIN_DYNAMIC_GAS_LIMIT = uint64(2100000)
+
 var DEFAULT_PRICE = int64(47619047619047600)
 var SigningContextLevel1Multiplier = int64(20)
 var SigningContextLevel2Multiplier = int64(30)
@@ -30,6 +34,15 @@ func GetMaxTransactionsForBlock(blockNumber uint64) int {
 	return int(DefaultConfig.DefaultGasLimit / BASIC_TXN_GAS)
 }
 
+// GetMaxGasLimit returns the maximum allowed block gas limit for the dynamic gas-limit
+// scheme: the normal default, or a reduced cap when breakglass mode is active.
+func GetMaxGasLimit(blockNumber uint64) uint64 {
+	if IsCryptoBreakglassMode(blockNumber) {
+		return DefaultConfig.BreakglassDefaultGasLimit
+	}
+	return DefaultConfig.DefaultGasLimit
+}
+
 func SetCryptoBreakGlassBlock(blockNumber uint64) error {
 	if cryptoBreakglassBlock > 0 && blockNumber != 0 {
 		return errors.New("SetCryptoBreakGlassBlock already set")
@@ -40,6 +53,21 @@ func SetCryptoBreakGlassBlock(blockNumber uint64) error {
 
 func IsCryptoBreakglassMode(blockNumber uint64) bool {
 	return cryptoBreakglassBlock != 0 && blockNumber >= cryptoBreakglassBlock
+}
+
+// IsGasTipActive reports whether gas tip / priority fee support is active at the
+// given block number (from GasTipStartBlock onward).
+func IsGasTipActive(blockNumber uint64) bool {
+	return blockNumber >= DefaultConfig.PosConfig.GasTipStartBlock
+}
+
+// IsConsensusMalleabilityV1 reports whether the consensus/header malleability
+// hardening (see ConsensusMalleabilityV1StartBlock) is active at the given block
+// number. All consensus-affecting malleability checks are gated behind this so they
+// only apply from a finalized activation height and never retroactively reject
+// historical blocks.
+func IsConsensusMalleabilityV1(blockNumber uint64) bool {
+	return blockNumber >= DefaultConfig.PosConfig.ConsensusMalleabilityV1StartBlock
 }
 
 func IsSigAlgSwitchMode(blockNumber uint64) bool {
@@ -74,6 +102,8 @@ type ProofOfStakeConfig struct {
 	CONSENSUS_CONTEXT_START_BLOCK     uint64
 	CONSENSUS_CONTEXT_MAX_BLOCK_COUNT uint64
 
+	SystemContractV3StartBlock uint64
+
 	VALIDATOR_NIL_BLOCK_START_BLOCK      uint64
 	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK uint64
 
@@ -101,9 +131,30 @@ type ProofOfStakeConfig struct {
 
 	MinOfflineProposerBlockDelay uint64
 
-	DynamicFeeTxStartBlock uint64
-	SkipProposerStartBlock uint64
-	SkipProposerEndBlock   uint64
+	DynamicFeeTxStartBlock     uint64
+	SkipProposerStartBlock     uint64
+	SkipProposerEndBlock       uint64
+	ExtraDataV3StartBlock      uint64
+	Normalizationv2StartBlock  uint64
+	ValidatorCountV2StartBlock uint64
+	GasV2StartBlock            uint64
+
+	// GasTipStartBlock activates gas tip / priority fee support. From this block,
+	// transactions are selected by effective tip subject to a 50/50 basic-vs-general
+	// gas split, the tip is paid to the block proposer, and ProcessTransactions
+	// enforces the split via two-pass execution. It is GasV2StartBlock + 10.
+	GasTipStartBlock uint64
+
+	// ConsensusMalleabilityV1StartBlock activates the consensus/header malleability
+	// hardening: preservation and cross-check of the deciding-round proposal packet's
+	// BlockTime/Txns against BlockConsensusData, strict consensus-protocol-version
+	// matching (== current version), header.Time monotonicity vs parent, an InitTime
+	// upper bound, and live-handler equivocation detection. Every one of these checks
+	// is consensus-affecting and can reject blocks that previously verified, so this
+	// MUST be replayed against full chain history before being scheduled. Mainnet is
+	// intentionally set to "never" (max uint64) until a concrete activation height has
+	// been finalized; only then should this be lowered to that height.
+	ConsensusMalleabilityV1StartBlock uint64
 }
 
 type Config struct {
@@ -111,10 +162,13 @@ type Config struct {
 	DeepCheckStartBlock     uint64
 	GasPriceStartBlock      uint64
 	DefaultGasLimit         uint64
-	ValidateSigPubStartTime int64
-	TxnStartAllowedTime     int64
-	ConversionTxnLastTime   int64
-	KemSwitchTime           int64
+	// BreakglassDefaultGasLimit is the reduced maximum block gas limit enforced while
+	// breakglass mode is active.
+	BreakglassDefaultGasLimit uint64
+	ValidateSigPubStartTime   int64
+	TxnStartAllowedTime       int64
+	ConversionTxnLastTime     int64
+	KemSwitchTime             int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -132,13 +186,13 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	CONSENSUS_CONTEXT_START_BLOCK:     uint64(421888),
 	CONSENSUS_CONTEXT_MAX_BLOCK_COUNT: uint64(512000),
 
-	VALIDATOR_NIL_BLOCK_START_BLOCK:      uint64(421888) + 1,
-	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK: uint64(421888) + 1 + 16,
+	VALIDATOR_NIL_BLOCK_START_BLOCK:      uint64(421889),
+	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK: uint64(421905),
 
 	CONTEXT_BASED_START_BLOCK:     uint64(536000),
 	CONTEXT_BASED_BLOCK_THRESHOLD: uint64(64000),
-	BLOCK_TIME_ORIG_START_BLOCK:   uint64(536000 + 1),
-	PACKET_PROTOCOL_START_BLOCK:   uint64(536000 + 1 + 32),
+	BLOCK_TIME_ORIG_START_BLOCK:   uint64(536001),
+	PACKET_PROTOCOL_START_BLOCK:   uint64(536033),
 
 	PROPOSAL_TIME_HASH_START_BLOCK:        uint64(1507600),
 	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK: uint64(1597600),
@@ -149,19 +203,28 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	SixtyVoteStartBlock: uint64(1386825),
 
 	SlashV2StartBlock:               uint64(2082171),
-	OfflineValidatorDeferStartBlock: 2082171 + 10,
+	OfflineValidatorDeferStartBlock: 2082181,
 
-	SixtySevenVoteStartBlock: uint64(2082171 + 10 + 10),
+	SixtySevenVoteStartBlock: uint64(2082191),
 
 	OfflineValidatorV4StartBlock: 3426261,
 
-	SigAlgSwitchBlock: 3426261 + 2,
+	SigAlgSwitchBlock: 3426263,
 
 	MinOfflineProposerBlockDelay: 3600,
 
-	DynamicFeeTxStartBlock: 3426261 + 2 + 10,
-	SkipProposerStartBlock: 3426261 + 2 + 10,
-	SkipProposerEndBlock:   3790264,
+	DynamicFeeTxStartBlock:     3426273,
+	SkipProposerStartBlock:     3426273,
+	SkipProposerEndBlock:       3790264,
+	ExtraDataV3StartBlock:      5319208,
+	Normalizationv2StartBlock:  5319218,
+	ValidatorCountV2StartBlock: 5319228,
+	GasV2StartBlock:            5319238,
+	GasTipStartBlock:           5319248,
+
+	SystemContractV3StartBlock: 5319258,
+
+	ConsensusMalleabilityV1StartBlock: 0,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -179,13 +242,13 @@ var devnetPosConfig = ProofOfStakeConfig{
 	CONSENSUS_CONTEXT_START_BLOCK:     uint64(8),
 	CONSENSUS_CONTEXT_MAX_BLOCK_COUNT: uint64(128),
 
-	VALIDATOR_NIL_BLOCK_START_BLOCK:      uint64(8) + 1,
-	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK: uint64(8+1) + 16,
+	VALIDATOR_NIL_BLOCK_START_BLOCK:      uint64(9),
+	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK: uint64(25),
 
 	CONTEXT_BASED_START_BLOCK:     uint64(32),
 	CONTEXT_BASED_BLOCK_THRESHOLD: uint64(4),
-	BLOCK_TIME_ORIG_START_BLOCK:   uint64(32 + 1),
-	PACKET_PROTOCOL_START_BLOCK:   uint64(32 + 1 + 32),
+	BLOCK_TIME_ORIG_START_BLOCK:   uint64(33),
+	PACKET_PROTOCOL_START_BLOCK:   uint64(65),
 
 	PROPOSAL_TIME_HASH_START_BLOCK:        uint64(64),
 	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK: uint64(64),
@@ -196,41 +259,52 @@ var devnetPosConfig = ProofOfStakeConfig{
 	SixtyVoteStartBlock: uint64(64),
 
 	SlashV2StartBlock:               uint64(90),
-	OfflineValidatorDeferStartBlock: 90 + 10,
+	OfflineValidatorDeferStartBlock: 100,
 
-	SixtySevenVoteStartBlock: uint64(90 + 10 + 10),
+	SixtySevenVoteStartBlock: uint64(110),
 
-	OfflineValidatorV4StartBlock: 90 + 10 + 10 + 10,
+	OfflineValidatorV4StartBlock: 120,
 
-	SigAlgSwitchBlock: 90 + 10 + 10 + 10 + 2,
+	SigAlgSwitchBlock: 122,
 
 	MinOfflineProposerBlockDelay: 3600,
 
-	DynamicFeeTxStartBlock: 90 + 10 + 10 + 10 + 2 + 10,
-	SkipProposerStartBlock: 0,
-	SkipProposerEndBlock:   0,
+	DynamicFeeTxStartBlock:     132,
+	SkipProposerStartBlock:     0,
+	SkipProposerEndBlock:       0,
+	ExtraDataV3StartBlock:      142,
+	Normalizationv2StartBlock:  152,
+	ValidatorCountV2StartBlock: 162,
+	GasV2StartBlock:            172,
+	GasTipStartBlock:           182,
+
+	SystemContractV3StartBlock: 192,
+
+	ConsensusMalleabilityV1StartBlock: 0,
 }
 
 var MainnetConfig = &Config{
-	PosConfig:               &mainnetPosConfig,
-	DeepCheckStartBlock:     uint64(3426261 + 3),
-	GasPriceStartBlock:      uint64(3426261 + 4),
-	DefaultGasLimit:         300000000,
-	ValidateSigPubStartTime: int64(1769904000), //Feb 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:           int64(1799229600), //Jan 06, 2027 10:00:00 AM UTC
+	PosConfig:                 &mainnetPosConfig,
+	DeepCheckStartBlock:       uint64(3426264),
+	GasPriceStartBlock:        uint64(3426265),
+	DefaultGasLimit:           300000000,
+	BreakglassDefaultGasLimit: 30000000,
+	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:       int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:     int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:             int64(1799229600), //Jan 06, 2027 10:00:00 AM UTC
 }
 
 var DevnetConfig = &Config{
-	PosConfig:               &devnetPosConfig,
-	DeepCheckStartBlock:     uint64(130),
-	GasPriceStartBlock:      uint64(131),
-	DefaultGasLimit:         300000000,
-	ValidateSigPubStartTime: int64(1769904000), //Feb 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:     int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:   int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:           int64(1713052800), //April 14th, 2025, 11:59:59 PM UTC
+	PosConfig:                 &devnetPosConfig,
+	DeepCheckStartBlock:       uint64(130),
+	GasPriceStartBlock:        uint64(131),
+	DefaultGasLimit:           300000000,
+	BreakglassDefaultGasLimit: 30000000,
+	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:       int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:     int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:             int64(1713052800), //April 14th, 2025, 11:59:59 PM UTC
 }
 
 var DefaultConfig = MainnetConfig

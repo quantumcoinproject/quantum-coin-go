@@ -20,7 +20,12 @@ type BlockExtraData struct {
 }
 
 func EncodeBlockExtraData(errorTransactions types.Transactions, currentExtraData []byte, blockNumber uint64) ([]byte, error) {
-	if blockNumber < defaults.DefaultConfig.DeepCheckStartBlock {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
+		if len(currentExtraData) != 0 {
+			log.Error("EncodeBlockExtraData v3", "extraData length invalid", len(currentExtraData), "blockNumber", blockNumber)
+			return nil, errors.New("invalid ExtraData")
+		}
+	} else if blockNumber < defaults.DefaultConfig.DeepCheckStartBlock {
 		if len(currentExtraData) != len(DefaultExtraData) {
 			log.Error("EncodeBlockExtraData a", "extraData length invalid", len(currentExtraData), "blockNumber", blockNumber)
 			return nil, errors.New("invalid ExtraData")
@@ -46,6 +51,15 @@ func EncodeBlockExtraData(errorTransactions types.Transactions, currentExtraData
 }
 
 func DecodeBlockExtraData(extraData []byte, blockNumber uint64) (*BlockExtraData, []byte, error) {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
+		blockExtraData := BlockExtraData{}
+		err := rlp.DecodeBytes(extraData, &blockExtraData)
+		if err != nil {
+			log.Error("DecodeBlockExtraData v3", "error", err)
+			return nil, nil, err
+		}
+		return &blockExtraData, []byte{}, nil
+	}
 	if blockNumber < defaults.DefaultConfig.DeepCheckStartBlock {
 		return nil, extraData, nil
 	}
@@ -69,11 +83,24 @@ func DecodeBlockExtraData(extraData []byte, blockNumber uint64) (*BlockExtraData
 }
 
 func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, error) {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
+		// DecodeBlockExtraData uses rlp.DecodeBytes, which enforces canonical
+		// encoding (rejecting non-canonical integers/sizes and any trailing bytes),
+		// so a successful decode already pins the V3 Extra to its unique canonical
+		// form. Embedded ErrorTransactions are field/signature-validated separately
+		// at header time (verifyErrorTransactions) and during execution.
+		blockExtraData, _, err := DecodeBlockExtraData(extraData, blockNumber)
+		if err != nil {
+			return nil, err
+		}
+
+		return blockExtraData, nil
+	}
 	if blockNumber < defaults.DefaultConfig.DeepCheckStartBlock {
-		/*if bytes.Compare(extraData, DefaultExtraData) != 0 {
+		if bytes.Compare(extraData, DefaultExtraData) != 0 {
 			log.Error("VerifyExtraData a", "number", blockNumber, "actual", common.Bytes2Hex(extraData), "expected", common.Bytes2Hex(DefaultExtraData))
-			return nil, errors.New("invalid ExtraData a")
-		}*/
+			return nil, errors.New("invalid ExtraData c")
+		}
 		return nil, nil
 	} else {
 		blockExtraData, origExtraData, err := DecodeBlockExtraData(extraData, blockNumber)
@@ -85,8 +112,10 @@ func VerifyExtraData(blockNumber uint64, extraData []byte) (*BlockExtraData, err
 			return nil, errors.New("invalid ExtraData a")
 		}
 
-		//todo: further verification
-
+		// The fixed DefaultExtraData prefix is verified above; the suffix is decoded
+		// via rlp.DecodeBytes in DecodeBlockExtraData, which rejects non-canonical
+		// encodings and trailing bytes, so the Extra bytes are uniquely determined.
+		// Embedded ErrorTransactions are field/signature-validated separately.
 		return blockExtraData, nil
 	}
 }

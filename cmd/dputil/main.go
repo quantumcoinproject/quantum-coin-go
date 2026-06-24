@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path"
@@ -26,6 +27,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/crosssign"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/ethclient"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
@@ -119,6 +121,14 @@ func printHelp() {
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
 	fmt.Println("===========")
+	fmt.Println("dputil bonddepositor VALIDATOR_ADDRESS DEPOSITOR_ADDRESS")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("===========")
+	fmt.Println("dputil bonddepositorforrotation VALIDATOR_ADDRESS DEPOSITOR_ADDRESS")
+	fmt.Println("      Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("===========")
 	fmt.Println("dputil getstakingdetails VALIDATOR_ADDRESS")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
@@ -131,9 +141,11 @@ func printHelp() {
 	fmt.Println("dputil transfercoins FROM_ADDRESS TO_ADDRESS AMOUNT")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("      Optional (dynamic-fee TX_TYPE=1 only): GAS_TIP_CAP, GAS_FEE_CAP (values in wei)")
 	fmt.Println("dputil transfertokens CONTRACT_ADDRESS FROM_ADDRESS TO_ADDRESS amount")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
+	fmt.Println("      Optional (dynamic-fee TX_TYPE=1 only): GAS_TIP_CAP, GAS_FEE_CAP (values in wei)")
 	fmt.Println("dputil renouncetokenownership CONTRACT_ADDRESS FROM_ADDRESS")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL, DP_KEY_FILE_DIR")
@@ -191,6 +203,8 @@ func printHelp() {
 	fmt.Println("dputil peerlist")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil checkconnect IP_ADDRESS")
+	fmt.Println("      Try a TCP connection to IP_ADDRESS on port 30303 (30s timeout). Prints ok or error.")
 	fmt.Println("===========")
 	fmt.Println("===========")
 }
@@ -251,6 +265,8 @@ func main() {
 		balance()
 	} else if os.Args[1] == "peerlist" {
 		getPeerList()
+	} else if os.Args[1] == "checkconnect" {
+		checkConnect()
 	} else if os.Args[1] == "transfercoins" {
 		sendTxn()
 	} else if os.Args[1] == "txn" {
@@ -318,6 +334,16 @@ func main() {
 		}
 	} else if os.Args[1] == "changevalidator" {
 		err := ChangeValidator()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "bonddepositor" {
+		err := BondDepositor()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "bonddepositorforrotation" {
+		err := BondDepositorForRotation()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -712,6 +738,22 @@ func getPeerList() {
 	} else {
 		fmt.Println("peers is nil")
 	}
+}
+
+func checkConnect() {
+	if len(os.Args) < 3 {
+		printHelp()
+		return
+	}
+	addr := net.JoinHostPort(os.Args[2], "30303")
+	fmt.Println("connecting to", addr)
+	conn, err := net.DialTimeout("tcp", addr, 30*time.Second)
+	if err != nil {
+		fmt.Println("error", err)
+		return
+	}
+	conn.Close()
+	fmt.Println("ok, was able to connect to", addr)
 }
 
 func getTxn() {
@@ -1672,6 +1714,89 @@ func ChangeValidator() error {
 	}
 
 	return changeValidator(depKey, common.HexToAddress(newValidatorAddr))
+}
+
+func BondDepositor() error {
+	valKey, depositorAddress, err := loadValidatorKeyForBond()
+	if err != nil {
+		return err
+	}
+
+	return bondDepositor(valKey, depositorAddress)
+}
+
+func BondDepositorForRotation() error {
+	valKey, depositorAddress, err := loadValidatorKeyForBond()
+	if err != nil {
+		return err
+	}
+
+	return bondDepositorForRotation(valKey, depositorAddress)
+}
+
+// loadValidatorKeyForBond parses VALIDATOR_ADDRESS and DEPOSITOR_ADDRESS args, loads and verifies the
+// validator key (the bond is signed by the validator, which is msg.sender), and returns the validator key
+// plus the depositor address argument.
+func loadValidatorKeyForBond() (*signaturealgorithm.PrivateKey, common.Address, error) {
+	if len(os.Args) < 4 {
+		printHelp()
+		return nil, common.Address{}, errors.New("incorrect usage")
+	}
+
+	if len(os.Getenv("DP_KEY_FILE_DIR")) == 0 {
+		return nil, common.Address{}, errors.New("set the keyfile directory environment variable DP_KEY_FILE_DIR")
+	}
+
+	validatorAddr := os.Args[2]
+	depositorAddr := os.Args[3]
+
+	if common.IsHexAddress(validatorAddr) == false {
+		return nil, common.Address{}, errors.New("invalid validator address " + validatorAddr)
+	}
+
+	if common.IsHexAddress(depositorAddr) == false {
+		return nil, common.Address{}, errors.New("invalid depositor address " + depositorAddr)
+	}
+
+	validatorAddress := common.HexToAddress(validatorAddr)
+	if validatorAddress.IsEqualTo(common.HexToAddress(depositorAddr)) {
+		return nil, common.Address{}, errors.New("validator address cannot be same as depositor address")
+	}
+
+	validatorKeyFile, err := findKeyFile(validatorAddr)
+	if err != nil {
+		return nil, common.Address{}, errors.New("error finding VALIDATOR_ADDRESS in DP_KEY_FILE_DIR " + err.Error())
+	}
+
+	fmt.Println(fmt.Sprintf("Validator wallet address %s", validatorKeyFile))
+	validatorPwd, err := prompt.Stdin.PromptPassword(fmt.Sprintf("Enter the validator wallet password : "))
+	if err != nil {
+		return nil, common.Address{}, err
+	}
+	if len(validatorPwd) == 0 {
+		return nil, common.Address{}, errors.New("validator password is not set")
+	}
+
+	valKey, err := GetKeyFromFile(validatorKeyFile, validatorPwd)
+	if err != nil {
+		return nil, common.Address{}, errors.New("error decrypting validator key " + err.Error())
+	}
+
+	sigAlgPtr, err := cryptobase.GetSigAlgForPrivateKey(valKey.PriData)
+	if err != nil {
+		return nil, common.Address{}, err
+	}
+	sigAlg := *sigAlgPtr
+	valAddressFromKey, err := sigAlg.PublicKeyToAddress(&valKey.PublicKey)
+	if err != nil {
+		return nil, common.Address{}, errors.New("validator PublicKeyToAddress " + err.Error())
+	}
+
+	if !valAddressFromKey.IsEqualTo(common.HexToAddress(validatorAddr)) {
+		return nil, common.Address{}, errors.New("validator key address check failed")
+	}
+
+	return valKey, common.HexToAddress(depositorAddr), nil
 }
 
 func GetStakingDetails() error {

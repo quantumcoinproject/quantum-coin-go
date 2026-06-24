@@ -781,25 +781,58 @@ func TestPacketHandler_offline_validator_block(t *testing.T) {
 }
 
 func TestPacketHandler_basic_various_blocks(t *testing.T) {
-	fmt.Println("TestPacketHandler_basic_various_blocks starting")
-	var blockNumbers = []uint64{1, defaults.DefaultConfig.PosConfig.RewardStartBlockNumber, defaults.DefaultConfig.PosConfig.SlashStartBlockNumber, defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK,
-		defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS, defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK, defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT,
-		defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK,
-		defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK, defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD, defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK, defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK,
-		defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK, defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK, defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock,
-		defaults.DefaultConfig.PosConfig.SlashV2StartBlock, defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock,
-		defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock,
+	// Sorted ascending by their mainnet block values; covers every block-denominated field in defaults/config.go.
+	testCases := []struct {
+		name        string
+		blockNumber uint64
+	}{
+		{"BlockOne", 1},
+		{"MinOfflineProposerBlockDelay", defaults.DefaultConfig.PosConfig.MinOfflineProposerBlockDelay},
+		{"FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS", defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_FREQUENCY_BLOCKS},
+		{"CONTEXT_BASED_BLOCK_THRESHOLD", defaults.DefaultConfig.PosConfig.CONTEXT_BASED_BLOCK_THRESHOLD},
+		{"RewardStartBlockNumber", defaults.DefaultConfig.PosConfig.RewardStartBlockNumber},
+		{"FULL_SIGN_PROPOSAL_CUTOFF_BLOCK", defaults.DefaultConfig.PosConfig.FULL_SIGN_PROPOSAL_CUTOFF_BLOCK},
+		{"STAKING_CONTRACT_V2_CUTOFF_BLOCK", defaults.DefaultConfig.PosConfig.STAKING_CONTRACT_V2_CUTOFF_BLOCK},
+		{"CONSENSUS_CONTEXT_START_BLOCK", defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK},
+		{"VALIDATOR_NIL_BLOCK_START_BLOCK", defaults.DefaultConfig.PosConfig.VALIDATOR_NIL_BLOCK_START_BLOCK},
+		{"BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK", defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK},
+		{"CONSENSUS_CONTEXT_MAX_BLOCK_COUNT", defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_MAX_BLOCK_COUNT},
+		{"CONTEXT_BASED_START_BLOCK", defaults.DefaultConfig.PosConfig.CONTEXT_BASED_START_BLOCK},
+		{"BLOCK_TIME_ORIG_START_BLOCK", defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK},
+		{"PACKET_PROTOCOL_START_BLOCK", defaults.DefaultConfig.PosConfig.PACKET_PROTOCOL_START_BLOCK},
+		{"SixtyVoteStartBlock", defaults.DefaultConfig.PosConfig.SixtyVoteStartBlock},
+		{"SlashStartBlockNumber", defaults.DefaultConfig.PosConfig.SlashStartBlockNumber},
+		{"PROPOSAL_TIME_HASH_START_BLOCK", defaults.DefaultConfig.PosConfig.PROPOSAL_TIME_HASH_START_BLOCK},
+		{"BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK", defaults.DefaultConfig.PosConfig.BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK},
+		{"SlashV2StartBlock", defaults.DefaultConfig.PosConfig.SlashV2StartBlock},
+		{"OfflineValidatorDeferStartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorDeferStartBlock},
+		{"SixtySevenVoteStartBlock", defaults.DefaultConfig.PosConfig.SixtySevenVoteStartBlock},
+		{"OfflineValidatorV4StartBlock", defaults.DefaultConfig.PosConfig.OfflineValidatorV4StartBlock},
+		{"SigAlgSwitchBlock", defaults.DefaultConfig.PosConfig.SigAlgSwitchBlock},
+		{"DeepCheckStartBlock", defaults.DefaultConfig.DeepCheckStartBlock},
+		{"GasPriceStartBlock", defaults.DefaultConfig.GasPriceStartBlock},
+		{"DynamicFeeTxStartBlock", defaults.DefaultConfig.PosConfig.DynamicFeeTxStartBlock},
+		{"SkipProposerStartBlock", defaults.DefaultConfig.PosConfig.SkipProposerStartBlock},
+		{"SkipProposerEndBlock", defaults.DefaultConfig.PosConfig.SkipProposerEndBlock},
+		{"ExtraDataV3StartBlock", defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock},
+		{"Normalizationv2StartBlock", defaults.DefaultConfig.PosConfig.Normalizationv2StartBlock},
+		{"ValidatorCountV2StartBlock", defaults.DefaultConfig.PosConfig.ValidatorCountV2StartBlock},
+		{"GasV2StartBlock", defaults.DefaultConfig.PosConfig.GasV2StartBlock},
+		{"GasTipStartBlock", defaults.DefaultConfig.PosConfig.GasTipStartBlock},
+		{"SystemContractV3StartBlock", defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock},
+		{"ConsensusMalleabilityV1StartBlock", defaults.DefaultConfig.PosConfig.ConsensusMalleabilityV1StartBlock},
 	}
 
-	for _, b := range blockNumbers {
-		fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", b)
-		for i := 1; i <= TEST_ITERATIONS; i++ {
-			fmt.Println("iteration", i)
-			testPacketHandler_basic(4, b, t)
-		}
+	for _, tc := range testCases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			fmt.Println("TEST_CONSENSUS_BLOCK_NUMBER", tc.blockNumber)
+			for i := 1; i <= TEST_ITERATIONS; i++ {
+				fmt.Println("iteration", i)
+				testPacketHandler_basic(4, tc.blockNumber, t)
+			}
+		})
 	}
-
-	fmt.Println("TestPacketHandler_basic_various_blocks done")
 }
 
 func TestPacketHandler_basic(t *testing.T) {

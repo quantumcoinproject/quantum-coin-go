@@ -19,6 +19,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/ethdb"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
@@ -212,6 +213,15 @@ func (c *Mock) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*types
 	results := make(chan error, len(headers))
 	go func() {
 		for i, header := range headers {
+			// Give the abort signal priority: results is fully buffered, so "results <- err"
+			// is always ready and a plain select would ignore a closed abort ~50% of the time,
+			// leaking an unbounded number of verifications past the abort.
+			select {
+			case <-abort:
+				return
+			default:
+			}
+
 			err := c.verifyHeader(chain, header, headers[:i])
 
 			select {
@@ -399,6 +409,11 @@ func (c *Mock) Seal(chain consensus.ChainHeaderReader, block *types.Block, resul
 // * DIFF_INTURN(1) if BLOCK_NUMBER % SIGNER_COUNT == SIGNER_INDEX
 func (c *Mock) CalcDifficulty(chain consensus.ChainHeaderReader, time uint64, parent *types.Header) *big.Int {
 	return big.NewInt(parent.Number.Int64() + 1)
+}
+
+// GetGasLimit implements consensus.Engine. The mock engine keeps the legacy fixed gas limit.
+func (c *Mock) GetGasLimit(header *types.Header, statedb *state.StateDB) (uint64, error) {
+	return defaults.GetGasLimit(header.Number.Uint64()), nil
 }
 
 // SealHash returns the hash of a block prior to it being sealed.

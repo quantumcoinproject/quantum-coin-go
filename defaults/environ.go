@@ -101,3 +101,10 @@ func GetMinValidatorsOverride() int {
 func GetTestHookEndpoint() string {
 	return testHookEndpoint
 }
+
+// GetTxnHookFile returns the path of the transaction test hook input file. It
+// is read live (rather than cached at init) so the hook reflects the current
+// environment at TxPool startup and so it can be exercised by tests.
+func GetTxnHookFile() string {
+	return os.Getenv("TXN_HOOK_FILE")
+}

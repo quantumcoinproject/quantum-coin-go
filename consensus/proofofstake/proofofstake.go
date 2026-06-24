@@ -52,6 +52,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
 	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv2"
+	"github.com/quantumcoinproject/quantum-coin-go/systemcontracts/staking/stakingv3"
 )
 
 const (
@@ -89,6 +90,15 @@ var (
 	errInvalidNonce = errors.New("invalid nonce")
 
 	errInvalidGasLimit = errors.New("invalid gas limit")
+
+	// errInvalidAuthor is returned if a block's Author header field is non-zero.
+	// The Author field is part of the block hash but is never populated by honest
+	// block production, so any non-zero value can only be a malleability attempt.
+	errInvalidAuthor = errors.New("invalid author")
+
+	// errNonMonotonicBlockTime is returned (from ConsensusMalleabilityV1StartBlock)
+	// when a block's timestamp does not strictly exceed its parent's.
+	errNonMonotonicBlockTime = errors.New("non-monotonic block time")
 )
 
 // SignerFn hashes and signs the data to be signed by a backing account.
@@ -190,7 +200,7 @@ func (c *ProofOfStake) DoesFinalizedTransactionExist(txnHash common.Hash) (bool,
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (c *ProofOfStake) VerifyHeader(chain consensus.ChainHeaderReader, header *types.Header, seal bool) error {
-	return c.verifyHeader(chain, header, nil)
+	return c.verifyHeader(chain, header, nil, seal)
 }
 
 func flattenTxnMap(txnMap map[common.Address]types.Transactions) ([]common.Hash, map[common.Hash]common.Address) {
@@ -346,7 +356,13 @@ func (c *ProofOfStake) VerifyHeaders(chain consensus.ChainHeaderReader, headers 
 
 	go func() {
 		for i, header := range headers {
-			err := c.verifyHeader(chain, header, headers[:i])
+			// seals is parallel to headers; default to full verification if a
+			// caller passes a shorter (or nil) slice.
+			seal := true
+			if i < len(seals) {
+				seal = seals[i]
+			}
+			err := c.verifyHeader(chain, header, headers[:i], seal)
 
 			select {
 			case <-abort:
@@ -362,7 +378,7 @@ func (c *ProofOfStake) VerifyHeaders(chain consensus.ChainHeaderReader, headers 
 // caller may optionally pass in a batch of parents (ascending order) to avoid
 // looking those up from the database. This is useful for concurrently verifying
 // a batch of new headers.
-func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header) error {
+func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *types.Header, parents []*types.Header, seal bool) error {
 	if header.Number == nil {
 		return errUnknownBlock
 	}
@@ -382,6 +398,14 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 		return errInvalidNonce
 	}
 
+	// The Author header field is part of the block hash but is never set by honest
+	// block production (Author() always returns the zero address). Enforcing a zero
+	// value unconditionally removes a malleability vector where an arbitrary 32-byte
+	// value would yield a different, still otherwise-valid block hash.
+	if header.Author.IsEqualTo(ZERO_HASH) == false {
+		return errInvalidAuthor
+	}
+
 	// Ensure that the mix digest is zero as we don't have fork protection currently
 	if header.MixDigest != (common.Hash{}) {
 		return errInvalidMixDigest
@@ -393,30 +417,71 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 			return errInvalidDifficulty
 		}
 	}
-	blockGasLimit := defaults.GetGasLimit(number)
-	if header.GasLimit != blockGasLimit {
-		return errInvalidGasLimit
+	//Gas limit: below GasV2StartBlock it is the fixed legacy value; from the fork it is
+	//dynamic, so only bounds are checked here (no state available). The exact value is
+	//enforced authoritatively against parent state in state_processor.ProcessTransactions.
+	if number < defaults.DefaultConfig.PosConfig.GasV2StartBlock {
+		gasLimit := defaults.GetGasLimit(number)
+		if header.GasLimit != defaults.GetGasLimit(number) {
+			log.Warn("GasLimit outside range", "header.GasLimit", header.GasLimit, "gasLimit", gasLimit)
+
+			return errInvalidGasLimit
+		}
+	} else {
+		maxGasLimit := defaults.GetMaxGasLimit(number)
+		if header.GasLimit > maxGasLimit || header.GasLimit < defaults.MIN_DYNAMIC_GAS_LIMIT {
+			log.Warn("GasLimit outside range", "header.GasLimit", header.GasLimit, "maxGasLimit", maxGasLimit, "MIN_DYNAMIC_GAS_LIMIT", defaults.MIN_DYNAMIC_GAS_LIMIT)
+			return errInvalidGasLimit
+		}
 	}
 
 	//GasUsed is checked in state_processor
 
-	_, err := VerifyExtraData(number, header.Extra)
+	blockExtraData, err := VerifyExtraData(number, header.Extra)
 	if err != nil {
 		return err
 	}
 
-	/*//Extra data
-	if header.Number.Uint64() >= core.DeepCheckStartBlock {
-		blockExtraData, err := DecodeBlockExtraData(header.Extra)
-		if err != nil {
+	// When seal verification is requested, validate the transactions embedded in the
+	// extra-data (ErrorTransactions). These are part of the block hash via Extra but
+	// the consensus packet signatures only cover SelectedTransactions hashes, so
+	// validate their fields and signatures here. This is the relatively expensive
+	// part, hence it is gated behind the seal flag (it is also re-checked during
+	// execution in verifyTransactions). blockExtraData is non-nil only at/after
+	// DeepCheckStartBlock.
+	if seal && blockExtraData != nil {
+		if err := c.verifyErrorTransactions(blockExtraData.ErrorTransactions); err != nil {
 			return err
 		}
-		//todo: verify blockExtraData
-		log.Debug("blockExtraData", "decoded", len(blockExtraData.ExtraData))
-	}*/
+	}
 
 	// All basic checks passed, verify cascading fields
 	return c.verifyCascadingFields(chain, header, parents)
+}
+
+// verifyErrorTransactions validates the transactions carried in a header's
+// extra-data (the ErrorTransactions list). Each transaction must have valid
+// fields and a valid signature over its signing hash. This mirrors the per-tx
+// checks performed during execution in verifyTransactions, but applied at header
+// verification time so a header carrying bogus error transactions is rejected
+// early rather than only when the block body is executed.
+func (c *ProofOfStake) verifyErrorTransactions(errorTransactions types.Transactions) error {
+	for _, tx := range errorTransactions {
+		if tx.VerifyFields() == false {
+			log.Trace("verifyErrorTransactions VerifyFields failed", "Hash", tx.Hash())
+			return errors.New("error transaction VerifyFields failed")
+		}
+		signerHash, err := c.signer.Hash(tx)
+		if err != nil {
+			log.Trace("verifyErrorTransactions signerHash failed", "Hash", tx.Hash(), "error", err)
+			return err
+		}
+		if tx.Verify(signerHash.Bytes()) == false {
+			log.Trace("verifyErrorTransactions Verify failed", "Hash", tx.Hash())
+			return errors.New("error transaction verify failed")
+		}
+	}
+	return nil
 }
 
 // verifyCascadingFields verifies all the header fields that are not standalone,
@@ -438,6 +503,15 @@ func (c *ProofOfStake) verifyCascadingFields(chain consensus.ChainHeaderReader, 
 	}
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
+	}
+	// header.Time is part of the block hash but was previously only checked as
+	// not-in-future. Require strict monotonic growth vs the parent. Gated so historical
+	// blocks are unaffected: honest production sets header.Time = max(BlockTime,
+	// parent.Time + Period) (see Finalize), which is always > parent.Time.
+	if defaults.IsConsensusMalleabilityV1(number) {
+		if header.Time <= parent.Time {
+			return errNonMonotonicBlockTime
+		}
 	}
 	// Verify that the gasUsed is <= gasLimit
 	if header.GasUsed > header.GasLimit {
@@ -463,6 +537,11 @@ func (c *ProofOfStake) verifySeal(chain consensus.ChainHeaderReader, header *typ
 		return errors.New("nil consensusdata")
 	}
 
+	// rlp.DecodeBytes enforces canonical encoding (it rejects non-canonical
+	// integers/sizes, trailing bytes, and wrong element counts - see rlp/decode.go),
+	// so a successful decode already pins ConsensusData/UnhashedConsensusData to their
+	// unique canonical bytes. No separate re-encode check is required to prevent
+	// encoding-level malleability of these fully-typed structs.
 	blockConsensusData := &BlockConsensusData{}
 	err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData)
 	if err != nil {
@@ -524,11 +603,15 @@ func (c *ProofOfStake) Prepare(chain consensus.ChainHeaderReader, header *types.
 	number := header.Number.Uint64()
 	header.Difficulty = header.Number
 
-	if len(header.Extra) < extraVanity {
-		header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
+	if number < defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
+		if len(header.Extra) < extraVanity {
+			header.Extra = append(header.Extra, bytes.Repeat([]byte{0x00}, extraVanity-len(header.Extra))...)
+		}
+		header.Extra = header.Extra[:extraVanity]
+		header.Extra = append(header.Extra, make([]byte, extraSeal)...)
+	} else {
+		header.Extra = make([]byte, 0)
 	}
-	header.Extra = header.Extra[:extraVanity]
-	header.Extra = append(header.Extra, make([]byte, extraSeal)...)
 
 	header.MixDigest = common.Hash{}
 	parent := chain.GetHeader(header.ParentHash, number-1)
@@ -806,6 +889,27 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 			burn(state, burnAmountTxnFee)
 
 			log.Trace("Reward amount", "BlockNumber", header.Number, "rewardsAmountTxnFee", rewardsAmountTxnFee, "burnAmountTxnFee", burnAmountTxnFee, "txnFeeTotal", txnFeeTotal)
+
+			//Gas tip / priority fee: from GasTipStartBlock, the effective tip portion of the
+			//transaction fee is paid in full to the block proposer (separate from the base
+			//fee rewards/burn split above). This conserves supply: senders are charged
+			//(baseFee + effectiveTip) * gasUsed in state_transition; the base portion is
+			//split here and the tip portion is minted to the proposer's reward.
+			if defaults.IsGasTipActive(blockNumber) {
+				tipTotal, err := calculateTxnTipTotal(txs, receipts)
+				if err != nil {
+					return err
+				}
+				if tipTotal.Sign() > 0 {
+					err = c.accumulateBalance(state, tipTotal, common.HexToAddress(staking.GetStakingContract_Address_String()))
+					if err != nil {
+						log.Error("accumulateBalance tipTotal staking contract err", "err", err)
+						return err
+					}
+					blockProposerRewardAmount = common.SafeAddBigInt(blockProposerRewardAmount, tipTotal)
+					log.Trace("Tip amount", "BlockNumber", header.Number, "tipTotal", tipTotal)
+				}
+			}
 		}
 
 		//Update staking contract with reward details
@@ -844,6 +948,13 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		state.SetCode(consensuscontext.CONSENSUS_CONTEXT_CONTRACT_ADDRESS, consensuscontextContractCode)
 	}
 
+	//Staking V3
+	if blockNumber == defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock {
+		log.Info("Setting stakingv3 contract code", "blockNumber", defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock)
+		stakingContractCode := common.FromHex(stakingv3.STAKING_RUNTIME_BIN)
+		state.SetCode(staking.STAKING_CONTRACT_ADDRESS, stakingContractCode)
+	}
+
 	if blockNumber > defaults.DefaultConfig.PosConfig.CONSENSUS_CONTEXT_START_BLOCK {
 		key, err := GetConsensusContextKey(blockNumber)
 		if err != nil {
@@ -871,6 +982,14 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 				log.Error("DeleteConsensusContext oldKey err", "err", err)
 				return err
 			}
+		}
+	}
+
+	//Dynamic gas limit: record this block's nil-block status into the round-robin array.
+	if blockNumber >= defaults.DefaultConfig.PosConfig.GasV2StartBlock {
+		if err := c.writeGasNilStatus(state, header, blockConsensusData); err != nil {
+			log.Error("writeGasNilStatus err", "err", err)
+			return err
 		}
 	}
 
@@ -920,6 +1039,40 @@ func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transactio
 	}
 
 	return txnFeeTotal, txnFeeRewardsAmount, burnAmount, nil
+}
+
+// calculateTxnTipTotal sums the effective priority-fee (tip) coins across the block's
+// transactions: for each tx, EffectiveGasTip(baseFee) * gasUsed. Default-fee txns and
+// dynamic-fee txns with no tip contribute zero. Used from GasTipStartBlock onward to pay
+// the tip to the block proposer.
+func calculateTxnTipTotal(txs []*types.Transaction, receipts []*types.Receipt) (*big.Int, error) {
+	if len(receipts) != len(txs) {
+		log.Error("Finalize tip receipts and txn invalid len", "receipts len", len(receipts), "txn len", len(txs))
+		return nil, errors.New("finalize tip receipts and txn invalid length")
+	}
+
+	txnMap := make(map[common.Hash]*types.Transaction)
+	for _, txn := range txs {
+		txnMap[txn.Hash()] = txn
+	}
+
+	tipTotal := big.NewInt(0)
+	for _, receipt := range receipts {
+		txn, ok := txnMap[receipt.TxHash]
+		if ok == false {
+			log.Error("Finalize tip txn not found in receipts", "hash", receipt.TxHash)
+			return nil, errors.New("finalize tip txn not found in receipts")
+		}
+		tip, err := txn.EffectiveGasTip(txn.BaseFee())
+		if err != nil {
+			log.Error("Finalize tip EffectiveGasTip", "hash", receipt.TxHash, "err", err)
+			return nil, err
+		}
+		tipCoins := common.SafeMulBigInt(tip, new(big.Int).SetUint64(receipt.GasUsed))
+		tipTotal = common.SafeAddBigInt(tipTotal, tipCoins)
+	}
+
+	return tipTotal, nil
 }
 
 func calculateTxnFeeSplitCoins(txnFeeTotal *big.Int) (burnAmount *big.Int, txnFeeRewardsAmount *big.Int) {
@@ -1239,6 +1392,17 @@ func SealHash(header *types.Header) (hash common.Hash) {
 }
 
 func encodeSigHeader(w io.Writer, header *types.Header) {
+	extra := header.Extra
+	if header.Number.Uint64() < defaults.DefaultConfig.PosConfig.ExtraDataV3StartBlock {
+		sigLen := cryptobase.SigAlg.SignatureWithPublicKeyLength()
+		if len(extra) >= sigLen {
+			extra = extra[:len(extra)-sigLen]
+		} else {
+			// Defensive: a malformed short Extra must not panic; fall back to empty.
+			extra = []byte{}
+		}
+	}
+
 	enc := []interface{}{
 		header.ParentHash,
 		header.Coinbase,
@@ -1251,7 +1415,7 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 		header.GasLimit,
 		header.GasUsed,
 		header.Time,
-		header.Extra[:len(header.Extra)-cryptobase.SigAlg.SignatureWithPublicKeyLength()], // Yes, this will panic if extra is too short
+		extra,
 		header.MixDigest,
 		header.Nonce,
 	}
