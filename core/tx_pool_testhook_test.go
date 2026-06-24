@@ -320,6 +320,40 @@ func TestTxnTestHookWaitsForStartBlock(t *testing.T) {
 	}
 }
 
+// TestTxnTestHookThrottlesLookups verifies that consecutive transaction status
+// lookups are rate limited to the configured interval.
+func TestTxnTestHookThrottlesLookups(t *testing.T) {
+	pool, key, bc := setupTxnHookPool(t)
+	defer pool.Stop()
+
+	// Four committed transactions; allCommitted must iterate over all of them.
+	txs := make([]*types.Transaction, 4)
+	for i := range txs {
+		txs[i] = signedTxWithNonce(t, pool, key, uint64(i))
+	}
+	bc.markCommitted(txs...)
+
+	interval := 50 * time.Millisecond
+	hook := &txnTestHook{
+		pool:           pool,
+		lookupInterval: interval,
+		quit:           make(chan struct{}),
+	}
+
+	start := time.Now()
+	if !hook.allCommitted(txs) {
+		t.Fatalf("expected all transactions to be reported committed")
+	}
+	elapsed := time.Since(start)
+
+	// The first lookup is immediate; the remaining three are each throttled by
+	// at least one interval.
+	min := 3 * interval
+	if elapsed < min {
+		t.Fatalf("lookups not throttled: elapsed %v, want >= %v", elapsed, min)
+	}
+}
+
 // TestLoadAndDecodeTxnTransactions verifies the JSON load and hex-decode path
 // round-trips transactions and groups them by batch in ascending order.
 func TestLoadAndDecodeTxnTransactions(t *testing.T) {

@@ -48,6 +48,11 @@ const (
 	// defaultTxnHookBatchTimeout is the maximum time the hook waits for a single
 	// batch to commit before giving up.
 	defaultTxnHookBatchTimeout = 10 * time.Minute
+
+	// defaultTxnHookLookupInterval is the minimum spacing between individual
+	// transaction status lookups, capping them at 3 per second so the hook does
+	// not overwhelm the node while checking commit status.
+	defaultTxnHookLookupInterval = time.Second / 3
 )
 
 // TxnTestTransaction is a single signed transaction entry in the hook input
@@ -99,6 +104,11 @@ type txnTestHook struct {
 	pollInterval time.Duration
 	batchTimeout time.Duration
 
+	// lookupInterval is the minimum time between individual transaction status
+	// lookups. A value <= 0 disables throttling (tests may set it freely).
+	lookupInterval time.Duration
+	lastLookup     time.Time
+
 	quit chan struct{}
 
 	// progress, when non-nil, receives one result per processed batch and is
@@ -145,6 +155,7 @@ func maybeStartTxnTestHook(pool *TxPool) {
 		batches:          batches,
 		pollInterval:     defaultTxnHookPollInterval,
 		batchTimeout:     defaultTxnHookBatchTimeout,
+		lookupInterval:   defaultTxnHookLookupInterval,
 		quit:             make(chan struct{}),
 	}
 	pool.txnHook = hook
@@ -332,13 +343,29 @@ func (h *txnTestHook) waitForBatchCommit(txs []*types.Transaction, sigCh <-chan 
 }
 
 // allCommitted reports whether every transaction in txs has been committed.
+// Individual status lookups are rate limited via throttleLookup so the node is
+// not overwhelmed when a batch contains many transactions.
 func (h *txnTestHook) allCommitted(txs []*types.Transaction) bool {
 	for _, tx := range txs {
+		h.throttleLookup()
 		if !h.isCommitted(tx.Hash()) {
 			return false
 		}
 	}
 	return true
+}
+
+// throttleLookup blocks as needed so that consecutive transaction status
+// lookups happen no faster than one per lookupInterval (max 3 per second by
+// default). A non-positive lookupInterval disables throttling.
+func (h *txnTestHook) throttleLookup() {
+	if h.lookupInterval <= 0 {
+		return
+	}
+	if elapsed := time.Since(h.lastLookup); elapsed < h.lookupInterval {
+		time.Sleep(h.lookupInterval - elapsed)
+	}
+	h.lastLookup = time.Now()
 }
 
 // isCommitted reports whether a single transaction is committed on chain. It
