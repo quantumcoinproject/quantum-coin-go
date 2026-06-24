@@ -52,7 +52,7 @@ const (
 	// defaultTxnHookLookupInterval is the minimum spacing between individual
 	// transaction status lookups, capping them at 3 per second so the hook does
 	// not overwhelm the node while checking commit status.
-	defaultTxnHookLookupInterval = time.Second / 3
+	defaultTxnHookLookupInterval = time.Second / 10
 )
 
 // TxnTestTransaction is a single signed transaction entry in the hook input

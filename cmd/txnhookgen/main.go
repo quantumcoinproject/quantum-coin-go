@@ -21,16 +21,17 @@
 //
 // Usage:
 //
-//	txnhookgen <input-wallet-path> <output-path> [wallet-password]
+//	txnhookgen [-levels=N] <input-wallet-path> <output-path> [wallet-password]
 //
-// If the wallet password is omitted, it is prompted for interactively. All
-// other parameters (chain id, amounts, gas, batch pattern, start block) are
-// hardcoded below.
+// -levels is the number of doubling batches (default 16). If the wallet
+// password is omitted, it is prompted for interactively. All other parameters
+// (chain id, amounts, gas, start block) are hardcoded below.
 package main
 
 import (
 	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"math/big"
 	"os"
@@ -55,48 +56,63 @@ const (
 	// (~100 coins for a 21000-gas transfer); the actual fee is slightly less,
 	// leaving each sender a tiny surplus.
 	gasBudgetCoins = 100
+
+	// defaultLevels is the number of doubling batches generated when the
+	// -levels flag is not provided.
+	defaultLevels = 16
+
+	// maxLevels guards against absurd sizes / integer overflow (2^level).
+	maxLevels = 30
 )
 
 // chainID is the network chain id used for signing.
 var chainID = big.NewInt(types.DEFAULT_CHAIN_ID)
 
-// batchSpec is one entry of the hardcoded funding pattern: the BatchNumber that
-// will be written into the hook file and the number of wallets funded in that
-// batch (which equals the number of transactions in the batch).
+// batchSpec is one entry of the funding pattern: the BatchNumber written into
+// the hook file and the number of wallets funded in that batch (which equals
+// the number of transactions in the batch).
 type batchSpec struct {
 	batchNumber int64
 	funded      int
 }
 
-// batchPattern is the hardcoded doubling schedule. Each funded count must equal
-// twice the previous level's size (root is level 0 with size 1).
-var batchPattern = []batchSpec{
-	{1, 2},
-	{2, 4},
-	{3, 8},
-	{4, 16},
-	{5, 32},
-	{10, 64},
-	{11, 128},
-	{12, 256},
-	{13, 512},
-	{14, 1024},
-	{15, 2048},
+// buildBatchPattern generates a doubling schedule for the given number of
+// levels: batch i (1-indexed) funds 2^i wallets, each sender funding two
+// children. The batch number equals the level.
+func buildBatchPattern(levels int) []batchSpec {
+	pattern := make([]batchSpec, levels)
+	for i := 1; i <= levels; i++ {
+		pattern[i-1] = batchSpec{batchNumber: int64(i), funded: 1 << uint(i)}
+	}
+	return pattern
 }
 
 func main() {
-	if len(os.Args) != 3 && len(os.Args) != 4 {
-		fmt.Fprintf(os.Stderr, "usage: %s <input-wallet-path> <output-path> [wallet-password]\n", os.Args[0])
+	levels := flag.Int("levels", defaultLevels, "number of doubling batches (each sender funds 2 children per level)")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "usage: %s [-levels=N] <input-wallet-path> <output-path> [wallet-password]\n", os.Args[0])
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	args := flag.Args()
+	if len(args) != 2 && len(args) != 3 {
+		flag.Usage()
 		os.Exit(2)
 	}
-	inputWalletPath := os.Args[1]
-	outputPath := os.Args[2]
+	inputWalletPath := args[0]
+	outputPath := args[1]
+
+	if *levels < 1 || *levels > maxLevels {
+		fmt.Fprintf(os.Stderr, "error: levels must be between 1 and %d\n", maxLevels)
+		os.Exit(2)
+	}
 
 	// Accept the wallet password from the command line; otherwise prompt for it
 	// interactively (same approach as cmd/dputil).
 	var password string
-	if len(os.Args) == 4 {
-		password = os.Args[3]
+	if len(args) == 3 {
+		password = args[2]
 	} else {
 		pwd, err := prompt.Stdin.PromptPassword("Enter the wallet password : ")
 		if err != nil {
@@ -106,17 +122,17 @@ func main() {
 		password = pwd
 	}
 
-	if err := run(inputWalletPath, outputPath, password); err != nil {
+	if err := run(inputWalletPath, outputPath, password, *levels); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(inputWalletPath, outputPath, password string) error {
+func run(inputWalletPath, outputPath, password string, levels int) error {
 	// Select the network config (devnet via Q_DEFAULT_CONFIG=1) so the start
 	// block reflects the target network.
 	defaults.LoadDefaultConfig()
-	startBlock := defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock + 10
+	startBlock := uint64(200)
 
 	logf("Loading root wallet from %s", inputWalletPath)
 	rootKey, err := loadRootKey(inputWalletPath, password)
@@ -126,14 +142,11 @@ func run(inputWalletPath, outputPath, password string) error {
 	rootAddr := cryptobase.SigAlg.PublicKeyToAddressNoError(&rootKey.PublicKey)
 	logf("Root wallet loaded: %s", rootAddr.Hex())
 
-	if err := validatePattern(); err != nil {
-		return err
-	}
+	batchPattern := buildBatchPattern(levels)
 
 	// Compute per-level funding amounts bottom-up. need[i] is the amount a
 	// wallet at level i must receive so it can fund its two children plus gas.
-	// Levels are 1..len(batchPattern); level len is the leaf level.
-	levels := len(batchPattern)
+	// Levels are 1..levels; the last level is the leaf level.
 	gasWei := coins(gasBudgetCoins)
 	twoGasWei := new(big.Int).Mul(gasWei, big.NewInt(2))
 
@@ -220,7 +233,7 @@ func run(inputWalletPath, outputPath, password string) error {
 		return fmt.Errorf("failed to write %s: %w", outputPath, err)
 	}
 
-	printSummary(outputPath, startBlock, need, len(txns))
+	printSummary(outputPath, startBlock, batchPattern, need, len(txns))
 	return nil
 }
 
@@ -235,18 +248,6 @@ func loadRootKey(path, password string) (*signaturealgorithm.PrivateKey, error) 
 		return nil, err
 	}
 	return key.PrivateKey, nil
-}
-
-// validatePattern ensures the funded counts follow the doubling rule.
-func validatePattern() error {
-	prev := 1 // root level size
-	for _, spec := range batchPattern {
-		if spec.funded != prev*2 {
-			return fmt.Errorf("invalid batch pattern: batch %d funds %d wallets, expected %d (2x previous level)", spec.batchNumber, spec.funded, prev*2)
-		}
-		prev = spec.funded
-	}
-	return nil
 }
 
 // logf writes a timestamped progress line to stderr.
@@ -267,10 +268,11 @@ func weiToCoins(wei *big.Int) string {
 	return c.String()
 }
 
-func printSummary(outputPath string, startBlock uint64, need []*big.Int, totalTxns int) {
+func printSummary(outputPath string, startBlock uint64, batchPattern []batchSpec, need []*big.Int, totalTxns int) {
 	fmt.Printf("Wrote %s\n", outputPath)
 	fmt.Printf("  startBlockNumber: %d\n", startBlock)
 	fmt.Printf("  chainID:          %s\n", chainID.String())
+	fmt.Printf("  levels:           %d\n", len(batchPattern))
 	fmt.Printf("  totalTransactions:%d\n", totalTxns)
 	fmt.Printf("  leaf amount:      %d coins\n", int64(leafCoins))
 	fmt.Printf("  gas budget/txn:   %d coins\n", int64(gasBudgetCoins))
@@ -278,7 +280,7 @@ func printSummary(outputPath string, startBlock uint64, need []*big.Int, totalTx
 	fmt.Println("  per-batch funding (value sent to each funded wallet):")
 	for idx, spec := range batchPattern {
 		level := idx + 1
-		fmt.Printf("    batch %-2d: %5d txns, %s coins each\n", spec.batchNumber, spec.funded, weiToCoins(need[level]))
+		fmt.Printf("    batch %-3d: %8d txns, %s coins each\n", spec.batchNumber, spec.funded, weiToCoins(need[level]))
 	}
 
 	// Required root balance: root sends two transfers of need[1] plus gas.
