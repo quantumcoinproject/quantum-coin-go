@@ -21,11 +21,14 @@
 //
 // Usage:
 //
-//	txnhookgen [-levels=N] <input-wallet-path> <output-path> [wallet-password]
+//	txnhookgen -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N]
 //
-// -levels is the number of doubling batches (default 16). If the wallet
-// password is omitted, it is prompted for interactively. All other parameters
-// (chain id, amounts, gas, start block) are hardcoded below.
+// All flags accept either "-flag value" or "-flag=value". -wallet and -out are
+// required. -levels is the number of doubling batches (default 16). -startNonce
+// is the starting nonce for the root wallet's batch-1 transactions (default 0);
+// set it to the root account's current pending nonce when reusing a funded
+// wallet. If -password is omitted, it is prompted for interactively. All other
+// parameters (chain id, amounts, gas, start block) are hardcoded below.
 package main
 
 import (
@@ -88,47 +91,53 @@ func buildBatchPattern(levels int) []batchSpec {
 }
 
 func main() {
+	inputWalletPath := flag.String("wallet", "", "path to the funded root wallet keystore file (required)")
+	outputPath := flag.String("out", "", "path to write the generated hook JSON file (required)")
+	password := flag.String("password", "", "root wallet password (prompted interactively if omitted)")
+	passwordSet := false
 	levels := flag.Int("levels", defaultLevels, "number of doubling batches (each sender funds 2 children per level)")
+	startNonce := flag.Uint64("startNonce", 0, "starting nonce for the root wallet's batch-1 transactions (other wallets are fresh and start at 0)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: %s [-levels=N] <input-wallet-path> <output-path> [wallet-password]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "usage: %s -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "all flags accept either -flag value or -flag=value\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "password" {
+			passwordSet = true
+		}
+	})
 
-	args := flag.Args()
-	if len(args) != 2 && len(args) != 3 {
+	if *inputWalletPath == "" || *outputPath == "" {
 		flag.Usage()
 		os.Exit(2)
 	}
-	inputWalletPath := args[0]
-	outputPath := args[1]
 
 	if *levels < 1 || *levels > maxLevels {
 		fmt.Fprintf(os.Stderr, "error: levels must be between 1 and %d\n", maxLevels)
 		os.Exit(2)
 	}
 
-	// Accept the wallet password from the command line; otherwise prompt for it
+	// Use the password flag when provided; otherwise prompt for it
 	// interactively (same approach as cmd/dputil).
-	var password string
-	if len(args) == 3 {
-		password = args[2]
-	} else {
-		pwd, err := prompt.Stdin.PromptPassword("Enter the wallet password : ")
+	pwd := *password
+	if !passwordSet {
+		entered, err := prompt.Stdin.PromptPassword("Enter the wallet password : ")
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "error: failed to read password: %v\n", err)
 			os.Exit(1)
 		}
-		password = pwd
+		pwd = entered
 	}
 
-	if err := run(inputWalletPath, outputPath, password, *levels); err != nil {
+	if err := run(*inputWalletPath, *outputPath, pwd, *levels, *startNonce); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(inputWalletPath, outputPath, password string, levels int) error {
+func run(inputWalletPath, outputPath, password string, levels int, startNonce uint64) error {
 	// Select the network config (devnet via Q_DEFAULT_CONFIG=1) so the start
 	// block reflects the target network.
 	defaults.LoadDefaultConfig()
@@ -180,9 +189,17 @@ func run(inputWalletPath, outputPath, password string, levels int) error {
 		newWallets := make([]*signaturealgorithm.PrivateKey, 0, spec.funded)
 		// Log intra-batch progress roughly every ~10% for large batches.
 		progressStep := spec.funded / 10
+		// The root is the only sender of batch 1 (level 1) and is a reused,
+		// pre-funded account, so honor startNonce. Every other sender is a
+		// freshly created wallet whose on-chain nonce is 0.
+		baseNonce := uint64(0)
+		if idx == 0 {
+			baseNonce = startNonce
+		}
 		for _, sender := range senders {
-			// Each sender funds exactly two children, using nonces 0 and 1.
-			for nonce := uint64(0); nonce < 2; nonce++ {
+			// Each sender funds exactly two children, using consecutive nonces.
+			for j := uint64(0); j < 2; j++ {
+				nonce := baseNonce + j
 				childKey, err := cryptobase.SigAlg.GenerateKey()
 				if err != nil {
 					return fmt.Errorf("failed to generate wallet: %w", err)
@@ -233,7 +250,7 @@ func run(inputWalletPath, outputPath, password string, levels int) error {
 		return fmt.Errorf("failed to write %s: %w", outputPath, err)
 	}
 
-	printSummary(outputPath, startBlock, batchPattern, need, len(txns))
+	printSummary(outputPath, startBlock, startNonce, batchPattern, need, len(txns))
 	return nil
 }
 
@@ -268,10 +285,11 @@ func weiToCoins(wei *big.Int) string {
 	return c.String()
 }
 
-func printSummary(outputPath string, startBlock uint64, batchPattern []batchSpec, need []*big.Int, totalTxns int) {
+func printSummary(outputPath string, startBlock uint64, startNonce uint64, batchPattern []batchSpec, need []*big.Int, totalTxns int) {
 	fmt.Printf("Wrote %s\n", outputPath)
 	fmt.Printf("  startBlockNumber: %d\n", startBlock)
 	fmt.Printf("  chainID:          %s\n", chainID.String())
+	fmt.Printf("  rootStartNonce:   %d\n", startNonce)
 	fmt.Printf("  levels:           %d\n", len(batchPattern))
 	fmt.Printf("  totalTransactions:%d\n", totalTxns)
 	fmt.Printf("  leaf amount:      %d coins\n", int64(leafCoins))
