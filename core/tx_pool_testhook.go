@@ -24,6 +24,7 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -53,6 +54,10 @@ const (
 	// transaction status lookups, capping them at 3 per second so the hook does
 	// not overwhelm the node while checking commit status.
 	defaultTxnHookLookupInterval = time.Second / 10
+
+	// defaultTxnHookParallelism is the number of concurrent submitters used per
+	// batch when the input file does not specify a positive parallelism value.
+	defaultTxnHookParallelism = 4
 )
 
 // TxnTestTransaction is a single signed transaction entry in the hook input
@@ -68,6 +73,7 @@ type TxnTestTransaction struct {
 // submitting transactions; the hook waits until the chain head reaches it.
 type TxnTestTransactions struct {
 	StartBlockNumber int64                `json:"startBlockNumber"`
+	Parallelism      int                  `json:"parallelism"`
 	Transactions     []TxnTestTransaction `json:"transactions"`
 }
 
@@ -100,6 +106,10 @@ type txnTestHook struct {
 
 	batchNumbers []int64
 	batches      [][]*types.Transaction
+
+	// parallelism is the number of goroutines used to submit a single batch's
+	// transactions concurrently. Values <= 1 submit sequentially.
+	parallelism int
 
 	pollInterval time.Duration
 	batchTimeout time.Duration
@@ -148,11 +158,17 @@ func maybeStartTxnTestHook(pool *TxPool) {
 		startBlockNumber = uint64(txns.StartBlockNumber)
 	}
 
+	parallelism := txns.Parallelism
+	if parallelism <= 0 {
+		parallelism = defaultTxnHookParallelism
+	}
+
 	hook := &txnTestHook{
 		pool:             pool,
 		startBlockNumber: startBlockNumber,
 		batchNumbers:     batchNumbers,
 		batches:          batches,
+		parallelism:      parallelism,
 		pollInterval:     defaultTxnHookPollInterval,
 		batchTimeout:     defaultTxnHookBatchTimeout,
 		lookupInterval:   defaultTxnHookLookupInterval,
@@ -184,7 +200,7 @@ func (h *txnTestHook) run() {
 	defer signal.Stop(sigCh)
 
 	totalBatches := len(h.batches)
-	log.Info("Transaction test hook started", "batches", totalBatches, "startBlockNumber", h.startBlockNumber)
+	log.Info("Transaction test hook started", "batches", totalBatches, "startBlockNumber", h.startBlockNumber, "parallelism", h.parallelism)
 
 	// Hold off submitting until the chain head reaches the configured start
 	// block number.
@@ -213,15 +229,7 @@ func (h *txnTestHook) run() {
 			"txCount", len(batch))
 
 		batchStart := time.Now()
-		errs := h.pool.AddLocals(batch)
-		accepted := 0
-		for _, err := range errs {
-			if err == nil {
-				accepted++
-			} else {
-				log.Warn("Transaction test hook transaction rejected", "batchNumber", h.batchNumbers[i], "err", err)
-			}
-		}
+		accepted := h.submitBatch(batch, h.batchNumbers[i])
 
 		committed := h.waitForBatchCommit(batch, sigCh)
 		elapsed := time.Since(batchStart)
@@ -273,6 +281,62 @@ func (h *txnTestHook) run() {
 		"txCount", committedTxns,
 		"elapsed", totalElapsed,
 		"tps", overallTPS)
+}
+
+// submitBatch injects a batch's transactions into the pool, splitting the work
+// across h.parallelism goroutines. The expensive per-transaction signature
+// recovery in addTxs runs before the pool lock, so concurrent submitters speed
+// up the crypto-bound path while only the cheap locked insert serializes. It
+// uses AddRemotes (no journaling, no synchronous reorg wait) for speed and
+// returns the number of accepted transactions.
+func (h *txnTestHook) submitBatch(batch []*types.Transaction, batchNumber int64) int {
+	p := h.parallelism
+	if p < 1 {
+		p = 1
+	}
+	if p > len(batch) {
+		p = len(batch)
+	}
+
+	countAccepted := func(errs []error) int {
+		accepted := 0
+		for _, err := range errs {
+			if err == nil {
+				accepted++
+			} else {
+				log.Warn("Transaction test hook transaction rejected", "batchNumber", batchNumber, "err", err)
+			}
+		}
+		return accepted
+	}
+
+	if p <= 1 {
+		return countAccepted(h.pool.AddRemotes(batch))
+	}
+
+	chunkSize := (len(batch) + p - 1) / p
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		accepted int
+	)
+	for start := 0; start < len(batch); start += chunkSize {
+		end := start + chunkSize
+		if end > len(batch) {
+			end = len(batch)
+		}
+		chunk := batch[start:end]
+		wg.Add(1)
+		go func(chunk []*types.Transaction) {
+			defer wg.Done()
+			n := countAccepted(h.pool.AddRemotes(chunk))
+			mu.Lock()
+			accepted += n
+			mu.Unlock()
+		}(chunk)
+	}
+	wg.Wait()
+	return accepted
 }
 
 // waitForStartBlock blocks until the chain head reaches the configured start

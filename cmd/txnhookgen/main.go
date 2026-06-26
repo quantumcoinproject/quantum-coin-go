@@ -21,14 +21,15 @@
 //
 // Usage:
 //
-//	txnhookgen -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N]
+//	txnhookgen -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N] [-parallelism N]
 //
 // All flags accept either "-flag value" or "-flag=value". -wallet and -out are
 // required. -levels is the number of doubling batches (default 16). -startNonce
 // is the starting nonce for the root wallet's batch-1 transactions (default 0);
 // set it to the root account's current pending nonce when reusing a funded
-// wallet. If -password is omitted, it is prompted for interactively. All other
-// parameters (chain id, amounts, gas, start block) are hardcoded below.
+// wallet. -parallelism is the per-batch concurrent submitter count the hook uses
+// (default 4). If -password is omitted, it is prompted for interactively. All
+// other parameters (chain id, amounts, gas, start block) are hardcoded below.
 package main
 
 import (
@@ -64,6 +65,10 @@ const (
 	// -levels flag is not provided.
 	defaultLevels = 16
 
+	// defaultParallelism is the per-batch concurrent submitter count written
+	// into the hook file when the -parallelism flag is not provided.
+	defaultParallelism = 4
+
 	// maxLevels guards against absurd sizes / integer overflow (2^level).
 	maxLevels = 30
 )
@@ -97,8 +102,9 @@ func main() {
 	passwordSet := false
 	levels := flag.Int("levels", defaultLevels, "number of doubling batches (each sender funds 2 children per level)")
 	startNonce := flag.Uint64("startNonce", 0, "starting nonce for the root wallet's batch-1 transactions (other wallets are fresh and start at 0)")
+	parallelism := flag.Int("parallelism", defaultParallelism, "number of concurrent submitters the hook uses per batch")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: %s -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "usage: %s -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N] [-parallelism N]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "all flags accept either -flag value or -flag=value\n")
 		flag.PrintDefaults()
 	}
@@ -119,6 +125,11 @@ func main() {
 		os.Exit(2)
 	}
 
+	if *parallelism < 1 {
+		fmt.Fprintf(os.Stderr, "error: parallelism must be at least 1\n")
+		os.Exit(2)
+	}
+
 	// Use the password flag when provided; otherwise prompt for it
 	// interactively (same approach as cmd/dputil).
 	pwd := *password
@@ -131,13 +142,13 @@ func main() {
 		pwd = entered
 	}
 
-	if err := run(*inputWalletPath, *outputPath, pwd, *levels, *startNonce); err != nil {
+	if err := run(*inputWalletPath, *outputPath, pwd, *levels, *startNonce, *parallelism); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(inputWalletPath, outputPath, password string, levels int, startNonce uint64) error {
+func run(inputWalletPath, outputPath, password string, levels int, startNonce uint64, parallelism int) error {
 	// Select the network config (devnet via Q_DEFAULT_CONFIG=1) so the start
 	// block reflects the target network.
 	defaults.LoadDefaultConfig()
@@ -240,6 +251,7 @@ func run(inputWalletPath, outputPath, password string, levels int, startNonce ui
 
 	out := core.TxnTestTransactions{
 		StartBlockNumber: int64(startBlock),
+		Parallelism:      parallelism,
 		Transactions:     txns,
 	}
 	data, err := json.MarshalIndent(out, "", "  ")
@@ -250,7 +262,7 @@ func run(inputWalletPath, outputPath, password string, levels int, startNonce ui
 		return fmt.Errorf("failed to write %s: %w", outputPath, err)
 	}
 
-	printSummary(outputPath, startBlock, startNonce, batchPattern, need, len(txns))
+	printSummary(outputPath, startBlock, startNonce, parallelism, batchPattern, need, len(txns))
 	return nil
 }
 
@@ -285,11 +297,12 @@ func weiToCoins(wei *big.Int) string {
 	return c.String()
 }
 
-func printSummary(outputPath string, startBlock uint64, startNonce uint64, batchPattern []batchSpec, need []*big.Int, totalTxns int) {
+func printSummary(outputPath string, startBlock uint64, startNonce uint64, parallelism int, batchPattern []batchSpec, need []*big.Int, totalTxns int) {
 	fmt.Printf("Wrote %s\n", outputPath)
 	fmt.Printf("  startBlockNumber: %d\n", startBlock)
 	fmt.Printf("  chainID:          %s\n", chainID.String())
 	fmt.Printf("  rootStartNonce:   %d\n", startNonce)
+	fmt.Printf("  parallelism:      %d\n", parallelism)
 	fmt.Printf("  levels:           %d\n", len(batchPattern))
 	fmt.Printf("  totalTransactions:%d\n", totalTxns)
 	fmt.Printf("  leaf amount:      %d coins\n", int64(leafCoins))
