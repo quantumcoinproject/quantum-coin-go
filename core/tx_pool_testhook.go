@@ -48,7 +48,7 @@ const (
 
 	// defaultTxnHookBatchTimeout is the maximum time the hook waits for a single
 	// batch to commit before giving up.
-	defaultTxnHookBatchTimeout = 10 * time.Minute
+	defaultTxnHookBatchTimeout = 20 * time.Minute
 
 	// defaultTxnHookLookupInterval is the minimum spacing between individual
 	// transaction status lookups, capping them at 3 per second so the hook does

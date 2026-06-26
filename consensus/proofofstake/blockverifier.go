@@ -937,8 +937,9 @@ func VerifyBlockProposalTime(blockNumber uint64, proposedTime uint64) bool {
 			return true
 		}
 
+		g := GetBlockTimeGranularity(blockNumber)
 		tm := time.Unix(int64(proposedTime), 0)
-		if tm.Second() != 0 || tm.Nanosecond() != 0 { //No granularity at anything other than minute level allowed, to reduce ability to manipulate blockHash
+		if int64(tm.Second())%g != 0 || tm.Nanosecond() != 0 { //No granularity finer than the allowed level (60s or 6s), to reduce ability to manipulate blockHash
 			log.Warn("VerifyBlockProposalTime granularity issue", "second", tm.Second(), "nanosecond", tm.Nanosecond())
 			return false
 		}

@@ -21,15 +21,17 @@
 //
 // Usage:
 //
-//	txnhookgen -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N] [-parallelism N]
+//	txnhookgen -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N] [-parallelism N] [-startBlock N]
 //
 // All flags accept either "-flag value" or "-flag=value". -wallet and -out are
 // required. -levels is the number of doubling batches (default 16). -startNonce
 // is the starting nonce for the root wallet's batch-1 transactions (default 0);
 // set it to the root account's current pending nonce when reusing a funded
 // wallet. -parallelism is the per-batch concurrent submitter count the hook uses
-// (default 4). If -password is omitted, it is prompted for interactively. All
-// other parameters (chain id, amounts, gas, start block) are hardcoded below.
+// (default 4). -startBlock is the block height written as startBlockNumber that
+// the hook waits for before submitting (default 100). If -password is omitted,
+// it is prompted for interactively. All other parameters (chain id, amounts,
+// gas) are hardcoded below.
 package main
 
 import (
@@ -69,6 +71,10 @@ const (
 	// into the hook file when the -parallelism flag is not provided.
 	defaultParallelism = 4
 
+	// defaultStartBlock is the startBlockNumber written into the hook file when
+	// the -startBlock flag is not provided.
+	defaultStartBlock = 100
+
 	// maxLevels guards against absurd sizes / integer overflow (2^level).
 	maxLevels = 30
 )
@@ -103,8 +109,9 @@ func main() {
 	levels := flag.Int("levels", defaultLevels, "number of doubling batches (each sender funds 2 children per level)")
 	startNonce := flag.Uint64("startNonce", 0, "starting nonce for the root wallet's batch-1 transactions (other wallets are fresh and start at 0)")
 	parallelism := flag.Int("parallelism", defaultParallelism, "number of concurrent submitters the hook uses per batch")
+	startBlock := flag.Uint64("startBlock", defaultStartBlock, "block number written as startBlockNumber; the hook waits for this height before submitting")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: %s -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N] [-parallelism N]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "usage: %s -wallet <path> -out <path> [-password <pwd>] [-levels N] [-startNonce N] [-parallelism N] [-startBlock N]\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "all flags accept either -flag value or -flag=value\n")
 		flag.PrintDefaults()
 	}
@@ -142,17 +149,16 @@ func main() {
 		pwd = entered
 	}
 
-	if err := run(*inputWalletPath, *outputPath, pwd, *levels, *startNonce, *parallelism); err != nil {
+	if err := run(*inputWalletPath, *outputPath, pwd, *levels, *startNonce, *parallelism, *startBlock); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(inputWalletPath, outputPath, password string, levels int, startNonce uint64, parallelism int) error {
-	// Select the network config (devnet via Q_DEFAULT_CONFIG=1) so the start
-	// block reflects the target network.
+func run(inputWalletPath, outputPath, password string, levels int, startNonce uint64, parallelism int, startBlock uint64) error {
+	// Select the network config (devnet via Q_DEFAULT_CONFIG=1) so signing and
+	// related parameters reflect the target network.
 	defaults.LoadDefaultConfig()
-	startBlock := uint64(200)
 
 	logf("Loading root wallet from %s", inputWalletPath)
 	rootKey, err := loadRootKey(inputWalletPath, password)
