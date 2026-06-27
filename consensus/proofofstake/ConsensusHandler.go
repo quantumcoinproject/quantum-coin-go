@@ -1877,14 +1877,22 @@ func Elapsed(startTime time.Time) int64 {
 	return diff
 }
 
+func GetBlockTimeGranularity(blockNumber uint64) int64 {
+	if blockNumber >= defaults.DefaultConfig.PosConfig.SixSecondBlockTimeStartBlock {
+		return 6
+	}
+	return 60
+}
+
 func GetProposalTime(blockNumber uint64) uint64 {
 	if blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK {
-		blockTime := uint64(time.Now().UTC().Unix())
-		if blockTime%60 != 0 {
-			blockTime = blockTime - (blockTime % 60)
+		blockTime := int64(time.Now().UTC().Unix())
+		g := GetBlockTimeGranularity(blockNumber)
+		if blockTime%g != 0 {
+			blockTime = blockTime - (blockTime % g)
 		}
 
-		return blockTime
+		return uint64(blockTime)
 	} else {
 		return 0
 	}
@@ -1897,14 +1905,15 @@ func VerifyBlockProposalTimeConsensus(blockNumber uint64, proposedTime uint64) b
 			return false
 		}
 
+		g := GetBlockTimeGranularity(blockNumber)
 		tm := time.Unix(int64(proposedTime), 0)
-		if tm.Second() != 0 || tm.Nanosecond() != 0 { //No granularity at anything other than minute level allowed, to reduce ability to manipulate blockHash
+		if int64(tm.Second())%g != 0 || tm.Nanosecond() != 0 { //No granularity finer than the allowed level (60s or 6s), to reduce ability to manipulate blockHash
 			log.Debug("VerifyBlockProposalTimeConsensus false case 2", "blockNumber", blockNumber, "proposedTime", proposedTime)
 			return false
 		}
 		currTimeVal := time.Now().UTC().Unix() //Note that packet may have arrived late. So, these comparisions are approximate.
-		if currTimeVal%60 != 0 {
-			currTimeVal = currTimeVal - (currTimeVal % 60)
+		if currTimeVal%g != 0 {
+			currTimeVal = currTimeVal - (currTimeVal % g)
 		}
 		currTime := time.Unix(currTimeVal, 0)
 

@@ -104,6 +104,11 @@ type ProofOfStakeConfig struct {
 
 	SystemContractV3StartBlock uint64
 
+	// SixSecondBlockTimeStartBlock activates 6-second proposal-time granularity
+	// (was 60s). Consensus-affecting: GetProposalTime, VerifyBlockProposalTime,
+	// and VerifyBlockProposalTimeConsensus all change behavior at this height.
+	SixSecondBlockTimeStartBlock uint64
+
 	VALIDATOR_NIL_BLOCK_START_BLOCK      uint64
 	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK uint64
 
@@ -158,10 +163,10 @@ type ProofOfStakeConfig struct {
 }
 
 type Config struct {
-	PosConfig               *ProofOfStakeConfig
-	DeepCheckStartBlock     uint64
-	GasPriceStartBlock      uint64
-	DefaultGasLimit         uint64
+	PosConfig           *ProofOfStakeConfig
+	DeepCheckStartBlock uint64
+	GasPriceStartBlock  uint64
+	DefaultGasLimit     uint64
 	// BreakglassDefaultGasLimit is the reduced maximum block gas limit enforced while
 	// breakglass mode is active.
 	BreakglassDefaultGasLimit uint64
@@ -224,6 +229,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 
 	SystemContractV3StartBlock: 5319258,
 
+	SixSecondBlockTimeStartBlock: 5319268,
+
 	ConsensusMalleabilityV1StartBlock: 0,
 }
 
@@ -248,37 +255,39 @@ var devnetPosConfig = ProofOfStakeConfig{
 	CONTEXT_BASED_START_BLOCK:     uint64(32),
 	CONTEXT_BASED_BLOCK_THRESHOLD: uint64(4),
 	BLOCK_TIME_ORIG_START_BLOCK:   uint64(33),
-	PACKET_PROTOCOL_START_BLOCK:   uint64(65),
+	PACKET_PROTOCOL_START_BLOCK:   uint64(36),
 
-	PROPOSAL_TIME_HASH_START_BLOCK:        uint64(64),
-	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK: uint64(64),
+	PROPOSAL_TIME_HASH_START_BLOCK:        uint64(38),
+	BLOCK_PROPOSER_OFFLINE_V2_START_BLOCK: uint64(38),
 
 	//Note: both of the below should add upto 100
-	TxnFeeRewardsPercentage: int64(50),
+	TxnFeeRewardsPercentage: int64(40),
 
-	SixtyVoteStartBlock: uint64(64),
+	SixtyVoteStartBlock: uint64(42),
 
-	SlashV2StartBlock:               uint64(90),
-	OfflineValidatorDeferStartBlock: 100,
+	SlashV2StartBlock:               uint64(44),
+	OfflineValidatorDeferStartBlock: 46,
 
-	SixtySevenVoteStartBlock: uint64(110),
+	SixtySevenVoteStartBlock: uint64(48),
 
-	OfflineValidatorV4StartBlock: 120,
+	OfflineValidatorV4StartBlock: 50,
 
-	SigAlgSwitchBlock: 122,
+	SigAlgSwitchBlock: 52,
 
 	MinOfflineProposerBlockDelay: 3600,
 
-	DynamicFeeTxStartBlock:     132,
+	DynamicFeeTxStartBlock:     58,
 	SkipProposerStartBlock:     0,
 	SkipProposerEndBlock:       0,
-	ExtraDataV3StartBlock:      142,
-	Normalizationv2StartBlock:  152,
-	ValidatorCountV2StartBlock: 162,
-	GasV2StartBlock:            172,
-	GasTipStartBlock:           182,
+	ExtraDataV3StartBlock:      64,
+	Normalizationv2StartBlock:  66,
+	ValidatorCountV2StartBlock: 68,
+	GasV2StartBlock:            70,
+	GasTipStartBlock:           72,
 
-	SystemContractV3StartBlock: 192,
+	SystemContractV3StartBlock: 74,
+
+	SixSecondBlockTimeStartBlock: 76,
 
 	ConsensusMalleabilityV1StartBlock: 0,
 }
@@ -296,9 +305,14 @@ var MainnetConfig = &Config{
 }
 
 var DevnetConfig = &Config{
-	PosConfig:                 &devnetPosConfig,
-	DeepCheckStartBlock:       uint64(130),
-	GasPriceStartBlock:        uint64(131),
+	PosConfig: &devnetPosConfig,
+	// DeepCheckStartBlock must stay <= PosConfig.ExtraDataV3StartBlock (and >= SigAlgSwitchBlock),
+	// matching mainnet ordering, so the Extra-data produce gate (Finalize, >= DeepCheckStartBlock)
+	// and verify gate (VerifyExtraData, >= ExtraDataV3StartBlock) stay aligned. Otherwise blocks in
+	// [ExtraDataV3StartBlock, DeepCheckStartBlock) are sealed with empty Extra but verified as v3,
+	// producing "DecodeBlockExtraData v3 error=EOF" BAD BLOCKs.
+	DeepCheckStartBlock:       uint64(54),
+	GasPriceStartBlock:        uint64(56),
 	DefaultGasLimit:           300000000,
 	BreakglassDefaultGasLimit: 30000000,
 	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM

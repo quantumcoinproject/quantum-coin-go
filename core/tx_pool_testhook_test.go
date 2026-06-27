@@ -484,3 +484,55 @@ func TestTxnTestHookEnvActivation(t *testing.T) {
 		t.Fatalf("hook decoded transaction incorrectly")
 	}
 }
+
+// TestTxnTestHookParallelSubmit verifies that a batch is submitted concurrently
+// across multiple goroutines (parallelism > 1) with every transaction landing
+// in the pool and the batch reported as committed.
+func TestTxnTestHookParallelSubmit(t *testing.T) {
+	pool, key, bc := setupTxnHookPool(t)
+	defer pool.Stop()
+
+	// A single batch of 8 transactions submitted with parallelism 4.
+	txs := make([]*types.Transaction, 8)
+	for i := range txs {
+		txs[i] = signedTxWithNonce(t, pool, key, uint64(i))
+	}
+
+	hook := &txnTestHook{
+		pool:         pool,
+		parallelism:  4,
+		batchNumbers: []int64{0},
+		batches:      [][]*types.Transaction{txs},
+		pollInterval: 5 * time.Millisecond,
+		batchTimeout: 5 * time.Second,
+		quit:         make(chan struct{}),
+		progress:     make(chan txnTestBatchResult, 1),
+	}
+	pool.txnHook = hook
+	go hook.run()
+
+	// All transactions in the batch must reach the pool.
+	for i, tx := range txs {
+		txHash := tx.Hash()
+		if !waitFor(t, 2*time.Second, func() bool { return pool.Get(txHash) != nil }) {
+			t.Fatalf("transaction %d was not submitted to the pool", i)
+		}
+	}
+
+	bc.markCommitted(txs...)
+
+	select {
+	case res := <-hook.progress:
+		if !res.Committed {
+			t.Fatalf("batch reported as not committed")
+		}
+		if res.Count != len(txs) {
+			t.Fatalf("batch reported count %d, want %d", res.Count, len(txs))
+		}
+		if res.Accepted != len(txs) {
+			t.Fatalf("batch reported %d accepted, want %d", res.Accepted, len(txs))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for batch progress")
+	}
+}
