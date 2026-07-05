@@ -72,15 +72,9 @@ func main() {
 	js.Global().Set("TxnSigningHash", js.FuncOf(TxnSigningHash))
 	js.Global().Set("TxnHash", js.FuncOf(TxnHash))
 	js.Global().Set("TxnData", js.FuncOf(TxnData))
-	js.Global().Set("ContractData", js.FuncOf(ContractData))
-	js.Global().Set("TokenTransfer", js.FuncOf(TokenTransfer))
 	js.Global().Set("KeyPairToWalletJson", js.FuncOf(KeyPairToWalletJson))
 	js.Global().Set("JsonToWalletKeyPair", js.FuncOf(JsonToWalletKeyPair))
-	js.Global().Set("ParseBigFloat", js.FuncOf(ParseBigFloat))
 	js.Global().Set("IsValidAddress", js.FuncOf(IsValidAddress))
-	js.Global().Set("SingleAddressArgumentMethod", js.FuncOf(SingleAddressArgumentMethod))
-	js.Global().Set("SingleAmountArgumentMethod", js.FuncOf(SingleAmountArgumentMethod))
-	js.Global().Set("NoArgumentMethod", js.FuncOf(NoArgumentMethod))
 	js.Global().Set("PublicKeyFromSignature", js.FuncOf(PublicKeyFromSignature))
 	js.Global().Set("PublicKeyFromPrivateKey", js.FuncOf(PublicKeyFromPrivateKey))
 	js.Global().Set("CombinePublicKeySignature", js.FuncOf(CombinePublicKeySignature))
@@ -543,68 +537,6 @@ func TxnData2(this js.Value, args []js.Value) interface{} {
 	return jsResult(signTxEncode)
 }
 
-func ContractData(this js.Value, args []js.Value) interface{} {
-	method := args[0].String()
-
-	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
-
-	if err != nil {
-		return nil
-	}
-
-	arguments := make([]interface{}, 0, len(args)-2)
-	for _, i := range args[2:] {
-		arguments = append(arguments, i.String())
-	}
-
-	data, err := abiData.Pack(method, arguments...)
-	if err != nil {
-		return nil
-	}
-
-	var d strings.Builder
-	for i := 0; i < len(data); i++ {
-		sh := data[i]
-		d.WriteString(string(sh))
-	}
-
-	return d.String()
-}
-
-func TokenTransfer(this js.Value, args []js.Value) interface{} {
-	method := args[0].String()
-
-	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
-	if err != nil {
-		return nil
-	}
-
-	var ethVal *big.Float
-	var weiVal *big.Int
-	ethVal, err = ParseBigFloatInner(args[3].String())
-	if err != nil {
-		return nil
-	}
-	weiVal = etherToWeiFloat(ethVal)
-
-	arguments := make([]interface{}, 0, 2)
-	arguments = append(arguments, common.HexToAddress(args[2].String()))
-	arguments = append(arguments, weiVal)
-
-	data, err := abiData.Pack(method, arguments...)
-	if err != nil {
-		return nil
-	}
-
-	var d strings.Builder
-	for i := 0; i < len(data); i++ {
-		sh := data[i]
-		d.WriteString(string(sh))
-	}
-
-	return d.String()
-}
-
 func KeyPairToWalletJson(this js.Value, args []js.Value) interface{} {
 	privData := js.Global().Get("Uint8Array").New(args[0])
 	privBytes := make([]byte, privData.Get("length").Int())
@@ -696,20 +628,6 @@ func EncryptPreExpansionSeedWrapper(this js.Value, args []js.Value) interface{} 
 		return js.Global().Get("Error").New(err.Error())
 	}
 	return string(walletJson)
-}
-
-// ParseBigFloat parse string value to big.Float
-func ParseBigFloat(this js.Value, args []js.Value) interface{} {
-	var value string
-	value = args[0].String()
-	f := new(big.Float)
-	f.SetPrec(236)
-	f.SetMode(big.ToNearestEven)
-	_, err := fmt.Sscan(value, f)
-	if err != nil {
-		return nil
-	}
-	return f.String()
 }
 
 func ParseBigFloatInner(value string) (*big.Float, error) {
@@ -859,10 +777,6 @@ func signTxHash(tx *core.Transaction, signer core.Signer, pubBytes, sigBytes []b
 	return tx.WithSignature(signer, sig)
 }
 
-func weiToEther(val *big.Int) *big.Int {
-	return new(big.Int).Div(val, big.NewInt(params.Ether))
-}
-
 func etherToWeiFloat(eth *big.Float) *big.Int {
 	truncInt, _ := eth.Int(nil)
 	truncInt = new(big.Int).Mul(truncInt, big.NewInt(params.Ether))
@@ -871,89 +785,6 @@ func etherToWeiFloat(eth *big.Float) *big.Int {
 	fracInt, _ := new(big.Int).SetString(fracStr, 10)
 	wei := new(big.Int).Add(truncInt, fracInt)
 	return wei
-}
-
-func SingleAddressArgumentMethod(this js.Value, args []js.Value) interface{} {
-	if len(args) != 3 {
-		return nil
-	}
-	method := args[0].String()
-
-	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
-	if err != nil {
-		return nil
-	}
-
-	arguments := make([]interface{}, 0)
-	arguments = append(arguments, common.HexToAddress(args[2].String()))
-
-	data, err := abiData.Pack(method, arguments...)
-	if err != nil {
-		return nil
-	}
-
-	var d strings.Builder
-	for i := 0; i < len(data); i++ {
-		sh := data[i]
-		d.WriteString(string(sh))
-	}
-
-	return d.String()
-}
-
-func SingleAmountArgumentMethod(this js.Value, args []js.Value) interface{} {
-	method := args[0].String()
-
-	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
-	if err != nil {
-		return nil
-	}
-
-	var ethVal *big.Float
-	var weiVal *big.Int
-	ethVal, err = ParseBigFloatInner(args[2].String())
-	if err != nil {
-		return nil
-	}
-	weiVal = etherToWeiFloat(ethVal)
-
-	arguments := make([]interface{}, 0, 1)
-	arguments = append(arguments, weiVal)
-
-	data, err := abiData.Pack(method, arguments...)
-	if err != nil {
-		return nil
-	}
-
-	var d strings.Builder
-	for i := 0; i < len(data); i++ {
-		sh := data[i]
-		d.WriteString(string(sh))
-	}
-
-	return d.String()
-}
-
-func NoArgumentMethod(this js.Value, args []js.Value) interface{} {
-	method := args[0].String()
-
-	abiData, err := abi.JSON(strings.NewReader((args[1].String())))
-	if err != nil {
-		return nil
-	}
-
-	data, err := abiData.Pack(method)
-	if err != nil {
-		return nil
-	}
-
-	var d strings.Builder
-	for i := 0; i < len(data); i++ {
-		sh := data[i]
-		d.WriteString(string(sh))
-	}
-
-	return d.String()
 }
 
 // PackMethodData packs a Solidity method call with the given ABI, method name, and arguments.

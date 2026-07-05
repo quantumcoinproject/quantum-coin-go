@@ -30,7 +30,7 @@ jobs:
         export CGO_ENABLED=1
         export GOOS=js
         export GOARCH=wasm
-        go build -o ${{ github.workspace }}/build/wasm/libgodp.wasm ${{ github.workspace }}/wasm/web/main.go
+        go build -trimpath -ldflags "-s -w" -o ${{ github.workspace }}/build/wasm/libgodp.wasm ${{ github.workspace }}/wasm/web/main.go
     - name: Check Files
       run:  ls  ${{ github.workspace }}/build
     - name: Create Release
