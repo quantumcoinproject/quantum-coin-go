@@ -99,6 +99,7 @@ func main() {
 	js.Global().Set("EncryptPreExpansionSeed", js.FuncOf(EncryptPreExpansionSeedWrapper))
 	js.Global().Set("Sha256", js.FuncOf(Sha256))
 	js.Global().Set("Sha512", js.FuncOf(Sha512))
+	js.Global().Set("Keccak256", js.FuncOf(Keccak256))
 	js.Global().Set("Ripemd160", js.FuncOf(Ripemd160))
 	js.Global().Set("ComputeHmac", js.FuncOf(ComputeHmac))
 	js.Global().Set("Pbkdf2", js.FuncOf(Pbkdf2))
@@ -159,6 +160,11 @@ func sha256Bytes(data []byte) []byte {
 func sha512Bytes(data []byte) []byte {
 	sum := sha512.Sum512(data)
 	return sum[:]
+}
+
+// keccak256Bytes returns the 32-byte Keccak-256 digest of data.
+func keccak256Bytes(data []byte) []byte {
+	return crypto.Keccak256(data)
 }
 
 // ripemd160Bytes returns the RIPEMD-160 digest of data.
@@ -273,6 +279,18 @@ func Sha512(this js.Value, args []js.Value) interface{} {
 		return js.Global().Get("Error").New("Sha512: " + err.Error())
 	}
 	return base64.StdEncoding.EncodeToString(sha512Bytes(data))
+}
+
+// Keccak256 returns base64(Keccak-256(data)). Arg: (dataBase64).
+func Keccak256(this js.Value, args []js.Value) interface{} {
+	if len(args) != 1 {
+		return js.Global().Get("Error").New("Keccak256: expected 1 argument (data)")
+	}
+	data, err := decodeBase64Arg(args[0])
+	if err != nil {
+		return js.Global().Get("Error").New("Keccak256: " + err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(keccak256Bytes(data))
 }
 
 // Ripemd160 returns base64(RIPEMD-160(data)). Arg: (dataBase64).
