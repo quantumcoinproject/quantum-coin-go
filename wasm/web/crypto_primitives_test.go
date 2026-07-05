@@ -22,6 +22,7 @@ import (
 	"hash"
 	"testing"
 
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/crypto/ripemd160"
 	"golang.org/x/crypto/scrypt"
@@ -42,6 +43,8 @@ func hashConstructorForTest(alg string) (func() hash.Hash, error) {
 
 func sha256BytesForTest(data []byte) []byte { s := sha256.Sum256(data); return s[:] }
 func sha512BytesForTest(data []byte) []byte { s := sha512.Sum512(data); return s[:] }
+
+func keccak256BytesForTest(data []byte) []byte { return crypto.Keccak256(data) }
 
 func ripemd160BytesForTest(data []byte) []byte {
 	h := ripemd160.New()
@@ -122,6 +125,28 @@ func TestSha512KnownAnswers(t *testing.T) {
 	}
 	if !bytes.Equal(got, sha512BytesForTest([]byte("abc"))) {
 		t.Fatal("sha512 not deterministic")
+	}
+}
+
+// ---- Keccak-256 (Ethereum-style, not SHA3-256) ----
+
+func TestKeccak256KnownAnswers(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"", "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"},
+		{"abc", "4e03657aea45a94fc7d47ba826c8d667c0d1e6e33a64a036ec44f58fa12d6c45"},
+	}
+	for _, c := range cases {
+		got := keccak256BytesForTest([]byte(c.in))
+		if !bytes.Equal(got, mustHex(t, c.want)) {
+			t.Fatalf("keccak256(%q) = %x, want %s", c.in, got, c.want)
+		}
+		if len(got) != 32 {
+			t.Fatalf("keccak256(%q) length = %d, want 32", c.in, len(got))
+		}
+		// determinism / repeatability
+		if !bytes.Equal(got, keccak256BytesForTest([]byte(c.in))) {
+			t.Fatalf("keccak256(%q) not deterministic", c.in)
+		}
 	}
 }
 
