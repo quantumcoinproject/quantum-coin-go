@@ -4,10 +4,14 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash"
 	"math/big"
 	"reflect"
 	"strconv"
@@ -26,6 +30,8 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/signaturealgorithm"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
+	"golang.org/x/crypto/pbkdf2"
+	"golang.org/x/crypto/ripemd160"
 	"golang.org/x/crypto/scrypt"
 )
 
@@ -91,6 +97,11 @@ func main() {
 	js.Global().Set("TxnHash2", js.FuncOf(TxnHash2))
 	js.Global().Set("TxnData2", js.FuncOf(TxnData2))
 	js.Global().Set("EncryptPreExpansionSeed", js.FuncOf(EncryptPreExpansionSeedWrapper))
+	js.Global().Set("Sha256", js.FuncOf(Sha256))
+	js.Global().Set("Sha512", js.FuncOf(Sha512))
+	js.Global().Set("Ripemd160", js.FuncOf(Ripemd160))
+	js.Global().Set("ComputeHmac", js.FuncOf(ComputeHmac))
+	js.Global().Set("Pbkdf2", js.FuncOf(Pbkdf2))
 	circlwasm.Register()
 	<-done
 }
@@ -132,20 +143,198 @@ func PackCreateContractDataWrapper(this js.Value, args []js.Value) interface{} {
 	return PackCreateContractData(abiJSON, bytecode, constructorArgs)
 }
 
+// maxScryptN bounds the scrypt CPU/memory cost parameter to avoid exhausting
+// WASM linear memory. 2^21 comfortably covers the standard 262144 (2^18) set.
+const maxScryptN = 1 << 21
+
+// ---- List-B crypto helpers (pure Go, unit-testable under the !js build) ----
+
+// sha256Bytes returns the SHA-256 digest of data.
+func sha256Bytes(data []byte) []byte {
+	sum := sha256.Sum256(data)
+	return sum[:]
+}
+
+// sha512Bytes returns the SHA-512 digest of data.
+func sha512Bytes(data []byte) []byte {
+	sum := sha512.Sum512(data)
+	return sum[:]
+}
+
+// ripemd160Bytes returns the RIPEMD-160 digest of data.
+func ripemd160Bytes(data []byte) []byte {
+	h := ripemd160.New()
+	h.Write(data)
+	return h.Sum(nil)
+}
+
+// hashConstructor maps a supported algorithm name to a hash.Hash factory.
+func hashConstructor(alg string) (func() hash.Hash, error) {
+	switch alg {
+	case "sha256":
+		return sha256.New, nil
+	case "sha512":
+		return sha512.New, nil
+	default:
+		return nil, fmt.Errorf("unsupported hash algorithm: %q", alg)
+	}
+}
+
+// hmacBytes computes HMAC(alg, key, data) for a supported alg.
+func hmacBytes(alg string, key, data []byte) ([]byte, error) {
+	newHash, err := hashConstructor(alg)
+	if err != nil {
+		return nil, err
+	}
+	mac := hmac.New(newHash, key)
+	mac.Write(data)
+	return mac.Sum(nil), nil
+}
+
+// pbkdf2Bytes derives a key using PBKDF2 with the given HMAC hash.
+func pbkdf2Bytes(password, salt []byte, iterations, keyLen int, alg string) ([]byte, error) {
+	if iterations <= 0 {
+		return nil, errors.New("pbkdf2: iterations must be positive")
+	}
+	if keyLen <= 0 {
+		return nil, errors.New("pbkdf2: keyLen must be positive")
+	}
+	newHash, err := hashConstructor(alg)
+	if err != nil {
+		return nil, err
+	}
+	return pbkdf2.Key(password, salt, iterations, keyLen, newHash), nil
+}
+
+// scryptBytes derives a key using scrypt with arbitrary (validated) params.
+func scryptBytes(secret, salt []byte, N, r, p, dkLen int) ([]byte, error) {
+	if N <= 0 || r <= 0 || p <= 0 || dkLen <= 0 {
+		return nil, errors.New("scrypt: N, r, p and dkLen must be positive")
+	}
+	if N > maxScryptN {
+		return nil, fmt.Errorf("scrypt: N too large (max %d)", maxScryptN)
+	}
+	return scrypt.Key(secret, salt, N, r, p, dkLen)
+}
+
+// decodeBase64Arg reads a JS string argument and base64-decodes it to bytes.
+func decodeBase64Arg(arg js.Value) ([]byte, error) {
+	if arg.Type() != js.TypeString {
+		return nil, errors.New("expected a base64 string argument")
+	}
+	return base64.StdEncoding.DecodeString(arg.String())
+}
+
+// Scrypt derives a key using scrypt. Args: (secretBase64, saltBase64, N, r, p, dkLen).
+// Returns the derived key as a base64 string, or a JS Error on invalid input.
 func Scrypt(this js.Value, args []js.Value) interface{} {
-	secret := args[0].String()
-
-	salt, err := base64.StdEncoding.DecodeString(args[1].String())
-	if err != nil {
-		return nil
+	if len(args) != 6 {
+		return js.Global().Get("Error").New("Scrypt: expected 6 arguments (secret, salt, N, r, p, dkLen)")
 	}
-
-	derivedKey, err := scrypt.Key([]byte(secret), salt, 262144, 8, 1, 32)
+	secret, err := decodeBase64Arg(args[0])
 	if err != nil {
-		return nil
+		return js.Global().Get("Error").New("Scrypt: " + err.Error())
 	}
-
+	salt, err := decodeBase64Arg(args[1])
+	if err != nil {
+		return js.Global().Get("Error").New("Scrypt: " + err.Error())
+	}
+	for i := 2; i < 6; i++ {
+		if args[i].Type() != js.TypeNumber {
+			return js.Global().Get("Error").New("Scrypt: N, r, p and dkLen must be numbers")
+		}
+	}
+	derivedKey, err := scryptBytes(secret, salt, args[2].Int(), args[3].Int(), args[4].Int(), args[5].Int())
+	if err != nil {
+		return js.Global().Get("Error").New("Scrypt: " + err.Error())
+	}
 	return base64.StdEncoding.EncodeToString(derivedKey)
+}
+
+// Sha256 returns base64(SHA-256(data)). Arg: (dataBase64).
+func Sha256(this js.Value, args []js.Value) interface{} {
+	if len(args) != 1 {
+		return js.Global().Get("Error").New("Sha256: expected 1 argument (data)")
+	}
+	data, err := decodeBase64Arg(args[0])
+	if err != nil {
+		return js.Global().Get("Error").New("Sha256: " + err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(sha256Bytes(data))
+}
+
+// Sha512 returns base64(SHA-512(data)). Arg: (dataBase64).
+func Sha512(this js.Value, args []js.Value) interface{} {
+	if len(args) != 1 {
+		return js.Global().Get("Error").New("Sha512: expected 1 argument (data)")
+	}
+	data, err := decodeBase64Arg(args[0])
+	if err != nil {
+		return js.Global().Get("Error").New("Sha512: " + err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(sha512Bytes(data))
+}
+
+// Ripemd160 returns base64(RIPEMD-160(data)). Arg: (dataBase64).
+func Ripemd160(this js.Value, args []js.Value) interface{} {
+	if len(args) != 1 {
+		return js.Global().Get("Error").New("Ripemd160: expected 1 argument (data)")
+	}
+	data, err := decodeBase64Arg(args[0])
+	if err != nil {
+		return js.Global().Get("Error").New("Ripemd160: " + err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(ripemd160Bytes(data))
+}
+
+// ComputeHmac returns base64(HMAC(alg, key, data)). Args: (alg, keyBase64, dataBase64).
+func ComputeHmac(this js.Value, args []js.Value) interface{} {
+	if len(args) != 3 {
+		return js.Global().Get("Error").New("ComputeHmac: expected 3 arguments (alg, key, data)")
+	}
+	if args[0].Type() != js.TypeString {
+		return js.Global().Get("Error").New("ComputeHmac: alg must be a string")
+	}
+	key, err := decodeBase64Arg(args[1])
+	if err != nil {
+		return js.Global().Get("Error").New("ComputeHmac: " + err.Error())
+	}
+	data, err := decodeBase64Arg(args[2])
+	if err != nil {
+		return js.Global().Get("Error").New("ComputeHmac: " + err.Error())
+	}
+	out, err := hmacBytes(args[0].String(), key, data)
+	if err != nil {
+		return js.Global().Get("Error").New("ComputeHmac: " + err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(out)
+}
+
+// Pbkdf2 returns base64(PBKDF2(password, salt, iterations, keylen, alg)).
+// Args: (passwordBase64, saltBase64, iterations, keylen, alg).
+func Pbkdf2(this js.Value, args []js.Value) interface{} {
+	if len(args) != 5 {
+		return js.Global().Get("Error").New("Pbkdf2: expected 5 arguments (password, salt, iterations, keylen, alg)")
+	}
+	password, err := decodeBase64Arg(args[0])
+	if err != nil {
+		return js.Global().Get("Error").New("Pbkdf2: " + err.Error())
+	}
+	salt, err := decodeBase64Arg(args[1])
+	if err != nil {
+		return js.Global().Get("Error").New("Pbkdf2: " + err.Error())
+	}
+	if args[2].Type() != js.TypeNumber || args[3].Type() != js.TypeNumber {
+		return js.Global().Get("Error").New("Pbkdf2: iterations and keylen must be numbers")
+	}
+	if args[4].Type() != js.TypeString {
+		return js.Global().Get("Error").New("Pbkdf2: alg must be a string")
+	}
+	out, err := pbkdf2Bytes(password, salt, args[2].Int(), args[3].Int(), args[4].String())
+	if err != nil {
+		return js.Global().Get("Error").New("Pbkdf2: " + err.Error())
+	}
+	return base64.StdEncoding.EncodeToString(out)
 }
 
 func PublicKeyToAddress(this js.Value, args []js.Value) interface{} {
