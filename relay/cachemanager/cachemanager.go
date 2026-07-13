@@ -776,10 +776,11 @@ func (c *CacheManager) processByCacheManager(internalBlockData *InternalBlockDat
 							log.Error("getTokenDetailsInternal", "error", err)
 							return err
 						}
+					} else {
+						transaction.TokenTransaction.TokenCount = hexutil.EncodeBig(tokenTransfers[0].Tokens)
+						transaction.TokenTransaction.TokenName = tokenDetails.Name
+						transaction.TokenTransaction.TokenSymbol = tokenDetails.Symbol
 					}
-					transaction.TokenTransaction.TokenCount = hexutil.EncodeBig(tokenTransfers[0].Tokens)
-					transaction.TokenTransaction.TokenName = tokenDetails.Name
-					transaction.TokenTransaction.TokenSymbol = tokenDetails.Symbol
 				}
 			}
 		}
