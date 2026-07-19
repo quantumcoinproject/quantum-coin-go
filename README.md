@@ -9,6 +9,7 @@
 - [Building](#building)
   - [Running the Node](#running-the-node)
   - [Running a Local Devnet](#running-a-local-devnet)
+  - [JavaScript Libraries](#javascript-libraries)
   - [Proof-of-Stake Consensus](#proof-of-stake-consensus)
   - [TL;DR - Post-Quantum Cryptography Summary](#tldr---post-quantum-cryptography-summary)
 - [Post-Quantum Cryptography](#post-quantum-cryptography)
@@ -40,6 +41,13 @@ Check the [documentation](https://quantumcoin.org/connecting-to-mainnet.html) po
 ### Running a Local Devnet
 
 To spin up a local development network populated with coins and prefilled wallets, see the [QuantumCoin Devnet readme](./quantumcoin-devnet-readme.md). Download the devnet package for your platform and just run `connectvalidator.ps1` (Windows) or `connectvalidator.sh` (macOS/Ubuntu).
+
+### JavaScript Libraries
+
+To interact with the QuantumCoin blockchain from JavaScript:
+
+- **[quantumcoin.js](https://github.com/quantumcoinproject/quantumcoin.js)** — the recommended library for most applications. It provides an API closely compatible with [ethers.js](https://docs.ethers.org/), so you can connect to nodes, query balances, send transactions, and work with smart contracts in the familiar ethers.js style.
+- **[quantum-coin-js-sdk](https://github.com/quantumcoinproject/quantum-coin-js-sdk)** ([npm](https://www.npmjs.com/package/quantum-coin-js-sdk)) — use this if you only need lower-level functionality, such as wallet creation, transaction signing, and direct relay/RPC interaction. See the [Quantum Coin SDK documentation](https://quantumcoin.org/sdk.html) for details and examples.
 
 ---
 
