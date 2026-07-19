@@ -10,7 +10,12 @@ Running the Devnet
 Windows (PowerShell):   .\connectvalidator.ps1
 macOS / Ubuntu:         ./connectvalidator.sh
 
-The node unlocks the validator wallet, resumes the pre-initialized chain and starts sealing new blocks within a few seconds.
+The node unlocks the validator wallet, resumes the pre-initialized chain and starts sealing new blocks.
+
+Warmup time: the node takes about 120 seconds after startup before it begins producing blocks.
+During this window the RPC endpoint may already answer queries (e.g. eth_blockNumber), but
+transactions will not be mined yet. Wait until the block number has advanced at least once
+before sending transactions.
 
 
 RPC Endpoints
@@ -31,6 +36,39 @@ Example HTTP request:
 When a port is passed, the script also passes --allow-insecure-unlock (the node otherwise refuses to unlock the validator account while HTTP RPC is exposed). This is acceptable on a local devnet only; never do this on mainnet.
 
 If no port is passed, the node starts with IPC only.
+
+
+Troubleshooting the HTTP RPC endpoint
+======================================
+If a tool polls http://127.0.0.1:<port> and times out even though the node seems to be running:
+
+1) Your connectvalidator script may be too old to accept a port. Older devnet packages ship a script
+   that starts the node IPC-only no matter what arguments you pass; the port is silently ignored and
+   nothing ever listens on HTTP. Check the script: the current Windows version starts with
+   param([int]$RpcPort = 0). If yours does not, download the latest devnet package, or start the node
+   manually with the HTTP flags appended:
+     .\dp --datadir data --networkid 123123 --syncmode full --gcmode full --freezermode skipappend --unlock $env:DC_ACC_ADDRESS --mine --http --http.port 8545 --http.api eth,net,web3,personal --allow-insecure-unlock
+
+2) Run the script in a foreground terminal first. Launching it detached or from a wrapper that
+   redirects output can fail without leaving anything in the log file. In the foreground the node
+   banner appears within a second or two; if you see nothing, the failure is in how the script is
+   launched (execution policy, working directory), not in the node. On Windows use:
+     powershell -NoProfile -ExecutionPolicy Bypass -File .\connectvalidator.ps1 -RpcPort 8545
+
+3) The node logs to stderr, not stdout. When capturing output to a file, redirect both streams
+   (*> node.log in PowerShell, > node.log 2>&1 in sh), otherwise the log file stays empty and the
+   node looks hung.
+
+4) Only one node can use the data folder. If a node is already running IPC-only, a second launch
+   with an RPC port fails with a datadir lock error. Stop the running dp process first, then
+   relaunch with the port.
+
+5) Confirm readiness with a probe, not a delay. Remember the ~120 second warmup before block
+   production: poll until the RPC answers AND the block number advances, rather than sleeping
+   a fixed time:
+     curl -s -X POST http://127.0.0.1:8545 -H "Content-Type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"eth_blockNumber\",\"params\":[],\"id\":1}"
+   A JSON response with a result field means the endpoint is up; connection refused means the node
+   is not listening on that port (see points 1-4).
 
 
 Prefilled Wallets
