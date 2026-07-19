@@ -43,7 +43,9 @@ Go to the [releases page](https://github.com/quantumcoinproject/quantum-coin-go/
      ./connectvalidator.sh
      ```
 
-That's it — the node unlocks the validator wallet, resumes the pre-initialized chain, and starts sealing new blocks within a few seconds. The devnet runs with network ID `123123`.
+That's it — the node unlocks the validator wallet, resumes the pre-initialized chain, and starts sealing new blocks. The devnet runs with network ID `123123`.
+
+**Warmup time: the node takes about 120 seconds after startup before it begins producing blocks.** During this window the RPC endpoint may already answer queries (e.g. `eth_blockNumber`), but transactions will not be mined yet. Scripts should wait until the block number has advanced at least once before sending transactions, rather than assuming the chain is live as soon as RPC responds.
 
 ## RPC Endpoints
 
@@ -78,6 +80,37 @@ curl -X POST http://127.0.0.1:8545 -H "Content-Type: application/json" \
 ```
 
 If no port is passed, the scripts start the node with IPC only, exactly as before.
+
+### Troubleshooting the HTTP RPC endpoint
+
+If a tool polls `http://127.0.0.1:<port>` and times out even though the node seems to be running, work through these checks. They cover the failure modes that are otherwise silent:
+
+1. **Your `connectvalidator` script may be too old to accept a port.** Devnet packages released before the `-RpcPort` option existed ship a script that starts the node IPC-only no matter what arguments you pass — the extra arguments are silently ignored and nothing ever listens on the HTTP port. Open the script and check: the current version starts with `param([int]$RpcPort = 0)` (Windows) or documents a port argument in a comment (macOS/Ubuntu). If yours does not, download the latest devnet package, or start the node manually with the HTTP flags appended:
+
+   ```powershell
+   # Windows, from the devnet folder (same env vars as connectvalidator.ps1):
+   .\dp --datadir data --networkid 123123 --syncmode full --gcmode full --freezermode skipappend --unlock $env:DC_ACC_ADDRESS --mine --http --http.port 8545 --http.api eth,net,web3,personal --allow-insecure-unlock
+   ```
+
+2. **Run the script in a foreground terminal first.** Launching it detached or from a wrapper that redirects output can fail without leaving anything in the log file. In the foreground you will see the node banner within a second or two; if you see nothing, the failure is in how the script is being launched (execution policy, working directory), not in the node. On Windows, launch with `powershell -NoProfile -ExecutionPolicy Bypass -File .\connectvalidator.ps1 -RpcPort 8545`.
+
+3. **The node logs to stderr, not stdout.** If you capture output to a file, redirect both streams (`*> node.log` in PowerShell, `> node.log 2>&1` in sh), otherwise the log file stays empty and the node looks hung.
+
+4. **Only one node can use the data folder.** If a node is already running IPC-only, a second launch with an RPC port fails with a datadir lock error (visible only per the two points above). Stop the running `dp` process first, then relaunch with the port.
+
+5. **Confirm readiness with a probe, not a delay.** Remember the ~120-second warmup before block production (see above): poll until the RPC answers *and* the block number advances, rather than sleeping a fixed time:
+
+   ```powershell
+   # Windows (PowerShell)
+   Invoke-RestMethod -Uri http://127.0.0.1:8545 -Method Post -ContentType 'application/json' -Body '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+   ```
+
+   ```bash
+   # macOS / Ubuntu
+   curl -s -X POST http://127.0.0.1:8545 -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+   ```
+
+   A JSON response with a `result` field means the HTTP endpoint is up; connection refused means the node is not listening on that port (see points 1–4).
 
 ## Prefilled Wallets
 
