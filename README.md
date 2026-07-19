@@ -4,6 +4,25 @@
 
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/bbbMPyzJTM)
 
+## Table of Contents
+
+- [Building](#building)
+  - [Running the Node](#running-the-node)
+  - [Running a Local Devnet](#running-a-local-devnet)
+  - [Proof-of-Stake Consensus](#proof-of-stake-consensus)
+  - [TL;DR - Post-Quantum Cryptography Summary](#tldr---post-quantum-cryptography-summary)
+- [Post-Quantum Cryptography](#post-quantum-cryptography)
+  - [Post-Quantum Digital Signature Schemes](#post-quantum-digital-signature-schemes)
+    - [Usage of PQC Signature Schemes](#usage-of-pqc-signature-schemes)
+  - [Post-Quantum Key Establishment](#post-quantum-key-establishment)
+  - [Evidence (Quick Pointers for Reviewers)](#evidence-quick-pointers-for-reviewers)
+  - [Audit and independent verification](#audit-and-independent-verification)
+  - [Other Changes from Ethereum](#other-changes-from-ethereum)
+- [Known Issues](#known-issues)
+- [Addendum](#addendum)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Building
 
 Requires a Go toolchain compatible with the version declared in [`go.mod`](./go.mod).
@@ -17,6 +36,10 @@ go build -o ./build ./...
 ### Running the Node
 
 Check the [documentation](https://quantumcoin.org/connecting-to-mainnet.html) portal for information on running the blockchain node client.
+
+### Running a Local Devnet
+
+To spin up a local development network populated with coins and prefilled wallets, see the [QuantumCoin Devnet readme](./quantumcoin-devnet-readme.md). Download the devnet package for your platform and just run `connectvalidator.ps1` (Windows) or `connectvalidator.sh` (macOS/Ubuntu).
 
 ---
 

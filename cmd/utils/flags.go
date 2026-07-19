@@ -165,7 +165,7 @@ var (
 	}
 	DeveloperFlag = cli.BoolFlag{
 		Name:  "dev",
-		Usage: "Ephemeral proof-of-authority network with a pre-funded developer account, mining enabled",
+		Usage: "Not supported. To run a local devnet, see https://github.com/quantumcoinproject/quantum-coin-go/blob/main/quantumcoin-devnet-readme.md",
 	}
 	DeveloperPeriodFlag = cli.IntFlag{
 		Name:  "dev.period",

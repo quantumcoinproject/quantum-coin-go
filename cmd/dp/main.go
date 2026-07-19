@@ -332,6 +332,13 @@ func geth(ctx *cli.Context) error {
 		return fmt.Errorf("invalid command: %q", args[0])
 	}
 
+	if ctx.GlobalIsSet(utils.DeveloperFlag.Name) {
+		fmt.Println("The --dev mode is not supported in QuantumCoin.")
+		fmt.Println("To run a local development network (devnet) populated with coins and prefilled wallets, download the devnet package and follow the instructions at:")
+		fmt.Println("https://github.com/quantumcoinproject/quantum-coin-go/blob/main/quantumcoin-devnet-readme.md")
+		os.Exit(0)
+	}
+
 	checkTimeSync()
 
 	prepare(ctx)
