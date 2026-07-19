@@ -145,6 +145,13 @@ eth.getBalance("0x1a846abe71c8b989e8337c55d608be81c28ab3b2e40c83eaa2a68d516049ae
 personal.sendTransaction({from: "0x1a846abe71c8b989e8337c55d608be81c28ab3b2e40c83eaa2a68d516049aec6", to: "0x45dc00282f80628911a15775cd821a3747d2c62e14e54d1339f057c9e921be71", value: web3.toWei(1, "ether")}, "QuantumCoinExample123!")
 ```
 
+### From JavaScript
+
+To build applications against the devnet (or any QuantumCoin network) in JavaScript:
+
+- **[quantumcoin.js](https://github.com/quantumcoinproject/quantumcoin.js)** — the recommended library for most applications. Its API is closely compatible with [ethers.js](https://docs.ethers.org/), so you can query balances, send transactions, and work with smart contracts the same way you would with ethers.js. Point its provider at the devnet's HTTP RPC endpoint (start the node with an RPC port as described in [RPC Endpoints](#rpc-endpoints), e.g. `http://127.0.0.1:8545`).
+- **[quantum-coin-js-sdk](https://github.com/quantumcoinproject/quantum-coin-js-sdk)** ([npm](https://www.npmjs.com/package/quantum-coin-js-sdk)) — use this if you only need lower-level functionality such as wallet creation and transaction signing. See the [Quantum Coin SDK documentation](https://quantumcoin.org/sdk.html) for details and examples.
+
 ## What's Inside
 
 - **Prefilled wallets** populated with coins in the genesis block (see above).

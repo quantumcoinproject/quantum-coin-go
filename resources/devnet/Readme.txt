@@ -62,6 +62,13 @@ Example console commands:
   personal.sendTransaction({from: "0x1a846abe71c8b989e8337c55d608be81c28ab3b2e40c83eaa2a68d516049aec6", to: "0x45dc00282f80628911a15775cd821a3747d2c62e14e54d1339f057c9e921be71", value: web3.toWei(1, "ether")}, "QuantumCoinExample123!")
 
 
+JavaScript Libraries
+=====================
+quantumcoin.js (https://github.com/quantumcoinproject/quantumcoin.js) can be used to interact with the blockchain; its API is closely compatible with ethers.js. Point it at the HTTP RPC endpoint (start the node with an RPC port as described above).
+
+quantum-coin-js-sdk (https://github.com/quantumcoinproject/quantum-coin-js-sdk) can be used instead if only lower-level functionality is needed, such as wallet creation and transaction signing. Documentation: https://quantumcoin.org/sdk.html
+
+
 Warning
 ========
 This devnet is for local development and testing only. Devnet coins have no value. The prefilled wallet keys and passwords are publicly known; never reuse them, or send real funds to them, on mainnet or any public network.
