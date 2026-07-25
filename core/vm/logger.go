@@ -112,6 +112,10 @@ type Tracer interface {
 	CaptureStart(env *EVM, from common.Address, to common.Address, create bool, input []byte, gas uint64, value *big.Int)
 	CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error)
 
+	// Rest of call frames (entering/exiting nested scopes via call, create or selfdestruct)
+	CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int)
+	CaptureExit(output []byte, gasUsed uint64, err error)
+
 	// Opcode level
 	CaptureState(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, rData []byte, depth int, err error)
 	CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost uint64, scope *ScopeContext, depth int, err error)
@@ -240,6 +244,14 @@ func (l *StructLogger) CaptureEnd(output []byte, gasUsed uint64, t time.Duration
 	}
 }
 
+// CaptureEnter is called when the EVM enters a new scope (via call, create or selfdestruct).
+func (l *StructLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+}
+
+// CaptureExit is called when the EVM exits a scope, even if the scope didn't
+// execute any code.
+func (l *StructLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}
+
 // StructLogs returns the captured log entries.
 func (l *StructLogger) StructLogs() []StructLog { return l.logs }
 
@@ -365,3 +377,11 @@ func (t *mdLogger) CaptureEnd(output []byte, gasUsed uint64, tm time.Duration, e
 	fmt.Fprintf(t.out, "\nOutput: `0x%x`\nConsumed gas: `%d`\nError: `%v`\n",
 		output, gasUsed, err)
 }
+
+// CaptureEnter is called when the EVM enters a new scope (via call, create or selfdestruct).
+func (t *mdLogger) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+}
+
+// CaptureExit is called when the EVM exits a scope, even if the scope didn't
+// execute any code.
+func (t *mdLogger) CaptureExit(output []byte, gasUsed uint64, err error) {}

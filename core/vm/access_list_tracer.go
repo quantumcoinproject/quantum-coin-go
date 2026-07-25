@@ -174,6 +174,14 @@ func (*AccessListTracer) CaptureFault(env *EVM, pc uint64, op OpCode, gas, cost 
 
 func (*AccessListTracer) CaptureEnd(output []byte, gasUsed uint64, t time.Duration, err error) {}
 
+// CaptureEnter is called when the EVM enters a new scope (via call, create or selfdestruct).
+func (*AccessListTracer) CaptureEnter(typ OpCode, from common.Address, to common.Address, input []byte, gas uint64, value *big.Int) {
+}
+
+// CaptureExit is called when the EVM exits a scope, even if the scope didn't
+// execute any code.
+func (*AccessListTracer) CaptureExit(output []byte, gasUsed uint64, err error) {}
+
 // AccessList returns the current accesslist maintained by the tracer.
 func (a *AccessListTracer) AccessList() types.AccessList {
 	return a.list.accessList()
