@@ -291,7 +291,12 @@ func (tx *Transaction) RawSignatureValues() (v, r, s *big.Int) {
 	return tx.inner.rawSignatureValues()
 }
 
-// Hash returns the transaction hash.
+// Hash returns the hash of the canonical, fully signed transaction encoding.
+//
+// The hash includes V, R, and S, so it identifies a particular signed wire
+// instance, not the unsigned transaction intent. Hybrid PQC signing is
+// randomized; signing the same intent more than once can therefore produce
+// different transaction hashes.
 func (tx *Transaction) Hash() common.Hash {
 	if hash := tx.hash.Load(); hash != nil {
 		return hash.(common.Hash)
@@ -337,9 +342,10 @@ func (tx *Transaction) WithSignature(signer Signer, sig []byte) (*Transaction, e
 
 func (tx *Transaction) Verify(digestHash []byte) bool {
 	v, r, s := tx.RawSignatureValues()
-	// Exact big.Int comparison: v.Uint64() would only read the low 64 bits, so a
-	// V congruent to 1 mod 2^64 (e.g. 2^64+1) must not be treated as 1.
-	if v == nil || v.Cmp(big.NewInt(1)) != 0 {
+	// BitLen operates on the absolute value, so Sign is also required to reject
+	// -1. Together they accept only the positive integer 1, without truncating
+	// larger values to their low 64 bits.
+	if v == nil || v.Sign() != 1 || v.BitLen() != 1 {
 		return false
 	}
 	isOk, _, _ := cryptobase.DynamicSigVerifier.ValidateSignatureValues(digestHash, byte(1), r, s)
