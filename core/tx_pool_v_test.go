@@ -144,6 +144,63 @@ func TestTxPoolAddRemoteAcceptsValidV(t *testing.T) {
 	}
 }
 
+// TestTxPoolRandomizedSignatureVariantReplacesSameNonce documents the intended
+// interaction between randomized PQC signatures and transaction-pool identity:
+// two signatures of the same intent have different hashes, but only the latest
+// variant remains executable for the sender and nonce.
+func TestTxPoolRandomizedSignatureVariantReplacesSameNonce(t *testing.T) {
+	pool, key := setupVTxPool(t)
+	defer pool.Stop()
+
+	to := common.BytesToAddress([]byte{0x22})
+	unsigned := types.NewTx(&types.DefaultFeeTx{
+		ChainID:    big.NewInt(types.DEFAULT_CHAIN_ID),
+		Nonce:      0,
+		To:         &to,
+		Value:      big.NewInt(0),
+		Gas:        params.TxGas,
+		MaxGasTier: types.GAS_TIER_DEFAULT,
+		Remarks:    []byte("randomized-signature-variant"),
+	})
+	first, err := types.SignTx(unsigned, pool.signer, key)
+	if err != nil {
+		t.Fatalf("failed to create first signed variant: %v", err)
+	}
+	second, err := types.SignTx(unsigned, pool.signer, key)
+	if err != nil {
+		t.Fatalf("failed to create second signed variant: %v", err)
+	}
+	if first.Hash() == second.Hash() {
+		t.Fatal("randomized signed variants must have distinct transaction hashes")
+	}
+
+	if err := pool.addRemoteSync(first); err != nil {
+		t.Fatalf("failed to add first signed variant: %v", err)
+	}
+	if err := pool.addRemoteSync(second); err != nil {
+		t.Fatalf("failed to replace first signed variant: %v", err)
+	}
+
+	if pool.Get(first.Hash()) != nil {
+		t.Fatal("replaced signed variant must be removed from the transaction pool")
+	}
+	if pool.Get(second.Hash()) == nil {
+		t.Fatal("replacement signed variant must remain in the transaction pool")
+	}
+
+	sender, err := types.Sender(pool.signer, second)
+	if err != nil {
+		t.Fatalf("failed to recover replacement sender: %v", err)
+	}
+	pending, queued := pool.ContentFrom(sender)
+	if len(pending) != 1 || pending[0].Hash() != second.Hash() {
+		t.Fatalf("expected one executable replacement, got %d pending transactions", len(pending))
+	}
+	if len(queued) != 0 {
+		t.Fatalf("expected no queued duplicate-nonce variants, got %d", len(queued))
+	}
+}
+
 // TestTxPoolAddRemoteRejectsMalleatedV is the negative case: a transaction that
 // is identical to a valid one except its signature V value has been malleated
 // to 2 must be rejected at admission. Enforcement now happens both in base

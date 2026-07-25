@@ -52,6 +52,117 @@ func TestChainId(t *testing.T) {
 	}
 }
 
+func TestRandomizedSigningProducesDistinctSignedInstances(t *testing.T) {
+	key, wantSender, err := defaultTestKey()
+	if err != nil {
+		t.Fatalf("failed to load test key: %v", err)
+	}
+
+	signer := NewLondonSigner(big.NewInt(DEFAULT_CHAIN_ID))
+	to := common.BytesToAddress([]byte{0x42})
+	unsigned := NewTx(&DefaultFeeTx{
+		ChainID:    big.NewInt(DEFAULT_CHAIN_ID),
+		Nonce:      7,
+		To:         &to,
+		Value:      big.NewInt(123),
+		Gas:        21_000,
+		MaxGasTier: GAS_TIER_DEFAULT,
+		Remarks:    []byte("randomized-signing-regression"),
+	})
+
+	intentHash, err := signer.Hash(unsigned)
+	if err != nil {
+		t.Fatalf("failed to hash unsigned transaction: %v", err)
+	}
+	signedA, err := SignTx(unsigned, signer, key)
+	if err != nil {
+		t.Fatalf("failed to create first signature: %v", err)
+	}
+	signedB, err := SignTx(unsigned, signer, key)
+	if err != nil {
+		t.Fatalf("failed to create second signature: %v", err)
+	}
+
+	if signedA.Hash() == signedB.Hash() {
+		t.Fatal("randomized signatures must identify distinct signed transaction instances")
+	}
+	for name, tx := range map[string]*Transaction{"first": signedA, "second": signedB} {
+		gotIntentHash, err := signer.Hash(tx)
+		if err != nil {
+			t.Fatalf("%s signed transaction has invalid signing hash: %v", name, err)
+		}
+		if gotIntentHash != intentHash {
+			t.Fatalf("%s signature changed the unsigned transaction intent hash", name)
+		}
+		if tx.Nonce() != unsigned.Nonce() {
+			t.Fatalf("%s signed transaction nonce changed: got %d, want %d", name, tx.Nonce(), unsigned.Nonce())
+		}
+		gotSender, err := Sender(signer, tx)
+		if err != nil {
+			t.Fatalf("%s signed transaction has invalid sender: %v", name, err)
+		}
+		if gotSender != wantSender {
+			t.Fatalf("%s signed transaction sender changed: got %s, want %s", name, gotSender, wantSender)
+		}
+	}
+
+	// Submission retries must reuse these bytes. Decoding the same signed wire
+	// instance preserves its hash, unlike signing the intent a second time.
+	encoded, err := signedA.MarshalBinary()
+	if err != nil {
+		t.Fatalf("failed to encode signed transaction: %v", err)
+	}
+	var decoded Transaction
+	if err := decoded.UnmarshalBinary(encoded); err != nil {
+		t.Fatalf("failed to decode signed transaction: %v", err)
+	}
+	if decoded.Hash() != signedA.Hash() {
+		t.Fatalf("signed transaction hash changed after wire round trip: got %s, want %s", decoded.Hash(), signedA.Hash())
+	}
+}
+
+func TestTransactionVerifyRequiresVExactlyOne(t *testing.T) {
+	key, _, err := defaultTestKey()
+	if err != nil {
+		t.Fatalf("failed to load test key: %v", err)
+	}
+	signer := NewLondonSigner(big.NewInt(DEFAULT_CHAIN_ID))
+	unsigned := NewTransaction(1, common.Address{}, big.NewInt(1), 21_000, big.NewInt(1), nil)
+	digest, err := signer.Hash(unsigned)
+	if err != nil {
+		t.Fatalf("failed to hash transaction: %v", err)
+	}
+	signed, err := SignTx(unsigned, signer, key)
+	if err != nil {
+		t.Fatalf("failed to sign transaction: %v", err)
+	}
+
+	v, r, s := signed.RawSignatureValues()
+	if v.Cmp(big.NewInt(1)) != 0 {
+		t.Fatalf("test setup produced V = %s, want 1", v)
+	}
+	if !signed.Verify(digest[:]) {
+		t.Fatal("valid transaction with V = 1 did not verify")
+	}
+
+	oneWithHighBits := new(big.Int).Lsh(big.NewInt(1), 64)
+	oneWithHighBits.Add(oneWithHighBits, big.NewInt(1))
+	for name, invalidV := range map[string]*big.Int{
+		"negative one":       big.NewInt(-1),
+		"zero":               big.NewInt(0),
+		"two":                big.NewInt(2),
+		"one with high bits": oneWithHighBits,
+	} {
+		t.Run(name, func(t *testing.T) {
+			malleated := NewTx(signed.inner.copy())
+			malleated.inner.setSignatureValues(signer.ChainID(), invalidV, r, s)
+			if malleated.Verify(digest[:]) {
+				t.Fatalf("transaction with V = %s verified", invalidV)
+			}
+		})
+	}
+}
+
 func getDefaultFeeTx() DefaultFeeTx {
 	to := common.BytesToAddress([]byte{1})
 	accesses := AccessList{{Address: to, StorageKeys: []common.Hash{{0}}}}
