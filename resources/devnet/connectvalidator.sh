@@ -7,10 +7,14 @@ export DP_ACC_PWD="QuantumCoinExample123!"
 export MIN_VALIDATORS="1"
 export Q_DEFAULT_CONFIG="1"
 export SKIP_STARTUP_DELAY="1"
+# Records the per-block consensus backup that proofofstake_getBlockExtendedDetails
+# serves. Without it that API returns "GetConsensusInstance is nil" and block
+# validator details are unavailable to explorers/indexers.
+export BLOCK_EXTENDED_SAVE="1"
 RPC_ARGS=""
 if [ -n "$1" ]; then
   # --allow-insecure-unlock is required because the validator account is unlocked
   # while HTTP RPC is exposed. Safe here: devnet only, keys are publicly known.
-  RPC_ARGS="--http --http.port $1 --http.api eth,net,web3,personal --allow-insecure-unlock"
+  RPC_ARGS="--http --http.port $1 --http.api eth,net,web3,personal,proofofstake,txpool,tracer --allow-insecure-unlock"
 fi
-./dp --datadir data --networkid 123123 --syncmode full --gcmode full --freezermode skipappend --unlock $DC_ACC_ADDRESS --mine $RPC_ARGS
+./dp --datadir data --networkid 123123 --syncmode full --gcmode full --freezermode skipappend --unlock $DC_ACC_ADDRESS --miner.etherbase $DC_ACC_ADDRESS --mine $RPC_ARGS
