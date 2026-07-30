@@ -25,6 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/quantumcoinproject/circl/sign/hybridedmldsaslhdsa"
+	"github.com/quantumcoinproject/circl/sign/hybridedmldsaslhdsa5"
+	"github.com/quantumcoinproject/circl/sign/hybrideds"
 	"github.com/quantumcoinproject/circl/sign/hybridparser"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
@@ -1552,7 +1555,7 @@ func (s *PublicTransactionPoolAPI) GetTransactionSignature(ctx context.Context, 
 		return nil, errors.New("transaction has no signature")
 	}
 	signature := sig.Bytes()
-	publicKey := r.Bytes()
+	publicKey := padHybridPublicKey(r.Bytes(), signature)
 
 	parsed, err := hybridparser.ParseHybrid(signature, publicKey, message)
 	if err != nil {
@@ -1560,9 +1563,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionSignature(ctx context.Context, 
 	}
 
 	return &TransactionSignatureResult{
-		TxHash:          hash,
-		PublicKeyHex:    hex.EncodeToString(publicKey),
-		SignatureHex:    hex.EncodeToString(signature),
+		TxHash:       hash,
+		PublicKeyHex: hex.EncodeToString(publicKey),
+		SignatureHex: hex.EncodeToString(signature),
 		HybridSignature: &HybridSignatureRPC{
 			SchemeID:       parsed.SchemeID,
 			SchemeName:     parsed.SchemeName,
@@ -1765,23 +1768,67 @@ type SignTransactionResult struct {
 	Tx  *types.Transaction `json:"tx"`
 }
 
+// hybridPublicKeySize is the packed public key length a hybrid scheme expects,
+// or 0 when the scheme id is unknown. The sizes come from the scheme packages
+// themselves so they track the library rather than being restated here.
+func hybridPublicKeySize(schemeID byte) int {
+	switch schemeID {
+	case hybrideds.DILITHIUM_ED25519_SPHINCS_COMPACT_ID, hybrideds.DILITHIUM_ED25519_SPHINCS_FULL_ID:
+		return hybrideds.PublicKeySize
+	case hybridedmldsaslhdsa.ED25519_MLDSA_SLHDSA_COMPACT_ID, hybridedmldsaslhdsa.ED25519_MLDSA_SLHDSA_FULL_ID:
+		return hybridedmldsaslhdsa.PublicKeySize
+	case hybridedmldsaslhdsa5.ED25519_MLDSA5_SLHDSA5_FULL_ID:
+		return hybridedmldsaslhdsa5.PublicKeySize
+	}
+	return 0
+}
+
+// padHybridPublicKey restores leading zero bytes the public key lost by being
+// carried as a big.Int.
+//
+// A transaction's public key lives in its `r` field, and RawSignatureValues
+// hands it back as a *big.Int. Bytes() renders the magnitude, so any leading
+// zero byte of the key is simply not there -- a key beginning 0x00 0x00 comes
+// back two bytes short and UnmarshalPublicKey rejects it ("packed public key
+// must be of 1408 bytes"). The bytes on chain are correct; only this numeric
+// round trip loses them, so the fix belongs here at the point of use.
+//
+// The scheme id is signature[0], which is never zero, so the signature itself
+// cannot lose a byte this way and is used as-is.
+//
+// Only short keys are padded. A key longer than the scheme expects is left
+// alone for the parser to reject: that would mean something genuinely wrong,
+// not a lost zero, and silently truncating it would hide it.
+func padHybridPublicKey(publicKey, signature []byte) []byte {
+	if len(signature) == 0 {
+		return publicKey
+	}
+	want := hybridPublicKeySize(signature[0])
+	if want == 0 || len(publicKey) >= want {
+		return publicKey
+	}
+	padded := make([]byte, want)
+	copy(padded[want-len(publicKey):], publicKey)
+	return padded
+}
+
 // TransactionSignatureResult is the result of eth_getTransactionSignature.
 type TransactionSignatureResult struct {
-	TxHash           common.Hash         `json:"transactionHash"`
-	PublicKeyHex     string              `json:"publicKeyHex"`
-	SignatureHex     string              `json:"signatureHex"`
-	HybridSignature  *HybridSignatureRPC  `json:"hybridSignature"`
+	TxHash          common.Hash         `json:"transactionHash"`
+	PublicKeyHex    string              `json:"publicKeyHex"`
+	SignatureHex    string              `json:"signatureHex"`
+	HybridSignature *HybridSignatureRPC `json:"hybridSignature"`
 }
 
 // HybridSignatureRPC mirrors hybridparser.HybridSignature for JSON-RPC.
 type HybridSignatureRPC struct {
-	SchemeID      byte              `json:"schemeId"`
-	SchemeName    string            `json:"schemeName"`
-	Context       string            `json:"context"`
+	SchemeID       byte              `json:"schemeId"`
+	SchemeName     string            `json:"schemeName"`
+	Context        string            `json:"context"`
 	AdditionalData map[string]string `json:"additionalData,omitempty"`
-	Message       string            `json:"message"`
-	PublicKeys    map[string]string `json:"publicKeys"`
-	Signatures    map[string]string `json:"signatures"`
+	Message        string            `json:"message"`
+	PublicKeys     map[string]string `json:"publicKeys"`
+	Signatures     map[string]string `json:"signatures"`
 }
 
 // SignTransaction will sign the given transaction with the from account.
