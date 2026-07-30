@@ -95,8 +95,8 @@ combined so that **verification must succeed for all component signatures** requ
 
 Two families of hybrid signatures exist in the codebase:
 
-- **Dilithium + ed25519 + SPHINCS+** (legacy naming in code: `DILITHIUM_ED25519_SPHINCS_*`)
-- **ML-DSA + ed25519 + SLH-DSA** (FIPS-aligned naming in code: `MLDSA_ED25519_SLHDSA_*`)
+- **Dilithium + Ed25519 + SPHINCS+** (legacy naming in code: `DILITHIUM_ED25519_SPHINCS_*`)
+- **ML-DSA + Ed25519 + SLH-DSA** (FIPS-aligned naming in code: `MLDSA_ED25519_SLHDSA_*`)
 
 QuantumCoin supports a **compact vs full** approach:
 
