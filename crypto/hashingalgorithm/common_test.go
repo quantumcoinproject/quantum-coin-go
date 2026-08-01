@@ -51,6 +51,13 @@ func HashStateSumTest(t *testing.T, h HashState) {
 	if !bytes.Equal(d1, d5) {
 		t.Fatal("digest differs after Reset")
 	}
+
+	// Reset also restores the Read stream from the beginning.
+	d6 := make([]byte, h.Size())
+	h.Read(d6)
+	if !bytes.Equal(d1, d6) {
+		t.Fatal("Read stream differs after Reset")
+	}
 }
 
 func HashStateTest(t *testing.T, h1 HashState, h2 HashState) {
