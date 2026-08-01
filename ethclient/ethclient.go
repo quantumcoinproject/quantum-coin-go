@@ -369,6 +369,10 @@ type TransactionSignatureResult struct {
 	HybridSignature *HybridSignature `json:"hybridSignature"`
 	PublicKeyHex    string           `json:"publicKeyHex"`
 	SignatureHex    string           `json:"signatureHex"`
+	// CombinedSignatureSize is the byte length of signature+publicKey in the
+	// combined wire form ([totalLen:2][sigLen:2][sig][pk]); always
+	// publicKey + signature + 4. Zero when the node predates the field.
+	CombinedSignatureSize int `json:"combinedSignatureSize"`
 }
 
 // HybridSignature mirrors the parsed hybrid signature for JSON-RPC.

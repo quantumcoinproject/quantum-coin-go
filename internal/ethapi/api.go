@@ -1566,6 +1566,12 @@ func (s *PublicTransactionPoolAPI) GetTransactionSignature(ctx context.Context, 
 		TxHash:       hash,
 		PublicKeyHex: hex.EncodeToString(publicKey),
 		SignatureHex: hex.EncodeToString(signature),
+		// The chain stores the two halves separately (r = public key,
+		// s = signature); on the wire they travel as one blob framed by
+		// common.CombineTwoParts so the key can be extracted from the
+		// signature: [totalLen:2][sigLen:2][sig][pk]. Hence + 2 length
+		// prefixes of common.LengthByteSize each.
+		CombinedSignatureSize: len(signature) + len(publicKey) + 2*common.LengthByteSize,
 		HybridSignature: &HybridSignatureRPC{
 			SchemeID:       parsed.SchemeID,
 			SchemeName:     parsed.SchemeName,
@@ -1814,10 +1820,16 @@ func padHybridPublicKey(publicKey, signature []byte) []byte {
 
 // TransactionSignatureResult is the result of eth_getTransactionSignature.
 type TransactionSignatureResult struct {
-	TxHash          common.Hash         `json:"transactionHash"`
-	PublicKeyHex    string              `json:"publicKeyHex"`
-	SignatureHex    string              `json:"signatureHex"`
-	HybridSignature *HybridSignatureRPC `json:"hybridSignature"`
+	TxHash       common.Hash `json:"transactionHash"`
+	PublicKeyHex string      `json:"publicKeyHex"`
+	SignatureHex string      `json:"signatureHex"`
+	// CombinedSignatureSize is the byte length of the signature and public
+	// key serialized as one blob (common.CombineTwoParts framing:
+	// [totalLen:2][sigLen:2][sig][pk]) -- the form that travels on the wire
+	// and allows extracting the public key from the signature. Always
+	// publicKey + signature + 4.
+	CombinedSignatureSize int                 `json:"combinedSignatureSize"`
+	HybridSignature       *HybridSignatureRPC `json:"hybridSignature"`
 }
 
 // HybridSignatureRPC mirrors hybridparser.HybridSignature for JSON-RPC.
