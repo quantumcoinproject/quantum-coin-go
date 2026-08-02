@@ -47,10 +47,9 @@ func (c *Config) DeepCopy() *Config {
 		NoBaseFee:               c.NoBaseFee,
 		EnablePreimageRecording: c.EnablePreimageRecording,
 		JumpTable:               c.JumpTable,
-		ExtraEips:               make([]int, 0),
+		ExtraEips:               append([]int(nil), c.ExtraEips...),
 		OverrideGasFailure:      c.OverrideGasFailure,
 	}
-	copy(conf.ExtraEips, c.ExtraEips)
 	return conf
 }
 

@@ -47,13 +47,11 @@ const SigningContextLevel2 SigningContext = 2  //MLDSA_ED25519_SLHDSA_FULL_ID
 
 // Keccak256 calculates and returns the Keccak256 hash of the input data.
 func Keccak256(data ...[]byte) []byte {
-	//Round 1
-	h1 := sha3.NewLegacyKeccak256()
+	h := sha3.NewLegacyKeccak256()
 	for _, b := range data {
-		h1.Write(b)
+		h.Write(b)
 	}
-	return h1.Sum(nil)
-
+	return h.Sum(nil)
 }
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
@@ -77,7 +75,6 @@ func CreateAddress2(b common.Address, salt [common.HashLength]byte, inithash []b
 
 func PublicKeyBytesToAddress(pubKey []byte) common.Address {
 	var a common.Address
-	b := Keccak256(pubKey[:])[common.AddressTruncateBytes:]
-	a.SetBytes(b)
+	a.SetBytes(Keccak256(pubKey))
 	return a
 }

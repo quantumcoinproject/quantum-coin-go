@@ -48,11 +48,12 @@ func bindCombinedJSON(test *bindV2Test) (string, error) {
 		bins = append(bins, test.bytecodes[i])
 		types = append(types, typeName)
 
-		// Derive the library placeholder which is a 34 character prefix of the
-		// hex encoding of the keccak256 hash of the fully qualified library name.
+		// Derive the library placeholder which is a 58 character prefix of the
+		// hex encoding of the keccak256 hash of the fully qualified library name
+		// (the 32-byte-address solc fork pads placeholders to a PUSH32 operand).
 		// Note that the fully qualified library name is the path of its source
 		// file and the library name separated by ":".
-		libPattern := crypto.Keccak256Hash([]byte(typeName)).String()[2:36] // the first 2 chars are 0x
+		libPattern := crypto.Keccak256Hash([]byte(typeName)).String()[2:60] // the first 2 chars are 0x
 		libs[libPattern] = typeName
 	}
 	if test.aliases == nil {

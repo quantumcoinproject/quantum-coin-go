@@ -57,3 +57,5 @@ templibs/
 **/*_TTrace_*.tla
 **/*_TTrace_*.bin
 .cursor
+/docs
+docs

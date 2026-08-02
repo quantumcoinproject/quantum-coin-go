@@ -237,8 +237,7 @@ func abigen(c *cli.Context) error {
 			nameParts := strings.Split(name, ":")
 			types = append(types, nameParts[len(nameParts)-1])
 
-			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36]
-			libs[libPattern] = nameParts[len(nameParts)-1]
+			libs[libPattern(name)] = nameParts[len(nameParts)-1]
 		}
 	}
 	// Extract all aliases from the flags
@@ -267,6 +266,15 @@ func abigen(c *cli.Context) error {
 		utils.Fatalf("Failed to write ABI binding: %v", err)
 	}
 	return nil
+}
+
+// libPattern derives the link placeholder pattern for a fully qualified
+// library name ("path/to/file.sol:LibName"): the first 58 hex chars of its
+// keccak256 hash. The 32-byte-address solc fork emits placeholders of the
+// form __$<58 hex>$__ inside a PUSH32 operand (upstream solc used 34 hex
+// chars inside a PUSH20).
+func libPattern(name string) string {
+	return crypto.Keccak256Hash([]byte(name)).String()[2:60]
 }
 
 func main() {

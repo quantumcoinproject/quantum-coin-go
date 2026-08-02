@@ -189,12 +189,7 @@ func generate(c *cli.Context) error {
 			sigs = append(sigs, contract.Hashes)
 			types = append(types, typeName)
 
-			// Derive the library placeholder which is a 34 character prefix of the
-			// hex encoding of the keccak256 hash of the fully qualified library name.
-			// Note that the fully qualified library name is the path of its source
-			// file and the library name separated by ":".
-			libPattern := crypto.Keccak256Hash([]byte(name)).String()[2:36] // the first 2 chars are 0x
-			libs[libPattern] = typeName
+			libs[libPattern(name)] = typeName
 		}
 	}
 	// Extract all aliases from the flags
@@ -231,6 +226,15 @@ func generate(c *cli.Context) error {
 		utils.Fatalf("Failed to write ABI binding: %v", err)
 	}
 	return nil
+}
+
+// libPattern derives the link placeholder pattern for a fully qualified
+// library name ("path/to/file.sol:LibName"): the first 58 hex chars of its
+// keccak256 hash. The 32-byte-address solc fork emits placeholders of the
+// form __$<58 hex>$__ inside a PUSH32 operand (upstream solc used 34 hex
+// chars inside a PUSH20).
+func libPattern(name string) string {
+	return crypto.Keccak256Hash([]byte(name)).String()[2:60]
 }
 
 func main() {
