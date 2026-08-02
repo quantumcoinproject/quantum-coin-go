@@ -149,7 +149,6 @@ var AppHelpFlagGroups = []flags.FlagGroup{
 		Name: "NETWORKING",
 		Flags: []cli.Flag{
 			utils.BootnodesFlag,
-			utils.DNSDiscoveryFlag,
 			utils.ListenPortFlag,
 			utils.MaxPeersFlag,
 			utils.MaxPendingPeersFlag,

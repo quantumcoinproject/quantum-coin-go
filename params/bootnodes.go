@@ -16,10 +16,6 @@
 
 package params
 
-import (
-	"github.com/quantumcoinproject/quantum-coin-go/common"
-)
-
 // MainnetBootnodes are the enode URLs of the P2P bootstrap nodes running on
 // the main Ethereum network.
 var MainnetBootnodes = []string{
@@ -44,26 +40,3 @@ var GoerliBootnodes = []string{}
 var CalaverasBootnodes = []string{}
 
 var V5Bootnodes = []string{}
-
-const dnsPrefix = ""
-
-// KnownDNSNetwork returns the address of a public DNS-based node list for the given
-// genesis hash and protocol. See https://github.com/ethereum/discv4-dns-lists for more
-// information.
-func KnownDNSNetwork(genesis common.Hash, protocol string) string {
-	var net string
-	switch genesis {
-	case MainnetGenesisHash:
-		net = "mainnet"
-	case RopstenGenesisHash:
-		net = "ropsten"
-	case RinkebyGenesisHash:
-		net = "rinkeby"
-	case GoerliGenesisHash:
-		net = "goerli"
-	default:
-		return ""
-	}
-
-	return dnsPrefix + protocol + "." + net + ".ethdisco.net"
-}

@@ -49,8 +49,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/miner"
 	"github.com/quantumcoinproject/quantum-coin-go/node"
 	"github.com/quantumcoinproject/quantum-coin-go/p2p"
-	"github.com/quantumcoinproject/quantum-coin-go/p2p/dnsdisc"
-	"github.com/quantumcoinproject/quantum-coin-go/p2p/enode"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 	"github.com/quantumcoinproject/quantum-coin-go/rpc"
@@ -65,11 +63,9 @@ type Ethereum struct {
 	config *ethconfig.Config
 
 	// Handlers
-	txPool             *core.TxPool
-	blockchain         *core.BlockChain
-	handler            *handler.P2PHandler
-	ethDialCandidates  enode.Iterator
-	snapDialCandidates enode.Iterator
+	txPool     *core.TxPool
+	blockchain *core.BlockChain
+	handler    *handler.P2PHandler
 
 	// DB interfaces
 	chainDb ethdb.Database // Block chain database
@@ -265,17 +261,6 @@ func New(stack *node.Node, config *ethconfig.Config) (*Ethereum, error) {
 		gpoParams.Default = config.Miner.GasPrice
 	}
 	eth.APIBackend.gpo = gasprice.NewOracle(eth.APIBackend, gpoParams)
-
-	// Setup DNS discovery iterators.
-	dnsclient := dnsdisc.NewClient(dnsdisc.Config{})
-	eth.ethDialCandidates, err = dnsclient.NewIterator(eth.config.EthDiscoveryURLs...)
-	if err != nil {
-		return nil, err
-	}
-	eth.snapDialCandidates, err = dnsclient.NewIterator(eth.config.SnapDiscoveryURLs...)
-	if err != nil {
-		return nil, err
-	}
 
 	// Start the RPC service
 	eth.netRPCService = ethapi.NewPublicNetAPI(eth.p2pServer, config.NetworkId)
@@ -543,7 +528,7 @@ func (s *Ethereum) BloomIndexer() *core.ChainIndexer   { return s.bloomIndexer }
 // Protocols returns all the currently configured
 // network protocols to start.
 func (s *Ethereum) Protocols() []p2p.Protocol {
-	protos := eth.MakeProtocols((*handler.EthHandler)(s.handler), s.networkID, s.ethDialCandidates)
+	protos := eth.MakeProtocols((*handler.EthHandler)(s.handler), s.networkID)
 	return protos
 }
 
@@ -572,8 +557,6 @@ func (s *Ethereum) Start() error {
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
 	// Stop all the peer-related stuff first.
-	s.ethDialCandidates.Close()
-	s.snapDialCandidates.Close()
 	s.handler.Stop()
 
 	// Then stop everything else.
