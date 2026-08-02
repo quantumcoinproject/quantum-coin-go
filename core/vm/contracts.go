@@ -322,17 +322,6 @@ func (c *bigModExp) Run(input []byte) ([]byte, error) {
 	return common.LeftPadBytes(base.Exp(base, exp, mod).Bytes(), int(modLen)), nil
 }
 
-var (
-	// true32Byte is returned if the bn256 pairing check succeeds.
-	true32Byte = []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1}
-
-	// false32Byte is returned if the bn256 pairing check fails.
-	false32Byte = make([]byte, 32)
-
-	// errBadPairingInput is returned if the bn256 pairing input is invalid.
-	errBadPairingInput = errors.New("bad elliptic curve pairing size")
-)
-
 type blake2F struct{}
 
 func (c *blake2F) RequiredGas(input []byte) uint64 {

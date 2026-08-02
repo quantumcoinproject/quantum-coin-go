@@ -91,22 +91,6 @@ func readBool(word []byte) (bool, error) {
 	}
 }
 
-// A function type is simply the address with the function selection signature at the end.
-//
-// readFunctionType enforces that standard by always presenting it as a 32-array (address + sig = 32 bytes)
-func readFunctionType(t Type, word []byte) (funcTy [FunctionTypeLength]byte, err error) {
-	if t.T != FunctionTy {
-		return [FunctionTypeLength]byte{}, fmt.Errorf("abi: invalid type in call to make function type byte array")
-	}
-	if len(word) < FunctionTypeLength {
-		return [FunctionTypeLength]byte{}, fmt.Errorf("abi: invalid function type length")
-	}
-
-	copy(funcTy[:], word[0:FunctionTypeLength])
-
-	return
-}
-
 // ReadFixedBytes uses reflection to create a fixed array to be read from.
 func ReadFixedBytes(t Type, word []byte) (interface{}, error) {
 	if t.T != FixedBytesTy {
@@ -249,8 +233,10 @@ func toGoType(index int, t Type, output []byte) (interface{}, error) {
 	case FixedBytesTy:
 		return ReadFixedBytes(t, returnOutput)
 	case FunctionTy:
+		// A solidity external function value would be a 36-byte quantity
+		// (32-byte address + 4-byte selector) that no longer fits an ABI word;
+		// the type is rejected at parse time and unreachable here.
 		return nil, errors.New("FunctionTy is not supported")
-		//return readFunctionType(t, returnOutput)
 	default:
 		return nil, fmt.Errorf("abi: unknown type %v", t.T)
 	}

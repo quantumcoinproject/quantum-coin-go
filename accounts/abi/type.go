@@ -205,8 +205,8 @@ func NewType(t string, internalType string, components []ArgumentMarshaling) (ty
 		}
 
 	case "function":
-		//typ.T = FunctionTy
-		//typ.Size = FunctionTypeLength
+		// An external function value is 32-byte address + 4-byte selector = 36
+		// bytes, which does not fit a single ABI word with 32-byte addresses.
 		return Type{}, errors.New("FunctionTy is not supported")
 	default:
 		return Type{}, fmt.Errorf("unsupported arg type: %s", t)
@@ -244,9 +244,8 @@ func (t Type) GetType() reflect.Type {
 	case FixedPointTy:
 		// fixedpoint type currently not used
 		return reflect.ArrayOf(32, reflect.TypeOf(byte(0)))
-	case FunctionTy:
-		return reflect.ArrayOf(FunctionTypeLength, reflect.TypeOf(byte(0)))
 	default:
+		// FunctionTy is rejected at parse time and cannot reach here.
 		panic("Invalid type")
 	}
 }

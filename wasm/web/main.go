@@ -353,7 +353,7 @@ func PublicKeyToAddress(this js.Value, args []js.Value) interface{} {
 	pubData := js.Global().Get("Uint8Array").New(args[0])
 	pubBytes := make([]byte, pubData.Get("length").Int())
 	js.CopyBytesToGo(pubBytes, pubData)
-	return common.BytesToAddress(crypto.Keccak256(pubBytes[:])[common.AddressTruncateBytes:]).String()
+	return common.BytesToAddress(crypto.Keccak256(pubBytes)).String()
 }
 
 func IsValidAddress(this js.Value, args []js.Value) interface{} {
