@@ -578,16 +578,6 @@ func (srv *Server) setupLocalNode() error {
 
 func (srv *Server) setupDiscovery() error {
 	srv.discmix = enode.NewFairMix(discmixTimeout)
-
-	// Add protocol-specific discovery sources.
-	added := make(map[string]bool)
-	for _, proto := range srv.Protocols {
-		if proto.DialCandidates != nil && !added[proto.Name] {
-			srv.discmix.AddSource(proto.DialCandidates, "DialCandidates")
-			added[proto.Name] = true
-		}
-	}
-
 	return nil
 }
 

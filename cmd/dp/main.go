@@ -134,7 +134,6 @@ var (
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyPasswordFlag,
 		utils.NodeKeyHexFlag,
-		utils.DNSDiscoveryFlag,
 		utils.MainnetFlag,
 		utils.DeveloperFlag,
 		utils.DeveloperPeriodFlag,
