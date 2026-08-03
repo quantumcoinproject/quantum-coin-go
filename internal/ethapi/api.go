@@ -543,12 +543,13 @@ func NewPublicBlockChainAPI(b Backend) *PublicBlockChainAPI {
 }
 
 // ChainId is the EIP-155 replay-protection chain id for the current ethereum chain config.
-func (api *PublicBlockChainAPI) ChainId() (*hexutil.Big, error) {
-	// if current block is at or past the EIP-155 replay-protection fork block, return chainID from config
-	if config := api.b.ChainConfig(); config.IsEIP155(api.b.CurrentBlock().Number()) {
-		return (*hexutil.Big)(config.ChainID), nil
-	}
-	return nil, fmt.Errorf("chain not synced beyond EIP-155 replay-protection fork block")
+//
+// Upstream 647c6f2db: there is no good reason to gate this on sync progress, and the
+// spurious "not synced" error breaks clients that read the chain id at startup. Here
+// the gate was doubly meaningless: quantum-coin-go is EIP-155 from genesis, so the
+// condition was already always true once the head block was available.
+func (api *PublicBlockChainAPI) ChainId() *hexutil.Big {
+	return (*hexutil.Big)(api.b.ChainConfig().ChainID)
 }
 
 // BlockNumber returns the block number of the chain head.
@@ -594,27 +595,34 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 
 	storageTrie := state.StorageTrie(address)
 	storageHash := types.EmptyRootHash
-	codeHash := state.GetCodeHash(address)
 	storageProof := make([]StorageResult, len(storageKeys))
+
+	// Upstream 8b99ad460: look the code hash up unconditionally. It used to be
+	// overwritten with the empty-code hash whenever no storage trie could be
+	// opened, which reports a code hash the account does not actually have.
+	codeHash := state.GetCodeHash(address)
 
 	// if we have a storageTrie, (which means the account exists), we can update the storagehash
 	if storageTrie != nil {
 		storageHash = storageTrie.Hash()
-	} else {
-		// no storageTrie means the account does not exist, so the codeHash is the hash of an empty bytearray.
-		codeHash = crypto.Keccak256Hash(nil)
 	}
 
 	// create the proof for the storageKeys
-	for i, key := range storageKeys {
+	for i, hexKey := range storageKeys {
+		// Upstream 8ade5e6c1 + 88132afc3: reject invalid hex instead of silently
+		// treating it as the zero key.
+		key, err := decodeHash(hexKey)
+		if err != nil {
+			return nil, err
+		}
 		if storageTrie != nil {
-			proof, storageError := state.GetStorageProof(address, common.HexToHash(key))
+			proof, storageError := state.GetStorageProof(address, key)
 			if storageError != nil {
 				return nil, storageError
 			}
-			storageProof[i] = StorageResult{key, (*hexutil.Big)(state.GetState(address, common.HexToHash(key)).Big()), toHexSlice(proof)}
+			storageProof[i] = StorageResult{hexKey, (*hexutil.Big)(state.GetState(address, key).Big()), toHexSlice(proof)}
 		} else {
-			storageProof[i] = StorageResult{key, &hexutil.Big{}, []string{}}
+			storageProof[i] = StorageResult{hexKey, &hexutil.Big{}, []string{}}
 		}
 	}
 
@@ -633,6 +641,30 @@ func (s *PublicBlockChainAPI) GetProof(ctx context.Context, address common.Addre
 		StorageHash:  storageHash,
 		StorageProof: storageProof,
 	}, state.Error()
+}
+
+// decodeHash parses a hex-encoded 32-byte hash. The input may optionally
+// be prefixed by 0x and can have a byte length up to 32. An odd number of
+// nibbles is zero-padded on the left.
+//
+// Upstream 8ade5e6c1 and 88132afc3: common.HexToHash silently truncates and
+// silently accepts garbage, so callers could not tell a bad key apart from an
+// unset slot.
+func decodeHash(s string) (common.Hash, error) {
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		s = s[2:]
+	}
+	if (len(s) & 1) > 0 {
+		s = "0" + s
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return common.Hash{}, errors.New("hex string invalid")
+	}
+	if len(b) > 32 {
+		return common.Hash{}, errors.New("hex string too long, want at most 32 bytes")
+	}
+	return common.BytesToHash(b), nil
 }
 
 // GetHeaderByNumber returns the requested canonical block header.
@@ -709,12 +741,17 @@ func (s *PublicBlockChainAPI) GetCode(ctx context.Context, address common.Addres
 // GetStorageAt returns the storage from the state at the given address, key and
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
-func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, key string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
+func (s *PublicBlockChainAPI) GetStorageAt(ctx context.Context, address common.Address, hexKey string, blockNrOrHash rpc.BlockNumberOrHash) (hexutil.Bytes, error) {
 	state, _, err := s.b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 	if state == nil || err != nil {
 		return nil, err
 	}
-	res := state.GetState(address, common.HexToHash(key))
+	// Upstream 8ade5e6c1: surface an invalid storage key instead of reading slot 0.
+	key, err := decodeHash(hexKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode storage key: %s", err)
+	}
+	res := state.GetState(address, key)
 	return res[:], state.Error()
 }
 
@@ -913,8 +950,24 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 		}
 		hi = block.GasLimit()
 	}
+	// Normalize the max fee per gas the call is willing to spend.
+	//
+	// Upstream a879c42bd: the balance cap below used to key off args.GasPrice only, so a
+	// call that specified just maxFeePerGas was never capped by the sender's balance.
+	// quantum-coin-go has no base fee, so there is nothing to derive a 1559 gas price
+	// from -- the fee cap is simply whichever ceiling the caller supplied.
+	var feeCap *big.Int
+	if args.GasPrice != nil && (args.MaxFeePerGas != nil || args.MaxPriorityFeePerGas != nil) {
+		return 0, errors.New("both gasPrice and (maxFeePerGas or maxPriorityFeePerGas) specified")
+	} else if args.GasPrice != nil {
+		feeCap = args.GasPrice.ToInt()
+	} else if args.MaxFeePerGas != nil {
+		feeCap = args.MaxFeePerGas.ToInt()
+	} else {
+		feeCap = common.Big0
+	}
 	// Recap the highest gas limit with account's available balance.
-	if args.GasPrice != nil && args.GasPrice.ToInt().BitLen() != 0 {
+	if feeCap.BitLen() != 0 {
 		state, _, err := b.StateAndHeaderByNumberOrHash(ctx, blockNrOrHash)
 		if err != nil {
 			return 0, err
@@ -928,7 +981,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 			}
 			available.Sub(available, args.Value.ToInt())
 		}
-		allowance := new(big.Int).Div(available, args.GasPrice.ToInt())
+		allowance := new(big.Int).Div(available, feeCap)
 
 		// If the allowance is larger than maximum uint64, skip checking
 		if allowance.IsUint64() && hi > allowance.Uint64() {
@@ -937,7 +990,7 @@ func DoEstimateGas(ctx context.Context, b Backend, args TransactionArgs, blockNr
 				transfer = new(hexutil.Big)
 			}
 			log.Warn("Gas estimation capped by limited funds", "original", hi, "balance", balance,
-				"sent", transfer.ToInt(), "gasprice", args.GasPrice.ToInt(), "fundable", allowance)
+				"sent", transfer.ToInt(), "feecap", feeCap, "fundable", allowance)
 			hi = allowance.Uint64()
 		}
 	}
@@ -1021,12 +1074,14 @@ type ExecutionResult struct {
 // StructLogRes stores a structured log emitted by the EVM while replaying a
 // transaction in debug mode
 type StructLogRes struct {
-	Pc      uint64             `json:"pc"`
-	Op      string             `json:"op"`
-	Gas     uint64             `json:"gas"`
-	GasCost uint64             `json:"gasCost"`
-	Depth   int                `json:"depth"`
-	Error   error              `json:"error,omitempty"`
+	Pc      uint64 `json:"pc"`
+	Op      string `json:"op"`
+	Gas     uint64 `json:"gas"`
+	GasCost uint64 `json:"gasCost"`
+	Depth   int    `json:"depth"`
+	// Upstream f311488d2: a plain error interface marshals to "{}" because the
+	// concrete error types have no exported fields. Carry the formatted message.
+	Error   string             `json:"error,omitempty"`
 	Stack   *[]string          `json:"stack,omitempty"`
 	Memory  *[]string          `json:"memory,omitempty"`
 	Storage *map[string]string `json:"storage,omitempty"`
@@ -1042,7 +1097,7 @@ func FormatLogs(logs []vm.StructLog) []StructLogRes {
 			Gas:     trace.Gas,
 			GasCost: trace.GasCost,
 			Depth:   trace.Depth,
-			Error:   trace.Err,
+			Error:   trace.ErrorString(),
 		}
 		if trace.Stack != nil {
 			stack := make([]string, len(trace.Stack))
@@ -1350,6 +1405,11 @@ func AccessList(ctx context.Context, b Backend, blockNrOrHash rpc.BlockNumberOrH
 		prevTracer = vm.NewAccessListTracer(*args.AccessList, args.from(), to, precompiles)
 	}
 	for {
+		// Upstream 5e070545: each iteration re-executes the transaction, so without
+		// this check the loop keeps burning CPU long after the caller has gone away.
+		if err := ctx.Err(); err != nil {
+			return nil, 0, nil, err
+		}
 		// Retrieve the current access list to expand
 		accessList := prevTracer.AccessList()
 		log.Trace("Creating access list", "input", accessList)
@@ -1594,7 +1654,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 	if err != nil {
 		return nil, err
 	}
-	if len(receipts) <= int(index) {
+	// Upstream f73365738: index is a uint64, so int(index) wraps negative on a huge
+	// value and the bounds check is skipped entirely. Compare in uint64 space.
+	if uint64(len(receipts)) <= index {
 		return nil, nil
 	}
 	receipt := receipts[index]
@@ -1627,7 +1689,9 @@ func (s *PublicTransactionPoolAPI) GetTransactionReceipt(ctx context.Context, ha
 		fields["status"] = hexutil.Uint(receipt.Status)
 	}
 	if receipt.Logs == nil {
-		fields["logs"] = [][]*types.Log{}
+		// Upstream f01e2fab0: "logs" is a flat array of logs, so an empty receipt must
+		// marshal as [] and not as an array of arrays.
+		fields["logs"] = []*types.Log{}
 	}
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
@@ -2017,9 +2081,20 @@ func (api *PrivateDebugAPI) ChaindbProperty(property string) (string, error) {
 // ChaindbCompact flattens the entire key-value database into a single level,
 // removing all unused slots and merging all keys.
 func (api *PrivateDebugAPI) ChaindbCompact() error {
-	for b := byte(0); b < 255; b++ {
-		log.Info("Compacting chain database", "range", fmt.Sprintf("0x%0.2X-0x%0.2X", b, b+1))
-		if err := api.b.ChainDb().Compact([]byte{b}, []byte{b + 1}); err != nil {
+	// Upstream 46c850a94: the old `for b := byte(0); b < 255` loop both stopped one
+	// range short and would have wrapped on b+1, leaving everything from 0xff
+	// upwards uncompacted. Iterate as an int and use an open upper bound at the top.
+	cstart := time.Now()
+	for b := 0; b <= 255; b++ {
+		var (
+			start = []byte{byte(b)}
+			end   = []byte{byte(b + 1)}
+		)
+		if b == 255 {
+			end = nil
+		}
+		log.Info("Compacting chain database", "range", fmt.Sprintf("%#X-%#X", start, end), "elapsed", common.PrettyDuration(time.Since(cstart)))
+		if err := api.b.ChainDb().Compact(start, end); err != nil {
 			log.Error("Database compaction failed", "err", err)
 			return err
 		}

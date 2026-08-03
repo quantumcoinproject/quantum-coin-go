@@ -120,7 +120,10 @@ func (t *rlpxTransport) close(err error) {
 			if err := t.conn.SetWriteDeadline(deadline); err == nil {
 				// Connection supports write deadline.
 				t.wbuf.Reset()
-				rlp.Encode(&t.wbuf, []DiscReason{r})
+				// Upstream c1c250714: encode via []any so this stays an RLP *list*.
+				// DiscReason is a single byte, so []DiscReason{r} would encode as a
+				// byte string and peers decoding a list would read reason 0.
+				rlp.Encode(&t.wbuf, []any{r})
 				t.conn.Write(discMsg, t.wbuf.Bytes())
 			}
 		}
@@ -172,9 +175,12 @@ func readProtocolHandshake(rw MsgReader) (*protoHandshake, error) {
 		// spec and we send it ourself if the post-handshake checks fail.
 		// We can't return the reason directly, though, because it is echoed
 		// back otherwise. Wrap it in a string instead.
-		var reason [1]DiscReason
-		rlp.Decode(msg.Payload, &reason)
-		return nil, reason[0]
+		// Upstream c1c250714: accept both the list and byte-string encodings.
+		reason, err := decodeDisconnectMessage(msg.Payload)
+		if err != nil {
+			return nil, DiscProtocolError
+		}
+		return nil, reason
 	}
 	if msg.Code != handshakeMsg {
 		return nil, fmt.Errorf("expected handshake, got %x", msg.Code)

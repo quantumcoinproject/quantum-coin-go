@@ -155,7 +155,12 @@ func (s *stateObject) touch() {
 	}
 }
 
-func (s *stateObject) getTrie(db Database) Trie {
+// getTrie returns the storage trie, opening it if necessary. Upstream 01808421e:
+// on failure it must report the error rather than substituting an EMPTY trie —
+// doing the latter turned a transient or corrupt-database failure into silently
+// wrong (empty) storage, and therefore a wrong storage root. The happy path is
+// unchanged; only the error path differs.
+func (s *stateObject) getTrie(db Database) (Trie, error) {
 	if s.trie == nil {
 		// Try fetching from prefetcher first
 		// We don't prefetch empty tries
@@ -165,15 +170,14 @@ func (s *stateObject) getTrie(db Database) Trie {
 			s.trie = s.db.prefetcher.trie(s.data.Root)
 		}
 		if s.trie == nil {
-			var err error
-			s.trie, err = db.OpenStorageTrie(s.addrHash, s.data.Root)
+			tr, err := db.OpenStorageTrie(s.addrHash, s.data.Root)
 			if err != nil {
-				s.trie, _ = db.OpenStorageTrie(s.addrHash, common.Hash{})
-				s.setError(fmt.Errorf("can't create storage trie: %v", err))
+				return nil, fmt.Errorf("can't create storage trie: %v", err)
 			}
+			s.trie = tr
 		}
 	}
-	return s.trie
+	return s.trie, nil
 }
 
 // GetState retrieves a value from the account storage trie.
@@ -248,7 +252,12 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 		if metrics.EnabledExpensive {
 			meter = &s.db.StorageReads
 		}
-		if enc, err = s.getTrie(db).TryGet(key.Bytes()); err != nil {
+		tr, err := s.getTrie(db)
+		if err != nil {
+			s.setError(err)
+			return common.Hash{}
+		}
+		if enc, err = tr.TryGet(key.Bytes()); err != nil {
 			s.setError(err)
 			return common.Hash{}
 		}
@@ -327,12 +336,14 @@ func (s *stateObject) finalise(prefetch bool) {
 }
 
 // updateTrie writes cached storage modifications into the object's storage trie.
-// It will return nil if the trie has not been loaded and no changes have been made
-func (s *stateObject) updateTrie(db Database) Trie {
+// It will return nil if the trie has not been loaded and no changes have been made.
+// Upstream 01808421e: it also reports a storage-trie open failure instead of
+// silently proceeding against an empty trie.
+func (s *stateObject) updateTrie(db Database) (Trie, error) {
 	// Make sure all dirty slots are finalized into the pending storage area
 	s.finalise(false) // Don't prefetch any more, pull directly if need be
 	if len(s.pendingStorage) == 0 {
-		return s.trie
+		return s.trie, nil
 	}
 	// Track the amount of time wasted on updating the storage trie
 	if metrics.EnabledExpensive {
@@ -341,7 +352,11 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	// The snapshot storage map for the object
 	var storage map[common.Hash][]byte
 	// Insert all the pending updates into the trie
-	tr := s.getTrie(db)
+	tr, err := s.getTrie(db)
+	if err != nil {
+		s.setError(err)
+		return nil, err
+	}
 
 	usedStorage := make([][]byte, 0, len(s.pendingStorage))
 	for key, value := range s.pendingStorage {
@@ -378,13 +393,20 @@ func (s *stateObject) updateTrie(db Database) Trie {
 	if len(s.pendingStorage) > 0 {
 		s.pendingStorage = make(Storage)
 	}
-	return tr
+	return tr, nil
 }
 
 // UpdateRoot sets the trie root to the current root hash of
 func (s *stateObject) updateRoot(db Database) {
-	// If nothing changed, don't bother with hashing anything
-	if s.updateTrie(db) == nil {
+	// If nothing changed, don't bother with hashing anything. A storage-trie open
+	// failure is recorded on the object (upstream 01808421e) and surfaces via
+	// StateDB.Error, so the root is left untouched rather than set from an empty trie.
+	tr, err := s.updateTrie(db)
+	if err != nil {
+		s.setError(fmt.Errorf("updateRoot (%x) error: %w", s.address, err))
+		return
+	}
+	if tr == nil {
 		return
 	}
 	// Track the amount of time wasted on hashing the storage trie
@@ -398,7 +420,11 @@ func (s *stateObject) updateRoot(db Database) {
 // This updates the trie root.
 func (s *stateObject) CommitTrie(db Database) error {
 	// If nothing changed, don't bother with hashing anything
-	if s.updateTrie(db) == nil {
+	tr, err := s.updateTrie(db)
+	if err != nil {
+		return err
+	}
+	if tr == nil {
 		return nil
 	}
 	if s.dbErr != nil {

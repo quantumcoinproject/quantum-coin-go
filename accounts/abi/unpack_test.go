@@ -765,20 +765,28 @@ func TestUnpackTuple(t *testing.T) {
 	buff.Write(common.Hex2Bytes("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")) // ret[b] = -1
 
 	// If the result is single tuple, use struct as return value container directly.
-	v := struct {
+	//
+	// Upstream 57a3fab8a: the single tuple is stored in the destination's first
+	// field, exactly like every other single argument. This test previously
+	// encoded the pre-fix behaviour of unpacking it into the destination itself.
+	type v struct {
 		A *big.Int
 		B *big.Int
-	}{new(big.Int), new(big.Int)}
+	}
+	type r struct {
+		Result v
+	}
+	var ret0 = new(r)
+	err = abi.UnpackIntoInterface(ret0, "tuple", buff.Bytes())
 
-	err = abi.UnpackIntoInterface(&v, "tuple", buff.Bytes())
 	if err != nil {
 		t.Error(err)
 	} else {
-		if v.A.Cmp(big.NewInt(1)) != 0 {
-			t.Errorf("unexpected value unpacked: want %x, got %x", 1, v.A)
+		if ret0.Result.A.Cmp(big.NewInt(1)) != 0 {
+			t.Errorf("unexpected value unpacked: want %x, got %x", 1, ret0.Result.A)
 		}
-		if v.B.Cmp(big.NewInt(-1)) != 0 {
-			t.Errorf("unexpected value unpacked: want %x, got %x", -1, v.B)
+		if ret0.Result.B.Cmp(big.NewInt(-1)) != 0 {
+			t.Errorf("unexpected value unpacked: want %x, got %x", -1, ret0.Result.B)
 		}
 	}
 

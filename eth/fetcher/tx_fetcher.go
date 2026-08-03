@@ -18,6 +18,7 @@ package fetcher
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	mrand "math/rand"
 	"sort"
@@ -46,6 +47,16 @@ const (
 	//     so pick a middle value here to ensure we can maximize the efficiency
 	//     of the retrieval and response size overflow won't happen in most cases.
 	maxTxRetrievals = 256
+
+	// txDeliveryBatchSize is the number of delivered transactions imported into the
+	// pool in one go. Upstream 7f2890a9b: importing in batches lets the fetcher
+	// notice - and throttle - a peer that floods us with invalid transactions.
+	txDeliveryBatchSize = 128
+
+	// txDeliveryThrottle is how long a peer delivery is stalled for when more than
+	// a quarter of a batch was rejected for reasons other than being known or
+	// underpriced.
+	txDeliveryThrottle = 200 * time.Millisecond
 
 	// maxTxUnderpricedSetSize is the size of the underpriced transaction set that
 	// is used to track recent transactions that have been dropped so we don't
@@ -261,56 +272,73 @@ func (f *TxFetcher) Notify(peer string, hashes []common.Hash) error {
 // direct request replies. The differentiation is important so the fetcher can
 // re-shedule missing transactions as soon as possible.
 func (f *TxFetcher) Enqueue(peer string, txs []*types.Transaction, direct bool) error {
-	// Keep track of all the propagated transactions
-	if direct {
-		txReplyInMeter.Mark(int64(len(txs)))
-	} else {
-		txBroadcastInMeter.Mark(int64(len(txs)))
+	var (
+		inMeter          = txReplyInMeter
+		knownMeter       = txReplyKnownMeter
+		underpricedMeter = txReplyUnderpricedMeter
+		otherRejectMeter = txReplyOtherRejectMeter
+	)
+	if !direct {
+		inMeter = txBroadcastInMeter
+		knownMeter = txBroadcastKnownMeter
+		underpricedMeter = txBroadcastUnderpricedMeter
+		otherRejectMeter = txBroadcastOtherRejectMeter
 	}
+	// Keep track of all the propagated transactions
+	inMeter.Mark(int64(len(txs)))
+
 	// Push all the transactions into the pool, tracking underpriced ones to avoid
 	// re-requesting them and dropping the peer in case of malicious transfers.
 	var (
-		added       = make([]common.Hash, 0, len(txs))
-		duplicate   int64
-		underpriced int64
-		otherreject int64
+		added = make([]common.Hash, 0, len(txs))
 	)
-	errs := f.addTxs(txs)
-	for i, err := range errs {
-		if err != nil {
+	// Upstream 7f2890a9b: proceed in batches so that a peer flooding us with
+	// invalid transactions can be throttled instead of being served at full speed.
+	for i := 0; i < len(txs); i += txDeliveryBatchSize {
+		end := i + txDeliveryBatchSize
+		if end > len(txs) {
+			end = len(txs)
+		}
+		var (
+			duplicate   int64
+			underpriced int64
+			otherreject int64
+		)
+		batch := txs[i:end]
+		for j, err := range f.addTxs(batch) {
 			// Track the transaction hash if the price is too low for us.
 			// Avoid re-request this transaction when we receive another
 			// announcement.
-			if err == core.ErrUnderpriced || err == core.ErrReplaceUnderpriced {
+			if errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced) {
 				for f.underpriced.Cardinality() >= maxTxUnderpricedSetSize {
 					f.underpriced.Pop()
 				}
-				f.underpriced.Add(txs[i].Hash())
+				f.underpriced.Add(batch[j].Hash())
 			}
 			// Track a few interesting failure types
-			switch err {
-			case nil: // Noop, but need to handle to not count these
+			switch {
+			case err == nil: // Noop, but need to handle to not count these
 
-			case core.ErrAlreadyKnown:
+			case errors.Is(err, core.ErrAlreadyKnown):
 				duplicate++
 
-			case core.ErrUnderpriced, core.ErrReplaceUnderpriced:
+			case errors.Is(err, core.ErrUnderpriced) || errors.Is(err, core.ErrReplaceUnderpriced):
 				underpriced++
 
 			default:
 				otherreject++
 			}
+			added = append(added, batch[j].Hash())
 		}
-		added = append(added, txs[i].Hash())
-	}
-	if direct {
-		txReplyKnownMeter.Mark(duplicate)
-		txReplyUnderpricedMeter.Mark(underpriced)
-		txReplyOtherRejectMeter.Mark(otherreject)
-	} else {
-		txBroadcastKnownMeter.Mark(duplicate)
-		txBroadcastUnderpricedMeter.Mark(underpriced)
-		txBroadcastOtherRejectMeter.Mark(otherreject)
+		knownMeter.Mark(duplicate)
+		underpricedMeter.Mark(underpriced)
+		otherRejectMeter.Mark(otherreject)
+
+		// If 'other reject' is >25% of the deliveries in any batch, sleep a bit.
+		if otherreject > txDeliveryBatchSize/4 {
+			time.Sleep(txDeliveryThrottle)
+			log.Warn("Peer delivering stale transactions", "peer", peer, "rejected", otherreject)
+		}
 	}
 	select {
 	case f.cleanup <- &txDelivery{origin: peer, hashes: added, direct: direct}:

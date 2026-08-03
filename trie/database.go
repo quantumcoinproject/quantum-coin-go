@@ -727,7 +727,11 @@ func (db *Database) Commit(node common.Hash, report bool, callback func(common.H
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	batch.Replay(uncacher)
+	// Upstream 57a65f00c: a failing replay means the dirty cache was not correctly
+	// uncached, which silently loses state nodes. Propagate it.
+	if err := batch.Replay(uncacher); err != nil {
+		return err
+	}
 	batch.Reset()
 
 	// Reset the storage counters and bumped metrics
@@ -778,9 +782,14 @@ func (db *Database) commit(hash common.Hash, batch ethdb.Batch, uncacher *cleane
 			return err
 		}
 		db.lock.Lock()
-		batch.Replay(uncacher)
+		// Upstream 57a65f00c: capture the replay error, finish the critical section,
+		// then bail out - the batch must be reset and the lock released either way.
+		err := batch.Replay(uncacher)
 		batch.Reset()
 		db.lock.Unlock()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -820,7 +829,9 @@ func (c *cleaner) Put(key []byte, rlp []byte) error {
 	delete(c.db.dirties, hash)
 	c.db.dirtiesSize -= common.StorageSize(common.HashLength + int(node.size))
 	if node.children != nil {
-		c.db.dirtiesSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
+		// Upstream 241dd2730: the children map is accounted for in childrenSize, not
+		// dirtiesSize, so charging it back to dirtiesSize corrupts both counters.
+		c.db.childrenSize -= common.StorageSize(cachedNodeChildrenSize + len(node.children)*(common.HashLength+2))
 	}
 	// Move the flushed node into the clean cache to prevent insta-reloads
 	if c.db.cleans != nil {

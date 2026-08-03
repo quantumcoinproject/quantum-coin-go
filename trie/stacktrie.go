@@ -132,7 +132,11 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 		Key       []byte
 		KeyOffset uint8
 	}
-	gob.NewDecoder(r).Decode(&dec)
+	// Upstream b7bfbc1e6: a failed decode used to leave the node zero-valued and
+	// silently carry on, producing a bogus trie from corrupt input.
+	if err := gob.NewDecoder(r).Decode(&dec); err != nil {
+		return err
+	}
 	st.nodeType = dec.Nodetype
 	st.val = dec.Val
 	st.key = dec.Key
@@ -146,7 +150,9 @@ func (st *StackTrie) unmarshalBinary(r io.Reader) error {
 			continue
 		}
 		var child StackTrie
-		child.unmarshalBinary(r)
+		if err := child.unmarshalBinary(r); err != nil {
+			return err
+		}
 		st.children[i] = &child
 	}
 	return nil

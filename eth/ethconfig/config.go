@@ -68,6 +68,26 @@ var Defaults = Config{
 	UltraLightFraction:      75,
 	DatabaseCache:           512,
 	TrieCleanCache:          154,
+	// WARNING: the persisted clean-trie cache is *not* self-invalidating.
+	//
+	// Upstream removed this feature outright in 59f7b289c (go-ethereum #27525)
+	// because the journal is keyed purely by node hash and carries no notion of
+	// which state roots are still on disk. After an offline prune or a chain
+	// rewind the journal can still hold a root (or intermediate) node whose
+	// children were deleted from the key-value store. A lookup then hits the
+	// clean cache, finds the parent, and concludes the sub-trie is present when
+	// it is not - surfacing as "missing trie node" much later, or as a node that
+	// silently serves a truncated state.
+	//
+	// We keep the feature (removing it is a behaviour/flag change that needs its
+	// own decision), so the hazard has to be handled operationally:
+	//
+	//	Delete the `triecache` directory under the datadir after ANY offline
+	//	prune (`dp snapshot prune-state`) or chain rewind (`dp removedb`,
+	//	`debug.setHead`, a rollback to an earlier block) before restarting.
+	//
+	// Setting --cache.trie.journal="" disables the journal entirely and avoids
+	// the hazard at the cost of a cold trie cache on every restart.
 	TrieCleanCacheJournal:   "triecache",
 	TrieCleanCacheRejournal: 30 * time.Second,
 	TrieDirtyCache:          256,
@@ -148,7 +168,11 @@ type Config struct {
 	DatabaseCache      int
 	DatabaseFreezer    string
 
-	TrieCleanCache          int
+	TrieCleanCache int
+	// TrieCleanCacheJournal is unsafe across a prune or a rewind: the journal is
+	// keyed by node hash only, so a stale root node makes an absent sub-trie look
+	// present. Delete the journal directory after an offline prune or a chain
+	// rewind (or set it to "" to disable the journal). See the note on Defaults.
 	TrieCleanCacheJournal   string        `toml:",omitempty"` // Disk journal directory for trie cache to survive node restarts
 	TrieCleanCacheRejournal time.Duration `toml:",omitempty"` // Time interval to regenerate the journal for clean cache
 	TrieDirtyCache          int

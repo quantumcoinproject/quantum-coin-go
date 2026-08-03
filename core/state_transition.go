@@ -21,10 +21,16 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/core/vm"
+	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"math"
 	"math/big"
 )
+
+// emptyCodeHash is the code hash of an account that holds no code; an account that
+// was never touched instead reports the zero hash.
+var emptyCodeHash = crypto.Keccak256Hash(nil)
 
 const TXN_FEE_CUTTOFF_BLOCK = 1607600
 
@@ -209,6 +215,20 @@ func (st *StateTransition) preCheck() error {
 		} else if stNonce > msgNonce {
 			return fmt.Errorf("%w: address %v, tx: %d state: %d", ErrNonceTooLow,
 				st.msg.From().Hex(), msgNonce, stNonce)
+		} else if defaults.IsUpstreamConsensusFixesV1Big(st.evm.Context.BlockNumber) && stNonce+1 < stNonce {
+			// EIP-2681: the sender's nonce is already at 2^64-1, so applying this
+			// transaction would wrap it back to zero. Upstream f32feeb26.
+			return fmt.Errorf("%w: address %v, nonce: %d", ErrNonceMax,
+				st.msg.From().Hex(), stNonce)
+		}
+		if defaults.IsUpstreamConsensusFixesV1Big(st.evm.Context.BlockNumber) {
+			// EIP-3607: make sure the sender is an EOA. A never-touched account
+			// reports the zero code hash rather than emptyCodeHash, which is only
+			// reachable with a zero-cost gas price. Upstream 0658712f6 + d02c60536.
+			if codeHash := st.state.GetCodeHash(st.msg.From()); codeHash != emptyCodeHash && codeHash != (common.Hash{}) {
+				return fmt.Errorf("%w: address %v, codehash: %s", ErrSenderNoEOA,
+					st.msg.From().Hex(), codeHash)
+			}
 		}
 	}
 	return st.buyGas()

@@ -129,6 +129,9 @@ func (b *SyncBloom) init(database ethdb.Iteratee) {
 func (b *SyncBloom) meter() {
 	// check every second
 	tick := time.NewTicker(1 * time.Second)
+	// Upstream 79bb9300c: the ticker outlives the bloom filter unless it is stopped.
+	defer tick.Stop()
+
 	for {
 		select {
 		case <-tick.C:

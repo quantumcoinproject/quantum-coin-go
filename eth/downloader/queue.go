@@ -947,7 +947,9 @@ func (q *queue) deliver(id string, taskPool map[common.Hash]*types.Header,
 	}
 
 	for _, header := range request.Headers[:i] {
-		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil {
+		// Upstream b32d20324: a stale slot must not be reconstructed into, the
+		// result it points at already belongs to a different (later) fetch round.
+		if res, stale, err := q.resultCache.GetDeliverySlot(header.Number.Uint64()); err == nil && !stale {
 			reconstruct(accepted, res)
 		} else {
 			// else: betweeen here and above, some other peer filled this result,

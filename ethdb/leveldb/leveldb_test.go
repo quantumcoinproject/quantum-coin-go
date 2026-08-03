@@ -38,3 +38,32 @@ func TestLevelDB(t *testing.T) {
 		})
 	})
 }
+
+// TestUBF126_BatchSizeCountsKey checks that a batched Put accounts for the key as well
+// as the value. Upstream 53f81574e: Delete counted the key but Put did not, so batches
+// were flushed later than the configured ideal size — badly so with 32-byte keys.
+func TestUBF126_BatchSizeCountsKey(t *testing.T) {
+	db, err := leveldb.Open(storage.NewMemStorage(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var (
+		key   = []byte("a-32-byte-quantum-coin-key-here!")
+		value = []byte("value")
+	)
+	b := (&Database{db: db}).NewBatch()
+	if err := b.Put(key, value); err != nil {
+		t.Fatal(err)
+	}
+	if want := len(key) + len(value); b.ValueSize() != want {
+		t.Errorf("ValueSize after Put = %d, want %d", b.ValueSize(), want)
+	}
+	if err := b.Delete(key); err != nil {
+		t.Fatal(err)
+	}
+	if want := 2*len(key) + len(value); b.ValueSize() != want {
+		t.Errorf("ValueSize after Delete = %d, want %d", b.ValueSize(), want)
+	}
+}

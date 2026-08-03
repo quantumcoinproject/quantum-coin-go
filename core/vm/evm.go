@@ -23,6 +23,7 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/uint256"
 )
@@ -424,6 +425,12 @@ func (evm *EVM) create(caller ContractRef, codeAndHash *codeAndHash, gas uint64,
 		return nil, common.Address{}, gas, ErrInsufficientBalance
 	}
 	nonce := evm.StateDB.GetNonce(caller.Address())
+	// EIP-2681: an account nonce may never exceed 2^64-1, so a creation that would
+	// wrap the creator's nonce back to zero must fail instead. Upstream f32feeb26.
+	// Gated: aborting here changes the state transition.
+	if defaults.IsUpstreamConsensusFixesV1Big(evm.Context.BlockNumber) && nonce+1 < nonce {
+		return nil, common.Address{}, gas, ErrNonceUintOverflow
+	}
 	evm.StateDB.SetNonce(caller.Address(), nonce+1)
 	// We add this to the access list _before_ taking a snapshot. Even if the creation fails,
 	// the access-list change should not be rolled back

@@ -258,6 +258,11 @@ func (dl *diffLayer) Root() common.Hash {
 
 // Parent returns the subsequent layer of a diff layer.
 func (dl *diffLayer) Parent() snapshot {
+	// Upstream 86d547707: dl.parent is re-linked during flattening, reading it
+	// without the lock is a data race.
+	dl.lock.RLock()
+	defer dl.lock.RUnlock()
+
 	return dl.parent
 }
 
@@ -289,9 +294,16 @@ func (dl *diffLayer) Account(hash common.Hash) (*Account, error) {
 //
 // Note the returned account is not a copy, please don't modify it.
 func (dl *diffLayer) AccountRLP(hash common.Hash) ([]byte, error) {
+	dl.lock.RLock()
+	// Upstream eb83e7c54: check staleness before reaching further, otherwise a
+	// bloom miss on a flattened-away layer reads a stale origin disk layer and
+	// returns junk instead of ErrSnapshotStale.
+	if dl.Stale() {
+		dl.lock.RUnlock()
+		return nil, ErrSnapshotStale
+	}
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
-	dl.lock.RLock()
 	hit := dl.diffed.Contains(accountBloomHasher(hash))
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(hash))
@@ -358,6 +370,11 @@ func (dl *diffLayer) Storage(accountHash, storageHash common.Hash) ([]byte, erro
 	// Check the bloom filter first whether there's even a point in reaching into
 	// all the maps in all the layers below
 	dl.lock.RLock()
+	// Upstream eb83e7c54: check staleness before reaching further.
+	if dl.Stale() {
+		dl.lock.RUnlock()
+		return nil, ErrSnapshotStale
+	}
 	hit := dl.diffed.Contains(storageBloomHasher{accountHash, storageHash})
 	if !hit {
 		hit = dl.diffed.Contains(destructBloomHasher(accountHash))

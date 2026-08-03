@@ -80,6 +80,7 @@ type freezerTable struct {
 	items uint64 // Number of items stored in the table (including items removed from tail)
 
 	noCompression bool   // if true, disables snappy compression. Note: does not work retroactively
+	readonly      bool   // if true, the table is opened for reading only and must never mutate its files
 	maxFileSize   uint32 // Max file size for data-files
 	name          string
 	path          string
@@ -104,13 +105,17 @@ type freezerTable struct {
 }
 
 // NewFreezerTable opens the given path as a freezer table.
+//
+// Note: unlike upstream we keep the read/write signature here so that the
+// existing `dp db` tooling keeps compiling; read-only tables are obtained
+// through newTable/newCustomTable instead.
 func NewFreezerTable(path, name string, disableSnappy bool) (*freezerTable, error) {
-	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, disableSnappy)
+	return newTable(path, name, metrics.NilMeter{}, metrics.NilMeter{}, metrics.NilGauge{}, disableSnappy, false)
 }
 
 // newTable opens a freezer table with default settings - 2G files
-func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, disableSnappy bool) (*freezerTable, error) {
-	return newCustomTable(path, name, readMeter, writeMeter, sizeGauge, 2*1000*1000*1000, disableSnappy)
+func newTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, disableSnappy bool, readonly bool) (*freezerTable, error) {
+	return newCustomTable(path, name, readMeter, writeMeter, sizeGauge, 2*1000*1000*1000, disableSnappy, readonly)
 }
 
 // openFreezerFileForAppend opens a freezer table file and seeks to the end
@@ -154,7 +159,7 @@ func truncateFreezerFile(file *os.File, size int64) error {
 // newCustomTable opens a freezer table, creating the data and index files if they are
 // non existent. Both files are truncated to the shortest common length to ensure
 // they don't go out of sync.
-func newCustomTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, maxFilesize uint32, noCompression bool) (*freezerTable, error) {
+func newCustomTable(path string, name string, readMeter metrics.Meter, writeMeter metrics.Meter, sizeGauge metrics.Gauge, maxFilesize uint32, noCompression bool, readonly bool) (*freezerTable, error) {
 	// Ensure the containing directory exists and open the indexEntry file
 	if err := os.MkdirAll(path, 0755); err != nil {
 		return nil, err
@@ -167,7 +172,18 @@ func newCustomTable(path string, name string, readMeter metrics.Meter, writeMete
 		// Compressed idx
 		idxName = fmt.Sprintf("%s.cidx", name)
 	}
-	offsets, err := openFreezerFileForAppend(filepath.Join(path, idxName))
+	// Upstream 4aab440ee: a read-only table must not create or extend anything on
+	// disk, so open the index read-only too. This fails if the table is missing,
+	// which is the desired behaviour for a read-only open.
+	var (
+		err     error
+		offsets *os.File
+	)
+	if readonly {
+		offsets, err = openFreezerFileForReadOnly(filepath.Join(path, idxName))
+	} else {
+		offsets, err = openFreezerFileForAppend(filepath.Join(path, idxName))
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -182,6 +198,7 @@ func newCustomTable(path string, name string, readMeter metrics.Meter, writeMete
 		path:          path,
 		logger:        log.New("database", path, "table", name),
 		noCompression: noCompression,
+		readonly:      readonly,
 		maxFileSize:   maxFilesize,
 	}
 	if err := tab.repair(); err != nil {
@@ -242,7 +259,11 @@ func (t *freezerTable) repair() error {
 
 	t.index.ReadAt(buffer, offsetsSize-indexEntrySize)
 	lastIndex.unmarshalBinary(buffer)
-	t.head, err = t.openFile(lastIndex.filenum, openFreezerFileForAppend)
+	if t.readonly {
+		t.head, err = t.openFile(lastIndex.filenum, openFreezerFileForReadOnly)
+	} else {
+		t.head, err = t.openFile(lastIndex.filenum, openFreezerFileForAppend)
+	}
 	if err != nil {
 		return err
 	}
@@ -255,6 +276,11 @@ func (t *freezerTable) repair() error {
 	contentExp = int64(lastIndex.offset)
 
 	for contentExp != contentSize {
+		// Upstream 4aab440ee / 545f4c554: a read-only table must never repair by
+		// truncating. Surface the inconsistency instead of mutating the files.
+		if t.readonly {
+			return fmt.Errorf("freezer table(path: %s, name: %s, num: %d) is corrupted", t.path, t.name, lastIndex.filenum)
+		}
 		// Truncate the head file to the last offset pointer
 		if contentExp < contentSize {
 			t.logger.Warn("Truncating dangling head", "indexed", common.StorageSize(contentExp), "stored", common.StorageSize(contentSize))
@@ -291,12 +317,15 @@ func (t *freezerTable) repair() error {
 			contentExp = int64(lastIndex.offset)
 		}
 	}
-	// Ensure all reparation changes have been written to disk
-	if err := t.index.Sync(); err != nil {
-		return err
-	}
-	if err := t.head.Sync(); err != nil {
-		return err
+	// Sync() fails for read-only files on windows.
+	if !t.readonly {
+		// Ensure all reparation changes have been written to disk
+		if err := t.index.Sync(); err != nil {
+			return err
+		}
+		if err := t.head.Sync(); err != nil {
+			return err
+		}
 	}
 	// Update the item and byte counters and return
 	t.items = uint64(t.itemOffset) + uint64(offsetsSize/indexEntrySize-1) // last indexEntry points to the end of the data file
@@ -324,8 +353,12 @@ func (t *freezerTable) preopen() (err error) {
 			return err
 		}
 	}
-	// Open head in read/write
-	t.head, err = t.openFile(t.headId, openFreezerFileForAppend)
+	if t.readonly {
+		t.head, err = t.openFile(t.headId, openFreezerFileForReadOnly)
+	} else {
+		// Open head in read/write
+		t.head, err = t.openFile(t.headId, openFreezerFileForAppend)
+	}
 	return err
 }
 
@@ -399,16 +432,35 @@ func (t *freezerTable) Close() error {
 	defer t.lock.Unlock()
 
 	var errs []error
-	if err := t.index.Close(); err != nil {
-		errs = append(errs, err)
-	}
-	t.index = nil
-
-	for _, f := range t.files {
-		if err := f.Close(); err != nil {
-			errs = append(errs, err)
+	// Upstream 0b53b2907: fsync the read/write descriptors before closing them,
+	// otherwise a shutdown followed by a power loss can lose the tail of the
+	// table even though Close reported success.
+	doClose := func(f *os.File, sync bool, close bool) {
+		if f == nil {
+			return // repair may have failed before the head was opened
+		}
+		if sync && !t.readonly {
+			if err := f.Sync(); err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if close {
+			if err := f.Close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
+	// Trying to fsync a file opened in rdonly causes "Access denied"
+	// error on Windows.
+	doClose(t.index, true, true)
+	// The preopened non-head data-files are all opened in readonly.
+	// The head is opened in rw-mode, so we sync it here - but since it's also
+	// part of t.files, it will be closed in the loop below.
+	doClose(t.head, true, false) // sync but do not close
+	for _, f := range t.files {
+		doClose(f, false, true) // close but do not sync
+	}
+	t.index = nil
 	t.head = nil
 
 	if errs != nil {
@@ -517,6 +569,13 @@ func (t *freezerTable) append(item uint64, encodedBlob []byte, wlock bool) (bool
 		// exists, we need to start over from scratch on it
 		newHead, err := t.openFile(nextID, openFreezerFileTruncated)
 		if err != nil {
+			return false, err
+		}
+		// Upstream e04d63ebd: commit the contents of the old file to stable storage
+		// before tearing it down. Without this fsync a rotated data file can lose
+		// its tail on a power failure, since freezer.Sync only ever fsyncs the
+		// current head.
+		if err := t.head.Sync(); err != nil {
 			return false, err
 		}
 		// Close old file, and reopen in RDONLY mode
@@ -654,10 +713,23 @@ func (t *freezerTable) sizeNolock() (uint64, error) {
 // Sync pushes any pending data from memory out to disk. This is an expensive
 // operation, so use it with care.
 func (t *freezerTable) Sync() error {
-	if err := t.index.Sync(); err != nil {
-		return err
+	// Upstream 193f350eb: the file descriptors are guarded by t.lock, and a failure
+	// to sync the index must not hide a failure to sync the head (or vice versa).
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	if t.index == nil || t.head == nil {
+		return errClosed
 	}
-	return t.head.Sync()
+	var err error
+	trackError := func(e error) {
+		if e != nil && err == nil {
+			err = e
+		}
+	}
+	trackError(t.index.Sync())
+	trackError(t.head.Sync())
+	return err
 }
 
 // DumpIndex is a debug print utility function, mainly for testing. It can also

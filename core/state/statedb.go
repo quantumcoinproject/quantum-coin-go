@@ -190,9 +190,15 @@ func (s *StateDB) AddLog(log *types.Log) {
 	s.logSize++
 }
 
-func (s *StateDB) GetLogs(hash common.Hash, blockHash common.Hash) []*types.Log {
+// GetLogs returns the logs emitted by the given transaction, stamped with the block
+// they belong to. Upstream cda051eba: BlockNumber must be set here as well as
+// BlockHash, otherwise logs surfaced on the live feed or during tracing carry
+// BlockNumber 0 until Receipts.DeriveFields runs later. BlockNumber is not part of
+// the consensus receipt encoding, so this is node-local.
+func (s *StateDB) GetLogs(hash common.Hash, blockNumber uint64, blockHash common.Hash) []*types.Log {
 	logs := s.logs[hash]
 	for _, l := range logs {
+		l.BlockNumber = blockNumber
 		l.BlockHash = blockHash
 	}
 	return logs
@@ -351,8 +357,16 @@ func (s *StateDB) StorageTrie(addr common.Address) Trie {
 		return nil
 	}
 	cpy := stateObject.deepCopy(s)
-	cpy.updateTrie(s.db)
-	return cpy.getTrie(s.db)
+	if _, err := cpy.updateTrie(s.db); err != nil {
+		return nil
+	}
+	// Upstream 01808421e: report an open failure as "no trie" rather than handing
+	// back an empty one that would read as empty storage.
+	tr, err := cpy.getTrie(s.db)
+	if err != nil {
+		return nil
+	}
+	return tr
 }
 
 func (s *StateDB) HasSuicided(addr common.Address) bool {
@@ -616,7 +630,11 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 	if so == nil {
 		return nil
 	}
-	it := trie.NewIterator(so.getTrie(db.db).NodeIterator(nil))
+	tr, err := so.getTrie(db.db)
+	if err != nil {
+		return err
+	}
+	it := trie.NewIterator(tr.NodeIterator(nil))
 
 	for it.Next() {
 		key := common.BytesToHash(db.trie.GetKey(it.Key))
@@ -880,7 +898,6 @@ func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
 func (s *StateDB) Prepare(thash common.Hash, ti int) {
 	s.thash = thash
 	s.txIndex = ti
-	s.accessList = newAccessList()
 }
 
 func (s *StateDB) clearJournalAndRefund() {
@@ -975,6 +992,11 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 //
 // This method should only be called if Berlin/2929+2930 is applicable at the current number.
 func (s *StateDB) PrepareAccessList(sender common.Address, dst *common.Address, precompiles []common.Address, list types.AccessList) {
+	// Clear out any leftover from previous executions. Upstream 48605b5f6: block
+	// execution always calls Prepare first, but RPC paths reuse a StateDB, so
+	// resetting here rather than in Prepare is what makes reuse correct.
+	s.accessList = newAccessList()
+
 	s.AddAddressToAccessList(sender)
 	if dst != nil {
 		s.AddAddressToAccessList(*dst)

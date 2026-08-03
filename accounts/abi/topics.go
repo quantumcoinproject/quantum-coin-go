@@ -23,6 +23,7 @@ import (
 	"reflect"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 )
 
@@ -40,8 +41,10 @@ func MakeTopics(query ...[]interface{}) ([][]common.Hash, error) {
 			case common.Address:
 				copy(topic[:], rule[:])
 			case *big.Int:
-				blob := rule.Bytes()
-				copy(topic[common.HashLength-len(blob):], blob)
+				// Upstream d0edc5af4 + 3c754e2a0: Bytes() drops the sign, so a
+				// negative int256 filter produced the wrong topic. U256Bytes is
+				// destructive, hence the defensive copy of the caller's value.
+				copy(topic[:], math.U256Bytes(new(big.Int).Set(rule)))
 			case bool:
 				if rule {
 					topic[common.HashLength-1] = 1

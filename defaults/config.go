@@ -2,6 +2,7 @@ package defaults
 
 import (
 	"errors"
+	"math"
 	"math/big"
 	"os"
 
@@ -10,6 +11,11 @@ import (
 )
 
 const BASIC_TXN_GAS = uint64(21000)
+
+// NotScheduled marks a fork activation height that has not been agreed yet. A gate
+// set to this value never activates, so the fix is compiled in but dormant until a
+// real height is chosen.
+const NotScheduled = uint64(math.MaxUint64)
 
 // MIN_DYNAMIC_GAS_LIMIT is the floor block gas limit (~100 basic txns) used by the
 // dynamic gas-limit scheme that activates at GasV2StartBlock.
@@ -68,6 +74,29 @@ func IsGasTipActive(blockNumber uint64) bool {
 // historical blocks.
 func IsConsensusMalleabilityV1(blockNumber uint64) bool {
 	return blockNumber >= DefaultConfig.PosConfig.ConsensusMalleabilityV1StartBlock
+}
+
+// IsUpstreamConsensusFixesV1 reports whether the upstream-derived consensus fix
+// bundle (see UpstreamConsensusFixesV1StartBlock) is active at the given block
+// number. Every fix behind this gate changes the state transition, so it must
+// only apply from a finalized activation height and never retroactively.
+func IsUpstreamConsensusFixesV1(blockNumber uint64) bool {
+	return blockNumber >= DefaultConfig.PosConfig.UpstreamConsensusFixesV1StartBlock
+}
+
+// IsUpstreamConsensusFixesV1Big is the *big.Int form for EVM call sites, which
+// carry the block number as a *big.Int. A nil block number is treated as
+// pre-activation so that callers without block context never activate the fork.
+func IsUpstreamConsensusFixesV1Big(blockNumber *big.Int) bool {
+	if blockNumber == nil {
+		return false
+	}
+	if !blockNumber.IsUint64() {
+		// Beyond uint64 range: past every schedulable height, but still inactive
+		// when the fork is unscheduled.
+		return DefaultConfig.PosConfig.UpstreamConsensusFixesV1StartBlock != NotScheduled
+	}
+	return IsUpstreamConsensusFixesV1(blockNumber.Uint64())
 }
 
 func IsSigAlgSwitchMode(blockNumber uint64) bool {
@@ -160,6 +189,25 @@ type ProofOfStakeConfig struct {
 	// intentionally set to "never" (max uint64) until a concrete activation height has
 	// been finalized; only then should this be lowered to that height.
 	ConsensusMalleabilityV1StartBlock uint64
+
+	// UpstreamConsensusFixesV1StartBlock activates the consensus fixes ported from
+	// upstream go-ethereum (see docs/upstream-bugfix-audit-2026-08.md). It gates:
+	//
+	//   - CVE-2021-39137: the identity precompile (0x04) returns its input slice by
+	//     reference, so a CALL whose return region overlaps caller memory can
+	//     retroactively mutate already-consumed return data. Upstream 1d9957319
+	//     (v1.10.8); split Ethereum mainnet at block 13107518.
+	//   - EIP-3607: reject transactions sent from an account that has code.
+	//     Upstream 0658712f6 + d02c60536 (v1.10.9).
+	//   - EIP-2681: reject a transaction at nonce 2^64-1, and fail CREATE/CREATE2
+	//     when the creator's nonce would wrap. Upstream f32feeb26.
+	//
+	// Every one of these changes the state transition or block validity: blocks that
+	// verify today can become invalid, and EVM output changes for contract-reachable
+	// input. Activating retroactively would fork the chain, so mainnet is set to
+	// NotScheduled until a concrete activation height has been agreed; only then
+	// should this be lowered to that height.
+	UpstreamConsensusFixesV1StartBlock uint64
 }
 
 type Config struct {
@@ -232,6 +280,10 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	SixSecondBlockTimeStartBlock: 5319268,
 
 	ConsensusMalleabilityV1StartBlock: 0,
+
+	// Not scheduled: activating these retroactively would fork mainnet. Set this to
+	// an agreed future height when the fork is scheduled.
+	UpstreamConsensusFixesV1StartBlock: NotScheduled,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -290,6 +342,10 @@ var devnetPosConfig = ProofOfStakeConfig{
 	SixSecondBlockTimeStartBlock: 76,
 
 	ConsensusMalleabilityV1StartBlock: 0,
+
+	// Devnet activates at the next height in the sequence so the fork path is
+	// exercised end to end. Devnet chains must be reset when this changes.
+	UpstreamConsensusFixesV1StartBlock: 78,
 }
 
 var MainnetConfig = &Config{

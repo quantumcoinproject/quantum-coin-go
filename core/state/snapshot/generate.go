@@ -72,6 +72,7 @@ var (
 	snapRecoveredStorageMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/storage/recovered", nil)
 	snapWipedStorageMeter         = metrics.NewRegisteredMeter("state/snapshot/generation/storage/wiped", nil)
 	snapMissallStorageMeter       = metrics.NewRegisteredMeter("state/snapshot/generation/storage/missall", nil)
+	snapDanglingStorageMeter      = metrics.NewRegisteredMeter("state/snapshot/generation/storage/dangling", nil)
 	snapSuccessfulRangeProofMeter = metrics.NewRegisteredMeter("state/snapshot/generation/proof/success", nil)
 	snapFailedRangeProofMeter     = metrics.NewRegisteredMeter("state/snapshot/generation/proof/failure", nil)
 
@@ -91,6 +92,8 @@ var (
 	snapStorageSnapReadCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/snapread", nil)
 	// snapStorageWriteCounter measures time spent on writing/updating/deleting storages
 	snapStorageWriteCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/write", nil)
+	// snapStorageCleanCounter measures time spent on deleting dangling storages
+	snapStorageCleanCounter = metrics.NewRegisteredCounter("state/snapshot/generation/duration/storage/clean", nil)
 )
 
 // generatorStats is a collection of statistics gathered by the snapshot generator
@@ -100,6 +103,7 @@ type generatorStats struct {
 	start    time.Time          // Timestamp when generation started
 	accounts uint64             // Number of accounts indexed(generated or recovered)
 	slots    uint64             // Number of storage slots indexed(generated or recovered)
+	dangling uint64             // Number of dangling storage slots
 	storage  common.StorageSize // Total account and storage slot size(generation or recovery)
 }
 
@@ -125,6 +129,7 @@ func (gs *generatorStats) Log(msg string, root common.Hash, marker []byte) {
 		"accounts", gs.accounts,
 		"slots", gs.slots,
 		"storage", gs.storage,
+		"dangling", gs.dangling,
 		"elapsed", common.PrettyDuration(time.Since(gs.start)),
 	}...)
 	// Calculate the estimated indexing time based on current stats
@@ -554,12 +559,28 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 	)
 	stats.Log("Resuming state snapshot generation", dl.root, dl.genMarker)
 
+	// Upstream 59ac229f8: walk a global storage snapshot iterator in lockstep
+	// with the account iteration so that storage entries whose owning account is
+	// gone (dangling storage) are detected and wiped. The iterator is opened at
+	// the interrupted position, all the snapshot data before the marker is
+	// assumed to have been generated correctly.
+	ctx := newGeneratorContext(stats, dl.diskdb, batch, dl.genMarker)
+	defer ctx.close()
+
 	checkAndFlush := func(currentLocation []byte) error {
 		select {
 		case abort = <-dl.genAbort:
 		default:
 		}
 		if batch.ValueSize() > ethdb.IdealBatchSize || abort != nil {
+			// Upstream 312e02bca: the marker must never regress, a persisted
+			// backwards marker makes the resumed generation skip state.
+			if bytes.Compare(currentLocation, dl.genMarker) < 0 {
+				log.Error("Snapshot generator went backwards",
+					"currentLocation", fmt.Sprintf("%x", currentLocation),
+					"genMarker", fmt.Sprintf("%x", dl.genMarker))
+			}
+
 			// Flush out the batch anyway no matter it's empty or not.
 			// It's possible that all the states are recovered and the
 			// generation indeed makes progress.
@@ -578,6 +599,9 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 				stats.Log("Aborting state snapshot generation", dl.root, currentLocation)
 				return errors.New("aborted")
 			}
+			// Don't hold the storage iterator too long, release it to let the
+			// compactor work.
+			ctx.reopenStorageIterator()
 		}
 		if time.Since(logged) > 8*time.Second {
 			stats.Log("Generating state snapshot", dl.root, currentLocation)
@@ -591,18 +615,17 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			start       = time.Now()
 			accountHash = common.BytesToHash(key)
 		)
+		// Upstream 59ac229f8: make sure to clear all dangling storages before
+		// this account.
+		ctx.removeStorageBefore(accountHash)
+
 		if delete {
 			rawdb.DeleteAccountSnapshot(batch, accountHash)
 			snapWipedAccountMeter.Mark(1)
+			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
 
 			// Ensure that any previous snapshot storage values are cleared
-			prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
-			keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
-			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
-				return err
-			}
-			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
-			return nil
+			return ctx.removeStorageAt(accountHash)
 		}
 		// Retrieve the current account and flatten it into the internal format
 		var acc struct {
@@ -634,21 +657,24 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			stats.storage += common.StorageSize(1 + common.HashLength + dataLen)
 			stats.accounts++
 		}
+		marker := accountHash[:]
+		// Upstream 312e02bca: if the snap generation goes here after being
+		// interrupted, genMarker may go backward when the last genMarker is
+		// composed of accountHash and storageHash.
+		if accMarker != nil && bytes.Equal(marker, accMarker) && len(dl.genMarker) > common.HashLength {
+			marker = dl.genMarker[:]
+		}
 		// If we've exceeded our batch allowance or termination was requested, flush to disk
-		if err := checkAndFlush(accountHash[:]); err != nil {
+		if err := checkAndFlush(marker); err != nil {
 			return err
 		}
 		// If the iterated account is the contract, create a further loop to
 		// verify or regenerate the contract storage.
 		if acc.Root == emptyRoot {
 			// If the root is empty, we still need to ensure that any previous snapshot
-			// storage values are cleared
-			// TODO: investigate if this can be avoided, this will be very costly since it
-			// affects every single EOA account
-			//  - Perhaps we can avoid if where codeHash is emptyCode
-			prefix := append(rawdb.SnapshotStoragePrefix, accountHash.Bytes()...)
-			keyLen := len(rawdb.SnapshotStoragePrefix) + 2*common.HashLength
-			if err := wipeKeyRange(dl.diskdb, "storage", prefix, nil, nil, keyLen, snapWipedStorageMeter, false); err != nil {
+			// storage values are cleared. Upstream 59ac229f8: this is now a step of
+			// the global storage iterator instead of a fresh range wipe per account.
+			if err := ctx.removeStorageAt(accountHash); err != nil {
 				return err
 			}
 			snapAccountWriteCounter.Inc(time.Since(start).Nanoseconds())
@@ -697,6 +723,11 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 					break // special case, the last is 0xffffffff...fff
 				}
 			}
+			// The storage of this account is legitimate, step the dangling-storage
+			// sweep over it.
+			if err := ctx.skipStorageAt(accountHash); err != nil {
+				return err
+			}
 		}
 		// Some account processed, unmark the marker
 		accMarker = nil
@@ -714,12 +745,14 @@ func (dl *diskLayer) generate(stats *generatorStats) {
 			abort <- stats
 			return
 		}
-		// Abort the procedure if the entire snapshot is generated
-		if exhausted {
+		accOrigin = increaseKey(last)
+
+		// Abort the procedure if the entire snapshot is generated. Upstream
+		// 59ac229f8: as a last step, cleanup the storages after the last
+		// account, all the remaining ones are dangling.
+		if exhausted || accOrigin == nil { // accOrigin == nil: the last is 0xffffffff...fff
+			ctx.removeStorageLeft()
 			break
-		}
-		if accOrigin = increaseKey(last); accOrigin == nil {
-			break // special case, the last is 0xffffffff...fff
 		}
 		accountRange = accountCheckRange
 	}

@@ -151,8 +151,15 @@ func (e seekError) Error() string {
 }
 
 func newNodeIterator(trie *Trie, start []byte) NodeIterator {
-	if trie.Hash() == emptyState {
-		return new(nodeIterator)
+	// Upstream fb2ae8e99: an empty trie hashes to emptyRoot, not to emptyState
+	// (which is keccak(nil)), so this shortcut never used to fire. The returned
+	// iterator must also carry the trie and be pre-terminated, otherwise callers
+	// see a zero-valued iterator whose Next() panics on the nil trie.
+	if trie.Hash() == emptyRoot {
+		return &nodeIterator{
+			trie: trie,
+			err:  errIteratorEnd,
+		}
 	}
 	it := &nodeIterator{trie: trie}
 	it.err = it.seek(start)
@@ -480,8 +487,11 @@ func (it *nodeIterator) push(state *nodeIteratorState, parentIndex *int, path []
 }
 
 func (it *nodeIterator) pop() {
-	parent := it.stack[len(it.stack)-1]
-	it.path = it.path[:parent.pathlen]
+	// Upstream fb2ae8e99: nil out the popped slot, otherwise the backing array
+	// keeps the node state (and the whole subtrie hanging off it) alive.
+	last := it.stack[len(it.stack)-1]
+	it.path = it.path[:last.pathlen]
+	it.stack[len(it.stack)-1] = nil
 	it.stack = it.stack[:len(it.stack)-1]
 }
 

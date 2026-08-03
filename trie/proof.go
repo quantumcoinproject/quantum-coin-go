@@ -472,10 +472,17 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	if len(keys) != len(values) {
 		return false, fmt.Errorf("inconsistent proof data, keys: %d, values: %d", len(keys), len(values))
 	}
-	// Ensure the received batch is monotonic increasing.
+	// Ensure the received batch is monotonic increasing and contains no deletions
 	for i := 0; i < len(keys)-1; i++ {
 		if bytes.Compare(keys[i], keys[i+1]) >= 0 {
 			return false, errors.New("range is not monotonically increasing")
+		}
+	}
+	// Upstream 743769f48: a zero-length value is a deletion, which has no place in
+	// a range proof - accepting one lets a peer prove away entries it never had.
+	for _, value := range values {
+		if len(value) == 0 {
+			return false, errors.New("range contains deletion")
 		}
 	}
 	// Special case, there is no edge proof at all. The given range is expected
@@ -500,7 +507,9 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 		if val != nil || hasRightElement(root, firstKey) {
 			return false, errors.New("more entries available")
 		}
-		return hasRightElement(root, firstKey), nil
+		// Upstream ae45c97d3: hasRightElement was just proven false above, so the
+		// only possible answer here is false.
+		return false, nil
 	}
 	// Special case, there is only one element and two edge keys are same.
 	// In this case, we can't construct two edge paths. So handle it here.
@@ -558,7 +567,10 @@ func VerifyRangeProof(rootHash common.Hash, firstKey []byte, lastKey []byte, key
 	if tr.Hash() != rootHash {
 		return false, fmt.Errorf("invalid proof, want hash %x, got %x", rootHash, tr.Hash())
 	}
-	return hasRightElement(root, keys[len(keys)-1]), nil
+	// Upstream ae45c97d3: `root` is the *edge-proof* skeleton with its internal
+	// references unset; the answer must be computed against the trie that was
+	// actually reconstructed from the leaf stream.
+	return hasRightElement(tr.root, keys[len(keys)-1]), nil
 }
 
 // get returns the child of the given node. Return nil if the

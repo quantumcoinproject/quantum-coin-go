@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"os"
-	"runtime"
 
 	bloomfilter "github.com/holiman/bloomfilter/v2"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -90,18 +89,18 @@ func (bloom *stateBloom) Commit(filename, tempname string) error {
 	if err != nil {
 		return err
 	}
-	// Ensure the file is synced to disk
-	f, err := os.Open(tempname)
+	// Ensure the file is synced to disk. Upstream 3b38a8327: the handle must be
+	// opened read-write, syncing a read-only handle fails on Windows.
+	f, err := os.OpenFile(tempname, os.O_RDWR, 0666)
 	if err != nil {
 		return err
 	}
-	if runtime.GOOS == "windows" {
-		log.Debug("Skipping fsync in windows")
-	} else {
-		if err := f.Sync(); err != nil {
-			f.Close()
-			return err
-		}
+	// The previous "skip fsync on windows" workaround existed only because the
+	// read-only handle above made Sync fail there; with O_RDWR it succeeds, so
+	// the bloom is durably persisted on every platform.
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
 	}
 	f.Close()
 

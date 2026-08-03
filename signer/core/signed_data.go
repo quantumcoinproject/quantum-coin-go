@@ -28,7 +28,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
 
@@ -90,14 +89,6 @@ func (t *Type) typeName() string {
 	return t.Type
 }
 
-func (t *Type) isReferenceType() bool {
-	if len(t.Type) == 0 {
-		return false
-	}
-	// Reference types must have a leading uppercase character
-	return unicode.IsUpper([]rune(t.Type)[0])
-}
-
 type Types map[string][]Type
 
 type TypePriority struct {
@@ -115,7 +106,8 @@ type TypedDataDomain struct {
 	Salt              string                `json:"salt"`
 }
 
-var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Z](\w*)(\[\])?$`)
+// Upstream 4f4a25d79: reference type names may start with a lowercase letter.
+var typedDataReferenceTypeRegexp = regexp.MustCompile(`^[A-Za-z](\w*)(\[\])?$`)
 
 // sign receives a request and produces a signature
 func (api *SignerAPI) sign(req *SignDataRequest, legacyV bool) (hexutil.Bytes, error) {
@@ -330,6 +322,24 @@ func (api *SignerAPI) signTypedData(ctx context.Context, addr common.MixedcaseAd
 	return signature, sighash, nil
 }
 
+// TypedDataAndHash is a helper function that calculates a hash for typed data
+// conforming to EIP-712. It returns the hash along with the raw preimage.
+//
+// Upstream 502fa829a needs the digest without signing, to compare it against the
+// hash the caller expects.
+func TypedDataAndHash(typedData TypedData) ([]byte, string, error) {
+	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
+	if err != nil {
+		return nil, "", err
+	}
+	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
+	if err != nil {
+		return nil, "", err
+	}
+	rawData := fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash))
+	return crypto.Keccak256([]byte(rawData)), rawData, nil
+}
+
 // HashStruct generates a keccak256 hash of the encoding of the provided data
 func (typedData *TypedData) HashStruct(primaryType string, data TypedDataMessage) (hexutil.Bytes, error) {
 	encodedData, err := typedData.EncodeData(primaryType, data, 1)
@@ -341,6 +351,9 @@ func (typedData *TypedData) HashStruct(primaryType string, data TypedDataMessage
 
 // Dependencies returns an array of custom types ordered by their hierarchical reference tree
 func (typedData *TypedData) Dependencies(primaryType string, found []string) []string {
+	// Upstream 5a0d487c3: a field typed 'Foo[]' refers to the struct 'Foo', which
+	// otherwise never made it into the type-hash preimage.
+	primaryType = strings.TrimSuffix(primaryType, "[]")
 	includes := func(arr []string, str string) bool {
 		for _, obj := range arr {
 			if obj == str {
@@ -426,8 +439,9 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 		encType := field.Type
 		encValue := data[field.Name]
 		if encType[len(encType)-1:] == "]" {
-			arrayValue, ok := encValue.([]interface{})
-			if !ok {
+			// Upstream e76813eb1: accept any Go slice, not only []interface{}.
+			arrayValue, err := convertDataToSlice(encValue)
+			if err != nil {
 				return nil, dataMismatchError(encType, encValue)
 			}
 
@@ -443,7 +457,11 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 					if err != nil {
 						return nil, err
 					}
-					arrayBuffer.Write(encodedData)
+					// Upstream 5a0d487c3: EIP-712 defines the encoding of an array
+					// member as the hash of its struct encoding, not the encoding
+					// itself. Writing the raw encoding made clef sign the wrong
+					// digest for any message containing an array of structs.
+					arrayBuffer.Write(crypto.Keccak256(encodedData))
 				} else {
 					bytesValue, err := typedData.EncodePrimitiveValue(parsedType, item, depth)
 					if err != nil {
@@ -477,6 +495,15 @@ func (typedData *TypedData) EncodeData(primaryType string, data map[string]inter
 
 // Attempt to parse bytes in different formats: byte array, hex string, hexutil.Bytes.
 func parseBytes(encType interface{}) ([]byte, bool) {
+	// Upstream 6d5590834: handle array types, e.g. a Go [N]byte passed in
+	// directly rather than as a hex string.
+	val := reflect.ValueOf(encType)
+	if val.Kind() == reflect.Array && val.Type().Elem().Kind() == reflect.Uint8 {
+		v := reflect.MakeSlice(reflect.TypeOf([]byte{}), val.Len(), val.Len())
+		reflect.Copy(v, val)
+		return v.Bytes(), true
+	}
+
 	switch v := encType.(type) {
 	case []byte:
 		return v, true
@@ -517,6 +544,9 @@ func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 	switch v := encValue.(type) {
 	case *math.HexOrDecimal256:
 		b = (*big.Int)(v)
+	// Upstream 6d5590834: accept a plain *big.Int too.
+	case *big.Int:
+		b = v
 	case string:
 		var hexIntValue math.HexOrDecimal256
 		if err := hexIntValue.UnmarshalText([]byte(v)); err != nil {
@@ -549,13 +579,27 @@ func parseInteger(encType string, encValue interface{}) (*big.Int, error) {
 func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interface{}, depth int) ([]byte, error) {
 	switch encType {
 	case "address":
-		stringValue, ok := encValue.(string)
-		if !ok || !common.IsHexAddress(stringValue) {
-			return nil, dataMismatchError(encType, encValue)
-		}
+		// Upstream 6d5590834: also accept the raw Go representations of an
+		// address, not just a hex string. Note that our addresses are 32 bytes
+		// and thus fill the whole ABI word, so there is no left-padding offset
+		// (upstream copies into retval[12:]).
 		retval := make([]byte, common.AddressLength)
-		copy(retval, common.HexToAddress(stringValue).Bytes())
-		return retval, nil
+		switch val := encValue.(type) {
+		case string:
+			if common.IsHexAddress(val) {
+				copy(retval, common.HexToAddress(val).Bytes())
+				return retval, nil
+			}
+		case []byte:
+			if len(val) == common.AddressLength {
+				copy(retval, val)
+				return retval, nil
+			}
+		case [common.AddressLength]byte:
+			copy(retval, val[:])
+			return retval, nil
+		}
+		return nil, dataMismatchError(encType, encValue)
 	case "bool":
 		boolValue, ok := encValue.(bool)
 		if !ok {
@@ -611,6 +655,24 @@ func (typedData *TypedData) EncodePrimitiveValue(encType string, encValue interf
 // the provided type and data
 func dataMismatchError(encType string, encValue interface{}) error {
 	return fmt.Errorf("provided data '%v' doesn't match type '%s'", encValue, encType)
+}
+
+// convertDataToSlice converts any Go slice into []interface{}, so that array
+// members supplied as e.g. []string or []MyStruct are handled the same way as
+// the []interface{} that JSON decoding produces.
+//
+// Upstream e76813eb1.
+func convertDataToSlice(encValue interface{}) ([]interface{}, error) {
+	var outEncValue []interface{}
+	rv := reflect.ValueOf(encValue)
+	if rv.Kind() == reflect.Slice {
+		for i := 0; i < rv.Len(); i++ {
+			outEncValue = append(outEncValue, rv.Index(i).Interface())
+		}
+	} else {
+		return outEncValue, fmt.Errorf("provided data '%v' is not slice", encValue)
+	}
+	return outEncValue, nil
 }
 
 // EcRecover recovers the address associated with the given sig.
@@ -735,7 +797,8 @@ func (typedData *TypedData) formatData(primaryType string, data map[string]inter
 			Typ:  field.Type,
 		}
 		if field.isArray() {
-			arrayValue, _ := encValue.([]interface{})
+			// Upstream e76813eb1: see EncodeData.
+			arrayValue, _ := convertDataToSlice(encValue)
 			parsedType := field.typeName()
 			for _, v := range arrayValue {
 				if typedData.Types[parsedType] != nil {
@@ -851,15 +914,18 @@ func (t Types) validate() error {
 			if typeKey == typeObj.Type {
 				return fmt.Errorf("type %q cannot reference itself", typeObj.Type)
 			}
-			if typeObj.isReferenceType() {
-				if _, exist := t[typeObj.typeName()]; !exist {
-					return fmt.Errorf("reference type %q is undefined", typeObj.Type)
-				}
-				if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
-					return fmt.Errorf("unknown reference type %q", typeObj.Type)
-				}
-			} else if !isPrimitiveTypeValid(typeObj.Type) {
-				return fmt.Errorf("unknown type %q", typeObj.Type)
+			// Upstream 4f4a25d79: a reference type is simply anything that is not
+			// a primitive. Deciding on a leading uppercase rune wrongly rejected
+			// lowercase struct names, which EIP-712 permits.
+			if isPrimitiveTypeValid(typeObj.Type) {
+				continue
+			}
+			// Must be reference type
+			if _, exist := t[typeObj.typeName()]; !exist {
+				return fmt.Errorf("reference type %q is undefined", typeObj.Type)
+			}
+			if !typedDataReferenceTypeRegexp.MatchString(typeObj.Type) {
+				return fmt.Errorf("unknown reference type %q", typeObj.Type)
 			}
 		}
 	}
@@ -954,6 +1020,9 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 		primitiveType == "int32[]" ||
 		primitiveType == "int64" ||
 		primitiveType == "int64[]" ||
+		// Upstream 55f914a1d: int96/uint96 are valid solidity types.
+		primitiveType == "int96" ||
+		primitiveType == "int96[]" ||
 		primitiveType == "int128" ||
 		primitiveType == "int128[]" ||
 		primitiveType == "int256" ||
@@ -970,6 +1039,9 @@ func isPrimitiveTypeValid(primitiveType string) bool {
 		primitiveType == "uint32[]" ||
 		primitiveType == "uint64" ||
 		primitiveType == "uint64[]" ||
+		// Upstream 55f914a1d: int96/uint96 are valid solidity types.
+		primitiveType == "uint96" ||
+		primitiveType == "uint96[]" ||
 		primitiveType == "uint128" ||
 		primitiveType == "uint128[]" ||
 		primitiveType == "uint256" ||

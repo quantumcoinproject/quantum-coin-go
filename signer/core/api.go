@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,6 +29,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/keystore"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
+	"github.com/quantumcoinproject/quantum-coin-go/common/math"
 	"github.com/quantumcoinproject/quantum-coin-go/internal/ethapi"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/signer/core/apitypes"
@@ -555,6 +557,25 @@ func (api *SignerAPI) SignGnosisSafeTx(ctx context.Context, signerAddress common
 		}
 	}
 	typedData := gnosisTx.ToTypedData()
+	// Upstream 502fa829a: the gnosis safetx input contains a 'safeTxHash' which is
+	// the hash the caller expects us to sign. If our calculated hash does not
+	// match it, error early rather than sign something else. A common cause is a
+	// json payload missing the chain id, so retry once with the configured one.
+	sighash, _, err := TypedDataAndHash(typedData)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
+		// It might be the case that the json is missing chain id.
+		if gnosisTx.ChainId == nil {
+			gnosisTx.ChainId = (*math.HexOrDecimal256)(api.chainID)
+			typedData = gnosisTx.ToTypedData()
+			sighash, _, _ = TypedDataAndHash(typedData)
+		}
+		if !bytes.Equal(sighash, gnosisTx.InputExpHash.Bytes()) {
+			return nil, fmt.Errorf("mismatched safeTxHash; have %#x want %#x", sighash, gnosisTx.InputExpHash[:])
+		}
+	}
 	signature, preimage, err := api.signTypedData(ctx, signerAddress, typedData, msgs)
 	if err != nil {
 		return nil, err

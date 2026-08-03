@@ -33,6 +33,26 @@ import (
 	"time"
 )
 
+var (
+	// errInvalidBlockRange is returned when eth_getLogs is asked for a range whose
+	// start lies after its end. Upstream f20b334f2 (#28386).
+	errInvalidBlockRange = errors.New("invalid block range params")
+
+	// errBlockHashWithRange is returned when a blockHash criteria is combined with
+	// a from/to block range, which are mutually exclusive. Upstream 038ff766f (#31877).
+	errBlockHashWithRange = errors.New("can't specify fromBlock/toBlock with blockHash")
+
+	// errExceedMaxTopics is returned when a filter criteria carries more topics than
+	// a log can ever have. Upstream 7bcb5532a (#29535).
+	errExceedMaxTopics = errors.New("exceed max topics")
+)
+
+// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
+const maxTopics = 4
+
+// The maximum number of allowed topics within a topic criteria
+const maxSubTopics = 1000
+
 // filter is a helper struct that holds meta information over the filter type
 // and associated subscription in the event system.
 type filter struct {
@@ -78,7 +98,13 @@ func (api *PublicFilterAPI) timeoutLoop(timeout time.Duration) {
 	ticker := time.NewTicker(timeout)
 	defer ticker.Stop()
 	for {
-		<-ticker.C
+		// Upstream 6c10996bf: bail out when the event system itself has shut down,
+		// otherwise this goroutine outlives the node it belongs to.
+		select {
+		case <-ticker.C:
+		case <-api.events.chainSub.Err():
+			return
+		}
 		api.filtersMu.Lock()
 		for id, f := range api.filters {
 			select {
@@ -147,12 +173,15 @@ func (api *PublicFilterAPI) NewPendingTransactions(ctx context.Context) (*rpc.Su
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-	rpcSub := notifier.CreateSubscription()
+	// Upstream de0a452f7: install the filter before returning the subscription id,
+	// otherwise events fired between the RPC response and the subscribe are lost.
+	var (
+		rpcSub       = notifier.CreateSubscription()
+		txHashes     = make(chan []common.Hash, 128)
+		pendingTxSub = api.events.SubscribePendingTxs(txHashes)
+	)
 
 	go func() {
-		txHashes := make(chan []common.Hash, 128)
-		pendingTxSub := api.events.SubscribePendingTxs(txHashes)
-
 		for {
 			select {
 			case hashes := <-txHashes:
@@ -216,12 +245,15 @@ func (api *PublicFilterAPI) NewHeads(ctx context.Context) (*rpc.Subscription, er
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
-	rpcSub := notifier.CreateSubscription()
+	// Upstream de0a452f7: install the filter before returning the subscription id,
+	// otherwise headers imported between the RPC response and the subscribe are lost.
+	var (
+		rpcSub     = notifier.CreateSubscription()
+		headers    = make(chan *types.Header)
+		headersSub = api.events.SubscribeNewHeads(headers)
+	)
 
 	go func() {
-		headers := make(chan *types.Header)
-		headersSub := api.events.SubscribeNewHeads(headers)
-
 		for {
 			select {
 			case h := <-headers:
@@ -332,6 +364,10 @@ func (api *PublicFilterAPI) NewFilter(crit FilterCriteria) (rpc.ID, error) {
 func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([]*types.Log, error) {
 	var filter *Filter
 	if crit.BlockHash != nil {
+		// Upstream 038ff766f: blockHash and fromBlock/toBlock are mutually exclusive.
+		if crit.FromBlock != nil || crit.ToBlock != nil {
+			return nil, errBlockHashWithRange
+		}
 		// Block filter requested, construct a single-shot filter
 		filter = NewBlockFilter(api.backend, *crit.BlockHash, crit.Addresses, crit.Topics)
 	} else {
@@ -343,6 +379,12 @@ func (api *PublicFilterAPI) GetLogs(ctx context.Context, crit FilterCriteria) ([
 		end := rpc.LatestBlockNumber.Int64()
 		if crit.ToBlock != nil {
 			end = crit.ToBlock.Int64()
+		}
+		// Upstream f20b334f2: fast-exit an inverted range instead of scanning nothing
+		// the slow way. Negative values are the "latest"/"pending" tags, so they are
+		// deliberately excluded from the comparison.
+		if begin > 0 && end > 0 && begin > end {
+			return nil, errInvalidBlockRange
 		}
 		// Construct the range filter
 		filter = NewRangeFilter(api.backend, begin, end, crit.Addresses, crit.Topics)
@@ -521,6 +563,11 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 		}
 	}
 
+	// Upstream 7bcb5532a: cap the criteria before allocating anything sized by it.
+	if len(raw.Topics) > maxTopics {
+		return errExceedMaxTopics
+	}
+
 	// topics is an array consisting of strings and/or arrays of strings.
 	// JSON null values are converted to common.Hash{} and ignored by the filter manager.
 	if len(raw.Topics) > 0 {
@@ -540,6 +587,9 @@ func (args *FilterCriteria) UnmarshalJSON(data []byte) error {
 
 			case []interface{}:
 				// or case e.g. [null, "topic0", "topic1"]
+				if len(topic) > maxSubTopics {
+					return errExceedMaxTopics
+				}
 				for _, rawTopic := range topic {
 					if rawTopic == nil {
 						// null component, match all

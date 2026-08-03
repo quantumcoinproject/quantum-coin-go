@@ -53,7 +53,7 @@ func getGasPrice() *big.Int {
 func (tx *DynamicFeeTx) copy() TxData {
 	cpy := &DynamicFeeTx{
 		Nonce: tx.Nonce,
-		To:    tx.To, // TODO: copy pointed-to address
+		To:    copyAddressPtr(tx.To), // Upstream 4e599ee46: don't alias the recipient
 		Data:  common.CopyBytes(tx.Data),
 		Gas:   tx.Gas,
 		// These are copied below.

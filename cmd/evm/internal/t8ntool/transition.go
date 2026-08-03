@@ -299,7 +299,12 @@ type Alloc map[common.Address]core.GenesisAccount
 
 func (g Alloc) OnRoot(common.Hash) {}
 
-func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
+// OnAccount takes a *common.Address so that an account whose preimage is unknown can be
+// reported as nil rather than silently collapsing onto the zero address. Upstream bfded65ed.
+func (g Alloc) OnAccount(addr *common.Address, dumpAccount state.DumpAccount) {
+	if addr == nil {
+		return
+	}
 	balance, _ := new(big.Int).SetString(dumpAccount.Balance, 10)
 	var storage map[common.Hash]common.Hash
 	if dumpAccount.Storage != nil {
@@ -314,7 +319,7 @@ func (g Alloc) OnAccount(addr common.Address, dumpAccount state.DumpAccount) {
 		Balance: balance,
 		Nonce:   dumpAccount.Nonce,
 	}
-	g[addr] = genesisAccount
+	g[*addr] = genesisAccount
 }
 
 // saveFile marshalls the object to the given file

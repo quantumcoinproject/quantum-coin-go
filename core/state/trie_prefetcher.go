@@ -127,6 +127,11 @@ func (p *triePrefetcher) copy() *triePrefetcher {
 	// If the prefetcher is already a copy, duplicate the data
 	if p.fetches != nil {
 		for root, fetch := range p.fetches {
+			// Upstream d46184c96: peek() can yield a nil trie, CopyTrie would
+			// then dereference nil.
+			if fetch == nil {
+				continue
+			}
 			copy.fetches[root] = p.db.CopyTrie(fetch)
 		}
 		return copy
