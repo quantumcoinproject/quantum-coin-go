@@ -56,7 +56,7 @@ type ubfBackend struct {
 func newUBFBackend(t *testing.T) *ubfBackend {
 	t.Helper()
 	memdb := rawdb.NewMemoryDatabase()
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(memdb), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(memdb), nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create state: %v", err)
 	}

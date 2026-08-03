@@ -61,7 +61,7 @@ func TestUBF024_PrefetcherCopyNilFetch(t *testing.T) {
 // Upstream bfded65ed (#27320).
 func TestUBF028_DumpIncludesZeroAddress(t *testing.T) {
 	db := rawdb.NewMemoryDatabase()
-	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, &trie.Config{Preimages: true}), nil)
+	sdb, _ := New(common.Hash{}, NewDatabaseWithConfig(db, &trie.Config{Preimages: true}), nil, nil)
 
 	zero := common.Address{} // [32]byte{}
 	obj := sdb.GetOrNewStateObject(zero)

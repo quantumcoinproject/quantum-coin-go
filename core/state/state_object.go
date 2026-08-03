@@ -25,6 +25,7 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
@@ -225,6 +226,16 @@ func (s *stateObject) GetCommittedState(db Database, key common.Hash) common.Has
 				*meter += time.Since(readStart)
 			}
 		}()
+	}
+	// Upstream c87f321b8 (UBF-004): if the account was destructed in *this*
+	// block (and potentially resurrected), its storage is gone regardless of
+	// whether a snapshot is available; without this hoisted check the
+	// trie-backed path below would read the pre-deletion storage and diverge
+	// from the snapshot path.
+	if defaults.IsUpstreamConsensusFixesV1Big(s.db.blockNumber) {
+		if _, destructed := s.db.stateObjectsDestruct[s.address]; destructed {
+			return common.Hash{}
+		}
 	}
 	if s.db.snap != nil {
 		if metrics.EnabledExpensive {

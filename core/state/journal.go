@@ -90,8 +90,17 @@ type (
 		account *common.Address
 	}
 	resetObjectChange struct {
-		prev         *stateObject
-		prevdestruct bool
+		// account is non-nil only when UpstreamConsensusFixesV1 is active
+		// (upstream 15bd21f3c): it makes the re-creation count as dirtying the
+		// account. prevStateDestruct/prevAccount/prevStorage undo the destruct
+		// tracking and snapshot-cache clearing done in createObject (upstream
+		// c87f321b8 / 380fb4e24).
+		account           *common.Address
+		prev              *stateObject
+		prevdestruct      bool
+		prevStateDestruct bool
+		prevAccount       []byte
+		prevStorage       map[common.Hash][]byte
 	}
 	suicideChange struct {
 		account     *common.Address
@@ -154,10 +163,19 @@ func (ch resetObjectChange) revert(s *StateDB) {
 	if !ch.prevdestruct && s.snap != nil {
 		delete(s.snapDestructs, ch.prev.addrHash)
 	}
+	if !ch.prevStateDestruct {
+		delete(s.stateObjectsDestruct, ch.prev.address)
+	}
+	if ch.prevAccount != nil {
+		s.snapAccounts[ch.prev.addrHash] = ch.prevAccount
+	}
+	if ch.prevStorage != nil {
+		s.snapStorage[ch.prev.addrHash] = ch.prevStorage
+	}
 }
 
 func (ch resetObjectChange) dirtied() *common.Address {
-	return nil
+	return ch.account
 }
 
 func (ch suicideChange) revert(s *StateDB) {

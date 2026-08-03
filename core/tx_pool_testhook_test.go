@@ -71,7 +71,7 @@ func (bc *txnHookBlockChain) GetBlock(hash common.Hash, number uint64) *types.Bl
 	return bc.CurrentBlock()
 }
 
-func (bc *txnHookBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+func (bc *txnHookBlockChain) StateAt(common.Hash, *big.Int) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
@@ -100,7 +100,7 @@ func (bc *txnHookBlockChain) markCommitted(txs ...*types.Transaction) {
 func setupTxnHookPool(t *testing.T) (*TxPool, *signaturealgorithm.PrivateKey, *txnHookBlockChain) {
 	t.Helper()
 
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create state: %v", err)
 	}
@@ -455,7 +455,7 @@ func TestTxnTestHookEnvActivation(t *testing.T) {
 	os.Setenv("TXN_HOOK_FILE", path)
 	defer os.Unsetenv("TXN_HOOK_FILE")
 
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create state: %v", err)
 	}

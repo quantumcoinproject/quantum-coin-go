@@ -81,7 +81,7 @@ func TestUBF080_StateAtBlockHonoursPreferDisk(t *testing.T) {
 		target = blocks[len(blocks)-1]
 	)
 	newBase := func() *state.StateDB {
-		base, err := eth.blockchain.StateAt(parent.Root())
+		base, err := eth.blockchain.StateAt(parent.Root(), new(big.Int).Add(parent.Number(), common.Big1))
 		if err != nil {
 			t.Fatalf("failed to open the base state: %v", err)
 		}
@@ -124,7 +124,7 @@ func TestUBF093_GetEVMSurfacesStateError(t *testing.T) {
 	eth, blocks := newStateAccessorTester(t, 1)
 	b := &EthAPIBackend{eth: eth}
 
-	statedb, err := eth.blockchain.StateAt(blocks[0].Root())
+	statedb, err := eth.blockchain.StateAt(blocks[0].Root(), new(big.Int).Add(blocks[0].Number(), common.Big1))
 	if err != nil {
 		t.Fatalf("failed to open state: %v", err)
 	}

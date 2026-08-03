@@ -42,7 +42,7 @@ func newStateDb() *state.StateDB {
 	dname, _ := os.MkdirTemp("", "txntest")
 	fmt.Println("txntest db path", dname)
 	db, _ := rawdb.NewLevelDBDatabase(dname, 0, 0, "", false)
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db), nil)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(db), nil, nil)
 
 	for i := 0; i <= 9999999; i++ {
 		statedb.AddBalance(messageSenderAddress, big.NewInt(9000000000000000000))

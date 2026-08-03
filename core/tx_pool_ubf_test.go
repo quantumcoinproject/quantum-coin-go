@@ -44,7 +44,7 @@ type ubfAccount struct {
 func newUBFPool(t *testing.T) *TxPool {
 	t.Helper()
 
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create state: %v", err)
 	}
@@ -318,7 +318,7 @@ func TestUBF046_ThrottleReplacementsBetweenReorgs(t *testing.T) {
 // not-yet-existing account to nonce 0.
 // Upstream ada603fab (#25603).
 func TestUBF047_NoncerDoesNotCacheZero(t *testing.T) {
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create state: %v", err)
 	}

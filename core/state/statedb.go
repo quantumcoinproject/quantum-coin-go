@@ -29,6 +29,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/core/state/snapshot"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/log"
 	"github.com/quantumcoinproject/quantum-coin-go/metrics"
 	"github.com/quantumcoinproject/quantum-coin-go/rlp"
@@ -67,11 +68,24 @@ type StateDB struct {
 	originalRoot common.Hash // The pre-state root, before any changes were made
 	trie         Trie
 
+	// blockNumber is the number of the block whose transactions are being
+	// executed on top of this state, nil when the caller has no block context.
+	// It is never serialised or hashed; it only feeds the
+	// UpstreamConsensusFixesV1 activation gate, so a nil value safely means
+	// "pre-activation".
+	blockNumber *big.Int
+
 	snaps         *snapshot.Tree
 	snap          snapshot.Snapshot
 	snapDestructs map[common.Hash]struct{}
 	snapAccounts  map[common.Hash][]byte
 	snapStorage   map[common.Hash]map[common.Hash][]byte
+
+	// Upstream c87f321b8 (UBF-004): accounts destructed in this block, tracked
+	// regardless of snapshot availability so the trie-backed read path agrees
+	// with the snapshot path on same-block delete-then-recreate. Only read
+	// behind the UpstreamConsensusFixesV1 gate.
+	stateObjectsDestruct map[common.Address]struct{}
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
 	stateObjects        map[common.Address]*stateObject
@@ -118,24 +132,29 @@ type StateDB struct {
 	SnapshotCommits      time.Duration
 }
 
-// New creates a new state from a given trie.
-func New(root common.Hash, db Database, snaps *snapshot.Tree) (*StateDB, error) {
+// New creates a new state from a given trie. blockNumber is the number of the
+// block whose transactions will be executed on top of this state (not the block
+// whose root is being opened); pass nil when there is genuinely no block
+// context, which keeps the UpstreamConsensusFixesV1 gate inactive.
+func New(root common.Hash, db Database, snaps *snapshot.Tree, blockNumber *big.Int) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
 	}
 	sdb := &StateDB{
-		db:                  db,
-		trie:                tr,
-		originalRoot:        root,
-		snaps:               snaps,
-		stateObjects:        make(map[common.Address]*stateObject),
-		stateObjectsPending: make(map[common.Address]struct{}),
-		stateObjectsDirty:   make(map[common.Address]struct{}),
-		logs:                make(map[common.Hash][]*types.Log),
-		preimages:           make(map[common.Hash][]byte),
-		journal:             newJournal(),
-		accessList:          newAccessList(),
+		db:                   db,
+		trie:                 tr,
+		originalRoot:         root,
+		blockNumber:          blockNumber,
+		snaps:                snaps,
+		stateObjects:         make(map[common.Address]*stateObject),
+		stateObjectsPending:  make(map[common.Address]struct{}),
+		stateObjectsDirty:    make(map[common.Address]struct{}),
+		stateObjectsDestruct: make(map[common.Address]struct{}),
+		logs:                 make(map[common.Hash][]*types.Log),
+		preimages:            make(map[common.Hash][]byte),
+		journal:              newJournal(),
+		accessList:           newAccessList(),
 	}
 	if sdb.snaps != nil {
 		if sdb.snap = sdb.snaps.Snapshot(root); sdb.snap != nil {
@@ -588,18 +607,55 @@ func (s *StateDB) GetOrNewStateObject(addr common.Address) *stateObject {
 func (s *StateDB) createObject(addr common.Address) (newobj, prev *stateObject) {
 	prev = s.getDeletedStateObject(addr) // Note, prev might have been deleted, we need that!
 
-	var prevdestruct bool
+	var (
+		prevdestruct bool
+		prevAccount  []byte
+		prevStorage  map[common.Hash][]byte
+	)
+	fixesActive := defaults.IsUpstreamConsensusFixesV1Big(s.blockNumber)
 	if s.snap != nil && prev != nil {
 		_, prevdestruct = s.snapDestructs[prev.addrHash]
 		if !prevdestruct {
 			s.snapDestructs[prev.addrHash] = struct{}{}
+		}
+		if fixesActive {
+			// Upstream 380fb4e24 (UBF-006): the re-created account starts clean,
+			// so cached snapshot data of the replaced account must not be carried
+			// into the snapshot at commit. The previous values are journalled so
+			// a revert restores them.
+			prevAccount = s.snapAccounts[prev.addrHash]
+			prevStorage = s.snapStorage[prev.addrHash]
+			delete(s.snapAccounts, prev.addrHash)
+			delete(s.snapStorage, prev.addrHash)
+		}
+	}
+	// Upstream c87f321b8 (UBF-004): track the replacement regardless of snapshot
+	// availability. Maintaining the map is inert below the activation gate
+	// because every read of it is gated.
+	var prevStateDestruct bool
+	if prev != nil {
+		_, prevStateDestruct = s.stateObjectsDestruct[prev.address]
+		if !prevStateDestruct {
+			s.stateObjectsDestruct[prev.address] = struct{}{}
 		}
 	}
 	newobj = newObject(s, addr, Account{})
 	if prev == nil {
 		s.journal.append(createObjectChange{account: &addr})
 	} else {
-		s.journal.append(resetObjectChange{prev: prev, prevdestruct: prevdestruct})
+		reset := resetObjectChange{
+			prev:              prev,
+			prevdestruct:      prevdestruct,
+			prevStateDestruct: prevStateDestruct,
+			prevAccount:       prevAccount,
+			prevStorage:       prevStorage,
+		}
+		if fixesActive {
+			// Upstream 15bd21f3c (UBF-006): journal the re-creation as dirtying
+			// the account so it survives Finalise and Copy.
+			reset.account = &addr
+		}
+		s.journal.append(reset)
 	}
 	s.setStateObject(newobj)
 	if prev != nil && !prev.deleted {
@@ -663,16 +719,24 @@ func (db *StateDB) ForEachStorage(addr common.Address, cb func(key, value common
 func (s *StateDB) Copy() *StateDB {
 	// Copy all the basic fields, initialize the memory ones
 	state := &StateDB{
-		db:                  s.db,
-		trie:                s.db.CopyTrie(s.trie),
-		stateObjects:        make(map[common.Address]*stateObject, len(s.journal.dirties)),
-		stateObjectsPending: make(map[common.Address]struct{}, len(s.stateObjectsPending)),
-		stateObjectsDirty:   make(map[common.Address]struct{}, len(s.journal.dirties)),
-		refund:              s.refund,
-		logs:                make(map[common.Hash][]*types.Log, len(s.logs)),
-		logSize:             s.logSize,
-		preimages:           make(map[common.Hash][]byte, len(s.preimages)),
-		journal:             newJournal(),
+		db:                   s.db,
+		trie:                 s.db.CopyTrie(s.trie),
+		blockNumber:          s.blockNumber,
+		stateObjects:         make(map[common.Address]*stateObject, len(s.journal.dirties)),
+		stateObjectsPending:  make(map[common.Address]struct{}, len(s.stateObjectsPending)),
+		stateObjectsDirty:    make(map[common.Address]struct{}, len(s.journal.dirties)),
+		stateObjectsDestruct: make(map[common.Address]struct{}, len(s.stateObjectsDestruct)),
+		refund:               s.refund,
+		logs:                 make(map[common.Hash][]*types.Log, len(s.logs)),
+		logSize:              s.logSize,
+		preimages:            make(map[common.Hash][]byte, len(s.preimages)),
+		journal:              newJournal(),
+	}
+	// The destruct set must be copied outside the snapshot conditional below:
+	// it is maintained even when no snapshot exists (upstream c87f321b8), and
+	// the miner relies on Copy() carrying it.
+	for addr := range s.stateObjectsDestruct {
+		state.stateObjectsDestruct[addr] = struct{}{}
 	}
 	// Copy the dirty states, logs, and preimages
 	for addr := range s.journal.dirties {
@@ -804,6 +868,12 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 		}
 		if obj.suicided || (deleteEmptyObjects && obj.empty()) {
 			obj.deleted = true
+
+			// Upstream c87f321b8 (UBF-004): record the destruction regardless of
+			// snapshot availability, so the trie-backed read path can tell that a
+			// same-block resurrection must start from empty storage. Reads of this
+			// map are gated on UpstreamConsensusFixesV1.
+			s.stateObjectsDestruct[obj.address] = struct{}{}
 
 			// If state snapshotting is active, also mark the destruction there.
 			// Note, we can't do this only at the end of a block because multiple
@@ -979,6 +1049,9 @@ func (s *StateDB) Commit(deleteEmptyObjects bool) (common.Hash, error) {
 		}
 		s.snap, s.snapDestructs, s.snapAccounts, s.snapStorage = nil, nil, nil, nil
 	}
+	// The committed trie is ground truth again: destructions from the block just
+	// committed must not leak into reads on top of the new root.
+	s.stateObjectsDestruct = make(map[common.Address]struct{})
 	return root, err
 }
 

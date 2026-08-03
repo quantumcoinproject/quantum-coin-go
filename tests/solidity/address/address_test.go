@@ -48,7 +48,7 @@ var testAddress1 = common.RandomAddress()
 var testAddress2 = common.RandomAddress()
 
 func newStateDb() *state.StateDB {
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 
 	statedb.CreateAccount(addressCheckerContractAddress)
 	statedb.SetCode(addressCheckerContractAddress, common.FromHex(AddressCheckerBin))

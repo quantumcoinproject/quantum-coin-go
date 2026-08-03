@@ -105,7 +105,7 @@ func TestUBF001_IdentityPrecompileOverlappingReturnData(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			address := common.BytesToAddress([]byte("caller"))
 
-			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 			statedb.CreateAccount(address)
 			statedb.SetCode(address, code)
 			statedb.Finalise(true)
@@ -139,7 +139,7 @@ func TestUBF003_EIP2681CreateNonceOverflow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			caller := common.BytesToAddress([]byte("creator"))
 
-			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 			statedb.CreateAccount(caller)
 			statedb.SetNonce(caller, math.MaxUint64)
 			statedb.Finalise(true)

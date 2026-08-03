@@ -58,7 +58,7 @@ func TestCrossContractCallThroughStoredReference(t *testing.T) {
 		return b
 	}
 
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	cfg := &Config{
 		State:    statedb,
 		GasLimit: 10_000_000,

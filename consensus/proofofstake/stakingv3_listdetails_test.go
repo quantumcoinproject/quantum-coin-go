@@ -466,7 +466,7 @@ func newStakingStateDbV3OnDisk(t *testing.T) (*state.StateDB, state.Database, et
 	t.Cleanup(func() { diskdb.Close() })
 
 	sdb := state.NewDatabase(diskdb)
-	statedb, err := state.New(common.Hash{}, sdb, nil)
+	statedb, err := state.New(common.Hash{}, sdb, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,7 +502,7 @@ func TestStakingV3_ListValidatorStakingDetailsPerfOnDisk(t *testing.T) {
 
 	// Reopen the committed state through a fresh state.Database (cold trie-node cache) over the same
 	// on-disk LevelDB, so subsequent reads are served from disk rather than warm memory.
-	diskState, err := state.New(root, state.NewDatabase(diskdb), nil)
+	diskState, err := state.New(root, state.NewDatabase(diskdb), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

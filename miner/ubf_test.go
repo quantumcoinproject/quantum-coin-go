@@ -85,7 +85,7 @@ func TestUBF105_WorkerCloseNoRaceOnCurrent(t *testing.T) {
 		db := rawdb.NewMemoryDatabase()
 		gspec := &core.Genesis{Config: params.TestChainConfig}
 		genesis := gspec.MustCommit(db)
-		statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil)
+		statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -129,7 +129,7 @@ func TestUBF106_ResultLoopDeepCopiesReceipts(t *testing.T) {
 
 	blocks, _ := core.GenerateChain(params.TestChainConfig, genesis, chainEngine, db, 1, nil)
 	block := blocks[0]
-	statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil)
+	statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

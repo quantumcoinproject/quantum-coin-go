@@ -71,7 +71,7 @@ func TestUBF002_EIP3607RejectSenderWithCode(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 			statedb.CreateAccount(sender)
 			statedb.SetCode(sender, []byte{0x60, 0x00})
 			statedb.AddBalance(sender, big.NewInt(1000000000))
@@ -88,7 +88,7 @@ func TestUBF002_EIP3607RejectSenderWithCode(t *testing.T) {
 	// A codeless sender must stay acceptable on both sides of the fork.
 	t.Run("post-fork accepts an EOA", func(t *testing.T) {
 		eoa := common.BytesToAddress([]byte("eoa-sender"))
-		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+		statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 		statedb.CreateAccount(eoa)
 		statedb.AddBalance(eoa, big.NewInt(1000000000))
 		statedb.Finalise(true)
@@ -117,7 +117,7 @@ func TestUBF003_EIP2681NonceMax(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+			statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 			statedb.CreateAccount(sender)
 			statedb.SetNonce(sender, math.MaxUint64)
 			statedb.AddBalance(sender, big.NewInt(1000000000))

@@ -295,7 +295,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 	// Make sure the state associated with the block is available
 	head := bc.CurrentBlock()
-	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps); err != nil {
+	if _, err := state.New(head.Root(), bc.stateCache, bc.snaps, head.Number()); err != nil {
 		// Head state is missing, before the state recovery, find out the
 		// disk layer point of snapshot(if it's enabled). Make sure the
 		// rewound point is lower than disk layer.
@@ -556,7 +556,7 @@ func (bc *BlockChain) setHeadBeyondRoot(head uint64, root common.Hash, repair bo
 						log.Trace("beyondRoot", "root", root.Hex(), "beyondRoot", beyondRoot, "newHeadBlock.Root()", newHeadBlock.Root().Hex(), "newHeadBlock", newHeadBlock.NumberU64())
 						beyondRoot, rootNumber = true, newHeadBlock.NumberU64()
 					}
-					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps); err != nil {
+					if _, err := state.New(newHeadBlock.Root(), bc.stateCache, bc.snaps, newHeadBlock.Number()); err != nil {
 						log.Trace("Block state missing, rewinding further", "number", newHeadBlock.NumberU64(), "hash", newHeadBlock.Hash(), "err", err)
 						if pivot == nil || newHeadBlock.NumberU64() > *pivot {
 							parent := bc.GetBlock(newHeadBlock.ParentHash(), newHeadBlock.NumberU64()-1)
@@ -725,14 +725,19 @@ func (bc *BlockChain) Processor() Processor {
 	return bc.processor
 }
 
-// State returns a new mutable state based on the current HEAD block.
+// State returns a new mutable state based on the current HEAD block. Anything
+// executed on it simulates a transaction in the next block, so that is the
+// number handed to the state.
 func (bc *BlockChain) State() (*state.StateDB, error) {
-	return bc.StateAt(bc.CurrentBlock().Root())
+	current := bc.CurrentBlock()
+	return bc.StateAt(current.Root(), new(big.Int).Add(current.Number(), common.Big1))
 }
 
 // StateAt returns a new mutable state based on a particular point in time.
-func (bc *BlockChain) StateAt(root common.Hash) (*state.StateDB, error) {
-	return state.New(root, bc.stateCache, bc.snaps)
+// blockNumber is the number of the block whose transactions will be executed on
+// top of that state, not the block whose root is opened (see state.New).
+func (bc *BlockChain) StateAt(root common.Hash, blockNumber *big.Int) (*state.StateDB, error) {
+	return state.New(root, bc.stateCache, bc.snaps, blockNumber)
 }
 
 // StateCache returns the caching database underpinning the blockchain instance.
@@ -1893,7 +1898,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps)
+		statedb, err := state.New(parent.Root, bc.stateCache, bc.snaps, block.Number())
 		if err != nil {
 			return it.index, err
 		}
@@ -1906,7 +1911,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, er
 		var followupInterrupt uint32
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps)
+				throwaway, _ := state.New(parent.Root, bc.stateCache, bc.snaps, followup.Number())
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB, interrupt *uint32) {
 					bc.prefetcher.Prefetch(followup, throwaway, bc.vmConfig, &followupInterrupt)

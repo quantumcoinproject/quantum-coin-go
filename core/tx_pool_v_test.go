@@ -67,7 +67,7 @@ func (bc *txPoolVBlockChain) GetBlock(hash common.Hash, number uint64) *types.Bl
 	return bc.CurrentBlock()
 }
 
-func (bc *txPoolVBlockChain) StateAt(common.Hash) (*state.StateDB, error) {
+func (bc *txPoolVBlockChain) StateAt(common.Hash, *big.Int) (*state.StateDB, error) {
 	return bc.statedb, nil
 }
 
@@ -80,7 +80,7 @@ func (bc *txPoolVBlockChain) SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) e
 func setupVTxPool(t *testing.T) (*TxPool, *signaturealgorithm.PrivateKey) {
 	t.Helper()
 
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create state: %v", err)
 	}
