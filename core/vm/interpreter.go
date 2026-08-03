@@ -101,13 +101,26 @@ func NewEVMInterpreter(evm *EVM, cfg Config) *EVMInterpreter {
 		default:
 			jt = frontierInstructionSet
 		}
-		for i, eip := range cfg.ExtraEips {
+		if len(cfg.ExtraEips) > 0 {
+			// Deep-copy the table before mutating it: jt still shares its *operation
+			// pointers with the process-global instruction set it was assigned from,
+			// so EnableEIP would otherwise permanently alter that global table.
+			// Upstream 7dc5e785a (#26137).
+			jt = copyJumpTable(&jt)
+		}
+		// Collect the EIPs that actually activated into a fresh slice instead of
+		// splicing cfg.ExtraEips while ranging over it (which skips entries and
+		// mutates the caller's backing array). Upstream c55c56cf0 (#25131).
+		var extraEips []int
+		for _, eip := range cfg.ExtraEips {
 			if err := EnableEIP(eip, &jt); err != nil {
 				// Disable it, so caller can check if it's activated or not
-				cfg.ExtraEips = append(cfg.ExtraEips[:i], cfg.ExtraEips[i+1:]...)
 				log.Error("EIP activation failed", "eip", eip, "error", err)
+			} else {
+				extraEips = append(extraEips, eip)
 			}
 		}
+		cfg.ExtraEips = extraEips
 		cfg.JumpTable = jt
 	}
 

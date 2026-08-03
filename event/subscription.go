@@ -120,7 +120,9 @@ func ResubscribeErr(backoffMax time.Duration, fn ResubscribeErrFunc) Subscriptio
 		backoffMax: backoffMax,
 		fn:         fn,
 		err:        make(chan error),
-		unsub:      make(chan struct{}),
+		// Upstream ffc6a0f36: the loop goroutine exits when the inner subscription ends
+		// successfully, so an unbuffered channel makes a later Unsubscribe block forever.
+		unsub: make(chan struct{}, 1),
 	}
 	go s.loop()
 	return s

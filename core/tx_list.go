@@ -23,6 +23,8 @@ import (
 	"math"
 	"math/big"
 	"sort"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -253,24 +255,29 @@ type txList struct {
 	strict bool         // Whether nonces are strictly continuous or not
 	txs    *txSortedMap // Heap indexed sorted hash map of the transactions
 
-	costcap *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
-	gascap  uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
+	costcap   *big.Int // Price of the highest costing transaction (reset only if exceeds balance)
+	gascap    uint64   // Gas limit of the highest spending transaction (reset only if exceeds block limit)
+	totalcost *big.Int // Total cost of all transactions in the list
 }
 
 // newTxList create a new transaction list for maintaining nonce-indexable fast,
 // gapped, sortable transaction lists.
 func newTxList(strict bool) *txList {
 	return &txList{
-		strict:  strict,
-		txs:     newTxSortedMap(),
-		costcap: new(big.Int),
+		strict:    strict,
+		txs:       newTxSortedMap(),
+		costcap:   new(big.Int),
+		totalcost: new(big.Int),
 	}
 }
 
-// Overlaps returns whether the transaction specified has the same nonce as one
-// already contained within the list.
-func (l *txList) Overlaps(tx *types.Transaction) bool {
-	return l.txs.Get(tx.Nonce()) != nil
+// Contains returns whether the list contains a transaction with the provided
+// nonce.
+//
+// Upstream 230df98e4 renamed Overlaps(tx) to Contains(nonce) so that the gapped
+// nonce check can probe arbitrary nonces, not just those of a concrete tx.
+func (l *txList) Contains(nonce uint64) bool {
+	return l.txs.Get(nonce) != nil
 }
 
 // Add tries to insert a new transaction into the list, returning whether the
@@ -281,9 +288,15 @@ func (l *txList) Overlaps(tx *types.Transaction) bool {
 func (l *txList) Add(tx *types.Transaction) (bool, *types.Transaction) {
 	// If there's an older better transaction, abort
 	old := l.txs.Get(tx.Nonce())
-	if old != nil && old.MaxGasTier().Uint64() > tx.MaxGasTier().Uint64() {
-		return false, nil
+	if old != nil {
+		if old.MaxGasTier().Uint64() > tx.MaxGasTier().Uint64() {
+			return false, nil
+		}
+		// Old is being replaced, subtract old cost
+		l.subTotalCost([]*types.Transaction{old})
 	}
+	// Add new tx cost to totalcost
+	l.totalcost.Add(l.totalcost, tx.Cost())
 	// Otherwise overwrite the old transaction with the current one
 	l.txs.Put(tx)
 	if cost := tx.Cost(); l.costcap.Cmp(cost) < 0 {
@@ -299,7 +312,9 @@ func (l *txList) Add(tx *types.Transaction) (bool, *types.Transaction) {
 // provided threshold. Every removed transaction is returned for any post-removal
 // maintenance.
 func (l *txList) Forward(threshold uint64) types.Transactions {
-	return l.txs.Forward(threshold)
+	txs := l.txs.Forward(threshold)
+	l.subTotalCost(txs)
+	return txs
 }
 
 // Filter removes all transactions from the list with a cost or gas limit higher
@@ -343,6 +358,9 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, signer types.Signer
 		}
 		invalids = l.txs.filter(func(tx *types.Transaction) bool { return tx.Nonce() > lowest })
 	}
+	// Reset total cost
+	l.subTotalCost(removed)
+	l.subTotalCost(invalids)
 	l.txs.reheap()
 	return removed, invalids
 }
@@ -350,7 +368,9 @@ func (l *txList) Filter(costLimit *big.Int, gasLimit uint64, signer types.Signer
 // Cap places a hard limit on the number of items, returning all transactions
 // exceeding that limit.
 func (l *txList) Cap(threshold int) types.Transactions {
-	return l.txs.Cap(threshold)
+	txs := l.txs.Cap(threshold)
+	l.subTotalCost(txs)
+	return txs
 }
 
 // Remove deletes a transaction from the maintained list, returning whether the
@@ -362,9 +382,12 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 	if removed := l.txs.Remove(nonce); !removed {
 		return false, nil
 	}
+	l.subTotalCost([]*types.Transaction{tx})
 	// In strict mode, filter out non-executable transactions
 	if l.strict {
-		return true, l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
+		txs := l.txs.Filter(func(tx *types.Transaction) bool { return tx.Nonce() > nonce })
+		l.subTotalCost(txs)
+		return true, txs
 	}
 	return true, nil
 }
@@ -377,7 +400,9 @@ func (l *txList) Remove(tx *types.Transaction) (bool, types.Transactions) {
 // prevent getting into and invalid state. This is not something that should ever
 // happen but better to be self correcting than failing!
 func (l *txList) Ready(start uint64) types.Transactions {
-	return l.txs.Ready(start)
+	txs := l.txs.Ready(start)
+	l.subTotalCost(txs)
+	return txs
 }
 
 // Len returns the length of the transaction list.
@@ -401,6 +426,17 @@ func (l *txList) Flatten() types.Transactions {
 // transaction with the highest nonce
 func (l *txList) LastElement() *types.Transaction {
 	return l.txs.LastElement()
+}
+
+// subTotalCost subtracts the cost of the given transactions from the
+// total cost of all transactions.
+//
+// Upstream 6cf2e921a: totalcost lets the pool reject transactions that would
+// overdraft the sender's balance across the whole pending list.
+func (l *txList) subTotalCost(txs []*types.Transaction) {
+	for _, tx := range txs {
+		l.totalcost.Sub(l.totalcost, tx.Cost())
+	}
 }
 
 // priceHeap is a heap.Interface implementation over transactions for retrieving
@@ -444,9 +480,16 @@ func (h *priceHeap) Pop() interface{} {
 // better candidates for inclusion while in other cases (at the top of the baseFee peak)
 // the floating heap is better. When baseFee is decreasing they behave similarly.
 type txPricedList struct {
-	all              *txLookup // Pointer to the map of all transactions
-	urgent, floating priceHeap // Heaps of prices of all the stored **remote** transactions
-	stales           int       // Number of stale price points to (re-heap trigger)
+	// Number of stale price points to (re-heap trigger).
+	// This field is accessed atomically, and must be the first field
+	// to ensure it has correct alignment for atomic.AddInt64.
+	// See https://golang.org/pkg/sync/atomic/#pkg-note-BUG.
+	// Upstream 067084fed and 51ed39c09.
+	stales int64
+
+	all              *txLookup  // Pointer to the map of all transactions
+	urgent, floating priceHeap  // Heaps of prices of all the stored **remote** transactions
+	reheapMu         sync.Mutex // Mutex asserts that only one routine is reheaping the list
 }
 
 const (
@@ -476,8 +519,8 @@ func (l *txPricedList) Put(tx *types.Transaction, local bool) {
 // the heap if a large enough ratio of transactions go stale.
 func (l *txPricedList) Removed(count int) {
 	// Bump the stale counter, but exit if still too low (< 25%)
-	l.stales += count
-	if l.stales <= (len(l.urgent.list)+len(l.floating.list))/4 {
+	stales := atomic.AddInt64(&l.stales, int64(count))
+	if int(stales) <= (len(l.urgent.list)+len(l.floating.list))/4 {
 		return
 	}
 	// Seems we've reached a critical number of stale transactions, reheap
@@ -495,7 +538,7 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.urgent).(*types.Transaction)
 			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
-				l.stales--
+				atomic.AddInt64(&l.stales, -1)
 				continue
 			}
 			// Non stale transaction found, move to floating heap
@@ -508,7 +551,7 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 			// Discard stale transactions if found during cleanup
 			tx := heap.Pop(&l.floating).(*types.Transaction)
 			if l.all.GetRemote(tx.Hash()) == nil { // Removed or migrated
-				l.stales--
+				atomic.AddInt64(&l.stales, -1)
 				continue
 			}
 			// Non stale transaction found, discard it
@@ -528,8 +571,11 @@ func (l *txPricedList) Discard(slots int, force bool) (types.Transactions, bool)
 
 // Reheap forcibly rebuilds the heap based on the current remote transaction set.
 func (l *txPricedList) Reheap() {
+	// Upstream 067084fed: only one goroutine may rebuild the heaps at a time.
+	l.reheapMu.Lock()
+	defer l.reheapMu.Unlock()
 	start := time.Now()
-	l.stales = 0
+	atomic.StoreInt64(&l.stales, 0)
 	l.urgent.list = make([]*types.Transaction, 0, l.all.RemoteCount())
 	l.all.Range(func(hash common.Hash, tx *types.Transaction, local bool) bool {
 		l.urgent.list = append(l.urgent.list, tx)

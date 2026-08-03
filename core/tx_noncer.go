@@ -49,7 +49,11 @@ func (txn *txNoncer) get(addr common.Address) uint64 {
 	defer txn.lock.Unlock()
 
 	if _, ok := txn.nonces[addr]; !ok {
-		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+		// Upstream ada603fab: a zero nonce means the account does not exist yet, so
+		// caching it would pin the noncer to 0 even after the account is created.
+		if nonce := txn.fallback.GetNonce(addr); nonce != 0 {
+			txn.nonces[addr] = nonce
+		}
 	}
 	return txn.nonces[addr]
 }
@@ -70,7 +74,10 @@ func (txn *txNoncer) setIfLower(addr common.Address, nonce uint64) {
 	defer txn.lock.Unlock()
 
 	if _, ok := txn.nonces[addr]; !ok {
-		txn.nonces[addr] = txn.fallback.GetNonce(addr)
+		// Upstream ada603fab: see get, don't cache the zero nonce of a missing account.
+		if nonce := txn.fallback.GetNonce(addr); nonce != 0 {
+			txn.nonces[addr] = nonce
+		}
 	}
 	if txn.nonces[addr] <= nonce {
 		return

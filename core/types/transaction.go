@@ -259,11 +259,18 @@ func (tx *Transaction) VerifyFields() bool { return tx.inner.verifyFields() }
 // For contract-creation transactions, To returns nil.
 func (tx *Transaction) To() *common.Address {
 	// Copy the pointed-to address.
-	ito := tx.inner.to()
-	if ito == nil {
+	return copyAddressPtr(tx.inner.to())
+}
+
+// copyAddressPtr copies an address.
+//
+// Upstream 4e599ee46: the transaction constructors and the per-type copy()
+// methods must not retain a reference to caller-owned address memory.
+func copyAddressPtr(a *common.Address) *common.Address {
+	if a == nil {
 		return nil
 	}
-	cpy := *ito
+	cpy := *a
 	return &cpy
 }
 
@@ -449,6 +456,9 @@ func (s *TxBySortPrefix) Pop() interface{} {
 	old := *s
 	n := len(old)
 	x := old[n-1]
+	// Upstream 06632da2b: zero the slot before shrinking, otherwise the backing
+	// array keeps the popped *WrapperTxn (and its *Transaction) alive.
+	old[n-1] = nil
 	*s = old[0 : n-1]
 	return x
 }

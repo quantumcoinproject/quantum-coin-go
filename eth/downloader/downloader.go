@@ -556,10 +556,8 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 			log.Debug("Enabling direct-ancient mode", "ancient", d.ancientLimit)
 		}
 		// Rewind the ancient store and blockchain if reorg happens.
-		if origin+1 < frozen {
-			if err := d.lightchain.SetHead(origin + 1); err != nil {
-				return err
-			}
+		if err := d.rewindOnReorg(origin, frozen); err != nil {
+			return err
 		}
 	}
 	// Initiate the sync using a concurrent header and content retrieval algorithm
@@ -585,6 +583,18 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 	return d.spawnSync(fetchers)
 }
 
+// rewindOnReorg rewinds the ancient store and the (light) chain when the common
+// ancestor found with the remote peer lies below the freezer threshold.
+//
+// Upstream d9c13d407: SetHead retains the block it is given, so rewinding to
+// origin+1 left one block too many behind and corrupted the ancient store.
+func (d *Downloader) rewindOnReorg(origin, frozen uint64) error {
+	if origin+1 < frozen {
+		return d.lightchain.SetHead(origin)
+	}
+	return nil
+}
+
 // spawnSync runs d.process and all given fetcher functions to completion in
 // separate goroutines, returning the first error that appears.
 func (d *Downloader) spawnSync(fetchers []func() error) error {
@@ -605,8 +615,13 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 			// it has processed the queue.
 			d.queue.Close()
 		}
-		if err = <-errc; err != nil && err != errCanceled {
-			break
+		// Upstream 79a57d49c: keep the last non-nil error, otherwise a trailing
+		// errCanceled from a sibling fetcher masks the real failure.
+		if got := <-errc; got != nil {
+			err = got
+			if got != errCanceled {
+				break // receive a meaningful error, bubble it up
+			}
 		}
 	}
 	d.queue.Close()

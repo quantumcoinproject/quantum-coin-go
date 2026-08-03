@@ -127,7 +127,7 @@ func spSignDef(t *testing.T, signer types.Signer, key *signaturealgorithm.Privat
 
 func spNewState(t *testing.T) *state.StateDB {
 	t.Helper()
-	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, err := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	if err != nil {
 		t.Fatalf("failed to create state: %v", err)
 	}

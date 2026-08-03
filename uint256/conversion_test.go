@@ -761,3 +761,35 @@ func TestEnDecode(t *testing.T) {
 		testSample(i, bigSample, intSample)
 	}
 }
+
+// TestUBF129_SetBytes29 checks the bounds-check hint of SetBytes29. uint256 v1.3.0: the
+// hint read in[23] while the routine reads in[21:29], so an under-length slice with
+// spare capacity silently read past its length instead of panicking. The computed value
+// was always correct because SetBytes only dispatches here for len(in) == 29.
+func TestUBF129_SetBytes29(t *testing.T) {
+	in := make([]byte, 29)
+	for i := range in {
+		in[i] = byte(i + 1)
+	}
+	var z Int
+	z.SetBytes29(in)
+	if exp := new(Int).SetBytes(in); !z.Eq(exp) {
+		t.Fatalf("SetBytes29 = %x, want %x", &z, exp)
+	}
+	if exp, _ := FromBig(new(big.Int).SetBytes(in)); !z.Eq(exp) {
+		t.Fatalf("SetBytes29 = %x, want %x", &z, exp)
+	}
+
+	// A 24-byte slice with capacity 29 used to slip through the hint: in[21:29] is a
+	// legal slice expression because it is bounded by capacity, so the routine read
+	// five bytes beyond the slice length without panicking.
+	short := in[:24]
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("SetBytes29 did not panic for a 24-byte input")
+			}
+		}()
+		new(Int).SetBytes29(short)
+	}()
+}

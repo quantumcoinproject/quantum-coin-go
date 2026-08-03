@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/quantumcoinproject/quantum-coin-go/common"
@@ -108,12 +109,17 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 	if args.Gas == nil {
 		// These fields are immutable during the estimation, safe to
 		// pass the pointer directly.
+		//
+		// Upstream ffae2043f: forwarding args.Data dropped the payload whenever the
+		// caller used the newer "input" field, so the estimate was made against an
+		// empty calldata. Use the resolved data instead.
+		data := args.data()
 		callArgs := TransactionArgs{
 			From:       args.From,
 			To:         args.To,
 			GasPrice:   args.GasPrice,
 			Value:      args.Value,
-			Data:       args.Data,
+			Data:       (*hexutil.Bytes)(&data),
 			AccessList: args.AccessList,
 		}
 		pendingBlockNr := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
@@ -124,9 +130,18 @@ func (args *TransactionArgs) setDefaults(ctx context.Context, b Backend) error {
 		args.Gas = &estimated
 		log.Trace("Estimate gas usage automatically", "gas", args.Gas)
 	}
-	if args.ChainID == nil {
-		id := (*hexutil.Big)(b.ChainConfig().ChainID)
-		args.ChainID = id
+	// If chain id is provided, ensure it matches the local chain id. Otherwise, set the local
+	// chain id as the default.
+	//
+	// Upstream 434ca026c: a mismatched chainId used to be silently overwritten, so the node
+	// signed a transaction for a chain the caller never asked for.
+	want := b.ChainConfig().ChainID
+	if args.ChainID != nil {
+		if have := (*big.Int)(args.ChainID); have.Cmp(want) != 0 {
+			return fmt.Errorf("chainId does not match node's (have=%v, want=%v)", have, want)
+		}
+	} else {
+		args.ChainID = (*hexutil.Big)(want)
 	}
 	return nil
 }

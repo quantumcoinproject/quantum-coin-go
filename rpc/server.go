@@ -27,6 +27,14 @@ import (
 
 const MetadataApi = "rpc"
 
+const (
+	// defaultBatchRequestLimit and defaultBatchResponseMaxSize are the batch limits
+	// applied to every server unless SetBatchLimits says otherwise.
+	// Upstream f3314bb6d (#26681).
+	defaultBatchRequestLimit    = 1000
+	defaultBatchResponseMaxSize = 25 * 1000 * 1000
+)
+
 // CodecOption specifies which type of messages a codec supports.
 //
 // Deprecated: this option is no longer honored by Server.
@@ -46,11 +54,21 @@ type Server struct {
 	idgen    func() ID
 	run      int32
 	codecs   mapset.Set
+
+	// Limits applied to incoming batch requests. Upstream f3314bb6d (#26681).
+	batchItemLimit     int
+	batchResponseLimit int
 }
 
 // NewServer creates a new server instance with no registered handlers.
 func NewServer() *Server {
-	server := &Server{idgen: randomIDGenerator(), codecs: mapset.NewSet(), run: 1}
+	server := &Server{
+		idgen:              randomIDGenerator(),
+		codecs:             mapset.NewSet(),
+		run:                1,
+		batchItemLimit:     defaultBatchRequestLimit,
+		batchResponseLimit: defaultBatchResponseMaxSize,
+	}
 	// Register the default service providing meta information about the RPC service such
 	// as the services and methods it offers.
 	rpcService := &RPCService{server}
@@ -64,6 +82,17 @@ func NewServer() *Server {
 // service collection this server provides to clients.
 func (s *Server) RegisterName(name string, receiver interface{}) error {
 	return s.services.registerName(name, receiver)
+}
+
+// SetBatchLimits sets limits applied to batch requests. There are two limits: 'itemLimit'
+// is the maximum number of items in a batch. 'maxResponseSize' is the maximum number of
+// response bytes across all requests in a batch.
+//
+// This method should be called before processing any requests via ServeCodec, ServeHTTP,
+// ServeListener etc. Upstream f3314bb6d (#26681).
+func (s *Server) SetBatchLimits(itemLimit, maxResponseSize int) {
+	s.batchItemLimit = itemLimit
+	s.batchResponseLimit = maxResponseSize
 }
 
 // ServeCodec reads incoming requests from codec, calls the appropriate callback and writes
@@ -83,7 +112,7 @@ func (s *Server) ServeCodec(codec ServerCodec, options CodecOption) {
 	s.codecs.Add(codec)
 	defer s.codecs.Remove(codec)
 
-	c := initClient(codec, s.idgen, &s.services)
+	c := initClient(codec, s.idgen, &s.services, s.batchItemLimit, s.batchResponseLimit)
 	<-codec.closed()
 	c.Close()
 }
@@ -97,7 +126,7 @@ func (s *Server) serveSingleRequest(ctx context.Context, codec ServerCodec) {
 		return
 	}
 
-	h := newHandler(ctx, codec, s.idgen, &s.services)
+	h := newHandler(ctx, codec, s.idgen, &s.services, s.batchItemLimit, s.batchResponseLimit)
 	h.allowSubscribe = false
 	defer h.close(io.EOF, nil)
 

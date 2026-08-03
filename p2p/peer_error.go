@@ -19,6 +19,9 @@ package p2p
 import (
 	"errors"
 	"fmt"
+	"io"
+
+	"github.com/quantumcoinproject/quantum-coin-go/rlp"
 )
 
 const (
@@ -54,7 +57,10 @@ func (pe *peerError) Error() string {
 
 var errProtocolReturned = errors.New("protocol returned")
 
-type DiscReason uint
+// DiscReason is the disconnect reason sent in a discMsg. Upstream 870b4505a
+// (CVE-2022-29177): every other devp2p implementation stores this as a single
+// byte, so decoding it as a wider integer let a peer supply out-of-range values.
+type DiscReason uint8
 
 const (
 	DiscRequested DiscReason = iota
@@ -99,11 +105,42 @@ func (d DiscReason) Error() string {
 	return d.String()
 }
 
+// decodeDisconnectMessage decodes the payload of a discMsg. Upstream c1c250714:
+// now that DiscReason is a single byte, the canonical `[]DiscReason{r}` encoding
+// is a byte string rather than a list, and implementations differ over which of
+// the two they send. Accept both, plus a bare byte, so a disconnect reason is
+// never silently reported as DiscRequested. An unrecognised payload yields
+// DiscInvalidIdentity's zero value with an error, and callers fall back.
+func decodeDisconnectMessage(r io.Reader) (DiscReason, error) {
+	raw, err := io.ReadAll(r)
+	if err != nil {
+		return 0, err
+	}
+	if len(raw) == 0 {
+		return 0, io.EOF
+	}
+	// Canonical list form: a one-element list holding the reason.
+	var asList struct{ R DiscReason }
+	if err := rlp.DecodeBytes(raw, &asList); err == nil {
+		return asList.R, nil
+	}
+	// Byte-string form, which is what []DiscReason encodes to now.
+	var asBytes []byte
+	if err := rlp.DecodeBytes(raw, &asBytes); err == nil && len(asBytes) == 1 {
+		return DiscReason(asBytes[0]), nil
+	}
+	// Bare single byte, sent by some implementations.
+	if len(raw) == 1 && raw[0] < 0x80 {
+		return DiscReason(raw[0]), nil
+	}
+	return 0, errors.New("invalid disconnect message")
+}
+
 func discReasonForError(err error) DiscReason {
 	if reason, ok := err.(DiscReason); ok {
 		return reason
 	}
-	if err == errProtocolReturned {
+	if errors.Is(err, errProtocolReturned) { // Upstream 138f0d749.
 		return DiscQuitting
 	}
 	peerError, ok := err.(*peerError)

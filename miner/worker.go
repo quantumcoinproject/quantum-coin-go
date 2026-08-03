@@ -338,9 +338,9 @@ func (w *worker) isRunning() bool {
 // close terminates all background threads maintained by the worker.
 // Note the worker does not support being closed multiple times.
 func (w *worker) close() {
-	if w.current != nil && w.current.state != nil {
-		w.current.state.StopPrefetcher()
-	}
+	// Upstream ee120ef86: w.current used to be read (and its prefetcher stopped) from
+	// here, racing with makeCurrent on the mainLoop goroutine. mainLoop now stops the
+	// prefetcher itself when it exits.
 	atomic.StoreInt32(&w.running, 0)
 	close(w.exitCh)
 }
@@ -437,6 +437,13 @@ func (w *worker) mainLoop() {
 	defer w.txsSub.Unsubscribe()
 	defer w.chainHeadSub.Unsubscribe()
 	defer w.chainSideSub.Unsubscribe()
+	// Upstream ee120ef86: w.current is owned by this goroutine, so the prefetcher has
+	// to be torn down here rather than from close().
+	defer func() {
+		if w.current != nil && w.current.state != nil {
+			w.current.state.StopPrefetcher()
+		}
+	}()
 
 	for {
 		select {
@@ -510,6 +517,11 @@ func (w *worker) taskLoop() {
 			log.Trace("taskCh1.3")
 			if err := w.engine.Seal(w.chain, task.block, w.resultCh, stopCh); err != nil {
 				log.Warn("Block sealing failed", "err", err)
+				// Upstream 476fb565c: the task will never produce a result, so drop it
+				// instead of letting pendingTasks grow without bound.
+				w.pendingMu.Lock()
+				delete(w.pendingTasks, sealHash)
+				w.pendingMu.Unlock()
 			}
 			backupManager := backupmanager.GetInstance()
 			if backupManager != nil {
@@ -557,17 +569,27 @@ func (w *worker) resultLoop() {
 				receipts = make([]*types.Receipt, len(task.receipts))
 				logs     []*types.Log
 			)
-			for i, receipt := range task.receipts {
+			// Upstream c113520d5: the copy has to happen before any field is written,
+			// and the log slice has to be copied element-wise as well. Otherwise the
+			// task's receipts and their *types.Log values are mutated in place and
+			// shared with the pending snapshot.
+			for i, taskReceipt := range task.receipts {
+				receipt := new(types.Receipt)
+				receipts[i] = receipt
+				*receipt = *taskReceipt
+
 				// add block location fields
 				receipt.BlockHash = hash
 				receipt.BlockNumber = block.Number()
 				receipt.TransactionIndex = uint(i)
 
-				receipts[i] = new(types.Receipt)
-				*receipts[i] = *receipt
 				// Update the block hash in all logs since it is now available and not when the
 				// receipt/log of individual transactions were created.
-				for _, log := range receipt.Logs {
+				receipt.Logs = make([]*types.Log, len(taskReceipt.Logs))
+				for i, taskLog := range taskReceipt.Logs {
+					log := new(types.Log)
+					receipt.Logs[i] = log
+					*log = *taskLog
 					log.BlockHash = hash
 				}
 				logs = append(logs, receipt.Logs...)
@@ -597,7 +619,7 @@ func (w *worker) resultLoop() {
 func (w *worker) makeCurrent(parent *types.Block, header *types.Header) error {
 	// Retrieve the parent state to execute on top and start a prefetcher for
 	// the miner to speed block sealing up a bit
-	state, err := w.chain.StateAt(parent.Root())
+	state, err := w.chain.StateAt(parent.Root(), header.Number)
 	if err != nil {
 		return err
 	}

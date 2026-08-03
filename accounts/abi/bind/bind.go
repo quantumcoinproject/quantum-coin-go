@@ -88,6 +88,16 @@ func Bind(types []string, abis []string, bytecodes []string, fsigs []map[string]
 			transactIdentifiers = make(map[string]bool)
 			eventIdentifiers    = make(map[string]bool)
 		)
+
+		// Upstream b45931cc4: the constructor is not part of evmABI.Methods, so a
+		// struct used only as a constructor parameter never reached structs and
+		// the template then nil-dereferenced it.
+		for _, input := range evmABI.Constructor.Inputs {
+			if hasStruct(input.Type) {
+				bindStructType[lang](input.Type, structs)
+			}
+		}
+
 		for _, original := range evmABI.Methods {
 			// Normalize the method for capital cases and non-anonymous inputs/outputs
 			normalized := original

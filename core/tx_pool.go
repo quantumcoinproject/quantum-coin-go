@@ -23,6 +23,7 @@ import (
 	"os"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/quantumcoinproject/quantum-coin-go/backupmanager"
@@ -93,6 +94,14 @@ var (
 	ErrOversizedData = errors.New("oversized data")
 
 	InvalidTx = errors.New("invalid transaction")
+
+	// ErrFutureReplacePending is returned if a future transaction replaces a pending
+	// transaction. Future transactions should only be able to replace other future transactions.
+	ErrFutureReplacePending = errors.New("future transaction tries to replace pending")
+
+	// ErrOverdraft is returned if a transaction would cause the senders balance to go negative
+	// thus invalidating a potential large number of transactions.
+	ErrOverdraft = errors.New("transaction would cause overdraft")
 )
 
 var (
@@ -120,6 +129,12 @@ var (
 	invalidTxMeter     = metrics.NewRegisteredMeter("txpool/invalid", nil)
 	underpricedTxMeter = metrics.NewRegisteredMeter("txpool/underpriced", nil)
 	overflowedTxMeter  = metrics.NewRegisteredMeter("txpool/overflowed", nil)
+	// throttleTxMeter counts how many transactions are rejected due to too-many-changes between
+	// txpool reorgs.
+	throttleTxMeter = metrics.NewRegisteredMeter("txpool/throttle", nil)
+	// dropBetweenReorgHistogram counts how many drops we experience between two reorg runs. It is expected
+	// that this number is pretty low, since txpool reorgs happen very frequently.
+	dropBetweenReorgHistogram = metrics.NewRegisteredHistogram("txpool/dropbetweenreorg", nil, metrics.NewExpDecaySample(1028, 0.015))
 
 	pendingGauge = metrics.NewRegisteredGauge("txpool/pending", nil)
 	queuedGauge  = metrics.NewRegisteredGauge("txpool/queued", nil)
@@ -144,7 +159,7 @@ const (
 type blockChain interface {
 	CurrentBlock() *types.Block
 	GetBlock(hash common.Hash, number uint64) *types.Block
-	StateAt(root common.Hash) (*state.StateDB, error)
+	StateAt(root common.Hash, blockNumber *big.Int) (*state.StateDB, error)
 
 	SubscribeChainHeadEvent(ch chan<- ChainHeadEvent) event.Subscription
 }
@@ -266,6 +281,8 @@ type TxPool struct {
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
 
+	changesSinceReorg int // A counter for how many drops we've performed in-between reorg.
+
 	txnHook *txnTestHook // optional devnet TPS test hook, enabled via TXN_HOOK_FILE
 }
 
@@ -369,8 +386,9 @@ func (pool *TxPool) loop() {
 		case <-report.C:
 			pool.mu.RLock()
 			pending, queued := pool.stats()
-			stales := pool.priced.stales
 			pool.mu.RUnlock()
+			// Upstream 067084fed: stales is maintained atomically, outside pool.mu.
+			stales := int(atomic.LoadInt64(&pool.priced.stales))
 
 			if pending != prevPending || queued != prevQueued || stales != prevStales {
 				log.Debug("Transaction pool status report", "executable", pending, "queued", queued, "stales", stales)
@@ -650,18 +668,44 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 	}
 	// Transactor should have enough funds to cover the costs
 	// cost == V + GP * GL
-	log.Trace("validateTx gas", "from", from, "balance", pool.currentState.GetBalance(from), "cost", tx.Cost())
-	if pool.currentState.GetBalance(from).Cmp(tx.Cost()) < 0 {
+	balance := pool.currentState.GetBalance(from)
+	log.Trace("validateTx gas", "from", from, "balance", balance, "cost", tx.Cost())
+	// balanceExempt records that this transaction was let through despite not being
+	// able to cover its own cost (gas-exempt conversion txn, or the TXPOOL_IGNORE_GAS
+	// escape hatch). The overdraft check below is skipped in that case, since it would
+	// reject for exactly the reason we just waived.
+	balanceExempt := false
+	if balance.Cmp(tx.Cost()) < 0 {
 		isGasExempt, err := conversionutil.IsGasExemptTxn(tx, pool.signer)
 		if err == nil && isGasExempt == true {
 			log.Trace("Is a GasExempt Txn", "from", from, "tx", tx.Hash())
+			balanceExempt = true
 		} else {
 			txPoolIgnoreGas := os.Getenv("TXPOOL_IGNORE_GAS")
 			if len(txPoolIgnoreGas) > 0 && txPoolIgnoreGas == "1" {
 				log.Warn("TXPOOL_IGNORE_GAS is set, skipping gas check")
+				balanceExempt = true
 			} else {
 				log.Debug("ErrInsufficientFunds", "from", from, "tx", tx.Hash())
 				return ErrInsufficientFunds
+			}
+		}
+	}
+
+	// Upstream 6cf2e921a: verify that replacing transactions will not result in overdraft.
+	// A sender must be able to fund every transaction it has pending simultaneously,
+	// otherwise a cheap batch of overdrafting transactions can invalidate (and churn) a
+	// large number of pool entries.
+	if !balanceExempt {
+		if list := pool.pending[from]; list != nil { // Sender already has pending txs
+			sum := new(big.Int).Add(tx.Cost(), list.totalcost)
+			if repl := list.txs.Get(tx.Nonce()); repl != nil {
+				// Deduct the cost of a transaction replaced by this
+				sum.Sub(sum, repl.Cost())
+			}
+			if balance.Cmp(sum) < 0 {
+				log.Trace("Replacing transactions would overdraft", "sender", from, "balance", balance, "required", sum)
+				return ErrOverdraft
 			}
 		}
 	}
@@ -708,8 +752,19 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 		backupManager.BackupTransaction(tx)
 	}
 
+	// already validated by this point
+	from, _ := types.Sender(pool.signer, tx)
+
 	// If the transaction pool is full, discard underpriced transactions
 	if uint64(pool.all.Slots()+numSlots(tx)) > pool.config.GlobalSlots+pool.config.GlobalQueue {
+		// Upstream d705f5a55: we're about to replace a transaction. The reorg does a more
+		// thorough analysis of what to remove and how, but it runs async. We don't want to
+		// do too many replacements between reorg-runs, so we cap the number of
+		// replacements to 25% of the slots
+		if pool.changesSinceReorg > int(pool.config.GlobalSlots/4) {
+			throttleTxMeter.Mark(1)
+			return false, ErrTxPoolOverflow
+		}
 		// New transaction is better than our worse ones, make room for it.
 		// If it's a local transaction, forcibly discard all available transactions.
 		// Otherwise if we can't make enough room for new one, abort the operation.
@@ -721,16 +776,39 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 			overflowedTxMeter.Mark(1)
 			return false, ErrTxPoolOverflow
 		}
+
+		// Upstream 6cf2e921a (+ e6b6a8b73, 230df98e4, b8ee2877c): if the new transaction is a
+		// future transaction it should never churn pending transactions. Local transactions
+		// are exempt from the rule.
+		if !isLocal && pool.isGapped(from, tx) {
+			var replacesPending bool
+			for _, dropTx := range drop {
+				dropSender, _ := types.Sender(pool.signer, dropTx)
+				if list := pool.pending[dropSender]; list != nil && list.Contains(dropTx.Nonce()) {
+					replacesPending = true
+					break
+				}
+			}
+			// Add all transactions back to the priced queue
+			if replacesPending {
+				for _, dropTx := range drop {
+					pool.priced.Put(dropTx, false)
+				}
+				log.Trace("Discarding future transaction replacing pending tx", "hash", hash)
+				return false, ErrFutureReplacePending
+			}
+		}
+
 		// Kick out the underpriced remote transactions.
 		for _, tx := range drop {
 			log.Trace("Discarding freshly underpriced transaction", "hash", tx.Hash())
 			underpricedTxMeter.Mark(1)
-			pool.removeTx(tx.Hash(), false)
+			dropped := pool.removeTx(tx.Hash(), false)
+			pool.changesSinceReorg += dropped
 		}
 	}
 	// Try to replace an existing transaction in the pending pool
-	from, _ := types.Sender(pool.signer, tx) // already validated
-	if list := pool.pending[from]; list != nil && list.Overlaps(tx) {
+	if list := pool.pending[from]; list != nil && list.Contains(tx.Nonce()) {
 		inserted, old := list.Add(tx)
 		if !inserted {
 			pendingDiscardMeter.Mark(1)
@@ -770,6 +848,32 @@ func (pool *TxPool) add(tx *types.Transaction, local bool) (replaced bool, err e
 
 	log.Trace("Pooled new future transaction", "hash", hash, "from", from, "to", tx.To())
 	return replaced, nil
+}
+
+// isGapped reports whether the given transaction is immediately executable.
+//
+// Upstream 230df98e4, with the final semantics of b8ee2877c.
+func (pool *TxPool) isGapped(from common.Address, tx *types.Transaction) bool {
+	// Short circuit if transaction falls within the scope of the pending list
+	// or matches the next pending nonce which can be promoted as an executable
+	// transaction afterwards. Note, the tx staleness is already checked in
+	// 'validateTx' function previously.
+	next := pool.pendingNonces.get(from)
+	if tx.Nonce() <= next {
+		return false
+	}
+	// The transaction has a nonce gap with pending list, it's only considered
+	// as executable if transactions in queue can fill up the nonce gap.
+	queue, ok := pool.queue[from]
+	if !ok {
+		return true
+	}
+	for nonce := next; nonce < tx.Nonce(); nonce++ {
+		if !queue.Contains(nonce) {
+			return true // txs in queue can't fill up the nonce gap
+		}
+	}
+	return false
 }
 
 // enqueueTx inserts a new transaction into the non-executable transaction queue.
@@ -1008,11 +1112,12 @@ func (pool *TxPool) Has(hash common.Hash) bool {
 
 // removeTx removes a single transaction from the queue, moving all subsequent
 // transactions back to the future queue.
-func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
+// Returns the number of transactions removed from the pending queue.
+func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) int {
 	// Fetch the transaction we wish to delete
 	tx := pool.all.Get(hash)
 	if tx == nil {
-		return
+		return 0
 	}
 	addr, _ := types.Sender(pool.signer, tx) // already validated during insertion
 
@@ -1040,7 +1145,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			pool.pendingNonces.setIfLower(addr, tx.Nonce())
 			// Reduce the pending counter
 			pendingGauge.Dec(int64(1 + len(invalids)))
-			return
+			return 1 + len(invalids)
 		}
 	}
 	// Transaction is in the future queue
@@ -1054,6 +1159,7 @@ func (pool *TxPool) removeTx(hash common.Hash, outofbound bool) {
 			delete(pool.beats, addr)
 		}
 	}
+	return 0
 }
 
 // requestReset requests a pool reset to the new head block.
@@ -1205,6 +1311,10 @@ func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirt
 		highestPending := list.LastElement()
 		pool.pendingNonces.set(addr, highestPending.Nonce()+1)
 	}
+	// Upstream d705f5a55: the reorg has now done the thorough analysis, so the
+	// between-reorg replacement budget starts over.
+	dropBetweenReorgHistogram.Update(int64(pool.changesSinceReorg))
+	pool.changesSinceReorg = 0 // Reset change counter
 	pool.mu.Unlock()
 
 	// Notify subsystems for newly added transactions
@@ -1294,7 +1404,7 @@ func (pool *TxPool) reset(oldHead, newHead *types.Header) {
 	if newHead == nil {
 		newHead = pool.chain.CurrentBlock().Header() // Special case during testing
 	}
-	statedb, err := pool.chain.StateAt(newHead.Root)
+	statedb, err := pool.chain.StateAt(newHead.Root, newHead.Number)
 	if err != nil {
 		log.Error("Failed to reset txpool state", "err", err)
 		return
@@ -1486,7 +1596,9 @@ func (pool *TxPool) truncateQueue() {
 			addresses = append(addresses, addressByHeartbeat{addr, pool.beats[addr]})
 		}
 	}
-	sort.Sort(addresses)
+	// Upstream 2bfd9a28d: transactions are dropped from the tail of the slice, so the
+	// list has to be sorted newest-first for the stalest accounts to be evicted.
+	sort.Sort(sort.Reverse(addresses))
 
 	// Drop transactions until the total is below the limit or only locals remain
 	for drop := queued - pool.config.GlobalQueue; drop > 0 && len(addresses) > 0; {

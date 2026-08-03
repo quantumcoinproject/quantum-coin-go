@@ -456,7 +456,7 @@ type batch struct {
 // Put inserts the given value into the batch for later committing.
 func (b *batch) Put(key, value []byte) error {
 	b.b.Put(key, value)
-	b.size += len(value)
+	b.size += len(key) + len(value) // Upstream 53f81574e: Delete counts the key, Put must too.
 	return nil
 }
 

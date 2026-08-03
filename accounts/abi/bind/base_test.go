@@ -109,7 +109,7 @@ const hexData = "0x000000000000000000000000376c47978271565f56deb45495afa69e59c16
 func TestUnpackIndexedStringTyLogIntoMap(t *testing.T) {
 	hash := crypto.Keccak256Hash([]byte("testName"))
 	topics := []common.Hash{
-		common.HexToHash("0x0"),
+		crypto.Keccak256Hash([]byte("received(string,address,uint256,bytes)")),
 		hash,
 	}
 	mockLog := newMockLog(topics, common.HexToHash("0x0"))
@@ -134,7 +134,7 @@ func TestUnpackIndexedSliceTyLogIntoMap(t *testing.T) {
 	}
 	hash := crypto.Keccak256Hash(sliceBytes)
 	topics := []common.Hash{
-		common.HexToHash("0x0"),
+		crypto.Keccak256Hash([]byte("received(string[],address,uint256,bytes)")),
 		hash,
 	}
 	mockLog := newMockLog(topics, common.HexToHash("0x0"))
@@ -159,7 +159,7 @@ func TestUnpackIndexedArrayTyLogIntoMap(t *testing.T) {
 	}
 	hash := crypto.Keccak256Hash(arrBytes)
 	topics := []common.Hash{
-		common.HexToHash("0x0"),
+		crypto.Keccak256Hash([]byte("received(address[2],address,uint256,bytes)")),
 		hash,
 	}
 	mockLog := newMockLog(topics, common.HexToHash("0x0"))
@@ -210,7 +210,7 @@ func TestUnpackIndexedBytesTyLogIntoMap(t *testing.T) {
 	bytes := []byte{1, 2, 3, 4, 5}
 	hash := crypto.Keccak256Hash(bytes)
 	topics := []common.Hash{
-		common.HexToHash("0x99b5620489b6ef926d4518936cfec15d305452712b88bd59da2d9c10fb0953e8"),
+		crypto.Keccak256Hash([]byte("received(bytes,address,uint256,bytes)")),
 		hash,
 	}
 	mockLog := newMockLog(topics, common.HexToHash("0x5c698f13940a2153440c6d19660878bc90219d9298fdcf37365aa8d88d40fc42"))

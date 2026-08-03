@@ -128,26 +128,36 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 		}
 		return f.blockLogs(ctx, header)
 	}
+	// Upstream d9566e39b: short-cut if all we care about is pending logs, and
+	// reject a range that only partially covers the pending block.
+	if f.begin == rpc.PendingBlockNumber.Int64() {
+		if f.end != rpc.PendingBlockNumber.Int64() {
+			return nil, errInvalidBlockRange
+		}
+		return f.pendingLogs()
+	}
 	// Figure out the limits of the filter range
 	header, _ := f.backend.HeaderByNumber(ctx, rpc.LatestBlockNumber)
 	if header == nil {
 		return nil, nil
 	}
-	head := header.Number.Uint64()
-
-	if f.begin == -1 {
+	var (
+		head    = header.Number.Uint64()
+		end     = uint64(f.end)
+		pending = f.end == rpc.PendingBlockNumber.Int64()
+	)
+	if f.begin == rpc.LatestBlockNumber.Int64() {
 		f.begin = int64(head)
 	}
-	end := uint64(f.end)
-	if f.end == -1 {
+	if f.end == rpc.LatestBlockNumber.Int64() || f.end == rpc.PendingBlockNumber.Int64() {
 		end = head
 	}
 	// Gather all indexed logs, and finish with non indexed ones
 	var (
-		logs []*types.Log
-		err  error
+		logs           []*types.Log
+		err            error
+		size, sections = f.backend.BloomStatus()
 	)
-	size, sections := f.backend.BloomStatus()
 	if indexed := sections * size; indexed > uint64(f.begin) {
 		if indexed > end {
 			logs, err = f.indexedLogs(ctx, end)
@@ -160,6 +170,13 @@ func (f *Filter) Logs(ctx context.Context) ([]*types.Log, error) {
 	}
 	rest, err := f.unindexedLogs(ctx, end)
 	logs = append(logs, rest...)
+	if pending {
+		pendingLogs, err := f.pendingLogs()
+		if err != nil {
+			return nil, err
+		}
+		logs = append(logs, pendingLogs...)
+	}
 	return logs, err
 }
 
@@ -219,6 +236,11 @@ func (f *Filter) unindexedLogs(ctx context.Context, end uint64) ([]*types.Log, e
 	var logs []*types.Log
 
 	for ; f.begin <= int64(end); f.begin++ {
+		// Upstream f53ff0ff4: stop scanning once the caller has gone away, a long
+		// range query otherwise keeps churning long after the client disconnected.
+		if f.begin%10 == 0 && ctx.Err() != nil {
+			return logs, ctx.Err()
+		}
 		header, err := f.backend.HeaderByNumber(ctx, rpc.BlockNumber(f.begin))
 		if header == nil || err != nil {
 			if err == nil {
@@ -274,6 +296,38 @@ func (f *Filter) checkMatches(ctx context.Context, header *types.Header) (logs [
 			logs = filterLogs(unfiltered, nil, nil, f.addresses, f.topics)
 		}
 		return logs, nil
+	}
+	return nil, nil
+}
+
+// pendingBlockBackend is the optional part of Backend that exposes the miner's
+// pending block. It is kept separate from Backend itself so that consumers which
+// only satisfy the historical interface (e.g. the GraphQL resolver, which passes
+// an ethapi.Backend) keep compiling.
+type pendingBlockBackend interface {
+	PendingBlockAndReceipts() (*types.Block, types.Receipts)
+}
+
+// pendingLogs returns the logs matching the filter criteria within the pending block.
+//
+// Upstream d9566e39b. Unlike upstream we tolerate a backend that cannot serve a
+// pending block at all, and a nil pending block (there is none while the miner is
+// idle) — both simply yield no logs rather than a nil dereference.
+func (f *Filter) pendingLogs() ([]*types.Log, error) {
+	backend, ok := f.backend.(pendingBlockBackend)
+	if !ok {
+		return nil, nil
+	}
+	block, receipts := backend.PendingBlockAndReceipts()
+	if block == nil {
+		return nil, nil
+	}
+	if bloomFilter(block.Bloom(), f.addresses, f.topics) {
+		var unfiltered []*types.Log
+		for _, r := range receipts {
+			unfiltered = append(unfiltered, r.Logs...)
+		}
+		return filterLogs(unfiltered, nil, nil, f.addresses, f.topics), nil
 	}
 	return nil, nil
 }

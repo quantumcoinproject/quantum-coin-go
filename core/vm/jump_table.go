@@ -1031,3 +1031,19 @@ func newFrontierInstructionSet() JumpTable {
 		},
 	}
 }
+
+// copyJumpTable returns a deep copy of the given table. The instruction sets are
+// process-global values holding *operation pointers, so a plain array copy still
+// shares every operation. EnableEIP mutates operations in place, which would then
+// corrupt the shared table for every other EVM in the process.
+// Upstream 7dc5e785a (#26137).
+func copyJumpTable(source *JumpTable) JumpTable {
+	dest := *source
+	for i, op := range source {
+		if op != nil {
+			opCopy := *op
+			dest[i] = &opCopy
+		}
+	}
+	return dest
+}

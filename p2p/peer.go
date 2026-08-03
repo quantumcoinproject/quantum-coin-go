@@ -112,6 +112,7 @@ type Peer struct {
 	wg       sync.WaitGroup
 	protoErr chan error
 	closed   chan struct{}
+	pingRecv chan struct{}
 	disc     chan DiscReason
 
 	// events receives message send / receive events if set
@@ -228,6 +229,7 @@ func newPeer(log log.Logger, conn *conn, protocols []Protocol) *Peer {
 		disc:     make(chan DiscReason),
 		protoErr: make(chan error, len(protomap)+1), // protocols + pingLoop
 		closed:   make(chan struct{}),
+		pingRecv: make(chan struct{}, 16),
 		log:      log.New("id", conn.node.ID(), "conn", conn.flags),
 	}
 	return p
@@ -340,6 +342,11 @@ func (p *Peer) pingLoop() {
 				return
 			}
 			ping.Reset(pingInterval)
+		case <-p.pingRecv:
+			// Upstream 7ec60d5f0 (CVE-2023-40591): answering an inbound ping used to
+			// spawn a goroutine per message in handle(), so a peer could flood us with
+			// pings and exhaust memory. The reply is now sent from this single loop.
+			SendItems(p.rw, pongMsg)
 		case <-p.closed:
 			log.Debug("pingLoop closed before done", "peer", p.ID().String())
 			p.wg.Done()
@@ -379,14 +386,25 @@ func (p *Peer) handle(msg Msg) error {
 	case msg.Code == pingMsg:
 		log.Trace("hanndle pingMsg", "peer", p.ID().String())
 		msg.Discard()
-		go SendItems(p.rw, pongMsg)
+		// Upstream 7ec60d5f0 (CVE-2023-40591): hand the pong off to pingLoop instead of
+		// starting a goroutine here. The buffered channel bounds the work an inbound
+		// ping flood can queue up.
+		select {
+		case p.pingRecv <- struct{}{}:
+		case <-p.closed:
+		}
 	case msg.Code == discMsg:
 		log.Trace("hanndle discMsg", "peer", p.ID().String())
-		var reason [1]DiscReason
 		// This is the last message. We don't need to discard or
 		// check errors because, the connection will be closed after it.
-		rlp.Decode(msg.Payload, &reason)
-		return reason[0]
+		// Upstream 870b4505a (CVE-2022-29177): DiscReason is a single byte, so a
+		// malformed or over-wide payload can no longer become an out-of-range reason.
+		// Upstream c1c250714: accept both the list and byte-string encodings.
+		reason, err := decodeDisconnectMessage(msg.Payload)
+		if err != nil {
+			return DiscProtocolError
+		}
+		return reason
 	case msg.Code < baseProtocolLength:
 		log.Trace("hanndle baseProtocolLength", "peer", p.ID().String())
 		// ignore other base protocol messages
@@ -475,7 +493,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 			if err == nil {
 				log.Trace(fmt.Sprintf("Protocol %s/%d returned", proto.Name, proto.Version))
 				err = errProtocolReturned
-			} else if err != io.EOF {
+			} else if !errors.Is(err, io.EOF) { // Upstream 138f0d749: unwrap wrapped io.EOF.
 				log.Trace(fmt.Sprintf("Protocol %s/%d failed", proto.Name, proto.Version), "err", err)
 			}
 			log.Trace("startProtocols before close")

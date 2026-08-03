@@ -154,3 +154,36 @@ func TestResubscribeWithErrorHandler(t *testing.T) {
 		t.Fatalf("unexpected subscription errors %v, want %v", subErrs, expectedSubErrs)
 	}
 }
+
+// TestUBF125_ResubscribeUnsubscribeAfterCompletion checks that Unsubscribe returns even
+// when the resubscribe loop has already exited because the inner subscription ended
+// successfully. Upstream ffc6a0f36: the unsub channel was unbuffered, so the send in
+// Unsubscribe had no reader left and blocked forever.
+func TestUBF125_ResubscribeUnsubscribeAfterCompletion(t *testing.T) {
+	started := make(chan struct{})
+	sub := ResubscribeErr(100*time.Millisecond, func(ctx context.Context, lastErr error) (Subscription, error) {
+		return NewSubscription(func(unsubscribed <-chan struct{}) error {
+			close(started)
+			return nil // ends successfully, which terminates the resubscribe loop
+		}), nil
+	})
+
+	<-started
+	// Wait for the loop goroutine to exit. Err is closed by loop's defer.
+	select {
+	case <-sub.Err():
+	case <-time.After(5 * time.Second):
+		t.Fatal("resubscribe loop did not exit")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		sub.Unsubscribe()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Unsubscribe deadlocked after the subscription ended")
+	}
+}

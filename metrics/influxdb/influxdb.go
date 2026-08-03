@@ -24,6 +24,10 @@ type reporter struct {
 	client *client.Client
 
 	cache map[string]int64
+
+	// stop terminates run. It is nil for the package-level reporters, which run for
+	// the lifetime of the process; a nil channel simply never fires.
+	stop chan struct{}
 }
 
 // InfluxDB starts a InfluxDB reporter which will post the from the given metrics.Registry at each d interval.
@@ -98,16 +102,21 @@ func (r *reporter) makeClient() (err error) {
 }
 
 func (r *reporter) run() {
-	intervalTicker := time.Tick(r.interval)
-	pingTicker := time.Tick(time.Second * 5)
+	// Upstream 297ec0669: time.Tick leaks its underlying Ticker because there is no
+	// handle to stop it, so hold the tickers and stop them when run returns.
+	intervalTicker := time.NewTicker(r.interval)
+	pingTicker := time.NewTicker(time.Second * 5)
+
+	defer intervalTicker.Stop()
+	defer pingTicker.Stop()
 
 	for {
 		select {
-		case <-intervalTicker:
+		case <-intervalTicker.C:
 			if err := r.send(); err != nil {
 				log.Warn("Unable to send to InfluxDB", "err", err)
 			}
-		case <-pingTicker:
+		case <-pingTicker.C:
 			_, _, err := r.client.Ping()
 			if err != nil {
 				log.Warn("Got error while sending a ping to InfluxDB, trying to recreate client", "err", err)
@@ -116,6 +125,8 @@ func (r *reporter) run() {
 					log.Warn("Unable to make InfluxDB client", "err", err)
 				}
 			}
+		case <-r.stop:
+			return
 		}
 	}
 }

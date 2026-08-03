@@ -21,7 +21,7 @@ import (
 // It declares ONLY new *V3-suffixed symbols that wire the v3 bytecode + GetStakingContractV3_ABI.
 
 func newStakingStateDbV3() *state.StateDB {
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	statedb.CreateAccount(ContractAddress)
 	statedb.SetCode(ContractAddress, common.FromHex(stakingv3.STAKING_RUNTIME_BIN))
 	statedb.Finalise(true) // Push the state into the "original" slot

@@ -126,7 +126,7 @@ func newFreezer(datadir string, namespace string, readonly bool, freezerMode str
 		freezerMode:  freezerMode,
 	}
 	for name, disableSnappy := range FreezerNoSnappy {
-		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy)
+		table, err := newTable(datadir, name, readMeter, writeMeter, sizeGauge, disableSnappy, readonly)
 		if err != nil {
 			for _, table := range freezer.tables {
 				table.Close()
@@ -136,7 +136,14 @@ func newFreezer(datadir string, namespace string, readonly bool, freezerMode str
 		}
 		freezer.tables[name] = table
 	}
-	if err := freezer.repair(); err != nil {
+	// Upstream 4aab440ee: a read-only freezer must not repair (i.e. truncate) the
+	// tables it opens. Only validate that they agree on a length.
+	if freezer.readonly {
+		err = freezer.validate()
+	} else {
+		err = freezer.repair()
+	}
+	if err != nil {
 		for _, table := range freezer.tables {
 			table.Close()
 		}
@@ -302,6 +309,10 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 		backoff   bool
 		triggered chan struct{} // Used in tests
 	)
+	// Upstream 83989a19b: allocate the backoff timer once instead of leaking a
+	// fresh (never stopped) timer on every backoff iteration.
+	timer := time.NewTimer(freezerRecheckInterval)
+	defer timer.Stop()
 	for {
 		select {
 		case <-f.quit:
@@ -316,8 +327,9 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 				triggered = nil
 			}
 			select {
-			case <-time.NewTimer(freezerRecheckInterval).C:
+			case <-timer.C:
 				backoff = false
+				timer.Reset(freezerRecheckInterval)
 			case triggered = <-f.trigger:
 				backoff = false
 			case <-f.quit:
@@ -445,6 +457,48 @@ func (f *freezer) freeze(db ethdb.KeyValueStore) {
 			backoff = true
 		}
 	}
+}
+
+// validate checks that every table has the same length.
+// Used instead of `repair` in readonly mode.
+//
+// Upstream 4aab440ee.
+func (f *freezer) validate() error {
+	// The freezer modes below deliberately leave the tables at differing lengths,
+	// so a cross-table length check would be meaningless. Mirror what repair does.
+	if f.freezerMode == FreezerModeSkipAll {
+		return nil
+	}
+	if f.freezerMode == FreezerModeSkipAppend {
+		if tbl, ok := f.tables[freezerHashTable]; ok {
+			items := atomic.LoadUint64(&tbl.items)
+			atomic.StoreUint64(&f.frozen, items)
+			log.Debug("Freezer", "freezerHashTable item count", items)
+		}
+		return nil
+	}
+	if len(f.tables) == 0 {
+		return nil
+	}
+	var (
+		length uint64
+		name   string
+	)
+	// Hack to get length of any table
+	for kind, table := range f.tables {
+		length = atomic.LoadUint64(&table.items)
+		name = kind
+		break
+	}
+	// Now check every table against that length
+	for kind, table := range f.tables {
+		items := atomic.LoadUint64(&table.items)
+		if length != items {
+			return fmt.Errorf("freezer tables %s and %s have differing lengths: %d != %d", kind, name, items, length)
+		}
+	}
+	atomic.StoreUint64(&f.frozen, length)
+	return nil
 }
 
 // repair truncates all data tables to the same length.

@@ -20,6 +20,7 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
+	"github.com/quantumcoinproject/quantum-coin-go/defaults"
 	"github.com/quantumcoinproject/quantum-coin-go/params"
 	"github.com/quantumcoinproject/quantum-coin-go/uint256"
 )
@@ -670,6 +671,15 @@ func opCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([]byt
 	}
 	stack.push(&temp)
 	if err == nil || err == ErrExecutionReverted {
+		// Upstream 1d9957319 (CVE-2021-39137): the identity precompile (0x04) hands
+		// back its input slice by reference, so ret can alias the caller's memory.
+		// Writing ret into an overlapping return region then mutates ret itself, and
+		// the return data recorded for RETURNDATASIZE/RETURNDATACOPY comes out wrong.
+		// Snapshot ret before the write. Gated because it changes EVM output for
+		// contract-reachable input.
+		if defaults.IsUpstreamConsensusFixesV1Big(interpreter.evm.Context.BlockNumber) {
+			ret = common.CopyBytes(ret)
+		}
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	scope.Contract.Gas += returnGas
@@ -704,6 +714,10 @@ func opCallCode(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) ([
 	}
 	stack.push(&temp)
 	if err == nil || err == ErrExecutionReverted {
+		// Upstream 1d9957319 (CVE-2021-39137), see opCall.
+		if defaults.IsUpstreamConsensusFixesV1Big(interpreter.evm.Context.BlockNumber) {
+			ret = common.CopyBytes(ret)
+		}
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	scope.Contract.Gas += returnGas
@@ -731,6 +745,10 @@ func opDelegateCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext
 	}
 	stack.push(&temp)
 	if err == nil || err == ErrExecutionReverted {
+		// Upstream 1d9957319 (CVE-2021-39137), see opCall.
+		if defaults.IsUpstreamConsensusFixesV1Big(interpreter.evm.Context.BlockNumber) {
+			ret = common.CopyBytes(ret)
+		}
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	scope.Contract.Gas += returnGas
@@ -758,6 +776,10 @@ func opStaticCall(pc *uint64, interpreter *EVMInterpreter, scope *ScopeContext) 
 	}
 	stack.push(&temp)
 	if err == nil || err == ErrExecutionReverted {
+		// Upstream 1d9957319 (CVE-2021-39137), see opCall.
+		if defaults.IsUpstreamConsensusFixesV1Big(interpreter.evm.Context.BlockNumber) {
+			ret = common.CopyBytes(ret)
+		}
 		scope.Memory.Set(retOffset.Uint64(), retSize.Uint64(), ret)
 	}
 	scope.Contract.Gas += returnGas

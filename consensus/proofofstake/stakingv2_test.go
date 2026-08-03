@@ -125,7 +125,7 @@ func execute(tcc *TestChainContext, data []byte, from common.Address, state *sta
 }
 
 func newStakingStateDb() *state.StateDB {
-	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil)
+	statedb, _ := state.New(common.Hash{}, state.NewDatabase(rawdb.NewMemoryDatabase()), nil, nil)
 	statedb.CreateAccount(ContractAddress)
 	statedb.SetCode(ContractAddress, common.FromHex(stakingv2.STAKING_RUNTIME_BIN))
 	statedb.Finalise(true) // Push the state into the "original" slot
