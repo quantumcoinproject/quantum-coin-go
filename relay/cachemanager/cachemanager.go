@@ -546,6 +546,8 @@ func (c *CacheManager) downloadBlocks(startBlockNumber int64, resultChan chan<- 
 					err := c.blockClient.GetRpcClient().CallContext(context.Background(), &latestBlockNumberHex, "eth_blockNumber")
 					if err != nil {
 						log.Error("downloadBlocks eth_blockNumber", "error", err)
+					} else if latestBlockNumberHex == nil {
+						log.Error("downloadBlocks eth_blockNumber returned nil")
 					} else {
 						latestBlockNumber, err := hexutil.DecodeBig(latestBlockNumberHex.String())
 						if err != nil {
