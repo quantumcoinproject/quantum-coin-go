@@ -129,6 +129,10 @@ func (ec *Client) getBlock(ctx context.Context, method string, args ...interface
 	if err := json.Unmarshal(raw, &head); err != nil {
 		return nil, err
 	}
+	if head == nil {
+		// The server responded with a JSON null, which means the block is unknown.
+		return nil, ethereum.NotFound
+	}
 	if err := json.Unmarshal(raw, &body); err != nil {
 		return nil, err
 	}
