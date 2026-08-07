@@ -99,6 +99,10 @@ var (
 	// errNonMonotonicBlockTime is returned (from ConsensusMalleabilityV1StartBlock)
 	// when a block's timestamp does not strictly exceed its parent's.
 	errNonMonotonicBlockTime = errors.New("non-monotonic block time")
+
+	// errInvalidBlockTime is returned when header.Time does not equal the value
+	// derived from the consensus-agreed BlockTime (see BlockTimeBindingV1StartBlock).
+	errInvalidBlockTime = errors.New("invalid block time")
 )
 
 // SignerFn hashes and signs the data to be signed by a backing account.
@@ -383,6 +387,13 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 		return errUnknownBlock
 	}
 
+	// header.Number is consumed as a uint64 throughout; reject values that do not fit
+	// so the checks below (and the Difficulty comparison) operate on the true value
+	// rather than a silently truncated one.
+	if !header.Number.IsUint64() {
+		return errUnknownBlock
+	}
+
 	number := header.Number.Uint64()
 
 	// Don't waste time checking blocks from the future
@@ -411,9 +422,14 @@ func (c *ProofOfStake) verifyHeader(chain consensus.ChainHeaderReader, header *t
 		return errInvalidMixDigest
 	}
 
-	// Ensure that the block's difficulty is meaningful (may not be correct at this point)
+	// There is no proof-of-work difficulty in this consensus: Difficulty is defined to
+	// be exactly the block number (see CalcDifficulty, which returns parent.Number+1).
+	// Compare as big.Int rather than via Uint64(), which returns only the low 64 bits
+	// and would accept an arbitrarily inflated value such as 2^64+number. Total
+	// difficulty is accumulated from the raw value, so a truncating check let a peer
+	// forge a chain with enormous TD and force reorg attempts.
 	if number > 0 {
-		if header.Difficulty == nil || header.Difficulty.Uint64() != number {
+		if header.Difficulty == nil || header.Difficulty.Cmp(header.Number) != 0 {
 			return errInvalidDifficulty
 		}
 	}
@@ -511,6 +527,25 @@ func (c *ProofOfStake) verifyCascadingFields(chain consensus.ChainHeaderReader, 
 	if defaults.IsConsensusMalleabilityV1(number) {
 		if header.Time <= parent.Time {
 			return errNonMonotonicBlockTime
+		}
+	}
+	// Bind header.Time to the consensus-agreed BlockTime. Finalize derives this value
+	// during import but writes it to a local header copy, and ValidateState never
+	// compares it, so without this check header.Time is a free field inside the block
+	// hash: any relaying peer can rewrite it to any value in (parent.Time, now] and
+	// the block still verifies. Since block N+1's EVM TIMESTAMP derives from the
+	// stored parent.Time, accepting a mutated block permanently partitions the node.
+	// Gated because it is backward-incompatible (see BlockTimeBindingV1StartBlock).
+	if defaults.IsBlockTimeBindingV1(number) {
+		blockConsensusData := &BlockConsensusData{}
+		if err := rlp.DecodeBytes(header.ConsensusData, blockConsensusData); err != nil {
+			return err
+		}
+		expectedTime := DeriveBlockTime(number, parent.Time, c.config.Period, blockConsensusData)
+		if header.Time != expectedTime {
+			log.Debug("verifyCascadingFields block time mismatch", "number", number,
+				"header.Time", header.Time, "expected", expectedTime)
+			return errInvalidBlockTime
 		}
 	}
 	// Verify that the gasUsed is <= gasLimit
@@ -995,18 +1030,28 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 
 	//Fix blocktime
 	parent := chain.GetHeader(header.ParentHash, blockNumber-1)
-	if (blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK) &&
-		blockConsensusData.VoteType == VOTE_TYPE_OK && parent.Time < blockConsensusData.BlockTime {
-		header.Time = blockConsensusData.BlockTime
-	} else {
-		header.Time = parent.Time + c.config.Period
+	if parent == nil {
+		return consensus.ErrUnknownAncestor
 	}
+	header.Time = DeriveBlockTime(blockNumber, parent.Time, c.config.Period, blockConsensusData)
 
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 
 	log.Info("Finalize Block", "root", header.Root, "hash", header.Hash(), "number", header.Number, "txn count", len(txs), "source", source, "extraDataLen", len(header.Extra))
 
 	return nil
+}
+
+// DeriveBlockTime returns the canonical header.Time for a block, given its parent's
+// time and the consensus-agreed BlockTime. This is the single source of truth shared
+// by block production (Finalize) and verification (verifyCascadingFields), so the two
+// can never drift apart.
+func DeriveBlockTime(blockNumber uint64, parentTime uint64, period uint64, blockConsensusData *BlockConsensusData) uint64 {
+	if (blockNumber == 1 || blockNumber%BLOCK_PERIOD_TIME_CHANGE == 0 || blockNumber >= defaults.DefaultConfig.PosConfig.BLOCK_TIME_ORIG_START_BLOCK) &&
+		blockConsensusData.VoteType == VOTE_TYPE_OK && parentTime < blockConsensusData.BlockTime {
+		return blockConsensusData.BlockTime
+	}
+	return parentTime + period
 }
 
 func calculateTxnFeeSplit(originalBlockRewards *big.Int, txs []*types.Transaction, receipts []*types.Receipt) (txnFeeTotal *big.Int, txnFeeRewardsAmount *big.Int, burnAmount *big.Int, err error) {

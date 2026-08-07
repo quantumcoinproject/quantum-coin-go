@@ -99,6 +99,14 @@ func IsUpstreamConsensusFixesV1Big(blockNumber *big.Int) bool {
 	return IsUpstreamConsensusFixesV1(blockNumber.Uint64())
 }
 
+// IsBlockTimeBindingV1 reports whether header.Time must equal the value derived
+// from the consensus-agreed BlockTime (see BlockTimeBindingV1StartBlock). This is
+// consensus-affecting, so it only applies from a finalized activation height and
+// never retroactively.
+func IsBlockTimeBindingV1(blockNumber uint64) bool {
+	return blockNumber >= DefaultConfig.PosConfig.BlockTimeBindingV1StartBlock
+}
+
 func IsSigAlgSwitchMode(blockNumber uint64) bool {
 	if blockNumber >= DefaultConfig.PosConfig.SigAlgSwitchBlock {
 		if cryptoBreakglassBlock != 0 && blockNumber >= cryptoBreakglassBlock {
@@ -208,6 +216,8 @@ type ProofOfStakeConfig struct {
 	// NotScheduled until a concrete activation height has been agreed; only then
 	// should this be lowered to that height.
 	UpstreamConsensusFixesV1StartBlock uint64
+
+	BlockTimeBindingV1StartBlock uint64
 }
 
 type Config struct {
@@ -281,9 +291,9 @@ var mainnetPosConfig = ProofOfStakeConfig{
 
 	ConsensusMalleabilityV1StartBlock: 0,
 
-	// Not scheduled: activating these retroactively would fork mainnet. Set this to
-	// an agreed future height when the fork is scheduled.
-	UpstreamConsensusFixesV1StartBlock: NotScheduled,
+	UpstreamConsensusFixesV1StartBlock: 5319269,
+
+	BlockTimeBindingV1StartBlock: 5319270,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -346,6 +356,10 @@ var devnetPosConfig = ProofOfStakeConfig{
 	// Devnet activates at the next height in the sequence so the fork path is
 	// exercised end to end. Devnet chains must be reset when this changes.
 	UpstreamConsensusFixesV1StartBlock: 78,
+
+	// Devnet activates the header.Time binding so the fork path is exercised end to
+	// end. Devnet chains must be reset when this changes.
+	BlockTimeBindingV1StartBlock: 80,
 }
 
 var MainnetConfig = &Config{

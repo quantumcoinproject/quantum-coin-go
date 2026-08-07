@@ -78,6 +78,11 @@ func ParseConsensusPacket(wg *sync.WaitGroup, parentHash common.Hash, packet *et
 	} else {
 		startIndex = 1
 	}
+	if len(packet.ConsensusData) < startIndex {
+		err = errors.New("invalid consensus packet, consensus data too short")
+		resultsChan <- &PacketParseResult{err: err}
+		return
+	}
 
 	isBreakGlass := defaults.IsCryptoBreakglassMode(blockNumber)
 	if isBreakGlass && len(packet.Signature) != cryptobase.SigAlgHybridEdsFull.SignatureWithPublicKeyLength() {
@@ -259,6 +264,16 @@ func ParseConsensusPackets(parentHash common.Hash, consensusPackets *[]eth.Conse
 	if len(packets) > MAX_PACKETS_SAFETY_LIMIT {
 		log.Warn("ParseConsensusPackets safety limit", "ParseConsensusPackets", ParseConsensusPackets, "actual count", len(packets))
 		return nil, PacketsOverLimitErr
+	}
+
+	// An empty packet list spawns no workers, so the results loop below would block
+	// forever waiting on a channel nobody closes (close(ch) sits after the loop).
+	// RLP decodes an empty list to an empty non-nil slice, so the nil checks in the
+	// callers do not catch this: a block carrying zero consensus packets would
+	// otherwise halt block import permanently while holding the chain mutex.
+	// A block with no packets can never satisfy any vote threshold anyway.
+	if len(packets) == 0 {
+		return nil, NoConsensusPacketsErr
 	}
 
 	startTime := time.Now()

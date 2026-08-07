@@ -304,11 +304,17 @@ func (api *API) GetBlockProposalDetails(blockNumberHex string) (*ProposalExtende
 
 	for i := 0; i < len(blockAdditionalConsensusData.ConsensusPackets); i++ {
 		packet := blockAdditionalConsensusData.ConsensusPackets[i]
+		if len(packet.ConsensusData) == 0 {
+			continue
+		}
 		var startIndex int
 		if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
 			startIndex = 2
 		} else {
 			startIndex = 1
+		}
+		if len(packet.ConsensusData) < startIndex {
+			continue
 		}
 
 		packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])

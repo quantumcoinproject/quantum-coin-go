@@ -144,6 +144,7 @@ var InvalidPacketErr = errors.New("invalid packet")
 var OutOfOrderPackerErr = errors.New("packet received out of order")
 var UnknownParentHashErr = errors.New("unknown parent hash")
 var PacketsOverLimitErr = errors.New("packet count exceeded threshold")
+var NoConsensusPacketsErr = errors.New("no consensus packets")
 var UnknownPacketTypeErr = errors.New("unknown packet type")
 
 const (
@@ -163,6 +164,12 @@ const (
 
 	CONSENSUS_PACKET_TYPE_CAPABILITY ConsensusPacketType = 6
 	CONSENSUS_PACKET_TYPE_SYNC       ConsensusPacketType = 7
+
+	// CONSENSUS_PACKET_TYPE_INVALID is returned by getPacketType for malformed
+	// packets whose consensus data is too short to carry a type byte. It is
+	// deliberately outside every valid type range so existing range checks and
+	// type comparisons reject it.
+	CONSENSUS_PACKET_TYPE_INVALID ConsensusPacketType = 255
 
 	PROPOSAL_KEY_PREFIX     = "proposal"
 	ACK_PROPOSAL_KEY_PREFIX = "ackProposal"
@@ -683,6 +690,10 @@ func (cph *ConsensusHandler) processPacket(packet *eth.ConsensusPacket, blockNum
 		startIndex = 2
 	} else {
 		startIndex = 1
+	}
+	if len(packet.ConsensusData) < startIndex {
+		log.Debug("processPacket consensus data too short", "len", len(packet.ConsensusData), "startIndex", startIndex)
+		return errors.New("invalid packet, consensus data too short")
 	}
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
@@ -1320,6 +1331,9 @@ func parsePacketInternal(packet *eth.ConsensusPacket, blockNumber uint64, parseH
 	} else {
 		startIndex = 1
 	}
+	if len(packet.ConsensusData) < startIndex {
+		return 0, common.Address{}, 0, nil, errors.New("invalid packet, consensus data too short")
+	}
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
 
@@ -1519,13 +1533,22 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 	return false, nil
 }
 
-// No nil checks, call only if nil has been checked already
+// No nil checks, call only if nil has been checked already.
+// Returns CONSENSUS_PACKET_TYPE_INVALID when the consensus data is too short to
+// carry a packet type, so callers never index out of range on malformed input.
 func getPacketType(packet *eth.ConsensusPacket) ConsensusPacketType {
+	if len(packet.ConsensusData) == 0 {
+		return CONSENSUS_PACKET_TYPE_INVALID
+	}
+
 	var startIndex int
 	if packet.ConsensusData[0] >= MinConsensusNetworkProtocolVersion {
 		startIndex = 2
 	} else {
 		startIndex = 1
+	}
+	if len(packet.ConsensusData) < startIndex {
+		return CONSENSUS_PACKET_TYPE_INVALID
 	}
 
 	var packetType ConsensusPacketType
@@ -3089,6 +3112,9 @@ func (cph *ConsensusHandler) ShouldRebroadCast(packet *eth.ConsensusPacket, from
 		startIndex = 2
 	} else {
 		startIndex = 1
+	}
+	if len(packet.ConsensusData) < startIndex {
+		return false
 	}
 
 	packetType := ConsensusPacketType(packet.ConsensusData[startIndex-1])
