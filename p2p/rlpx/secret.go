@@ -21,6 +21,13 @@ const (
 	secretKeyLabelName              = "key"
 	secretIvLabelName               = "iv"
 
+	// Header protection labels (V2 only). Derived from the same per-direction
+	// traffic secrets as the record keys, but with distinct labels, so header
+	// and body AEADs are cryptographically independent. The "pqkem " prefix is
+	// added inside the label encoder.
+	secretHdrKeyLabelName = "hp key"
+	secretHdrIvLabelName  = "hp iv"
+
 	clientApplicationTrafficLabelName = "c ap traffic"
 	serverApplicationTrafficLabelName = "s ap traffic"
 )
@@ -53,6 +60,19 @@ type SessionSecret struct {
 	ClientApplicationCipher cipher.AEAD
 	ServerApplicationCipher cipher.AEAD
 
+	// Header protection AEADs and IVs (V2 sessions only; nil on legacy
+	// sessions). The raw header keys are zeroed immediately after the AEADs
+	// are constructed, so only the ciphers and IVs live on the struct.
+	ClientHandshakeHdrCipher cipher.AEAD
+	ServerHandshakeHdrCipher cipher.AEAD
+	ClientHandshakeHdrIv     []byte
+	ServerHandshakeHdrIv     []byte
+
+	ClientApplicationHdrCipher cipher.AEAD
+	ServerApplicationHdrCipher cipher.AEAD
+	ClientApplicationHdrIv     []byte
+	ServerApplicationHdrIv     []byte
+
 	masterSecret   []byte
 	TranscriptHash []byte
 }
@@ -72,6 +92,35 @@ func NewSessionSecretV2(transcriptHash []byte, sharedSecret []byte) (*SessionSec
 	zeroKey := bytes.Repeat([]byte{0}, common.HashLength)
 	earlySecret := hkdf.Extract(sha3.New256, zeroKey, nil)
 	return newSessionSecretImpl(earlySecret, transcriptHash, sharedSecret, true)
+}
+
+// deriveHeaderProtection derives one direction's header-protection AEAD and IV
+// from that direction's traffic secret (V2 only). The raw header key is zeroed
+// once the AEAD holds its own key schedule. The AEAD overhead must be exactly
+// headerCiphertextLenV2-headerPlainLenV2: the fixed 32-byte wire header
+// depends on it.
+func deriveHeaderProtection(trafficSecret []byte) (cipher.AEAD, []byte, error) {
+	key, err := hkdfExpandLabelDirect(trafficSecret, secretHdrKeyLabelName, nil, symmetricKeySize, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer zeroBytes(key)
+	iv, err := hkdfExpandLabelDirect(trafficSecret, secretHdrIvLabelName, nil, ivSize, true)
+	if err != nil {
+		return nil, nil, err
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, nil, err
+	}
+	aead, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, nil, err
+	}
+	if aead.Overhead() != headerCiphertextLenV2-headerPlainLenV2 {
+		return nil, nil, errors.New("unexpected AEAD overhead for header protection")
+	}
+	return aead, iv, nil
 }
 
 func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecret []byte, useFixed bool) (*SessionSecret, error) {
@@ -180,6 +229,24 @@ func newSessionSecretImpl(earlySecret []byte, transcriptHash []byte, sharedSecre
 		return nil, err
 	}
 
+	// V2 sessions additionally derive header-protection keys, eagerly: the
+	// traffic secrets are zeroed at the end of the handshake, so this is the
+	// only chance. Legacy sessions must not derive new material.
+	if useFixed {
+		if secret.ClientHandshakeCipher.Overhead() != headerCiphertextLenV2-headerPlainLenV2 ||
+			secret.ServerHandshakeCipher.Overhead() != headerCiphertextLenV2-headerPlainLenV2 {
+			return nil, errors.New("unexpected AEAD overhead for record body")
+		}
+		secret.ClientHandshakeHdrCipher, secret.ClientHandshakeHdrIv, err = deriveHeaderProtection(clientHandshakeTrafficSecret)
+		if err != nil {
+			return nil, err
+		}
+		secret.ServerHandshakeHdrCipher, secret.ServerHandshakeHdrIv, err = deriveHeaderProtection(serverHandshakeTrafficSecret)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return secret, nil
 }
 
@@ -285,6 +352,23 @@ func (ss *SessionSecret) CreateApplicationSecrets(transcriptHash []byte) error {
 	ss.ServerApplicationCipher, err = cipher.NewGCM(blockApplicationServer)
 	if err != nil {
 		return err
+	}
+
+	// V2 sessions additionally derive application-epoch header-protection keys
+	// eagerly, before the application traffic secrets are zeroed post-handshake.
+	if ss.useFixedLabel {
+		if ss.ClientApplicationCipher.Overhead() != headerCiphertextLenV2-headerPlainLenV2 ||
+			ss.ServerApplicationCipher.Overhead() != headerCiphertextLenV2-headerPlainLenV2 {
+			return errors.New("unexpected AEAD overhead for record body")
+		}
+		ss.ClientApplicationHdrCipher, ss.ClientApplicationHdrIv, err = deriveHeaderProtection(clientApplicationTrafficSecret)
+		if err != nil {
+			return err
+		}
+		ss.ServerApplicationHdrCipher, ss.ServerApplicationHdrIv, err = deriveHeaderProtection(serverApplicationTrafficSecret)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Zero raw key bytes now that the cipher objects hold their own internal
@@ -438,6 +522,12 @@ func (ss *SessionSecret) ZeroPostHandshakeKeyMaterial() {
 	ss.ServerHandshakeIv = nil
 	ss.ClientHandshakeCipher = nil
 	ss.ServerHandshakeCipher = nil
+	zeroBytes(ss.ClientHandshakeHdrIv)
+	ss.ClientHandshakeHdrIv = nil
+	zeroBytes(ss.ServerHandshakeHdrIv)
+	ss.ServerHandshakeHdrIv = nil
+	ss.ClientHandshakeHdrCipher = nil
+	ss.ServerHandshakeHdrCipher = nil
 
 	zeroBytes(ss.masterSecret)
 	ss.masterSecret = nil
@@ -463,6 +553,10 @@ func (ss *SessionSecret) ZeroSecrets() {
 	zeroBytes(ss.ServerApplicationKey)
 	zeroBytes(ss.ClientApplicationIv)
 	zeroBytes(ss.ServerApplicationIv)
+	zeroBytes(ss.ClientHandshakeHdrIv)
+	zeroBytes(ss.ServerHandshakeHdrIv)
+	zeroBytes(ss.ClientApplicationHdrIv)
+	zeroBytes(ss.ServerApplicationHdrIv)
 	zeroBytes(ss.masterSecret)
 	zeroBytes(ss.TranscriptHash)
 
@@ -470,4 +564,8 @@ func (ss *SessionSecret) ZeroSecrets() {
 	ss.ServerHandshakeCipher = nil
 	ss.ClientApplicationCipher = nil
 	ss.ServerApplicationCipher = nil
+	ss.ClientHandshakeHdrCipher = nil
+	ss.ServerHandshakeHdrCipher = nil
+	ss.ClientApplicationHdrCipher = nil
+	ss.ServerApplicationHdrCipher = nil
 }
