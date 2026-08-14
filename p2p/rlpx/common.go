@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/cipher"
+	"encoding/binary"
 	"errors"
 	"io"
 	"time"
@@ -30,10 +31,25 @@ const (
 
 	padLen = 0 // legacy format padding length
 
-	maxRecordLength       = 96 * 1024 * 1024  // 96 MB (legacy)
-	maxRecordLengthV2     = 64 * 1024 * 1024  // 64 MB (max application record on wire)
-	maxDecompressedSize   = 128 * 1024 * 1024 // 128 MB (legacy decompression limit)
-	maxDecompressedSizeV2 = 96 * 1024 * 1024  // 96 MB (v2 decompression limit, same as legacy record max)
+	maxRecordLength     = 96 * 1024 * 1024  // 96 MB (legacy)
+	maxRecordLengthV2   = 64 * 1024 * 1024  // 64 MB (max application record on wire)
+	maxDecompressedSize = 128 * 1024 * 1024 // 128 MB (legacy decompression limit)
+
+	// V2 record header protection. Every v2 record starts with a fixed-size
+	// encrypted header: headerPlainLenV2 bytes of plaintext sealed with a
+	// dedicated header AEAD, producing exactly headerCiphertextLenV2 bytes on
+	// the wire (plaintext + 16-byte GCM tag). The body ciphertext length is
+	// carried inside the header plaintext and is therefore authenticated
+	// before the receiver allocates or reads any body bytes.
+	headerPlainLenV2      = 16
+	headerCiphertextLenV2 = 32
+
+	// maxHelloSizeV2 bounds the plaintext ClientHello/ServerHello frames (the
+	// only unprotected records; no keys exist yet). A ClientHello is ~1.4 KB:
+	// 1138-byte KEM public key + 32-byte random + RLP overhead + up to 199
+	// bytes of serializer zero padding. ServerHello is similar with the KEM
+	// ciphertext. 4 KB gives ~3x margin.
+	maxHelloSizeV2 = 4096
 
 	// maxHandshakeRecordLengthV2 caps the record size for V2 handshake messages.
 	// The largest handshake record is a Verify message (~4.2 KB with current PQC
@@ -56,13 +72,6 @@ type DataPacket struct {
 	seqNum     uint64
 	fragment   []byte
 	context    uint64
-}
-
-type Header struct {
-	MinorVersion   uint
-	RecordLength   uint
-	AdditionalData [common.HashLength]byte
-	Rest           []rlp.RawValue `rlp:"tail"`
 }
 
 // LegacyHeader is the pre-KemSwitchTime frame format for backward compatibility.
@@ -271,16 +280,6 @@ func decompress(compressedData []byte) ([]byte, error) {
 	return decompressWithLimit(compressedData, maxDecompressedSize)
 }
 
-// maybeDecompress is used by V2 read paths. It detects gzip-compressed
-// fragments (written by the V2 write path) via the gzip magic bytes and
-// decompresses them up to maxDecompressedSizeV2.
-func maybeDecompress(data []byte) ([]byte, error) {
-	if len(data) >= 3 && data[0] == 0x1f && data[1] == 0x8b && data[2] == 0x08 {
-		return decompressWithLimit(data, maxDecompressedSizeV2)
-	}
-	return data, nil
-}
-
 func BuildAAD(minorVersion uint, packetType PacketType) [common.HashLength]byte {
 	var aad [common.HashLength]byte
 	aad[0] = byte(minorVersion >> 24)
@@ -291,21 +290,43 @@ func BuildAAD(minorVersion uint, packetType PacketType) [common.HashLength]byte 
 	return aad
 }
 
-// BuildAADV2 constructs AAD for the v2 protocol. It includes the record
-// length so the AEAD authenticates the header field, and uses a fixed content
-// type to prevent leaking whether a record is handshake or application data.
-func BuildAADV2(minorVersion uint, recordLength uint) [common.HashLength]byte {
-	var aad [common.HashLength]byte
-	aad[0] = byte(minorVersion >> 24)
-	aad[1] = byte(minorVersion >> 16)
-	aad[2] = byte(minorVersion >> 8)
-	aad[3] = byte(minorVersion)
-	aad[4] = byte(PacketTypeApplicationData)
-	aad[5] = byte(recordLength >> 24)
-	aad[6] = byte(recordLength >> 16)
-	aad[7] = byte(recordLength >> 8)
-	aad[8] = byte(recordLength)
-	return aad
+// packHeaderV2 builds the fixed 16-byte header plaintext for a v2 record:
+//
+//	[0]    minor version (2)
+//	[1]    flags (0; reserved for future negotiation)
+//	[2:6]  body ciphertext length, big-endian uint32 (includes the AEAD tag)
+//	[6:16] reserved, must be zero
+//
+// The plaintext is sealed with the direction's header AEAD (own nonce, no
+// AAD) into exactly headerCiphertextLenV2 wire bytes, and doubles as the AAD
+// of the body AEAD so a body cannot be spliced onto a different header.
+func packHeaderV2(bodyLen uint32) [headerPlainLenV2]byte {
+	var plain [headerPlainLenV2]byte
+	plain[0] = minorVersionV2
+	binary.BigEndian.PutUint32(plain[2:6], bodyLen)
+	return plain
+}
+
+// unpackHeaderV2 validates an authenticated header plaintext and returns the
+// body ciphertext length. Every non-length byte is checked against its exact
+// expected value (fail closed; a future format change negotiates via the
+// ClientHello version, not via silently-ignored bits).
+func unpackHeaderV2(plain []byte) (uint32, error) {
+	if len(plain) != headerPlainLenV2 {
+		return 0, errors.New("invalid header plaintext length")
+	}
+	if plain[0] != minorVersionV2 {
+		return 0, errors.New("unsupported transport version")
+	}
+	if plain[1] != 0 {
+		return 0, errors.New("unsupported header flags")
+	}
+	for _, b := range plain[6:] {
+		if b != 0 {
+			return 0, errors.New("nonzero reserved bytes in header")
+		}
+	}
+	return binary.BigEndian.Uint32(plain[2:6]), nil
 }
 
 func sha3Sum256(data []byte) []byte {

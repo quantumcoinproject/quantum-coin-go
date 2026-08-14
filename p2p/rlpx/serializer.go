@@ -77,6 +77,44 @@ func (rs *RlpxSerializer) Serialize(msg interface{}) ([]byte, error) {
 	return rs.serializeDeterministicLocked(msg, padLen)
 }
 
+// deserializeBoundedV2 reads one length-prefixed plaintext handshake frame
+// (ClientHello/ServerHello) for the v2 transport. Unlike the shared
+// Deserialize (which legacy client.go/server.go also use and which must stay
+// byte-for-byte compatible), this bounds the pre-authentication allocation to
+// maxSize and decodes strictly: the frame must be exactly one RLP value
+// followed by the serializer's zero padding (Serialize appends 100-199 zero
+// bytes after the RLP value); any nonzero trailing byte is rejected.
+// The returned bytes are the full frame without the 2-byte prefix, suitable
+// for transcript binding.
+func deserializeBoundedV2(msg interface{}, reader io.Reader, maxSize int) ([]byte, error) {
+	prefix := make([]byte, 2)
+	if _, err := io.ReadFull(reader, prefix); err != nil {
+		return nil, err
+	}
+	size := int(binary.BigEndian.Uint16(prefix))
+	if size > maxSize {
+		return nil, errors.New("handshake message exceeds maximum allowed size")
+	}
+	packet := make([]byte, size)
+	if _, err := io.ReadFull(reader, packet); err != nil {
+		return nil, err
+	}
+
+	_, _, rest, err := rlp.Split(packet)
+	if err != nil {
+		return nil, err
+	}
+	if err := rlp.DecodeBytes(packet[:len(packet)-len(rest)], msg); err != nil {
+		return nil, err
+	}
+	for _, b := range rest {
+		if b != 0 {
+			return nil, errors.New("nonzero trailing bytes in handshake message")
+		}
+	}
+	return packet, nil
+}
+
 func (rs *RlpxSerializer) Deserialize(msg interface{}, reader io.Reader) ([]byte, error) {
 	//rs.rbuf.Reset()
 

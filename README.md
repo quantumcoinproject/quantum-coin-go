@@ -129,7 +129,7 @@ To verify use of the PQC signature schemes, inspect any transaction or validator
 
 Node-to-node sessions use hybrid **X25519 + ML-KEM-768** (via `circl/kem/hybrid.X25519MLKEM768()`) to **establish** a secure session between blockchain nodes in the rewritten RLPx handshake. The KEM is unconditional: every session uses this hybrid construction.
 
-The RLPx protocol has two versions, selected at runtime by `defaults.DefaultConfig.KemSwitchTime` (mainnet: **Aug 21, 2026 00:00:00 UTC**; see `defaults/config.go`). Both versions use the same hybrid KEM; the V2 protocol adds encrypted headers, a fixed HKDF label encoding, and a new frame format.
+The RLPx protocol has two versions, selected at runtime by `defaults.DefaultConfig.KemSwitchTime` (mainnet: **Jan 6, 2027 10:00:00 UTC**; see `defaults/config.go`). Both versions use the same hybrid KEM; the V2 protocol adds encrypted headers, a fixed HKDF label encoding, and a new frame format.
 
 - **V2 cryptographic specification**: [`./p2p/rlpx/README.md`](./p2p/rlpx/README.md) — full protocol specification covering the handshake, key schedule, record layer, and security properties (intended for cryptographers and auditors).
 - **KEM selection logic**: [`./crypto/keyestablishmentalgorithm/kem.go`](./crypto/keyestablishmentalgorithm/kem.go)

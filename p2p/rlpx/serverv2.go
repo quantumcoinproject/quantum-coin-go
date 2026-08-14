@@ -120,7 +120,9 @@ func (s *ServerV2) PerformHandshake() (retErr error) {
 
 	clientHelloMessage := new(ClientHelloMessage)
 	// #12: save actual wire bytes for transcript
-	clientHelloRaw, err := s.serializer.Deserialize(clientHelloMessage, s.conn)
+	// F2: bounded read — caps the pre-authentication allocation and rejects
+	// nonzero trailing bytes. Legacy paths keep using serializer.Deserialize.
+	clientHelloRaw, err := deserializeBoundedV2(clientHelloMessage, s.conn, maxHelloSizeV2)
 	if err != nil {
 		retErr = err
 		return
@@ -147,8 +149,13 @@ func (s *ServerV2) PerformHandshake() (retErr error) {
 		return
 	}
 
-	// #12: use wire bytes for transcript to prevent padding malleability
-	s.transcript = append(clientHelloRaw, serverHelloPacket[2:]...)
+	// #12: use wire bytes for transcript to prevent padding malleability.
+	// F6: build the transcript in a freshly allocated buffer so it never
+	// shares backing storage (spare capacity) with the wire buffers.
+	transcript := make([]byte, 0, len(clientHelloRaw)+len(serverHelloPacket)-2)
+	transcript = append(transcript, clientHelloRaw...)
+	transcript = append(transcript, serverHelloPacket[2:]...)
+	s.transcript = transcript
 	transcriptHash := sha3Sum256(s.transcript)
 
 	secret, err := NewSessionSecretV2(transcriptHash, s.kemSharedSecret[:])
@@ -399,19 +406,25 @@ func (s *ServerV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 		return errors.New("connection closed")
 	}
 
-	var cipher cipher2.AEAD
+	var bodyCipher, hdrCipher cipher2.AEAD
 	var seqNum uint64
-	var serverIv []byte
+	var bodyIv, hdrIv []byte
+	maxRecLen := uint(maxRecordLengthV2)
 	if packetType == PacketTypeHandshake {
-		cipher = s.secret.ServerHandshakeCipher
+		bodyCipher = s.secret.ServerHandshakeCipher
+		hdrCipher = s.secret.ServerHandshakeHdrCipher
 		seqNum = s.serverSeqNumHandshake
-		serverIv = s.secret.ServerHandshakeIv
+		bodyIv = s.secret.ServerHandshakeIv
+		hdrIv = s.secret.ServerHandshakeHdrIv
+		maxRecLen = maxHandshakeRecordLengthV2
 	} else {
-		cipher = s.secret.ServerApplicationCipher
+		bodyCipher = s.secret.ServerApplicationCipher
+		hdrCipher = s.secret.ServerApplicationHdrCipher
 		seqNum = s.serverSeqNumApplication
-		serverIv = s.secret.ServerApplicationIv
+		bodyIv = s.secret.ServerApplicationIv
+		hdrIv = s.secret.ServerApplicationHdrIv
 	}
-	if cipher == nil {
+	if bodyCipher == nil || hdrCipher == nil {
 		return errors.New("cipher unavailable")
 	}
 
@@ -425,25 +438,26 @@ func (s *ServerV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 		return err
 	}
 
-	encryptedLen := uint(len(payloadData) + cipher.Overhead())
-	header := new(Header)
-	header.MinorVersion = minorVersionV2
-	header.RecordLength = encryptedLen
-	header.AdditionalData = BuildAADV2(minorVersionV2, encryptedLen)
+	bodyLen := len(payloadData) + bodyCipher.Overhead()
+	if uint(bodyLen) > maxRecLen {
+		return errors.New("record length exceeds maximum allowed size")
+	}
+	headerPlain := packHeaderV2(uint32(bodyLen))
 
-	nonce, err := CalculateNonceV2(seqNum, serverIv)
+	// Header and body use the same sequence number with independent keys/IVs,
+	// mirroring the TLS 1.3 one-sequence-per-record construction.
+	hdrNonce, err := CalculateNonceV2(seqNum, hdrIv)
 	if err != nil {
 		return err
 	}
-	encryptedData := cipher.Seal(nil, nonce, payloadData, header.AdditionalData[:])
-
-	headerPacket, err := s.serializer.Serialize(header)
+	bodyNonce, err := CalculateNonceV2(seqNum, bodyIv)
 	if err != nil {
 		return err
 	}
-	buf := make([]byte, len(headerPacket)+len(encryptedData))
-	copy(buf, headerPacket)
-	copy(buf[len(headerPacket):], encryptedData)
+
+	buf := make([]byte, 0, headerCiphertextLenV2+bodyLen)
+	buf = hdrCipher.Seal(buf, hdrNonce, headerPlain[:], nil)
+	buf = bodyCipher.Seal(buf, bodyNonce, payloadData, headerPlain[:])
 	if _, err = s.conn.Write(buf); err != nil {
 		return err
 	}
@@ -457,74 +471,82 @@ func (s *ServerV2) WriteEncrypted(data []byte, context uint64, packetType Packet
 }
 
 func (s *ServerV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
-	if packetType == PacketTypeApplicationData {
-		if !s.handshakeDone.Load() {
-			return nil, errors.New("handshake not completed")
-		}
-		s.readMutex.Lock()
-		defer s.readMutex.Unlock()
-		if s.closed.Load() {
-			return nil, errors.New("connection closed")
-		}
+	if packetType == PacketTypeApplicationData && !s.handshakeDone.Load() {
+		return nil, errors.New("handshake not completed")
+	}
+	// F3: lock and check closed unconditionally (handshake phase included) so
+	// a concurrent Cleanup() cannot zero cipher/IV material mid-read.
+	// Handshake reads are serialized by PerformHandshake (which holds mutex,
+	// not readMutex), so this cannot deadlock.
+	s.readMutex.Lock()
+	defer s.readMutex.Unlock()
+	if s.closed.Load() {
+		return nil, errors.New("connection closed")
 	}
 
-	var cipher cipher2.AEAD
+	var bodyCipher, hdrCipher cipher2.AEAD
 	var seqNum uint64
-	var clientIv []byte
+	var bodyIv, hdrIv []byte
+	maxRecLen := uint(maxRecordLengthV2)
 	if packetType == PacketTypeHandshake {
-		cipher = s.secret.ClientHandshakeCipher
+		bodyCipher = s.secret.ClientHandshakeCipher
+		hdrCipher = s.secret.ClientHandshakeHdrCipher
 		seqNum = s.clientSeqNumHandshake
-		clientIv = s.secret.ClientHandshakeIv
+		bodyIv = s.secret.ClientHandshakeIv
+		hdrIv = s.secret.ClientHandshakeHdrIv
+		maxRecLen = maxHandshakeRecordLengthV2
 	} else {
-		cipher = s.secret.ClientApplicationCipher
+		bodyCipher = s.secret.ClientApplicationCipher
+		hdrCipher = s.secret.ClientApplicationHdrCipher
 		seqNum = s.clientSeqNumApplication
-		clientIv = s.secret.ClientApplicationIv
+		bodyIv = s.secret.ClientApplicationIv
+		hdrIv = s.secret.ClientApplicationHdrIv
 	}
-	if cipher == nil {
+	if bodyCipher == nil || hdrCipher == nil {
 		return nil, errors.New("cipher unavailable")
 	}
 
-	header := new(Header)
-	_, err := s.serializer.Deserialize(header, s.conn)
+	// Fixed-size encrypted header first: nothing attacker-controlled is
+	// allocated or trusted before the header authenticates.
+	var hdrCt [headerCiphertextLenV2]byte
+	if _, err := io.ReadFull(s.conn, hdrCt[:]); err != nil {
+		return nil, err
+	}
+	hdrNonce, err := CalculateNonceV2(seqNum, hdrIv)
 	if err != nil {
 		return nil, err
 	}
-	if header.MinorVersion != minorVersionV2 {
-		return nil, errors.New("unsupported transport version")
+	headerPlain, err := hdrCipher.Open(nil, hdrNonce, hdrCt[:], nil)
+	if err != nil {
+		return nil, errors.New("record header authentication failed")
 	}
-	// #4: reject headers with unexpected trailing data
-	if len(header.Rest) > 0 {
-		return nil, errors.New("unexpected data in header")
+	bodyLen, err := unpackHeaderV2(headerPlain)
+	if err != nil {
+		return nil, err
 	}
-
-	maxRecLen := uint(maxRecordLengthV2)
-	if packetType == PacketTypeHandshake {
-		maxRecLen = maxHandshakeRecordLengthV2
+	if int(bodyLen) < bodyCipher.Overhead() {
+		return nil, errors.New("record length below AEAD overhead")
 	}
-	if header.RecordLength > maxRecLen {
+	if uint(bodyLen) > maxRecLen {
 		return nil, errors.New("record length exceeds maximum allowed size")
 	}
 
-	reconstructedAAD := BuildAADV2(header.MinorVersion, header.RecordLength)
-	if reconstructedAAD != header.AdditionalData {
-		return nil, errors.New("header AAD mismatch")
+	// The length is authenticated, but grow the buffer with the bytes actually
+	// received so a peer that claims a large record and stalls cannot pin the
+	// full allocation up front.
+	var bodyBuf bytes.Buffer
+	bodyBuf.Grow(min(int(bodyLen), 64*1024))
+	if _, err := io.CopyN(&bodyBuf, s.conn, int64(bodyLen)); err != nil {
+		return nil, err
 	}
 
-	recLen := int(header.RecordLength)
-	encryptedData := make([]byte, recLen)
-	bytesRead, err := io.ReadAtLeast(s.conn, encryptedData, recLen)
+	bodyNonce, err := CalculateNonceV2(seqNum, bodyIv)
 	if err != nil {
 		return nil, err
 	}
-	if bytesRead != recLen {
-		return nil, errors.New("prefix size less")
-	}
-
-	nonce, err := CalculateNonceV2(seqNum, clientIv)
-	if err != nil {
-		return nil, err
-	}
-	decryptedPayloadBytes, err := cipher.Open(nil, nonce, encryptedData, reconstructedAAD[:])
+	// The header plaintext is the body AAD: a body cannot be spliced onto a
+	// different record's header.
+	decryptedPayloadBytes, err := bodyCipher.Open(nil, bodyNonce, bodyBuf.Bytes(), headerPlain)
 	if err != nil {
 		return nil, err
 	}
@@ -536,15 +558,17 @@ func (s *ServerV2) ReadAndDecrypt(packetType PacketType) (*DataPacket, error) {
 	if len(encryptedPayload.Rest) > 0 {
 		return nil, errors.New("unexpected data in encrypted payload")
 	}
+	// F4: compare in the wide type before narrowing so values that truncate
+	// to a valid PacketType byte cannot pass.
+	if encryptedPayload.PacketType != uint(packetType) {
+		return nil, errors.New("packetType mismatch")
+	}
 
 	dataPacket := &DataPacket{
-		packetType: PacketType(encryptedPayload.PacketType),
+		packetType: packetType,
 		seqNum:     seqNum,
 		fragment:   encryptedPayload.Fragment,
 		context:    encryptedPayload.Context,
-	}
-	if dataPacket.packetType != packetType {
-		return nil, errors.New("packetType mismatch")
 	}
 
 	if packetType == PacketTypeHandshake {
