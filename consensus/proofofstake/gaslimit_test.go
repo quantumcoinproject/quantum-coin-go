@@ -8,6 +8,10 @@ const (
 	testMaxGas        = uint64(300000000)
 	testFloorGas      = uint64(2100000)
 	testBreakglassGas = uint64(30000000)
+
+	// GasV3StartBlock ceilings (defaults.DefaultGasLimitV2 / BreakglassDefaultGasLimitV2).
+	testGasV3Max           = uint64(45000000)
+	testGasV3BreakglassGas = uint64(9000000)
 )
 
 // buildStatus constructs a round-robin status array for the given block number, setting
@@ -243,6 +247,132 @@ func TestComputeBlockGasLimit(t *testing.T) {
 			maxGas: testBreakglassGas,
 			// penalty = 16*10*21000 = 3,360,000; gas = 30M - 3.36M
 			want: 26640000,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := buildStatus(blockNumber, tt.distances)
+			got := ComputeBlockGasLimit(status, blockNumber, tt.maxGas, testFloorGas)
+			if got != tt.want {
+				t.Fatalf("ComputeBlockGasLimit = %d, want %d", got, tt.want)
+			}
+			if got < testFloorGas || got > tt.maxGas {
+				t.Fatalf("result %d out of bounds [%d, %d]", got, testFloorGas, tt.maxGas)
+			}
+		})
+	}
+}
+
+// TestComputeBlockGasLimitReducedMax runs the calculation with the reduced GasV3
+// ceilings (45M normal, 9M breakglass). Under 45M every round-2 band cap (up to
+// 8F = 16.8M) still binds; under 9M a far band cap can exceed the ceiling, in which
+// case the ceiling itself must win.
+func TestComputeBlockGasLimitReducedMax(t *testing.T) {
+	const blockNumber = uint64(1000)
+
+	tests := []struct {
+		name      string
+		distances map[uint64]byte
+		maxGas    uint64
+		want      uint64
+	}{
+		// ----- GasV3 normal max (45M) -----
+		{
+			name:      "gasv3 all ok yields max",
+			distances: map[uint64]byte{},
+			maxGas:    testGasV3Max,
+			want:      testGasV3Max,
+		},
+		{
+			name:      "gasv3 round2 band1 (distance 1) hits floor",
+			distances: map[uint64]byte{1: GasStatusNilRound2},
+			maxGas:    testGasV3Max,
+			want:      testFloorGas,
+		},
+		{
+			name:      "gasv3 round2 band8 (distance 30) caps at 8F",
+			distances: map[uint64]byte{30: GasStatusNilRound2},
+			maxGas:    testGasV3Max,
+			want:      8 * testFloorGas,
+		},
+		{
+			name: "gasv3 8 round1 nils flat penalty",
+			distances: func() map[uint64]byte {
+				m := map[uint64]byte{}
+				fillRange(m, 1, 8, GasStatusNilRound1)
+				return m
+			}(),
+			maxGas: testGasV3Max,
+			// penalty = 8*10*21000 = 1,680,000; gas = 45M - 1.68M
+			want: 43320000,
+		},
+		{
+			name: "gasv3 16 round2 nils: band3 cap dominates flat penalty",
+			distances: func() map[uint64]byte {
+				m := map[uint64]byte{}
+				fillRange(m, 9, 24, GasStatusNilRound2) // nearest at distance 9 -> band3 cap 3F
+				return m
+			}(),
+			maxGas: testGasV3Max,
+			// penalty = (16-1)*20*21000 = 6,300,000 -> 38.7M; min(38.7M, 3F=6.3M) = 3F
+			want: 3 * testFloorGas,
+		},
+
+		// ----- GasV3 breakglass max (9M) -----
+		{
+			name:      "gasv3 breakglass all ok yields max",
+			distances: map[uint64]byte{},
+			maxGas:    testGasV3BreakglassGas,
+			want:      testGasV3BreakglassGas,
+		},
+		{
+			name:      "gasv3 breakglass round2 band1 (distance 2) hits floor",
+			distances: map[uint64]byte{2: GasStatusNilRound2},
+			maxGas:    testGasV3BreakglassGas,
+			want:      testFloorGas,
+		},
+		{
+			name:      "gasv3 breakglass round2 band3 (distance 9) caps at 3F",
+			distances: map[uint64]byte{9: GasStatusNilRound2},
+			maxGas:    testGasV3BreakglassGas,
+			want:      3 * testFloorGas,
+		},
+		{
+			// Band cap 5F = 10.5M exceeds the 9M ceiling; the ceiling must win.
+			name:      "gasv3 breakglass round2 band5 cap above ceiling clamps to max",
+			distances: map[uint64]byte{17: GasStatusNilRound2},
+			maxGas:    testGasV3BreakglassGas,
+			want:      testGasV3BreakglassGas,
+		},
+		{
+			// Band cap 8F = 16.8M exceeds the 9M ceiling; the ceiling must win.
+			name:      "gasv3 breakglass round2 band8 cap above ceiling clamps to max",
+			distances: map[uint64]byte{30: GasStatusNilRound2},
+			maxGas:    testGasV3BreakglassGas,
+			want:      testGasV3BreakglassGas,
+		},
+		{
+			name: "gasv3 breakglass 8 round1 nils flat penalty",
+			distances: func() map[uint64]byte {
+				m := map[uint64]byte{}
+				fillRange(m, 1, 8, GasStatusNilRound1)
+				return m
+			}(),
+			maxGas: testGasV3BreakglassGas,
+			// penalty = 8*10*21000 = 1,680,000; gas = 9M - 1.68M
+			want: 7320000,
+		},
+		{
+			name: "gasv3 breakglass 16 round2 nils: penalty dominates band3 cap",
+			distances: func() map[uint64]byte {
+				m := map[uint64]byte{}
+				fillRange(m, 9, 24, GasStatusNilRound2) // nearest at distance 9 -> band3 cap 3F
+				return m
+			}(),
+			maxGas: testGasV3BreakglassGas,
+			// penalty = (16-1)*20*21000 = 6,300,000 -> 2.7M; min(2.7M, 3F=6.3M) = 2.7M
+			want: 2700000,
 		},
 	}
 

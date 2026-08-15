@@ -37,14 +37,24 @@ func GetGasLimit(blockNumber uint64) uint64 {
 }
 
 func GetMaxTransactionsForBlock(blockNumber uint64) int {
+	if IsGasV3(blockNumber) {
+		return int(DefaultConfig.DefaultGasLimitV2 / BASIC_TXN_GAS)
+	}
 	return int(DefaultConfig.DefaultGasLimit / BASIC_TXN_GAS)
 }
 
 // GetMaxGasLimit returns the maximum allowed block gas limit for the dynamic gas-limit
-// scheme: the normal default, or a reduced cap when breakglass mode is active.
+// scheme: the normal default, or a reduced cap when breakglass mode is active. Both
+// ceilings drop once GasV3StartBlock is active.
 func GetMaxGasLimit(blockNumber uint64) uint64 {
 	if IsCryptoBreakglassMode(blockNumber) {
+		if IsGasV3(blockNumber) {
+			return DefaultConfig.BreakglassDefaultGasLimitV2
+		}
 		return DefaultConfig.BreakglassDefaultGasLimit
+	}
+	if IsGasV3(blockNumber) {
+		return DefaultConfig.DefaultGasLimitV2
 	}
 	return DefaultConfig.DefaultGasLimit
 }
@@ -97,6 +107,15 @@ func IsUpstreamConsensusFixesV1Big(blockNumber *big.Int) bool {
 		return DefaultConfig.PosConfig.UpstreamConsensusFixesV1StartBlock != NotScheduled
 	}
 	return IsUpstreamConsensusFixesV1(blockNumber.Uint64())
+}
+
+// IsGasV3 reports whether the reduced gas-limit ceilings (see GasV3StartBlock) are
+// active at the given block number. Consensus-affecting: it changes the valid
+// header.GasLimit range, the dynamic gas-limit computation, and the
+// max-transactions-per-block bound, so it only applies from a scheduled activation
+// height and never retroactively.
+func IsGasV3(blockNumber uint64) bool {
+	return blockNumber >= DefaultConfig.PosConfig.GasV3StartBlock
 }
 
 // IsBlockTimeBindingV1 reports whether header.Time must equal the value derived
@@ -224,6 +243,14 @@ type ProofOfStakeConfig struct {
 	UpstreamConsensusFixesV1StartBlock uint64
 
 	BlockTimeBindingV1StartBlock uint64
+
+	// GasV3StartBlock reduces the maximum block gas limit from DefaultGasLimit (300M)
+	// to DefaultGasLimitV2 (45M), and the breakglass maximum from
+	// BreakglassDefaultGasLimit (30M) to BreakglassDefaultGasLimitV2 (9M). The dynamic
+	// gas-limit scheme from GasV2StartBlock keeps operating; only its ceilings change.
+	// The max-transactions-per-block bound drops proportionally. Consensus-affecting:
+	// must only activate at a scheduled height, never retroactively.
+	GasV3StartBlock uint64
 }
 
 type Config struct {
@@ -231,13 +258,19 @@ type Config struct {
 	DeepCheckStartBlock uint64
 	GasPriceStartBlock  uint64
 	DefaultGasLimit     uint64
+	// DefaultGasLimitV2 is the reduced maximum block gas limit enforced once
+	// GasV3StartBlock is active.
+	DefaultGasLimitV2 uint64
 	// BreakglassDefaultGasLimit is the reduced maximum block gas limit enforced while
 	// breakglass mode is active.
 	BreakglassDefaultGasLimit uint64
-	ValidateSigPubStartTime   int64
-	TxnStartAllowedTime       int64
-	ConversionTxnLastTime     int64
-	KemSwitchTime             int64
+	// BreakglassDefaultGasLimitV2 is the maximum block gas limit enforced while
+	// breakglass mode is active once GasV3StartBlock is active.
+	BreakglassDefaultGasLimitV2 uint64
+	ValidateSigPubStartTime     int64
+	TxnStartAllowedTime         int64
+	ConversionTxnLastTime       int64
+	KemSwitchTime               int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -301,6 +334,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 	UpstreamConsensusFixesV1StartBlock: 5319269,
 
 	BlockTimeBindingV1StartBlock: 5319270,
+
+	GasV3StartBlock: 5319280,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -370,18 +405,25 @@ var devnetPosConfig = ProofOfStakeConfig{
 	// Devnet activates the header.Time binding so the fork path is exercised end to
 	// end. Devnet chains must be reset when this changes.
 	BlockTimeBindingV1StartBlock: 80,
+
+	// Devnet activates the reduced gas-limit ceilings at the next height in the
+	// sequence so the fork path is exercised end to end. Devnet chains must be reset
+	// when this changes.
+	GasV3StartBlock: 82,
 }
 
 var MainnetConfig = &Config{
-	PosConfig:                 &mainnetPosConfig,
-	DeepCheckStartBlock:       uint64(3426264),
-	GasPriceStartBlock:        uint64(3426265),
-	DefaultGasLimit:           300000000,
-	BreakglassDefaultGasLimit: 30000000,
-	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:       int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:     int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:             int64(1799229600), //Jan 06, 2027 10:00:00 AM UTC
+	PosConfig:                   &mainnetPosConfig,
+	DeepCheckStartBlock:         uint64(3426264),
+	GasPriceStartBlock:          uint64(3426265),
+	DefaultGasLimit:             300000000,
+	DefaultGasLimitV2:           45000000,
+	BreakglassDefaultGasLimit:   30000000,
+	BreakglassDefaultGasLimitV2: 9000000,
+	ValidateSigPubStartTime:     int64(1769904000), //Feb 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:         int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:       int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:               int64(1799229600), //Jan 06, 2027 10:00:00 AM UTC
 }
 
 var DevnetConfig = &Config{
@@ -391,14 +433,16 @@ var DevnetConfig = &Config{
 	// and verify gate (VerifyExtraData, >= ExtraDataV3StartBlock) stay aligned. Otherwise blocks in
 	// [ExtraDataV3StartBlock, DeepCheckStartBlock) are sealed with empty Extra but verified as v3,
 	// producing "DecodeBlockExtraData v3 error=EOF" BAD BLOCKs.
-	DeepCheckStartBlock:       uint64(54),
-	GasPriceStartBlock:        uint64(56),
-	DefaultGasLimit:           300000000,
-	BreakglassDefaultGasLimit: 30000000,
-	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:       int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:     int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:             int64(1713052800), //April 14th, 2025, 11:59:59 PM UTC
+	DeepCheckStartBlock:         uint64(54),
+	GasPriceStartBlock:          uint64(56),
+	DefaultGasLimit:             300000000,
+	DefaultGasLimitV2:           45000000,
+	BreakglassDefaultGasLimit:   30000000,
+	BreakglassDefaultGasLimitV2: 9000000,
+	ValidateSigPubStartTime:     int64(1769904000), //Feb 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:         int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:       int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:               int64(1713052800), //April 14th, 2025, 11:59:59 PM UTC
 }
 
 var DefaultConfig = MainnetConfig

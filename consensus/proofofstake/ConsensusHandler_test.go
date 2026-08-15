@@ -821,6 +821,9 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 		{"GasTipStartBlock", defaults.DefaultConfig.PosConfig.GasTipStartBlock},
 		{"SystemContractV3StartBlock", defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock},
 		{"GranularBlockTimeStartBlock", defaults.DefaultConfig.PosConfig.GranularBlockTimeStartBlock},
+		{"UpstreamConsensusFixesV1StartBlock", defaults.DefaultConfig.PosConfig.UpstreamConsensusFixesV1StartBlock},
+		{"BlockTimeBindingV1StartBlock", defaults.DefaultConfig.PosConfig.BlockTimeBindingV1StartBlock},
+		{"GasV3StartBlock", defaults.DefaultConfig.PosConfig.GasV3StartBlock},
 		{"ConsensusMalleabilityV1StartBlock", defaults.DefaultConfig.PosConfig.ConsensusMalleabilityV1StartBlock},
 	}
 
