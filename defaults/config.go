@@ -141,10 +141,16 @@ type ProofOfStakeConfig struct {
 
 	SystemContractV3StartBlock uint64
 
-	// SixSecondBlockTimeStartBlock activates 6-second proposal-time granularity
-	// (was 60s). Consensus-affecting: GetProposalTime, VerifyBlockProposalTime,
-	// and VerifyBlockProposalTimeConsensus all change behavior at this height.
-	SixSecondBlockTimeStartBlock uint64
+	// GranularBlockTimeStartBlock activates granular proposal-time alignment
+	// (BlockTimeGranularity seconds, was 60s). Consensus-affecting: GetProposalTime,
+	// VerifyBlockProposalTime, and VerifyBlockProposalTimeConsensus all change
+	// behavior at this height.
+	GranularBlockTimeStartBlock uint64
+
+	// BlockTimeGranularity is the proposal-time alignment in seconds once
+	// GranularBlockTimeStartBlock is active (before that, 60s applies).
+	// Consensus-affecting: must only change together with a scheduled fork.
+	BlockTimeGranularity int64
 
 	VALIDATOR_NIL_BLOCK_START_BLOCK      uint64
 	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK uint64
@@ -287,7 +293,8 @@ var mainnetPosConfig = ProofOfStakeConfig{
 
 	SystemContractV3StartBlock: 5319258,
 
-	SixSecondBlockTimeStartBlock: 5319268,
+	GranularBlockTimeStartBlock: 5319268,
+	BlockTimeGranularity:        6,
 
 	ConsensusMalleabilityV1StartBlock: 0,
 
@@ -349,7 +356,10 @@ var devnetPosConfig = ProofOfStakeConfig{
 
 	SystemContractV3StartBlock: 74,
 
-	SixSecondBlockTimeStartBlock: 76,
+	// Devnet uses 1-second granularity post-fork so header times match the wall
+	// clock exactly. Devnet chains must be reset when these change.
+	GranularBlockTimeStartBlock: 76,
+	BlockTimeGranularity:        1,
 
 	ConsensusMalleabilityV1StartBlock: 0,
 
