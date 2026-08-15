@@ -436,7 +436,7 @@ var DevnetConfig = &Config{
 	DeepCheckStartBlock:         uint64(54),
 	GasPriceStartBlock:          uint64(56),
 	DefaultGasLimit:             300000000,
-	DefaultGasLimitV2:           45000000,
+	DefaultGasLimitV2:           21000000,
 	BreakglassDefaultGasLimit:   30000000,
 	BreakglassDefaultGasLimitV2: 9000000,
 	ValidateSigPubStartTime:     int64(1769904000), //Feb 1, 2026 12:00:00 AM
