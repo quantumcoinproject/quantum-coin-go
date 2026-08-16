@@ -663,7 +663,9 @@ func newDeposit(validatorAddress string, depositAmount string, key *signaturealg
 
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
-	txnOpts.GasLimit = uint64(250000)
+	// v3 newDeposit needs ~256k gas (bond-gate check + full registration storage writes); 250k was
+	// enough only for v2. Unused gas is refunded, so keep a wide margin.
+	txnOpts.GasLimit = uint64(400000)
 	if os.Getenv("TX_TYPE") == "1" {
 		txnOpts.TxType = types.DynamicFeeTxType
 		txnOpts.SigningContext = byte(cryptobase.GetSigningContext())
@@ -1464,7 +1466,9 @@ func changeValidator(key *signaturealgorithm.PrivateKey, newValidatorAddress com
 
 	txnOpts.From = fromAddress
 	txnOpts.Nonce = big.NewInt(int64(nonce))
-	txnOpts.GasLimit = uint64(175000)
+	// v3 changeValidator needs ~227k gas (rotation-bond check + validator migration writes); 175k was
+	// enough only for v2. Unused gas is refunded, so keep a wide margin.
+	txnOpts.GasLimit = uint64(400000)
 
 	if os.Getenv("TX_TYPE") == "1" {
 		txnOpts.TxType = types.DynamicFeeTxType
