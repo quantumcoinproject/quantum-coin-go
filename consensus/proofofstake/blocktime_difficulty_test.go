@@ -98,14 +98,40 @@ func TestBlockTimeBindingGate(t *testing.T) {
 	}
 }
 
-// Mainnet must not activate the binding retroactively: doing so would invalidate
-// historical blocks whose stored Time differs from the derived value.
-func TestBlockTimeBindingNotScheduledOnMainnet(t *testing.T) {
-	if got := MainnetConfigBlockTimeBindingStart(); got != defaults.NotScheduled {
-		t.Errorf("mainnet BlockTimeBindingV1StartBlock = %d, want NotScheduled (%d)", got, defaults.NotScheduled)
+// TestBlockTimeBindingSchedule freezes the BlockTimeBindingV1 activation heights on
+// both networks. The binding is backward-incompatible (see C3), so a scheduled
+// height must never be lowered: activating retroactively would invalidate historical
+// blocks whose stored Time differs from the derived value. It must also activate
+// after granular block time, whose BlockTime values it binds header.Time to, and
+// after the upstream consensus fixes it builds on.
+func TestBlockTimeBindingSchedule(t *testing.T) {
+	testCases := []struct {
+		name           string
+		config         *defaults.Config
+		wantStartBlock uint64
+	}{
+		{"mainnet", defaults.MainnetConfig, 5319270},
+		{"devnet", defaults.DevnetConfig, 80},
 	}
-}
 
-func MainnetConfigBlockTimeBindingStart() uint64 {
-	return defaults.MainnetConfig.PosConfig.BlockTimeBindingV1StartBlock
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pos := tc.config.PosConfig
+			if pos.BlockTimeBindingV1StartBlock != tc.wantStartBlock {
+				t.Errorf("BlockTimeBindingV1StartBlock: got %d, want %d",
+					pos.BlockTimeBindingV1StartBlock, tc.wantStartBlock)
+			}
+			if pos.BlockTimeBindingV1StartBlock == defaults.NotScheduled {
+				t.Errorf("BlockTimeBindingV1StartBlock must be a finalized activation height")
+			}
+			if pos.BlockTimeBindingV1StartBlock <= pos.GranularBlockTimeStartBlock {
+				t.Errorf("BlockTimeBindingV1StartBlock (%d) must be after GranularBlockTimeStartBlock (%d)",
+					pos.BlockTimeBindingV1StartBlock, pos.GranularBlockTimeStartBlock)
+			}
+			if pos.BlockTimeBindingV1StartBlock <= pos.UpstreamConsensusFixesV1StartBlock {
+				t.Errorf("BlockTimeBindingV1StartBlock (%d) must be after UpstreamConsensusFixesV1StartBlock (%d)",
+					pos.BlockTimeBindingV1StartBlock, pos.UpstreamConsensusFixesV1StartBlock)
+			}
+		})
+	}
 }

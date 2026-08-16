@@ -824,6 +824,8 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 		{"UpstreamConsensusFixesV1StartBlock", defaults.DefaultConfig.PosConfig.UpstreamConsensusFixesV1StartBlock},
 		{"BlockTimeBindingV1StartBlock", defaults.DefaultConfig.PosConfig.BlockTimeBindingV1StartBlock},
 		{"GasV3StartBlock", defaults.DefaultConfig.PosConfig.GasV3StartBlock},
+		// GasV3StartBlock is the last scheduled cutoff; also cover the first block after it.
+		{"GasV3StartBlockPlusOne", defaults.DefaultConfig.PosConfig.GasV3StartBlock + 1},
 		{"ConsensusMalleabilityV1StartBlock", defaults.DefaultConfig.PosConfig.ConsensusMalleabilityV1StartBlock},
 	}
 

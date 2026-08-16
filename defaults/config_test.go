@@ -73,9 +73,10 @@ func TestGasV3Schedule(t *testing.T) {
 		name           string
 		config         *Config
 		wantStartBlock uint64
+		wantGasLimitV2 uint64
 	}{
-		{"mainnet", MainnetConfig, 5319280},
-		{"devnet", DevnetConfig, 82},
+		{"mainnet", MainnetConfig, 5319280, 45000000},
+		{"devnet", DevnetConfig, 82, 21000000},
 	}
 
 	for _, tc := range testCases {
@@ -88,8 +89,8 @@ func TestGasV3Schedule(t *testing.T) {
 				t.Errorf("GasV3StartBlock (%d) must be after BlockTimeBindingV1StartBlock (%d)",
 					pos.GasV3StartBlock, pos.BlockTimeBindingV1StartBlock)
 			}
-			if tc.config.DefaultGasLimitV2 != 45000000 {
-				t.Errorf("DefaultGasLimitV2: got %d, want 45000000", tc.config.DefaultGasLimitV2)
+			if tc.config.DefaultGasLimitV2 != tc.wantGasLimitV2 {
+				t.Errorf("DefaultGasLimitV2: got %d, want %d", tc.config.DefaultGasLimitV2, tc.wantGasLimitV2)
 			}
 			if tc.config.BreakglassDefaultGasLimitV2 != 9000000 {
 				t.Errorf("BreakglassDefaultGasLimitV2: got %d, want 9000000", tc.config.BreakglassDefaultGasLimitV2)
