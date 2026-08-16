@@ -1,3 +1,97 @@
+// ============================================================================
+// STAKING DEVNET RUNBOOK — how to re-validate the stakingv3 bond flows on a
+// live devnet end to end (proven 2026-08; follow verbatim next time).
+// ============================================================================
+//
+// Bootstrap: use the full devnet runbook in cmd/txnhookgen/main.go (build
+// dp.exe + dputil.exe, delete <dir>\data, `dp init` with
+// consensus\proofofstake\genesis\devnet\genesis.json, copy both keystores from
+// resources\devnet\ — password QuantumCoinExample123!, funded root
+// 0x1a84...aec6 — then start the single-validator node with Q_DEFAULT_CONFIG=1,
+// MIN_VALIDATORS=1, SKIP_STARTUP_DELAY=1, BLOCK_EXTENDED_SAVE=1, DP_ACC_PWD,
+// --mine --http). No TXN_HOOK_FILE is needed for staking tests. If another
+// devnet node is running, use --port 30310 --http.port 8546 --ipcpath
+// geth-hooktest.ipc instead of killing it.
+//
+// Staking-specific facts (all hit for real in the Aug 2026 run):
+//   - The v3 bytecode swaps in at PosConfig.SystemContractV3StartBlock
+//     (devnet 74; defaults/config.go). The last devnet fork is GasV3 at 82 —
+//     wait until head >= 85 before sending any staking transaction.
+//   - Do NOT send ANY transaction (even plain transfers) before devnet block 52
+//     (PosConfig.SigAlgSwitchBlock): dputil signs with MLDSA (mode 3), which the
+//     txpool rejects below that fork ("txpool tx signature type is not allowed").
+//   - Gas is expensive: DEFAULT_PRICE ~0.0476 coins/gas, so a bond costs ~8.3k
+//     coins and a deposit/rotation ~19k upfront (mostly refunded). Fund
+//     depositors 6,050,000+ and validators ~20,000 from the root wallet with
+//     `dputil transfercoins` (DP_ACC_PWD + SHOULD_CONFIRM=no make it prompt-free).
+//     Give the negative-case depositor the full 6M too, so its failure is
+//     provably the bond gate and not insufficient balance.
+//   - MINIMUM_DEPOSIT is 5,000,000 coins; use 6,000,000 in tests.
+//   - Create fresh wallets with `dp.exe account new --password <file>`
+//     (Q_DEFAULT_CONFIG=1, same datadir keystore). dputil env: DP_RAW_URL,
+//     DP_KEY_FILE_DIR=<datadir>\keystore.
+//   - dputil prompts on stdin; pipe answers with LF-only line endings (bash
+//     `printf '...\n' | ./dputil.exe ...`). PowerShell piping appends CRLF and
+//     the \r corrupts the password ("could not decrypt key").
+//     Prompt order — bonddepositor/bonddepositorforrotation: validator pwd.
+//     stakingdeposit: depositor pwd, y, validator pwd, y.
+//     changevalidator: depositor pwd, validator pwd, y, y (and it requires the
+//     NEW validator's key file in DP_KEY_FILE_DIR, so negatives against an
+//     address without a local key file must use a freshly created wallet).
+//   - Expected-failure txns are accepted into the pool and revert ON-CHAIN:
+//     evidence is the status-0 receipt (eth_getTransactionReceipt), optionally
+//     tracer_traceTransaction for the revert point.
+//
+// Onboarding sequence (mirrors TestStakingV3_AntiFrontRunAttackerFirst below):
+//  1. dputil bonddepositor X D    — attacker validator X bonds depositor D it
+//     does NOT own the key of. Succeeds: anyone may ATTEMPT to bond.
+//  2. dputil bonddepositor V D    — owner's validator V bonds the SAME D.
+//     Succeeds: pair-keyed, the attacker bond neither overwrites nor blocks.
+//  3. dputil stakingdeposit AD X 6000000 — attacker's own depositor AD naming
+//     X. FAILS ("Validator has not bonded depositor"): X's bond is keyed to D.
+//  4. dputil stakingdeposit D V 6000000  — succeeds despite the competing bond.
+//     Verify: getstakingdetails V shows depositor D, balance 6,000,000.
+//
+// NIL-block verification (no node runs the new validator's key, so its slots
+// go nil while the chain keeps progressing; each nil round takes ~60s, so the
+// chain visibly slows while the offline validator is in the set): scan recent
+// heights via proofofstake_getBlockConsensusData (or `dputil block N`). In a
+// NIL block the consensus data has voteType == 2 (VOTE_TYPE_NIL) and
+// blockProposer ZEROED — the timed-out proposer is listed in
+// nilvotedBlockProposers instead. Cross-check `dputil getstakingdetails V`:
+// Nil Block Count > 0, recent Last NiL Block, and nil slashing of 100
+// coins/block accruing against the depositor's net balance.
+//
+// Rotation sequence (mirrors TestStakingV3_RotationAntiFrontRunAttackerFirst
+// and TestStakingV3_RotationNegatives below):
+//  5. dputil bonddepositorforrotation X2 <fresh-addr> — FAILS ("Depositor does
+//     not exist"): rotation bonds require an existing depositor.
+//  6. dputil bonddepositorforrotation X2 D — attacker rotation-bond FIRST;
+//     succeeds (attempt allowed). Then `dputil changevalidator D <unbonded
+//     fresh addr>` FAILS ("New validator has not bonded depositor").
+//  7. dputil bonddepositorforrotation N D — owner's new validator; succeeds.
+//  8. dputil changevalidator D N — succeeds; getstakingdetails N shows D and
+//     the old validator V no longer resolves. The NIL verification for N is
+//     the MIGRATED state on N's staking details (Last NiL Block / Nil Block
+//     Count / slashing carried over from V) — do NOT wait for a fresh nil
+//     block by N: with NilBlockCount > 1 the proposer selection defers the
+//     offline validator for MinOfflineProposerBlockDelay (devnet 3600) blocks
+//     past LastNiLBlock (blockproposer.go canPropose), so post-rotation blocks
+//     show zero nil rounds. That absence, plus the migrated counters, is the
+//     expected evidence.
+//
+// Record every expected failure with its error text or status-0 receipt hash
+// (dputil txn TXN_HASH) — never assert a negative without evidence.
+//
+// dputil gas-limit gotcha (fixed Aug 2026): the v3 contract needs MORE gas than
+// the old hardcoded dputil limits — measured newDeposit ~256k (was capped 250k)
+// and changeValidator ~227k (was capped 175k); both out-of-gas reverted with a
+// status-0 receipt that LOOKS like a require() failure. cmd/dputil/util.go now
+// uses 400k for both. When a positive case unexpectedly reverts, run
+// eth_estimateGas with the txn's exact from/to/value/data before suspecting the
+// contract.
+// ============================================================================
+
 package proofofstake
 
 import (
@@ -547,6 +641,45 @@ func TestStakingV3_AntiFrontRun(t *testing.T) {
 	}
 }
 
+// F3 anti-front-run, attacker-FIRST ordering: attacker validator X bonds a depositor address it does
+// not own BEFORE the legit validator; the legit bond and deposit are unaffected, and the attacker's
+// bond cannot be exercised from any other depositor address (pair-keyed, msg.sender-gated).
+func TestStakingV3_AntiFrontRunAttackerFirst(t *testing.T) {
+	depositor := common.RandomAddress()
+	attackerValidator := common.RandomAddress()
+	attackerDepositor := common.RandomAddress()
+	legitValidator := common.RandomAddress()
+	state := newStakingStateDbV3()
+	state.SetBalance(depositor, params.EtherToWei(big.NewInt(10000000)))
+	state.SetBalance(attackerDepositor, params.EtherToWei(big.NewInt(10000000)))
+
+	// Attacker bonds the victim's depositor address FIRST (anyone may attempt to bond any address).
+	if err := BondDepositorV3(state, attackerValidator, depositor); err != nil {
+		t.Fatal("attacker bond attempt should succeed", err)
+	}
+
+	// The legit validator's bond on the SAME depositor must still succeed (no overwrite/block).
+	if err := BondDepositorV3(state, legitValidator, depositor); err != nil {
+		t.Fatal("legit bond after attacker bond should succeed", err)
+	}
+
+	bondedAttacker, _ := IsDepositorBondedV3(state, depositor, attackerValidator)
+	bondedLegit, _ := IsDepositorBondedV3(state, depositor, legitValidator)
+	if bondedAttacker == false || bondedLegit == false {
+		t.Fatal("both pairs should be bonded")
+	}
+
+	// The attacker cannot exercise its bond from its own depositor address (bond is keyed to the victim).
+	if err := NewDepositV3(state, attackerDepositor, attackerValidator, MIN_VALIDATOR_DEPOSIT); err == nil {
+		t.Fatal("attacker deposit from a different depositor address should revert")
+	}
+
+	// The legit depositor's deposit is unaffected by the pre-existing attacker bond.
+	if err := NewDepositV3(state, depositor, legitValidator, MIN_VALIDATOR_DEPOSIT); err != nil {
+		t.Fatal("legit deposit should succeed despite the attacker's earlier bond", err)
+	}
+}
+
 // F13: a validator may bond AT MOST ONE depositor; re-bonding (different or same depositor) reverts.
 func TestStakingV3_ValidatorExclusivity(t *testing.T) {
 	validator := common.RandomAddress()
@@ -708,6 +841,40 @@ func TestStakingV3_RotationAntiFrontRun(t *testing.T) {
 
 	if err := ChangeValidatorV3(state, depositor, newValidator1); err != nil {
 		t.Fatal("rotation to the chosen validator should succeed despite a competing bond", err)
+	}
+}
+
+// F15 anti-front-run, attacker-FIRST ordering: an attacker rotation-bonds an existing depositor
+// BEFORE the owner's chosen new validator; the legit rotation bond and changeValidator are unaffected.
+func TestStakingV3_RotationAntiFrontRunAttackerFirst(t *testing.T) {
+	depositor := common.RandomAddress()
+	validator := common.RandomAddress()
+	attackerValidator := common.RandomAddress()
+	newValidator := common.RandomAddress()
+	state := newStakingStateDbV3()
+
+	registerDepositorV3(t, state, depositor, validator)
+
+	// Attacker rotation-bonds the depositor FIRST (anyone may attempt).
+	if err := BondDepositorForRotationV3(state, attackerValidator, depositor); err != nil {
+		t.Fatal("attacker rotation bond attempt should succeed", err)
+	}
+
+	// The owner's chosen new validator can still rotation-bond the SAME depositor (no overwrite/block).
+	if err := BondDepositorForRotationV3(state, newValidator, depositor); err != nil {
+		t.Fatal("legit rotation bond after attacker bond should succeed", err)
+	}
+
+	if err := ChangeValidatorV3(state, depositor, newValidator); err != nil {
+		t.Fatal("rotation to the owner's chosen validator should succeed despite the attacker's earlier bond", err)
+	}
+
+	got, err := GetValidatorOfDepositorV3(state, depositor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.IsEqualTo(newValidator) == false {
+		t.Fatal("depositor should be mapped to the owner's chosen validator")
 	}
 }
 
