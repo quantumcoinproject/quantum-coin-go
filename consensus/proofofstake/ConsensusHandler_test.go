@@ -820,7 +820,12 @@ func TestPacketHandler_basic_various_blocks(t *testing.T) {
 		{"GasV2StartBlock", defaults.DefaultConfig.PosConfig.GasV2StartBlock},
 		{"GasTipStartBlock", defaults.DefaultConfig.PosConfig.GasTipStartBlock},
 		{"SystemContractV3StartBlock", defaults.DefaultConfig.PosConfig.SystemContractV3StartBlock},
-		{"SixSecondBlockTimeStartBlock", defaults.DefaultConfig.PosConfig.SixSecondBlockTimeStartBlock},
+		{"GranularBlockTimeStartBlock", defaults.DefaultConfig.PosConfig.GranularBlockTimeStartBlock},
+		{"UpstreamConsensusFixesV1StartBlock", defaults.DefaultConfig.PosConfig.UpstreamConsensusFixesV1StartBlock},
+		{"BlockTimeBindingV1StartBlock", defaults.DefaultConfig.PosConfig.BlockTimeBindingV1StartBlock},
+		{"GasV3StartBlock", defaults.DefaultConfig.PosConfig.GasV3StartBlock},
+		// GasV3StartBlock is the last scheduled cutoff; also cover the first block after it.
+		{"GasV3StartBlockPlusOne", defaults.DefaultConfig.PosConfig.GasV3StartBlock + 1},
 		{"ConsensusMalleabilityV1StartBlock", defaults.DefaultConfig.PosConfig.ConsensusMalleabilityV1StartBlock},
 	}
 
@@ -1988,25 +1993,30 @@ func TestVerifyBlockProposalTimeConsensus(t *testing.T) {
 	}
 }
 
-func TestSixSecondBlockTimeGranularity(t *testing.T) {
-	sixSecBlock := defaults.DefaultConfig.PosConfig.SixSecondBlockTimeStartBlock
-	preForkBlock := sixSecBlock - 1
+func TestGranularBlockTime(t *testing.T) {
+	granularStartBlock := defaults.DefaultConfig.PosConfig.GranularBlockTimeStartBlock
+	granularity := defaults.DefaultConfig.PosConfig.BlockTimeGranularity
+	preForkBlock := granularStartBlock - 1
+
+	if granularity <= 0 || granularity >= 60 || 60%granularity != 0 {
+		t.Fatalf("configured granularity must be a positive divisor of 60 below 60: %d", granularity)
+	}
 
 	// Granularity helper boundaries.
 	if GetBlockTimeGranularity(preForkBlock) != 60 {
 		t.Fatalf("expected 60s granularity below fork block")
 	}
-	if GetBlockTimeGranularity(sixSecBlock) != 6 {
-		t.Fatalf("expected 6s granularity at fork block")
+	if GetBlockTimeGranularity(granularStartBlock) != granularity {
+		t.Fatalf("expected %ds granularity at fork block", granularity)
 	}
-	if GetBlockTimeGranularity(sixSecBlock+1000) != 6 {
-		t.Fatalf("expected 6s granularity above fork block")
+	if GetBlockTimeGranularity(granularStartBlock+1000) != granularity {
+		t.Fatalf("expected %ds granularity above fork block", granularity)
 	}
 
-	// Proposal time at/after fork is 6-second aligned.
-	postTime := GetProposalTime(sixSecBlock)
-	if postTime == 0 || postTime%6 != 0 {
-		t.Fatalf("post-fork proposal time not 6s aligned: %d", postTime)
+	// Proposal time at/after fork is aligned to the configured granularity.
+	postTime := GetProposalTime(granularStartBlock)
+	if postTime == 0 || int64(postTime)%granularity != 0 {
+		t.Fatalf("post-fork proposal time not %ds aligned: %d", granularity, postTime)
 	}
 
 	// Proposal time before fork stays minute aligned.
@@ -2014,48 +2024,53 @@ func TestSixSecondBlockTimeGranularity(t *testing.T) {
 	if preTime == 0 || preTime%60 != 0 {
 		t.Fatalf("pre-fork proposal time not minute aligned: %d", preTime)
 	}
-	if GetProposalTime(256)%60 != 0 {
+	if 256 < granularStartBlock && GetProposalTime(256)%60 != 0 {
 		t.Fatalf("block 256 proposal time not minute aligned")
 	}
 
 	// Round-trip verification at the fork block.
-	if VerifyBlockProposalTime(sixSecBlock, GetProposalTime(sixSecBlock)) == false {
+	if VerifyBlockProposalTime(granularStartBlock, GetProposalTime(granularStartBlock)) == false {
 		t.Fatalf("VerifyBlockProposalTime round-trip failed at fork block")
 	}
-	if VerifyBlockProposalTimeConsensus(sixSecBlock, GetProposalTime(sixSecBlock)) == false {
+	if VerifyBlockProposalTimeConsensus(granularStartBlock, GetProposalTime(granularStartBlock)) == false {
 		t.Fatalf("VerifyBlockProposalTimeConsensus round-trip failed at fork block")
 	}
 
-	// A 6-second-aligned but non-minute-aligned time near now is accepted post-fork.
+	// A granularity-aligned but non-minute-aligned time near now is accepted post-fork.
 	minuteAligned := time.Now().UTC().Unix()
 	if minuteAligned%60 != 0 {
 		minuteAligned = minuteAligned - (minuteAligned % 60)
 	}
-	sixAlignedNonMinute := uint64(minuteAligned + 6) // seconds == 6: divisible by 6, not by 60
-	if VerifyBlockProposalTime(sixSecBlock, sixAlignedNonMinute) == false {
-		t.Fatalf("VerifyBlockProposalTime should accept 6s-aligned time post-fork")
+	alignedNonMinute := uint64(minuteAligned + granularity) // divisible by granularity, not by 60
+	if VerifyBlockProposalTime(granularStartBlock, alignedNonMinute) == false {
+		t.Fatalf("VerifyBlockProposalTime should accept %ds-aligned time post-fork", granularity)
 	}
-	if VerifyBlockProposalTimeConsensus(sixSecBlock, sixAlignedNonMinute) == false {
-		t.Fatalf("VerifyBlockProposalTimeConsensus should accept 6s-aligned time post-fork")
+	if VerifyBlockProposalTimeConsensus(granularStartBlock, alignedNonMinute) == false {
+		t.Fatalf("VerifyBlockProposalTimeConsensus should accept %ds-aligned time post-fork", granularity)
 	}
 
-	// The same 6s-aligned non-minute time is rejected before the fork (60s rule).
-	if VerifyBlockProposalTime(preForkBlock, sixAlignedNonMinute) == true {
+	// The same aligned non-minute time is rejected before the fork (60s rule).
+	if VerifyBlockProposalTime(preForkBlock, alignedNonMinute) == true {
 		t.Fatalf("VerifyBlockProposalTime should reject non-minute time pre-fork")
 	}
-	if VerifyBlockProposalTimeConsensus(preForkBlock, sixAlignedNonMinute) == true {
+	if VerifyBlockProposalTimeConsensus(preForkBlock, alignedNonMinute) == true {
 		t.Fatalf("VerifyBlockProposalTimeConsensus should reject non-minute time pre-fork")
 	}
 
-	// Times that are not 6-second aligned are rejected post-fork.
-	if VerifyBlockProposalTime(sixSecBlock, GetProposalTime(sixSecBlock)+1) == true {
-		t.Fatalf("VerifyBlockProposalTime should reject +1s time post-fork")
+	// Times that are not granularity-aligned are rejected post-fork. With a
+	// granularity of 1 every second is aligned, so there is nothing to reject.
+	if granularity > 1 {
+		if VerifyBlockProposalTime(granularStartBlock, GetProposalTime(granularStartBlock)+1) == true {
+			t.Fatalf("VerifyBlockProposalTime should reject +1s time post-fork")
+		}
+		if VerifyBlockProposalTimeConsensus(granularStartBlock, alignedNonMinute+1) == true {
+			t.Fatalf("VerifyBlockProposalTimeConsensus should reject +1s time post-fork")
+		}
 	}
-	if VerifyBlockProposalTime(sixSecBlock, GetProposalTime(sixSecBlock)+2) == true {
-		t.Fatalf("VerifyBlockProposalTime should reject +2s time post-fork")
-	}
-	if VerifyBlockProposalTimeConsensus(sixSecBlock, sixAlignedNonMinute+1) == true {
-		t.Fatalf("VerifyBlockProposalTimeConsensus should reject +1s time post-fork")
+	if granularity > 2 {
+		if VerifyBlockProposalTime(granularStartBlock, GetProposalTime(granularStartBlock)+2) == true {
+			t.Fatalf("VerifyBlockProposalTime should reject +2s time post-fork")
+		}
 	}
 }
 

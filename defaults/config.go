@@ -37,14 +37,24 @@ func GetGasLimit(blockNumber uint64) uint64 {
 }
 
 func GetMaxTransactionsForBlock(blockNumber uint64) int {
+	if IsGasV3(blockNumber) {
+		return int(DefaultConfig.DefaultGasLimitV2 / BASIC_TXN_GAS)
+	}
 	return int(DefaultConfig.DefaultGasLimit / BASIC_TXN_GAS)
 }
 
 // GetMaxGasLimit returns the maximum allowed block gas limit for the dynamic gas-limit
-// scheme: the normal default, or a reduced cap when breakglass mode is active.
+// scheme: the normal default, or a reduced cap when breakglass mode is active. Both
+// ceilings drop once GasV3StartBlock is active.
 func GetMaxGasLimit(blockNumber uint64) uint64 {
 	if IsCryptoBreakglassMode(blockNumber) {
+		if IsGasV3(blockNumber) {
+			return DefaultConfig.BreakglassDefaultGasLimitV2
+		}
 		return DefaultConfig.BreakglassDefaultGasLimit
+	}
+	if IsGasV3(blockNumber) {
+		return DefaultConfig.DefaultGasLimitV2
 	}
 	return DefaultConfig.DefaultGasLimit
 }
@@ -99,6 +109,15 @@ func IsUpstreamConsensusFixesV1Big(blockNumber *big.Int) bool {
 	return IsUpstreamConsensusFixesV1(blockNumber.Uint64())
 }
 
+// IsGasV3 reports whether the reduced gas-limit ceilings (see GasV3StartBlock) are
+// active at the given block number. Consensus-affecting: it changes the valid
+// header.GasLimit range, the dynamic gas-limit computation, and the
+// max-transactions-per-block bound, so it only applies from a scheduled activation
+// height and never retroactively.
+func IsGasV3(blockNumber uint64) bool {
+	return blockNumber >= DefaultConfig.PosConfig.GasV3StartBlock
+}
+
 // IsBlockTimeBindingV1 reports whether header.Time must equal the value derived
 // from the consensus-agreed BlockTime (see BlockTimeBindingV1StartBlock). This is
 // consensus-affecting, so it only applies from a finalized activation height and
@@ -141,10 +160,16 @@ type ProofOfStakeConfig struct {
 
 	SystemContractV3StartBlock uint64
 
-	// SixSecondBlockTimeStartBlock activates 6-second proposal-time granularity
-	// (was 60s). Consensus-affecting: GetProposalTime, VerifyBlockProposalTime,
-	// and VerifyBlockProposalTimeConsensus all change behavior at this height.
-	SixSecondBlockTimeStartBlock uint64
+	// GranularBlockTimeStartBlock activates granular proposal-time alignment
+	// (BlockTimeGranularity seconds, was 60s). Consensus-affecting: GetProposalTime,
+	// VerifyBlockProposalTime, and VerifyBlockProposalTimeConsensus all change
+	// behavior at this height.
+	GranularBlockTimeStartBlock uint64
+
+	// BlockTimeGranularity is the proposal-time alignment in seconds once
+	// GranularBlockTimeStartBlock is active (before that, 60s applies).
+	// Consensus-affecting: must only change together with a scheduled fork.
+	BlockTimeGranularity int64
 
 	VALIDATOR_NIL_BLOCK_START_BLOCK      uint64
 	BLOCK_PROPOSER_NIL_BLOCK_START_BLOCK uint64
@@ -218,20 +243,43 @@ type ProofOfStakeConfig struct {
 	UpstreamConsensusFixesV1StartBlock uint64
 
 	BlockTimeBindingV1StartBlock uint64
+
+	// GasV3StartBlock reduces the maximum block gas limit from DefaultGasLimit (300M)
+	// to DefaultGasLimitV2 (45M), and the breakglass maximum from
+	// BreakglassDefaultGasLimit (30M) to BreakglassDefaultGasLimitV2 (9M). The dynamic
+	// gas-limit scheme from GasV2StartBlock keeps operating; only its ceilings change.
+	// The max-transactions-per-block bound drops proportionally. Consensus-affecting:
+	// must only activate at a scheduled height, never retroactively.
+	GasV3StartBlock uint64
 }
 
 type Config struct {
 	PosConfig           *ProofOfStakeConfig
 	DeepCheckStartBlock uint64
 	GasPriceStartBlock  uint64
-	DefaultGasLimit     uint64
+	// TxnFeeCutoffBlock activates the transaction-fee reward split: from this
+	// block, Finalize splits base fees between the block proposer's depositor
+	// (TxnFeeRewardsPercentage) and the ZERO_ADDRESS burn, and (once
+	// IsGasTipActive) pays the effective tip to the depositor. Below it,
+	// state_transition credits the whole charge — base fee and tip — to the
+	// coinbase, which is always the zero address on this chain (effectively a
+	// burn). Consensus-affecting: must only change together with a scheduled
+	// fork / chain reset. Was the hardcoded core.TXN_FEE_CUTTOFF_BLOCK.
+	TxnFeeCutoffBlock uint64
+	DefaultGasLimit   uint64
+	// DefaultGasLimitV2 is the reduced maximum block gas limit enforced once
+	// GasV3StartBlock is active.
+	DefaultGasLimitV2 uint64
 	// BreakglassDefaultGasLimit is the reduced maximum block gas limit enforced while
 	// breakglass mode is active.
 	BreakglassDefaultGasLimit uint64
-	ValidateSigPubStartTime   int64
-	TxnStartAllowedTime       int64
-	ConversionTxnLastTime     int64
-	KemSwitchTime             int64
+	// BreakglassDefaultGasLimitV2 is the maximum block gas limit enforced while
+	// breakglass mode is active once GasV3StartBlock is active.
+	BreakglassDefaultGasLimitV2 uint64
+	ValidateSigPubStartTime     int64
+	TxnStartAllowedTime         int64
+	ConversionTxnLastTime       int64
+	KemSwitchTime               int64
 }
 
 var mainnetPosConfig = ProofOfStakeConfig{
@@ -287,13 +335,16 @@ var mainnetPosConfig = ProofOfStakeConfig{
 
 	SystemContractV3StartBlock: 5319258,
 
-	SixSecondBlockTimeStartBlock: 5319268,
+	GranularBlockTimeStartBlock: 5319268,
+	BlockTimeGranularity:        6,
 
 	ConsensusMalleabilityV1StartBlock: 0,
 
 	UpstreamConsensusFixesV1StartBlock: 5319269,
 
 	BlockTimeBindingV1StartBlock: 5319270,
+
+	GasV3StartBlock: 5319280,
 }
 
 var devnetPosConfig = ProofOfStakeConfig{
@@ -349,7 +400,10 @@ var devnetPosConfig = ProofOfStakeConfig{
 
 	SystemContractV3StartBlock: 74,
 
-	SixSecondBlockTimeStartBlock: 76,
+	// Devnet uses 1-second granularity post-fork so header times match the wall
+	// clock exactly. Devnet chains must be reset when these change.
+	GranularBlockTimeStartBlock: 76,
+	BlockTimeGranularity:        1,
 
 	ConsensusMalleabilityV1StartBlock: 0,
 
@@ -360,18 +414,26 @@ var devnetPosConfig = ProofOfStakeConfig{
 	// Devnet activates the header.Time binding so the fork path is exercised end to
 	// end. Devnet chains must be reset when this changes.
 	BlockTimeBindingV1StartBlock: 80,
+
+	// Devnet activates the reduced gas-limit ceilings at the next height in the
+	// sequence so the fork path is exercised end to end. Devnet chains must be reset
+	// when this changes.
+	GasV3StartBlock: 82,
 }
 
 var MainnetConfig = &Config{
-	PosConfig:                 &mainnetPosConfig,
-	DeepCheckStartBlock:       uint64(3426264),
-	GasPriceStartBlock:        uint64(3426265),
-	DefaultGasLimit:           300000000,
-	BreakglassDefaultGasLimit: 30000000,
-	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:       int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:     int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:             int64(1799229600), //Jan 06, 2027 10:00:00 AM UTC
+	PosConfig:                   &mainnetPosConfig,
+	DeepCheckStartBlock:         uint64(3426264),
+	GasPriceStartBlock:          uint64(3426265),
+	TxnFeeCutoffBlock:           uint64(1607600),
+	DefaultGasLimit:             300000000,
+	DefaultGasLimitV2:           45000000,
+	BreakglassDefaultGasLimit:   30000000,
+	BreakglassDefaultGasLimitV2: 9000000,
+	ValidateSigPubStartTime:     int64(1769904000), //Feb 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:         int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:       int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:               int64(1799229600), //Jan 06, 2027 10:00:00 AM UTC
 }
 
 var DevnetConfig = &Config{
@@ -381,14 +443,21 @@ var DevnetConfig = &Config{
 	// and verify gate (VerifyExtraData, >= ExtraDataV3StartBlock) stay aligned. Otherwise blocks in
 	// [ExtraDataV3StartBlock, DeepCheckStartBlock) are sealed with empty Extra but verified as v3,
 	// producing "DecodeBlockExtraData v3 error=EOF" BAD BLOCKs.
-	DeepCheckStartBlock:       uint64(54),
-	GasPriceStartBlock:        uint64(56),
-	DefaultGasLimit:           300000000,
-	BreakglassDefaultGasLimit: 30000000,
-	ValidateSigPubStartTime:   int64(1769904000), //Feb 1, 2026 12:00:00 AM
-	TxnStartAllowedTime:       int64(1713052800), //April 14th, 2024
-	ConversionTxnLastTime:     int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
-	KemSwitchTime:             int64(1713052800), //April 14th, 2025, 11:59:59 PM UTC
+	DeepCheckStartBlock: uint64(54),
+	GasPriceStartBlock:  uint64(56),
+	// Devnet activates the fee split (and, once GasTipStartBlock is active, tip
+	// payment to the proposer's depositor) from the same height rewards start,
+	// so the path is exercised end to end. Devnet chains must be reset when
+	// this changes.
+	TxnFeeCutoffBlock:           uint64(2),
+	DefaultGasLimit:             300000000,
+	DefaultGasLimitV2:           21000000,
+	BreakglassDefaultGasLimit:   30000000,
+	BreakglassDefaultGasLimitV2: 9000000,
+	ValidateSigPubStartTime:     int64(1769904000), //Feb 1, 2026 12:00:00 AM
+	TxnStartAllowedTime:         int64(1713052800), //April 14th, 2024
+	ConversionTxnLastTime:       int64(1744675199), //April 14th, 2025, 11:59:59 PM UTC
+	KemSwitchTime:               int64(1713052800), //April 14th, 2025, 11:59:59 PM UTC
 }
 
 var DefaultConfig = MainnetConfig

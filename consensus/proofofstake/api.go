@@ -28,7 +28,6 @@ import (
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"github.com/quantumcoinproject/quantum-coin-go/consensus"
 	"github.com/quantumcoinproject/quantum-coin-go/conversionutil"
-	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/defaults"
@@ -257,10 +256,11 @@ type Slashing struct {
 }
 
 type BlockRewardsInfo struct {
-	BlockProposerRewards     string      `json:"blockProposerRewards"     gencodec:"required"` //total rewards, blockRewards + txnFeeRewards
+	BlockProposerRewards     string      `json:"blockProposerRewards"     gencodec:"required"` //total rewards, blockRewards + txnFeeRewards + tipRewards
 	BaseBlockProposerRewards string      `json:"baseBlockProposerRewards" gencodec:"required"` //block rewards excluding txn free rewards
 	TxnFeeRewards            string      `json:"txnFeeRewards"`
 	BurntTxnFee              string      `json:"burntTxnFee"`
+	TipRewards               string      `json:"tipRewards"`        //effective gas tip total paid to the proposer (set when non-zero; from GasTipStartBlock)
 	SlashedValidators        []*Slashing `json:"slashedValidators"` //includes block proposers
 	SlashAmount              string      `json:"slashAmount"`       //total slash amount
 }
@@ -372,10 +372,25 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 				return nil, err
 			}
 
-			if header.Number.Uint64() >= core.TXN_FEE_CUTTOFF_BLOCK {
+			if header.Number.Uint64() >= defaults.DefaultConfig.TxnFeeCutoffBlock {
 				blockRewards = common.SafeAddBigInt(blockRewards, rewardsAmountTxnFee)
 				blockRewardsInfo.TxnFeeRewards = hexutil.EncodeBig(rewardsAmountTxnFee)
 				blockRewardsInfo.BurntTxnFee = hexutil.EncodeBig(burnAmountTxnFee)
+
+				//Gas tip / priority fee: mirror Finalize — from GasTipStartBlock the
+				//effective tip total is paid in full to the block proposer on top of
+				//the base-fee split, so it is part of the reported total rewards.
+				if defaults.IsGasTipActive(header.Number.Uint64()) {
+					tipTotal, err := calculateTxnTipTotal(block.Transactions(), receipts)
+					if err != nil {
+						log.Error("pos calculateTxnTipTotal", "error", err)
+						return nil, err
+					}
+					if tipTotal.Sign() > 0 {
+						blockRewards = common.SafeAddBigInt(blockRewards, tipTotal)
+						blockRewardsInfo.TipRewards = hexutil.EncodeBig(tipTotal)
+					}
+				}
 			} else {
 				blockRewardsInfo.BurntTxnFee = hexutil.EncodeBig(txnFeeTotal)
 			}

@@ -1901,8 +1901,8 @@ func Elapsed(startTime time.Time) int64 {
 }
 
 func GetBlockTimeGranularity(blockNumber uint64) int64 {
-	if blockNumber >= defaults.DefaultConfig.PosConfig.SixSecondBlockTimeStartBlock {
-		return 6
+	if blockNumber >= defaults.DefaultConfig.PosConfig.GranularBlockTimeStartBlock {
+		return defaults.DefaultConfig.PosConfig.BlockTimeGranularity
 	}
 	return 60
 }
