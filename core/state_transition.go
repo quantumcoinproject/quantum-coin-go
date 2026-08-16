@@ -32,7 +32,9 @@ import (
 // was never touched instead reports the zero hash.
 var emptyCodeHash = crypto.Keccak256Hash(nil)
 
-const TXN_FEE_CUTTOFF_BLOCK = 1607600
+// TXN_FEE_CUTTOFF_BLOCK moved to per-network config: see
+// defaults.Config.TxnFeeCutoffBlock (mainnet keeps the original 1607600;
+// devnet activates the fee split from the start so it is testable).
 
 /*
 The State Transitioning Model
@@ -314,7 +316,7 @@ func (st *StateTransition) TransitionDb() (*ExecutionResult, error) {
 		st.refundGas(params.RefundQuotientEIP3529)
 	}
 
-	if st.evm.Context.BlockNumber.Uint64() < TXN_FEE_CUTTOFF_BLOCK {
+	if st.evm.Context.BlockNumber.Uint64() < defaults.DefaultConfig.TxnFeeCutoffBlock {
 		st.state.AddBalance(st.evm.Context.Coinbase, new(big.Int).Mul(new(big.Int).SetUint64(st.gasUsed()), st.gasPrice))
 	}
 

@@ -65,6 +65,24 @@ func TestGetMaxTransactionsForBlockGasV3(t *testing.T) {
 	}
 }
 
+// TestTxnFeeCutoffSchedule freezes TxnFeeCutoffBlock on both networks: mainnet
+// keeps the original hardcoded core.TXN_FEE_CUTTOFF_BLOCK value (1607600) so
+// historical replay is unchanged; devnet activates the fee split (and tip
+// payment once GasTipStartBlock is active) from the reward start so the path
+// is testable end to end.
+func TestTxnFeeCutoffSchedule(t *testing.T) {
+	if got := MainnetConfig.TxnFeeCutoffBlock; got != 1607600 {
+		t.Errorf("mainnet TxnFeeCutoffBlock: got %d, want 1607600 (must never change: consensus replay)", got)
+	}
+	if got := DevnetConfig.TxnFeeCutoffBlock; got != 2 {
+		t.Errorf("devnet TxnFeeCutoffBlock: got %d, want 2", got)
+	}
+	if DevnetConfig.TxnFeeCutoffBlock < DevnetConfig.PosConfig.RewardStartBlockNumber {
+		t.Errorf("devnet TxnFeeCutoffBlock (%d) below RewardStartBlockNumber (%d): fee split is nested inside the reward branch and would silently never run",
+			DevnetConfig.TxnFeeCutoffBlock, DevnetConfig.PosConfig.RewardStartBlockNumber)
+	}
+}
+
 // TestGasV3Schedule freezes the GasV3 activation heights and ceiling values on both
 // networks, and asserts the ordering invariants the dynamic gas-limit scheme
 // (ComputeBlockGasLimit) relies on.

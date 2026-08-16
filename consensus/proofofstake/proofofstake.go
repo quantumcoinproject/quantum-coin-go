@@ -906,7 +906,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 		}
 
 		//If txn fee for proposer criteria is met and the block has transactions
-		if blockNumber >= core.TXN_FEE_CUTTOFF_BLOCK && len(txs) > 0 {
+		if blockNumber >= defaults.DefaultConfig.TxnFeeCutoffBlock && len(txs) > 0 {
 			txnFeeTotal, rewardsAmountTxnFee, burnAmountTxnFee, err := calculateTxnFeeSplit(blockProposerRewardAmount, txs, receipts)
 			if err != nil {
 				return err

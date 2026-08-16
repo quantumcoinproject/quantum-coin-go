@@ -23,7 +23,6 @@ import (
 
 	"github.com/quantumcoinproject/quantum-coin-go/accounts/abi"
 	"github.com/quantumcoinproject/quantum-coin-go/common"
-	"github.com/quantumcoinproject/quantum-coin-go/core"
 	"github.com/quantumcoinproject/quantum-coin-go/core/types"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto"
 	"github.com/quantumcoinproject/quantum-coin-go/crypto/cryptobase"
@@ -48,7 +47,7 @@ func TestTxnFee(t *testing.T) {
 		t.Fatalf("failed2")
 	}
 
-	blockRewards := GetReward(big.NewInt(core.TXN_FEE_CUTTOFF_BLOCK))
+	blockRewards := GetReward(new(big.Int).SetUint64(defaults.DefaultConfig.TxnFeeCutoffBlock))
 	totalRewards := common.SafeAddBigInt(blockRewards, txnFeeRewards)
 	log.Info("TestTxnFee2", "blockRewards", blockRewards, "totalRewards", totalRewards, "txnFeeRewards", txnFeeRewards)
 	if totalRewards.String() != "951793759512937627532754" {

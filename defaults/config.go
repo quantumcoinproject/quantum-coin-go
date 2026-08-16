@@ -257,7 +257,16 @@ type Config struct {
 	PosConfig           *ProofOfStakeConfig
 	DeepCheckStartBlock uint64
 	GasPriceStartBlock  uint64
-	DefaultGasLimit     uint64
+	// TxnFeeCutoffBlock activates the transaction-fee reward split: from this
+	// block, Finalize splits base fees between the block proposer's depositor
+	// (TxnFeeRewardsPercentage) and the ZERO_ADDRESS burn, and (once
+	// IsGasTipActive) pays the effective tip to the depositor. Below it,
+	// state_transition credits the whole charge — base fee and tip — to the
+	// coinbase, which is always the zero address on this chain (effectively a
+	// burn). Consensus-affecting: must only change together with a scheduled
+	// fork / chain reset. Was the hardcoded core.TXN_FEE_CUTTOFF_BLOCK.
+	TxnFeeCutoffBlock uint64
+	DefaultGasLimit   uint64
 	// DefaultGasLimitV2 is the reduced maximum block gas limit enforced once
 	// GasV3StartBlock is active.
 	DefaultGasLimitV2 uint64
@@ -416,6 +425,7 @@ var MainnetConfig = &Config{
 	PosConfig:                   &mainnetPosConfig,
 	DeepCheckStartBlock:         uint64(3426264),
 	GasPriceStartBlock:          uint64(3426265),
+	TxnFeeCutoffBlock:           uint64(1607600),
 	DefaultGasLimit:             300000000,
 	DefaultGasLimitV2:           45000000,
 	BreakglassDefaultGasLimit:   30000000,
@@ -433,8 +443,13 @@ var DevnetConfig = &Config{
 	// and verify gate (VerifyExtraData, >= ExtraDataV3StartBlock) stay aligned. Otherwise blocks in
 	// [ExtraDataV3StartBlock, DeepCheckStartBlock) are sealed with empty Extra but verified as v3,
 	// producing "DecodeBlockExtraData v3 error=EOF" BAD BLOCKs.
-	DeepCheckStartBlock:         uint64(54),
-	GasPriceStartBlock:          uint64(56),
+	DeepCheckStartBlock: uint64(54),
+	GasPriceStartBlock:  uint64(56),
+	// Devnet activates the fee split (and, once GasTipStartBlock is active, tip
+	// payment to the proposer's depositor) from the same height rewards start,
+	// so the path is exercised end to end. Devnet chains must be reset when
+	// this changes.
+	TxnFeeCutoffBlock:           uint64(2),
 	DefaultGasLimit:             300000000,
 	DefaultGasLimitV2:           21000000,
 	BreakglassDefaultGasLimit:   30000000,
