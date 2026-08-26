@@ -375,3 +375,59 @@ func Test_SafeRelativePercentageBigInt(t *testing.T) {
 		t.Fatalf("failed")
 	}
 }
+
+func TestSafeSubBigIntNonNegative(t *testing.T) {
+	a := big.NewInt(100)
+	b := big.NewInt(40)
+	got := SafeSubBigIntNonNegative(a, b)
+	if got.Int64() != 60 {
+		t.Fatalf("SafeSubBigIntNonNegative(100, 40) = %s, want 60", got)
+	}
+	if a.Int64() != 100 || b.Int64() != 40 {
+		t.Fatalf("operands must not be modified: a=%s b=%s", a, b)
+	}
+	if got := SafeSubBigIntNonNegative(a, a); got.Sign() != 0 {
+		t.Fatalf("SafeSubBigIntNonNegative(x, x) = %s, want 0", got)
+	}
+	if got := SafeSubBigIntNonNegative(a, big.NewInt(0)); got.Cmp(a) != 0 || got == a {
+		t.Fatalf("SafeSubBigIntNonNegative(x, 0) must equal x in a fresh big.Int")
+	}
+}
+
+func TestSafeSubBigIntNonNegativePanicsOnUnderflow(t *testing.T) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatalf("expected panic on underflow")
+		}
+		if msg, ok := r.(string); !ok || msg != "big.Int underflow: have=40 sub=100" {
+			t.Fatalf("unexpected panic value: %v", r)
+		}
+	}()
+	SafeSubBigIntNonNegative(big.NewInt(40), big.NewInt(100))
+}
+
+func TestSafeSubBigIntNonNegativePanicsOnNegativeOperands(t *testing.T) {
+	cases := []struct {
+		name string
+		x, y int64
+	}{
+		{"negative minuend", -1, 0},
+		{"zero minus one", 0, 1},
+		{"negative minuend larger magnitude", -100, -1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer func() {
+				if recover() == nil {
+					t.Fatalf("SafeSubBigIntNonNegative(%d, %d) must panic", tc.x, tc.y)
+				}
+			}()
+			SafeSubBigIntNonNegative(big.NewInt(tc.x), big.NewInt(tc.y))
+		})
+	}
+	// Signed operands are fine as long as the result is non-negative.
+	if got := SafeSubBigIntNonNegative(big.NewInt(-5), big.NewInt(-10)); got.Int64() != 5 {
+		t.Fatalf("SafeSubBigIntNonNegative(-5, -10) = %s, want 5", got)
+	}
+}

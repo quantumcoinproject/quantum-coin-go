@@ -1246,7 +1246,37 @@ func listValidators() error {
 	return nil
 }
 
+// netWithdrawableWei returns rewardsWei - slashingsWei, the amount a depositor can
+// withdraw, in wei. It errors when nothing is withdrawable (no rewards, or slashings
+// >= rewards). Amounts are never rounded to whole coins, so fractional-coin rewards
+// stay withdrawable.
+func netWithdrawableWei(rewardsWei, slashingsWei *big.Int) (*big.Int, error) {
+	if rewardsWei == nil || slashingsWei == nil || rewardsWei.Sign() < 0 || slashingsWei.Sign() < 0 {
+		return nil, errors.New("invalid depositor amount")
+	}
+	if rewardsWei.Sign() == 0 || slashingsWei.Cmp(rewardsWei) >= 0 {
+		return nil, errors.New("there are no rewards available to withdraw")
+	}
+	return new(big.Int).Sub(rewardsWei, slashingsWei), nil
+}
+
+// initiatePartialWithdrawal parses a whole-coin decimal amount string and submits the
+// withdrawal; see initiatePartialWithdrawalWei for the wei-denominated form.
 func initiatePartialWithdrawal(key *signaturealgorithm.PrivateKey, amount string) error {
+	amountFlt, err := ParseBigFloat(amount)
+	if err != nil {
+		return err
+	}
+	return initiatePartialWithdrawalWei(key, etherToWeiFloat(amountFlt))
+}
+
+// initiatePartialWithdrawalWei submits a partial rewards withdrawal of exactly amountWei.
+// Amounts are kept in wei end to end so that fractional-coin rewards are neither
+// truncated nor rejected.
+func initiatePartialWithdrawalWei(key *signaturealgorithm.PrivateKey, amountWei *big.Int) error {
+	if amountWei == nil || amountWei.Sign() <= 0 {
+		return errors.New("invalid withdrawal amount")
+	}
 	client, err := ethclient.Dial(rawURL)
 	if err != nil {
 		return err
@@ -1291,12 +1321,6 @@ func initiatePartialWithdrawal(key *signaturealgorithm.PrivateKey, amount string
 	if err != nil {
 		return err
 	}
-
-	amountFlt, err := ParseBigFloat(amount)
-	if err != nil {
-		return err
-	}
-	amountWei := etherToWeiFloat(amountFlt)
 
 	tx, err := contract.InitiatePartialWithdrawal(txnOpts, amountWei)
 	if err != nil {

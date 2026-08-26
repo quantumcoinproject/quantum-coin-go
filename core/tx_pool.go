@@ -622,7 +622,9 @@ func (pool *TxPool) validateTx(tx *types.Transaction, local bool) error {
 				log.Debug("validateTx ValidateGasFeeCaps", "error", err, "GasFeeCap", tx.GasFeeCap(), "GasTipCap", tx.GasTipCap())
 				return err
 			}
-		} else if (tx.GasFeeCap() != nil || tx.GasTipCap() != nil) && (tx.GasFeeCap().Uint64() != 0 || tx.GasTipCap().Uint64() != 0) {
+		} else if (tx.GasFeeCap() != nil || tx.GasTipCap() != nil) && (tx.GasFeeCap().Sign() != 0 || tx.GasTipCap().Sign() != 0) {
+			// Sign() rather than Uint64(): Uint64() truncates, so a cap of k*2^64 would read as zero
+			// and slip past this filter.
 			log.Debug("gasFeeCap or gasTipCap non nil", "GasFeeCap", tx.GasFeeCap(), "GasTipCap", tx.GasTipCap())
 			return errors.New("gasFeeCap or gasTipCap non nil")
 		}

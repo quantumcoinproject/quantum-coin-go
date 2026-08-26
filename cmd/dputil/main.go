@@ -188,6 +188,10 @@ func printHelp() {
 	fmt.Println("dputil listaddresstokenconversions QUANTUM_WALLET_ADDRESS BURN_PROOF_CONTRACT_ADDRESS QUANTUM_CONTRACT_ADDRESS ETHEREUM_CONTRACT_ADDRESS OUTPUT_FOLDER")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("           DP_RAW_URL")
+	fmt.Println("dputil reconciletokenconversions -snapshot SNAPSHOT_CSV -burns BURN_EXPORT_CSV [-burns ...] -out OUTPUT_FOLDER")
+	fmt.Println("      Reconciles token conversion requests, Ethereum burns, snapshot entitlements and already-sent tokens; read-only.")
+	fmt.Println("      Run 'dputil reconciletokenconversions -h' for all options. Set the following environment variables:")
+	fmt.Println("           DP_RAW_URL")
 	fmt.Println("dputil sethead BLOCK_NUMBER")
 	fmt.Println("      Set the following environment variables:")
 	fmt.Println("dputil getblockextendeddetails BLOCK_NUMBER")
@@ -431,6 +435,11 @@ func main() {
 		}
 	} else if os.Args[1] == "listaddresstokenconversions" {
 		err := ListAddressTokenConversions()
+		if err != nil {
+			fmt.Println("Error", err)
+		}
+	} else if os.Args[1] == "reconciletokenconversions" {
+		err := ReconcileTokenConversions()
 		if err != nil {
 			fmt.Println("Error", err)
 		}
@@ -1391,14 +1400,15 @@ func InitiateWithdrawalRewards() error {
 		return errors.New("depositor slashings " + err.Error())
 	}
 
-	if depositorSlashings.Cmp(depositorReward) >= 0 {
-		return errors.New("there are no rewards available to withdraw")
+	// Net amount in wei. Previously both sides were truncated to whole coins before
+	// subtracting, which rejected sub-coin rewards and left up to ~2 coins of fractional
+	// rewards unwithdrawn per call.
+	amountWei, err := netWithdrawableWei(depositorReward, depositorSlashings)
+	if err != nil {
+		return err
 	}
 
-	amount := big.NewInt(0)
-	amount = amount.Sub(weiToEther(depositorReward), weiToEther(depositorSlashings))
-
-	depositorRewardConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("The following amount will be withdrawn. Please confirm if you are ok : %d?", amount))
+	depositorRewardConfirm, err := prompt.Stdin.PromptConfirm(fmt.Sprintf("The following amount will be withdrawn. Please confirm if you are ok : %s coins (%s wei)?", weiToTokenStr(amountWei), amountWei.String()))
 	if err != nil {
 		return err
 	}
@@ -1408,11 +1418,7 @@ func InitiateWithdrawalRewards() error {
 	}
 	fmt.Println()
 
-	if amount.Int64() > 0 {
-		return initiatePartialWithdrawal(depKey, amount.String())
-	} else {
-		return errors.New("invalid depositor amount")
-	}
+	return initiatePartialWithdrawalWei(depKey, amountWei)
 
 }
 

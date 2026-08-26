@@ -309,8 +309,28 @@ func testSeedQuery() error {
 	for _, seed := range nodeDBSeedQueryNodes[1:] {
 		want[seed.node.ID()] = struct{}{}
 	}
-	if len(seeds) != len(want) && len(seeds) != len(want)-1 {
-		return fmt.Errorf("seed count mismatch: have %v, want %v", len(seeds), len(want))
+	if len(seeds) != len(want) {
+		// Report exactly which fixture nodes are missing/extra together with the pong
+		// age the database holds for them, so a failure can be told apart as "not
+		// reached by the query" versus "excluded as stale". (The fixture keys are
+		// generated per process, so the node ID layout differs from run to run.)
+		now := time.Now()
+		var detail []string
+		for i, seed := range nodeDBSeedQueryNodes {
+			id := seed.node.ID()
+			_, inHave := have[id]
+			_, inWant := want[id]
+			if inHave == inWant {
+				continue
+			}
+			state := "missing"
+			if inHave {
+				state = "extra"
+			}
+			detail = append(detail, fmt.Sprintf("node %d %s (id %x.., stored pong age %v, fixture pong age %v)",
+				i, state, id[:4], now.Sub(db.LastPongReceived(id, seed.node.IP())).Round(time.Second), now.Sub(seed.pong).Round(time.Second)))
+		}
+		return fmt.Errorf("seed count mismatch: have %v, want %v: %v", len(seeds), len(want), detail)
 	}
 	for id := range have {
 		if _, ok := want[id]; !ok {
@@ -323,6 +343,111 @@ func testSeedQuery() error {
 		}
 	}
 	return nil
+}
+
+// TestDBSeedQueryComplete: with the sequential fill in QuerySeeds a database smaller
+// than the seek budget must return every eligible node on every call, whatever the
+// (per-process random) ID layout of the fixture, so the multi-attempt tolerance in
+// TestDBSeedQuery is no longer load-bearing.
+func TestDBSeedQueryComplete(t *testing.T) {
+	for i := 0; i < 200; i++ {
+		if err := testSeedQuery(); err != nil {
+			t.Fatalf("run %d: %v", i, err)
+		}
+	}
+}
+
+// TestDBSeedQueryAdjacentIDs: the worst case for random seeks — nodes whose IDs
+// differ only in the last byte, so the key gap before each is a single key — must
+// still all be returned.
+func TestDBSeedQueryAdjacentIDs(t *testing.T) {
+	db, _ := OpenDB("")
+	defer db.Close()
+
+	const count = 5
+	var ids []ID
+	for i := 0; i < count; i++ {
+		var id ID
+		id[0] = 0x80
+		id[len(id)-1] = byte(i)
+		node := NewV4(hexPubkey(pubenckey3), net.IP{10, 0, 0, byte(i + 1)}, 30303)
+		node.id = id
+		if err := db.UpdateNode(node); err != nil {
+			t.Fatalf("insert %d: %v", i, err)
+		}
+		if err := db.UpdateLastPongReceived(id, node.IP(), time.Now().Add(-time.Second)); err != nil {
+			t.Fatalf("pong %d: %v", i, err)
+		}
+		ids = append(ids, id)
+	}
+	for run := 0; run < 50; run++ {
+		seeds := db.QuerySeeds(count*2, time.Hour)
+		if len(seeds) != count {
+			t.Fatalf("run %d: QuerySeeds returned %d nodes, want %d", run, len(seeds), count)
+		}
+		seen := make(map[ID]bool)
+		for _, s := range seeds {
+			seen[s.ID()] = true
+		}
+		for _, id := range ids {
+			if !seen[id] {
+				t.Fatalf("run %d: node %x missing", run, id[len(id)-1])
+			}
+		}
+	}
+}
+
+// TestDBSeedQueryBudget: the request size is still honoured on a database larger than
+// the seek budget, stale nodes are never returned and no node is returned twice.
+func TestDBSeedQueryBudget(t *testing.T) {
+	db, _ := OpenDB("")
+	defer db.Close()
+
+	const fresh, stale = 120, 40
+	staleIDs := make(map[ID]bool)
+	for i := 0; i < fresh+stale; i++ {
+		var id ID
+		id[0] = byte(i)
+		id[1] = byte(i >> 8)
+		id[2] = 0x5a
+		node := NewV4(hexPubkey(pubenckey3), net.IP{10, 0, byte(i >> 8), byte(i)}, 30303)
+		node.id = id
+		if err := db.UpdateNode(node); err != nil {
+			t.Fatalf("insert %d: %v", i, err)
+		}
+		pong := time.Now().Add(-time.Minute)
+		if i >= fresh {
+			pong = time.Now().Add(-3 * time.Hour)
+			staleIDs[id] = true
+		}
+		if err := db.UpdateLastPongReceived(id, node.IP(), pong); err != nil {
+			t.Fatalf("pong %d: %v", i, err)
+		}
+	}
+	for _, n := range []int{1, 7, 25} {
+		seeds := db.QuerySeeds(n, time.Hour)
+		if len(seeds) != n {
+			t.Fatalf("QuerySeeds(%d) returned %d nodes", n, len(seeds))
+		}
+		seen := make(map[ID]bool)
+		for _, s := range seeds {
+			if staleIDs[s.ID()] {
+				t.Fatalf("QuerySeeds(%d) returned stale node %x", n, s.ID().Bytes()[:4])
+			}
+			if seen[s.ID()] {
+				t.Fatalf("QuerySeeds(%d) returned node %x twice", n, s.ID().Bytes()[:4])
+			}
+			seen[s.ID()] = true
+		}
+	}
+	// Asking for more fresh nodes than exist yields exactly the fresh set (fresh <= budget*5).
+	if seeds := db.QuerySeeds(fresh, time.Hour); len(seeds) != fresh {
+		t.Fatalf("QuerySeeds(%d) returned %d nodes, want all %d fresh nodes", fresh, len(seeds), fresh)
+	}
+	// Nothing is stale-eligible for a zero age window except nothing: no node has a pong in the future.
+	if seeds := db.QuerySeeds(fresh, 0); len(seeds) != 0 {
+		t.Fatalf("QuerySeeds with zero maxAge returned %d nodes, want 0", len(seeds))
+	}
 }
 
 func TestDBPersistency(t *testing.T) {

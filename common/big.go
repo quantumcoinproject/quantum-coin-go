@@ -17,6 +17,7 @@
 package common
 
 import (
+	"fmt"
 	"github.com/quantumcoinproject/quantum-coin-go/common/hexutil"
 	"math/big"
 )
@@ -38,7 +39,25 @@ func SafeAddBigInt(x, y *big.Int) *big.Int {
 	return result
 }
 
+// SafeSubBigInt returns x - y in a freshly allocated big.Int (x and y are never
+// aliased or modified). It is a SIGNED subtraction: the result may be negative.
+// For balances, deposits, gas or any other non-negative amount use
+// SafeSubBigIntNonNegative instead, which refuses to underflow.
 func SafeSubBigInt(x, y *big.Int) *big.Int {
+	result := big.NewInt(0)
+	result.Sub(x, y)
+	return result
+}
+
+// SafeSubBigIntNonNegative returns x - y in a freshly allocated big.Int and panics if
+// the result would be negative. It is meant for amounts that are non-negative by
+// definition (balances, deposits, rewards, block counts): every caller is expected to
+// have established x >= y already, so a panic here means state accounting has gone
+// wrong and must not be silently persisted as a negative value.
+func SafeSubBigIntNonNegative(x, y *big.Int) *big.Int {
+	if x.Cmp(y) < 0 {
+		panic(fmt.Sprintf("big.Int underflow: have=%s sub=%s", x.String(), y.String()))
+	}
 	result := big.NewInt(0)
 	result.Sub(x, y)
 	return result
