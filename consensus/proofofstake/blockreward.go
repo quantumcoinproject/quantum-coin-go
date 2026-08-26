@@ -29,7 +29,7 @@ func GetReward(blockNumber *big.Int) *big.Int {
 
 	if rewardStartBlock.Int64() <= blockNumber.Int64() {
 		//Step 0
-		block := common.SafeSubBigInt(blockNumber, rewardStartBlock)
+		block := common.SafeSubBigIntNonNegative(blockNumber, rewardStartBlock)
 		s := common.SafeDivBigInt(block, blockYearly)
 		s0 := common.SafeDivBigInt(s, percentageChangeYear)
 
@@ -74,6 +74,17 @@ func (c *ProofOfStake) accumulateBalance(state *state.StateDB, amount *big.Int, 
 	return nil
 }
 
+// GetSlashAmount returns the per-validator slash amount that Finalize applies for a
+// round-1 nil-vote block at blockNumber. It is the single source of truth for the
+// SlashV2StartBlock schedule: every reporting path (ParseRewardsInfo, GetRewardsSlashingsByVote)
+// must use it so that RPC/API output matches the amount actually applied to state.
+func GetSlashAmount(blockNumber uint64) *big.Int {
+	if blockNumber < defaults.DefaultConfig.PosConfig.SlashV2StartBlock {
+		return defaults.DefaultConfig.PosConfig.SLASH_AMOUNT
+	}
+	return defaults.DefaultConfig.PosConfig.SLASH_AMOUNT_V2
+}
+
 func GetRewardsSlashingsByVote(blockNumber *big.Int, voteType VoteType, rounds byte) (rewardsCoins *big.Int, slashedCoins *big.Int) {
 	rewardsCoins = big.NewInt(0)
 	slashedCoins = big.NewInt(0)
@@ -84,9 +95,7 @@ func GetRewardsSlashingsByVote(blockNumber *big.Int, voteType VoteType, rounds b
 	} else if voteType == VOTE_TYPE_NIL {
 		if rounds == 1 {
 			if blockNumber.Uint64() >= defaults.DefaultConfig.PosConfig.SlashStartBlockNumber {
-				slashedCoins = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT
-			} else if blockNumber.Uint64() >= defaults.DefaultConfig.PosConfig.SlashV2StartBlock {
-				slashedCoins = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT_V2
+				slashedCoins = GetSlashAmount(blockNumber.Uint64())
 			}
 		}
 	}

@@ -405,12 +405,9 @@ func ParseRewardsInfo(block *types.Block, receipts []*types.Receipt) (*BlockRewa
 		if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && header.Number.Uint64() >= defaults.DefaultConfig.PosConfig.SlashStartBlockNumber {
 			blockRewardsInfo.SlashedValidators = make([]*Slashing, len(blockConsensusData.SlashedBlockProposers))
 
-			var slashAmount *big.Int
-			if header.Number.Uint64() >= defaults.DefaultConfig.PosConfig.SlashV2StartBlock {
-				slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT
-			} else {
-				slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT_V2
-			}
+			// Must match the amount Finalize applies (proofofstake.go); GetSlashAmount is the
+			// single source of truth for the SlashV2StartBlock schedule.
+			slashAmount := GetSlashAmount(header.Number.Uint64())
 
 			for i, val := range blockConsensusData.SlashedBlockProposers {
 				slashing := &Slashing{

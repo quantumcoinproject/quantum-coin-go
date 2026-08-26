@@ -465,44 +465,26 @@ func (db *DB) storeLocalSeq(id ID, n uint64) {
 // QuerySeeds retrieves random nodes to be used as potential seed nodes
 // for bootstrapping.
 func (db *DB) QuerySeeds(n int, maxAge time.Duration) []*Node {
-	var (
-		now   = time.Now()
-		nodes = make([]*Node, 0, n)
-		it    = db.lvl.NewIterator(nil, nil)
-		id    ID
-	)
-	defer it.Release()
-
-seek:
-	for seeks := 0; len(nodes) < n && seeks < n*5; seeks++ {
-		// Seek to a random entry. The first byte is incremented by a
-		// random amount each time in order to increase the likelihood
-		// of hitting all existing nodes in very small databases.
-		ctr := id[0]
-		rand.Read(id[:])
-		id[0] = ctr + id[0]%16
-		it.Seek(nodeKey(id))
-
-		n := nextNode(it)
-		if n == nil {
-			id[0] = 0
-			continue seek // iterator exhausted
-		}
-		if now.Sub(db.LastPongReceived(n.ID(), n.IP())) > maxAge {
-			continue seek
-		}
-		for i := range nodes {
-			if nodes[i].ID() == n.ID() {
-				continue seek // duplicate
-			}
-		}
-		nodes = append(nodes, n)
-	}
-	return nodes
+	return db.queryRandomNodes(n, maxAge, db.LastPongReceived)
 }
 
 // QueryNodes retrieves random nodes to be used to connect.
 func (db *DB) QueryNodes(n int, maxAge time.Duration) []*Node {
+	return db.queryRandomNodes(n, maxAge, db.LastConnectionTime)
+}
+
+// queryRandomNodes returns up to n distinct nodes whose lastSeen time is within
+// maxAge, chosen by random seeks into the node table.
+//
+// A random seek only finds a node when it lands in the key gap just before that
+// node, so in a small database a node whose predecessor is close in key space can
+// be missed by every seek. If the seek budget did not fill the request, the
+// remainder is taken from a bounded sequential pass over the node table. For a
+// database smaller than the budget this makes the result complete and
+// deterministic; for a large database the pass only runs when eligible nodes are
+// sparse and examines at most n*5 further entries, the same order of work as the
+// seeks.
+func (db *DB) queryRandomNodes(n int, maxAge time.Duration, lastSeen func(ID, net.IP) time.Time) []*Node {
 	var (
 		now   = time.Now()
 		nodes = make([]*Node, 0, n)
@@ -511,7 +493,10 @@ func (db *DB) QueryNodes(n int, maxAge time.Duration) []*Node {
 	)
 	defer it.Release()
 
-seek:
+	eligible := func(node *Node) bool {
+		return now.Sub(lastSeen(node.ID(), node.IP())) <= maxAge && !containsNodeID(nodes, node.ID())
+	}
+
 	for seeks := 0; len(nodes) < n && seeks < n*5; seeks++ {
 		// Seek to a random entry. The first byte is incremented by a
 		// random amount each time in order to increase the likelihood
@@ -521,22 +506,40 @@ seek:
 		id[0] = ctr + id[0]%16
 		it.Seek(nodeKey(id))
 
-		n := nextNode(it)
-		if n == nil {
+		node := nextNode(it)
+		if node == nil {
 			id[0] = 0
-			continue seek // iterator exhausted
+			continue // iterator exhausted
 		}
-		if now.Sub(db.LastConnectionTime(n.ID(), n.IP())) > maxAge {
-			continue seek
+		if eligible(node) {
+			nodes = append(nodes, node)
 		}
-		for i := range nodes {
-			if nodes[i].ID() == n.ID() {
-				continue seek // duplicate
+	}
+
+	if len(nodes) < n {
+		it.Seek([]byte(dbNodePrefix))
+		for examined := 0; len(nodes) < n && examined < n*5; examined++ {
+			node := nextNode(it)
+			if node == nil {
+				break
+			}
+			it.Next() // nextNode leaves the iterator on the entry it returned
+			if eligible(node) {
+				nodes = append(nodes, node)
 			}
 		}
-		nodes = append(nodes, n)
 	}
 	return nodes
+}
+
+// containsNodeID reports whether nodes already holds a node with the given ID.
+func containsNodeID(nodes []*Node, id ID) bool {
+	for _, n := range nodes {
+		if n.ID() == id {
+			return true
+		}
+	}
+	return false
 }
 
 // reads the next node record from the iterator, skipping over other

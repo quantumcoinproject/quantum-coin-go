@@ -266,7 +266,7 @@ func normalizeDeposit(blockNumber uint64, valDepMap *map[common.Address]*big.Int
 		amt := depMap[val]
 		maxCoins := common.SafeRelativePercentageBigInt(totalDeposit, maxPercentage)
 		if amt.Cmp(maxCoins) > 0 {
-			reduction := common.SafeSubBigInt(amt, maxCoins)
+			reduction := common.SafeSubBigIntNonNegative(amt, maxCoins)
 			coinsReduced = common.SafeAddBigInt(coinsReduced, reduction)
 			depMap[val] = maxCoins
 			hasChanges = true

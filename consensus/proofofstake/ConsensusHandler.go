@@ -426,7 +426,7 @@ func getOfflineValidatorDepositAfterPenalty(valDetails *ValidatorDetailsV2, curr
 	}
 
 	penalty := common.SafeRelativePercentageBigInt(big.NewInt(penaltyPercent), depositValue)
-	newDepositValue := common.SafeSubBigInt(depositValue, penalty)
+	newDepositValue := common.SafeSubBigIntNonNegative(depositValue, penalty)
 	log.Debug("getOfflineValidatorDepositAfterPenalty", "val", valDetails.Validator, "penalty", penalty, "penaltyPercent", penaltyPercent,
 		"NilBlockCount", valDetails.NilBlockCount.Uint64(), "newDepositValue", newDepositValue)
 	return newDepositValue
@@ -1517,7 +1517,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundProposalAcks(parentHash common
 	}
 
 	//If there are votes in greater rounds
-	balanceDepositVotesRequiredCurrentRound := common.SafeSubBigInt(blockStateDetails.blockMinWeightedProposalsRequired, currentRoundDepositSoFar)
+	balanceDepositVotesRequiredCurrentRound := common.SafeSubBigIntNonNegative(blockStateDetails.blockMinWeightedProposalsRequired, currentRoundDepositSoFar)
 	log.Debug("shouldMoveToNextRoundProposalAcks",
 		"blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired,
 		"balanceDepositVotesRequiredCurrentRound", balanceDepositVotesRequiredCurrentRound,
@@ -1621,7 +1621,7 @@ func (cph *ConsensusHandler) shouldMoveToNextRoundPrecommit(parentHash common.Ha
 		return false, nil
 	}
 
-	balanceDepositVotesRequiredCurrentRound := common.SafeSubBigInt(blockStateDetails.blockMinWeightedProposalsRequired, currentRoundDepositSoFar)
+	balanceDepositVotesRequiredCurrentRound := common.SafeSubBigIntNonNegative(blockStateDetails.blockMinWeightedProposalsRequired, currentRoundDepositSoFar)
 	log.Debug("shouldMoveNextRound",
 		"blockMinWeightedProposalsRequired", blockStateDetails.blockMinWeightedProposalsRequired,
 		"balanceDepositVotesRequiredCurrentRound", balanceDepositVotesRequiredCurrentRound,

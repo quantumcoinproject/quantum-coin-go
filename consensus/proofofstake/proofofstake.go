@@ -848,12 +848,7 @@ func (c *ProofOfStake) Finalize(chain consensus.ChainHeaderReader, header *types
 	//If Round = 1, then it means PROPOSER was likely offline, as opposed to Round = 2 which means validators were not able to get consensus on time
 	if blockConsensusData.Round == 1 && blockConsensusData.SlashedBlockProposers != nil && len(blockConsensusData.SlashedBlockProposers) > 0 && blockNumber >= defaults.DefaultConfig.PosConfig.SlashStartBlockNumber {
 
-		var slashAmount *big.Int
-		if blockNumber < defaults.DefaultConfig.PosConfig.SlashV2StartBlock {
-			slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT
-		} else {
-			slashAmount = defaults.DefaultConfig.PosConfig.SLASH_AMOUNT_V2
-		}
+		slashAmount := GetSlashAmount(blockNumber)
 
 		for _, val := range blockConsensusData.SlashedBlockProposers {
 			depositor, err := c.GetDepositorOfValidator(val, header.ParentHash)
@@ -1122,7 +1117,7 @@ func calculateTxnTipTotal(txs []*types.Transaction, receipts []*types.Receipt) (
 
 func calculateTxnFeeSplitCoins(txnFeeTotal *big.Int) (burnAmount *big.Int, txnFeeRewardsAmount *big.Int) {
 	txnFeeRewardsAmount = common.SafeRelativePercentageBigInt(txnFeeTotal, big.NewInt(defaults.DefaultConfig.PosConfig.TxnFeeRewardsPercentage))
-	burnAmount = common.SafeSubBigInt(txnFeeTotal, txnFeeRewardsAmount)
+	burnAmount = common.SafeSubBigIntNonNegative(txnFeeTotal, txnFeeRewardsAmount)
 	return burnAmount, txnFeeRewardsAmount
 }
 
