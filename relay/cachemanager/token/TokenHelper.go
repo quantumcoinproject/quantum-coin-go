@@ -19,6 +19,15 @@ var LogApprovalSig = []byte("Approval(address,address,uint256)")
 var logTransferSigHash = strings.ToLower(crypto.Keccak256Hash(logTransferSig).Hex())
 var logApprovalSigHash = strings.ToLower(crypto.Keccak256Hash(LogApprovalSig).Hex())
 
+// Wrapped-Q (WETH9-style) balance events. deposit() mints WQ to the caller and
+// emits Deposit(dst, wad); withdraw() burns and emits Withdrawal(src, wad).
+// Neither emits Transfer, so without these the account's WQ holding never
+// enters the index and its quantity never moves on wrap/unwrap.
+var logDepositSig = []byte("Deposit(address,uint256)")
+var logWithdrawalSig = []byte("Withdrawal(address,uint256)")
+var logDepositSigHash = strings.ToLower(crypto.Keccak256Hash(logDepositSig).Hex())
+var logWithdrawalSigHash = strings.ToLower(crypto.Keccak256Hash(logWithdrawalSig).Hex())
+
 type TokenDetails struct {
 	Name        string
 	Symbol      string
@@ -112,6 +121,31 @@ func ParseTokenTransaction(txn *types.Transaction, receipt *types.Receipt) ([]*L
 			approvalEvent.Spender = common.HexToAddress(rLog.Topics[2].Hex())
 
 			approvals = append(approvals, &approvalEvent)
+
+		case logDepositSigHash, logWithdrawalSigHash:
+			// A wrap is a mint of WQ to the account and an unwrap a burn, so
+			// they are surfaced as the equivalent Transfer legs from/to the zero
+			// address: the balance refresh downstream then re-reads balanceOf
+			// for the account exactly as it does for a real transfer. Both
+			// events have one indexed arg (the account); the amount is the
+			// first data word. The token ABI carries neither event, hence the
+			// manual decode. Emitters that are not tokens are dropped
+			// downstream, so a same-named event from an unrelated contract
+			// costs at most one node check.
+			if len(rLog.Topics) < 2 || len(rLog.Data) < 32 {
+				continue
+			}
+			leg := LogTransfer{
+				ContractAddress: rLog.Address,
+				Tokens:          new(big.Int).SetBytes(rLog.Data[:32]),
+			}
+			account := common.HexToAddress(rLog.Topics[1].Hex())
+			if strings.ToLower(rLog.Topics[0].Hex()) == logDepositSigHash {
+				leg.To = account // mint: zero -> account
+			} else {
+				leg.From = account // burn: account -> zero
+			}
+			transfers = append(transfers, &leg)
 		}
 	}
 
