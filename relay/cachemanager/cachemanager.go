@@ -47,7 +47,11 @@ type CacheManager struct {
 	addressMap               map[string]*AccountDetails
 	tokenMap                 map[string]*TokenDetails
 	accountTokenMap          map[string]*map[string]bool //map[accountAddress]map[contractAddress]bool
-	blockChan                chan *InternalBlockData
+	// notTokenMap remembers contracts the node has classified as not an ERC-20
+	// token, so a contract that emits token-shaped events without being one
+	// is checked against the node only once (see processAccountTokenTransfers).
+	notTokenMap map[string]bool
+	blockChan   chan *InternalBlockData
 }
 
 var SummaryKey = "summary"
@@ -306,6 +310,7 @@ func NewCacheManager(cacheDir string, nodeUrl string, enableExtendedApis bool, g
 		addressMap:         make(map[string]*AccountDetails),
 		tokenMap:           make(map[string]*TokenDetails),
 		accountTokenMap:    make(map[string]*map[string]bool),
+		notTokenMap:        make(map[string]bool),
 	}
 
 	var err error
@@ -1695,6 +1700,43 @@ func (c *CacheManager) putAccountTokenPage(address string, accountTokenList *Acc
 	return nil
 }
 
+// registerTokenFromNode registers a contract the index has no record of by
+// asking the node whether it is an ERC-20 token (bytecode check plus
+// name/symbol/decimals, the same call the deployment path uses). Returns the
+// stored details, or nil (and no error) when the node says it is not a token,
+// in which case the contract is remembered so it is never asked about again.
+// Creator and creation transaction are unknown on this path and left empty;
+// CreatedBlockNumber records the block the token was first seen in.
+func (c *CacheManager) registerTokenFromNode(contract common.Address, blockNum *big.Int, batch *ethdb.Batch) (*TokenDetails, error) {
+	contractAddress := strings.ToLower(contract.Hex())
+	if c.notTokenMap[contractAddress] {
+		return nil, nil
+	}
+	details, err := c.client.GetTokenDetails(contract, blockNum)
+	if err != nil {
+		if errors.Is(err, ethclient.NotATokenError) {
+			c.notTokenMap[contractAddress] = true
+			return nil, nil
+		}
+		log.Error("registerTokenFromNode GetTokenDetails", "contractAddress", contractAddress, "error", err)
+		return nil, err
+	}
+	tkn := &TokenDetails{
+		ContractAddress:    contractAddress,
+		CreatedBlockNumber: blockNum.Uint64(),
+		Name:               details.Name,
+		Symbol:             details.Symbol,
+		TotalSupply:        hexutil.EncodeBig(details.TotalSupply),
+		Decimals:           hexutil.EncodeUint64(uint64(details.Decimals)),
+	}
+	if err := c.putTokenInDb(tkn, batch); err != nil {
+		log.Error("registerTokenFromNode putTokenInDb", "contractAddress", contractAddress, "error", err)
+		return nil, err
+	}
+	log.Info("registerTokenFromNode registered token first seen in a transfer", "contractAddress", contractAddress, "symbol", tkn.Symbol, "block", blockNum)
+	return tkn, nil
+}
+
 // Parses and stores list of tokens and balance for each token
 func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogTransfer, blockNum *big.Int, batch *ethdb.Batch) error {
 	for _, t := range tokenTransfers {
@@ -1702,8 +1744,21 @@ func (c *CacheManager) processAccountTokenTransfers(tokenTransfers []*token.LogT
 		tokenDetails, err := c.getTokenDetailsInternal(contractAddress)
 		if err != nil {
 			if err.Error() == LevelDbNoTFoundErrMsg {
-				log.Debug("processAccountTokenTransfers getTokenDetailsInternal not found", "contractAddress", contractAddress)
-				return nil
+				// Unknown contract. Tokens are normally registered from the
+				// deployment trace's CREATE frame, but a deployment the index
+				// never saw (cache created or reset after it, or a trace that
+				// failed) would otherwise leave every later transfer of that
+				// token silently dropped. Register it now from the node; a
+				// contract the node says is not a token is remembered so it is
+				// never asked about again.
+				tokenDetails, err = c.registerTokenFromNode(t.ContractAddress, blockNum, batch)
+				if err != nil {
+					return err
+				}
+				if tokenDetails == nil {
+					log.Debug("processAccountTokenTransfers skipping non-token contract", "contractAddress", contractAddress)
+					continue
+				}
 			} else {
 				log.Error("processAccountTokenTransfers getTokenDetailsInternal", "contractAddress", contractAddress, "error", err)
 				return err
